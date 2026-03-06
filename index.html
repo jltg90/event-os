@@ -5924,24 +5924,34 @@ function _doDeleteMBFolder(fid){
   saveProj(p);renderMoodboard();toast('Folder deleted');
 }
 
-function addMBImages(input, folderId){
+async function addMBImages(input, folderId){
   const files=Array.from(input.files);
   if(!files.length)return;
   const p=proj();const mb=getMB(p);
-  let loaded=0;
-  files.forEach(f=>{
-    const r=new FileReader();
-    r.onload=e=>{
-      const img={id:'mi'+Date.now()+loaded,src:e.target.result,name:f.name.replace(/\.[^/.]+$/,'')};
-      if(folderId){const folder=mb.folders.find(f=>f.id===folderId);if(folder)folder.images.push(img);}
+  toast('Uploading images…');
+  let uploaded=0;
+  for(const f of files){
+    try{
+      const ext=f.name.split('.').pop();
+      const fileName='mi'+Date.now()+uploaded+'.'+ext;
+      const path=DB.cur+'/'+p.id+'/'+fileName;
+      const res=await fetch(
+        SUPA_URL+'/storage/v1/object/moodboard/'+path,
+        {method:'POST',headers:Object.assign({},supaHeaders(),{'Content-Type':f.type}),body:f}
+      );
+      if(!res.ok){const e=await res.text();console.error('Upload failed:',e);toast('Upload failed: '+f.name,'e');continue;}
+      const url=SUPA_URL+'/storage/v1/object/public/moodboard/'+path;
+      const img={id:'mi'+Date.now()+uploaded,src:url,name:f.name.replace(/\.[^/.]+$/,''),_path:path};
+      if(folderId){const folder=mb.folders.find(fo=>fo.id===folderId);if(folder)folder.images.push(img);}
       else{mb.uncategorized.push(img);}
-      loaded++;
-      if(loaded===files.length){
-        if(folderId&&!mbOpenFolders[folderId])mbOpenFolders[folderId]=true;
-        saveProj(p);renderMoodboard();toast(`${files.length} image${files.length>1?'s':''} added`,'s');
-      }
-    };r.readAsDataURL(f);
-  });
+      uploaded++;
+    }catch(e){console.error('Upload error:',e);toast('Upload error: '+f.name,'e');}
+  }
+  if(uploaded>0){
+    if(folderId&&!mbOpenFolders[folderId])mbOpenFolders[folderId]=true;
+    saveProj(p);renderMoodboard();
+    toast(uploaded+' image'+(uploaded>1?'s':'')+' added','s');
+  }
 }
 
 function delMBImg(idx, folderId){
@@ -5952,10 +5962,18 @@ function delMBImg(idx, folderId){
     <button class="btn btn-danger" onclick="closeMo();_doDelMBImg(${idx},${folderId===null||folderId===undefined?'null':`'${folderId}'`})">Delete</button>
   </div>`);
 }
-function _doDelMBImg(idx, folderId){
+async function _doDelMBImg(idx, folderId){
   const p=proj();const mb=getMB(p);
-  if(folderId){const f=mb.folders.find(f=>f.id===folderId);if(f)f.images.splice(idx,1);}
-  else{mb.uncategorized.splice(idx,1);}
+  let img=null;
+  if(folderId){const f=mb.folders.find(f=>f.id===folderId);if(f){img=f.images[idx];f.images.splice(idx,1);}}
+  else{img=mb.uncategorized[idx];mb.uncategorized.splice(idx,1);}
+  // Delete from Supabase Storage if it was cloud-hosted
+  if(img&&img._path){
+    try{
+      await fetch(SUPA_URL+'/storage/v1/object/moodboard/'+img._path,
+        {method:'DELETE',headers:supaHeaders()});
+    }catch(e){console.error('Storage delete error:',e);}
+  }
   saveProj(p);renderMoodboard();toast('Image deleted');
 }
 
