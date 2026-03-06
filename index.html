@@ -888,6 +888,9 @@ tr:hover td { background: var(--bg2); }
   .ptabs::-webkit-scrollbar { display: none; }
   .ptab { padding: 6px 10px; font-size: 11px; white-space: nowrap; }
   .ptab svg { display: none; }
+  /* Hide horizontal tabs on mobile — drawer handles tab nav */
+  .ptabs { display: none; }
+  #pnav-name, #pnav-type { display: block; }
 
   /* ── Events page ── */
   .evgrid { grid-template-columns: 1fr; gap: 14px; }
@@ -5635,41 +5638,6 @@ ${breakdown.length?`<h2>Budget Breakdown</h2>
   <button onclick="window.print()" style="padding:11px 32px;background:#c9a84c;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-weight:700;letter-spacing:.02em">🖨️ Print / Save as PDF</button>
 </div>
 
-  <!-- MOBILE DRAWER -->
-  <div id="mob-drawer" class="mob-drawer hidden" onclick="closeMobDrawerIfOverlay(event)">
-    <div class="mob-drawer-overlay"></div>
-    <div class="mob-drawer-panel" id="mob-drawer-panel">
-      <div class="mob-drawer-logo">Event<span>OS</span></div>
-      <div class="mob-drawer-section">Account</div>
-      <button class="mob-drawer-item" onclick="closeMobDrawer()">
-        <div style="width:30px;height:30px;border-radius:50%;background:var(--gold-l);border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--gold-h)" id="mob-uav">?</div>
-        <div style="text-align:left"><div id="mob-uname" style="font-size:13px;font-weight:600">User</div><div id="mob-uemail" style="font-size:11px;color:var(--muted)"></div></div>
-      </button>
-      <div class="mob-drawer-divider"></div>
-      <div class="mob-drawer-section">Navigation</div>
-      <button class="mob-drawer-item" onclick="showPage('events');closeMobDrawer()">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-        My Events
-      </button>
-      <div class="mob-drawer-divider"></div>
-      <div class="mob-drawer-section">Settings</div>
-      <button class="mob-drawer-item" onclick="toggleLang();closeMobDrawer()">
-        🌐 <span id="mob-lang-label">Toggle Language</span>
-      </button>
-      <button class="mob-drawer-item" onclick="openCurrencyPicker();closeMobDrawer()">
-        💱 <span id="mob-currency-label">Currency</span>
-      </button>
-      <button class="mob-drawer-item" onclick="openShareFromNav();closeMobDrawer()">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-        Share Project
-      </button>
-      <div style="flex:1"></div>
-      <div class="mob-drawer-divider"></div>
-      <button class="mob-drawer-item" style="color:var(--danger)" onclick="doLogout()">
-        🚪 Sign Out
-      </button>
-    </div>
-  </div>
 </body></html>`;
 
   const blob=new Blob([html],{type:'text/html'});
@@ -7085,6 +7053,12 @@ function openMobDrawer(){
     if(mobName)  mobName.textContent  = name;
     if(mobEmail) mobEmail.textContent = email;
   }
+  // Show project nav section only when inside a project
+  var projNav = document.getElementById('mob-project-nav');
+  if(projNav){
+    var inProject = CID && !document.getElementById('pg-project').classList.contains('hidden');
+    projNav.style.display = inProject ? 'block' : 'none';
+  }
   // sync currency label
   var cl = document.getElementById('mob-currency-label');
   var cbl = document.getElementById('currency-label');
@@ -7164,5 +7138,83 @@ window.SCI={};
 <div id="pg-client" class="hidden">
   <div id="client-portal-content"></div>
 </div>
+<!-- ── MOBILE DRAWER ──────────────────────────────────────────── -->
+<div id="mob-drawer" class="mob-drawer hidden" onclick="closeMobDrawerIfOverlay(event)">
+  <div class="mob-drawer-overlay"></div>
+  <div class="mob-drawer-panel" id="mob-drawer-panel">
+    <div class="mob-drawer-logo">Event<span>OS</span></div>
+
+    <!-- Account -->
+    <div class="mob-drawer-section">Account</div>
+    <div class="mob-drawer-item" style="cursor:default">
+      <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--gold),var(--gold-h));display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0" id="mob-uav">?</div>
+      <div style="text-align:left;min-width:0">
+        <div id="mob-uname" style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">User</div>
+        <div id="mob-uemail" style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+      </div>
+    </div>
+
+    <div class="mob-drawer-divider"></div>
+
+    <!-- Navigation -->
+    <div class="mob-drawer-section">Navigation</div>
+    <button class="mob-drawer-item" onclick="showPage('events');closeMobDrawer()">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+      My Events
+    </button>
+
+    <!-- Project tabs — only shown when inside a project -->
+    <div id="mob-project-nav" style="display:none">
+      <div class="mob-drawer-divider"></div>
+      <div class="mob-drawer-section">Project</div>
+      <button class="mob-drawer-item" onclick="switchTab('dashboard');closeMobDrawer()">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Dashboard
+      </button>
+      <button class="mob-drawer-item" onclick="switchTab('budget');closeMobDrawer()">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        Budget
+      </button>
+      <button class="mob-drawer-item" onclick="switchTab('timeline');closeMobDrawer()">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+        Timeline
+      </button>
+      <button class="mob-drawer-item" onclick="switchTab('guests');closeMobDrawer()">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Guests
+      </button>
+      <button class="mob-drawer-item" onclick="switchTab('layout');closeMobDrawer()">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+        Layout
+      </button>
+      <button class="mob-drawer-item" onclick="switchTab('moodboard');closeMobDrawer()">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="9" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="16" width="7" height="5" rx="1"/></svg>
+        Moodboard
+      </button>
+    </div>
+
+    <div class="mob-drawer-divider"></div>
+
+    <!-- Settings -->
+    <div class="mob-drawer-section">Settings</div>
+    <button class="mob-drawer-item" onclick="toggleLang();closeMobDrawer()">
+      🌐 <span id="mob-lang-label">Toggle Language</span>
+    </button>
+    <button class="mob-drawer-item" onclick="openCurrencyPicker();closeMobDrawer()">
+      💱 <span id="mob-currency-label">Currency</span>
+    </button>
+    <button class="mob-drawer-item" onclick="openShareFromNav();closeMobDrawer()">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+      Share Project
+    </button>
+
+    <div style="flex:1"></div>
+    <div class="mob-drawer-divider"></div>
+    <button class="mob-drawer-item" style="color:var(--danger)" onclick="doLogout()">
+      🚪 Sign Out
+    </button>
+  </div>
+</div>
+
 </body>
 </html>
