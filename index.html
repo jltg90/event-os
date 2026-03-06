@@ -59,6 +59,12 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+html {
+  /* Prevent rubber-band overscroll from interfering with iframe scroll */
+  overscroll-behavior: none;
+  height: 100%;
+}
+
 body {
   font-family: 'Jost', sans-serif;
   background: var(--bg);
@@ -68,6 +74,10 @@ body {
   font-weight: 400;
   letter-spacing: .01em;
   -webkit-font-smoothing: antialiased;
+  /* Allow native touch scrolling throughout */
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
 }
 
 /* Decorative noise texture overlay */
@@ -672,7 +682,7 @@ tr:hover td { background: var(--bg2); }
 }
 
 /* ─── LAYOUT DESIGNER ────────────────────────── */
-.layout-shell { display: flex; height: calc(100vh - 120px); overflow: hidden; background: var(--bg); }
+.layout-shell { display: flex; min-height: 60vh; height: calc(100vh - 120px); overflow: hidden; background: var(--bg); }
 .layout-sidebar {
   width: 235px; flex-shrink: 0;
   background: var(--card);
@@ -883,6 +893,7 @@ tr:hover td { background: var(--bg2); }
   .evgrid { grid-template-columns: 1fr; gap: 14px; }
   .pcontent { padding: 14px; }
   .sh { flex-direction: column; gap: 10px; align-items: flex-start; }
+  #pg-events > div { padding: 20px 14px; }
 
   /* ── Stat grids ── */
   .sg { grid-template-columns: repeat(2,1fr); gap: 12px; }
@@ -929,7 +940,7 @@ tr:hover td { background: var(--bg2); }
   .tnav { height: 50px; padding: 0 12px; }
   .tnav-logo { font-size: 19px; }
 
-  .pnav { padding: 8px 12px 4px; }
+  .pnav { top: 50px; padding: 8px 12px 4px; }
   .ptab { padding: 5px 8px; font-size: 10.5px; }
 
   .evgrid { gap: 10px; }
@@ -3100,7 +3111,10 @@ function renderLayout(){
   if(typeof _measureLines==='undefined')window._measureLines=[];
   if(typeof _measurePoints==='undefined')window._measurePoints=[];
   const el=document.getElementById('tab-layout');
-  el.style.height='calc(100vh - 116px)';
+  // Dynamically calculate height based on actual nav bar heights (important for mobile/iframe)
+  var tnavH = (document.querySelector('.tnav')||{}).offsetHeight || 62;
+  var pnavH = (document.querySelector('.pnav')||{}).offsetHeight || 58;
+  el.style.height = 'calc(100vh - ' + (tnavH + pnavH) + 'px)';
   el.innerHTML=`
   <div class="layout-shell">
     <!-- SIDEBAR -->
