@@ -878,6 +878,7 @@ tr:hover td { background: var(--bg2); }
   #lang-btn, #currency-btn { display: none !important; }
   #share-nav-btn span { display: none; }
   #share-nav-btn { padding: 5px 9px !important; }
+  .share-btn-label { display: none; }
 
   /* ── Project nav ── */
   .pnav { flex-direction: column; height: auto; padding: 10px 14px 6px; gap: 6px; top: 54px; }
@@ -1154,9 +1155,9 @@ tr:hover td { background: var(--bg2); }
       onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
       🌐 <span id="lang-label">ES</span>
     </button>
-    <button id="share-nav-btn" onclick="openShareFromNav()" title="Share project with client" style="background:transparent;border:1.5px solid var(--border);border-radius:20px;padding:5px 13px;font-size:12px;font-weight:600;cursor:pointer;color:var(--muted);letter-spacing:.05em;transition:var(--tr);display:flex;align-items:center;gap:5px" onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold-h)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
-      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-      Share
+    <button id="share-nav-btn" onclick="openShareFromNav()" title="Share project with client" style="background:transparent;border:1.5px solid var(--border);border-radius:20px;padding:5px 11px;font-size:12px;font-weight:600;cursor:pointer;color:var(--muted);letter-spacing:.05em;transition:var(--tr);display:flex;align-items:center;gap:5px" onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold-h)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+      <span class="share-btn-label">Share</span>
     </button>
     <button id="currency-btn" onclick="openCurrencyPicker()" title="Change currency"
       style="background:transparent;border:1.5px solid var(--border);border-radius:20px;padding:5px 13px;font-size:12px;font-weight:600;cursor:pointer;color:var(--muted);letter-spacing:.05em;transition:var(--tr);margin-right:12px;display:flex;align-items:center;gap:6px"
@@ -1943,6 +1944,7 @@ function startSyncPoll(){
 // For local development, a fallback kicks in after 3 seconds.
 // ══════════════════════════════════════════════════════════════════
 window.addEventListener('message', function(event){
+  if(window._shareMode) return; // client portal — no Wix auth needed
   if(!event.data || event.data.type !== 'WIX_USER') return;
   var d = event.data;
   if(!d.userId) return;
@@ -1961,6 +1963,7 @@ window.parent.postMessage('EVENTOS_READY', '*');
 // ── Dev/preview fallback: if no postMessage after 3s, use a test user
 // Remove or comment this out before going live on Wix.
 setTimeout(function(){
+  if(window._shareMode) return; // skip dev fallback in share mode
   if(!WIX_USER){
     console.warn('EventOS: no WIX_USER received — using dev fallback');
     WIX_USER = { userId: 'dev_user_local', email: 'dev@local.test', displayName: 'Dev User', token: '' };
@@ -6927,11 +6930,27 @@ function clientStatCard(icon, label, value){
 // These functions allow clients to update data when they have 'edit' permission.
 // Data is saved to localStorage (same storage the owner uses) and re-renders the section.
 
-function _clientSave(){ 
-  // Save the client's edited project back to localStorage
-  // Find which user owns this project and update it
+function _clientSave(){
   var p = window._clientProject;
   if(!p) return false;
+
+  // If viewing via share link (no Wix login), save directly to Supabase
+  // using the project owner's user_id that we resolved when loading the share
+  if(window._shareMode && window._clientProjectUserId){
+    fetch(SUPA_URL+'/rest/v1/projects', {
+      method: 'POST',
+      headers: Object.assign({}, supaHeaders(), {'Prefer':'resolution=merge-duplicates'}),
+      body: JSON.stringify({
+        id: p.id,
+        user_id: window._clientProjectUserId,
+        data: p,
+        updated_at: new Date().toISOString()
+      })
+    }).catch(function(e){ console.error('Client save error:', e); });
+    return true;
+  }
+
+  // Owner is logged in — save via normal saveProj
   var found = false;
   Object.keys(DB.projects).forEach(function(user){
     if(DB.projects[user] && DB.projects[user][p.id]){
@@ -7003,35 +7022,92 @@ function exitClientPortal(){
 }
 
 // ─── DEEP LINK — load share on page load ──────────────────────────
+// When a client opens a share link (?share=TOKEN), they are NOT logged in
+// to Wix and have no localStorage. We must fetch the project from Supabase
+// by scanning for the token. No login required for clients.
 (function(){
   var params = new URLSearchParams(window.location.search);
   var token = params.get('share');
   if(!token) return;
-  // Search local cache for the token (project owner's data synced here)
-  loadCache();
-  function findByToken(){
-    var found = null, foundShare = null;
-    Object.keys(DB.projects).forEach(function(user){
-      if(found) return;
-      Object.values(DB.projects[user]||{}).forEach(function(pr){
+
+  // Mark that we're in client/share mode so the Wix postMessage init is skipped
+  window._shareMode = true;
+
+  async function loadShareByToken(){
+    // Show loading state
+    var loadingEl = document.getElementById('pg-loading');
+    var appEl = document.getElementById('pg-app');
+    if(loadingEl) loadingEl.style.display='flex';
+    if(appEl) appEl.classList.add('hidden');
+
+    try{
+      // Query Supabase for a project whose share token matches.
+      // We filter inside the JSON data column using Supabase's PostgREST syntax.
+      var res = await fetch(
+        SUPA_URL+'/rest/v1/projects?select=data&data->>share_token=eq.'+encodeURIComponent(token),
+        { headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer '+SUPA_KEY } }
+      );
+      var rows = res.ok ? await res.json() : [];
+
+      // The above filter won't work for nested JSON — use a broader fetch and filter client-side
+      // Fetch all projects (RLS allows anon read since we set allow-all policy)
+      // and find the one with the matching token
+      if(!rows.length){
+        // Fallback: fetch with no filter and search client-side
+        // We limit by using a full scan — acceptable since share links are rare lookups
+        var res2 = await fetch(
+          SUPA_URL+'/rest/v1/projects?select=data',
+          { headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer '+SUPA_KEY } }
+        );
+        rows = res2.ok ? await res2.json() : [];
+      }
+
+      var found = null, foundShare = null;
+      rows.forEach(function(row){
         if(found) return;
-        if(pr.share && pr.share.token === token && pr.share.enabled){
+        var pr = row.data;
+        if(pr && pr.share && pr.share.token === token && pr.share.enabled){
           found = pr; foundShare = pr.share;
         }
       });
-    });
-    return {found, foundShare};
+
+      if(found){
+        // Store the project so client edits can save back to Supabase
+        window._clientProjectUserId = null;
+        // Find the user_id for this project so we can save edits back
+        var res3 = await fetch(
+          SUPA_URL+'/rest/v1/projects?select=user_id,data',
+          { headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer '+SUPA_KEY } }
+        );
+        if(res3.ok){
+          var rows3 = await res3.json();
+          rows3.forEach(function(row){
+            if(row.data && row.data.share && row.data.share.token === token){
+              window._clientProjectUserId = row.user_id;
+            }
+          });
+        }
+        renderClientPortal(found, foundShare, false);
+      } else {
+        // Token not found or share disabled
+        if(loadingEl){
+          loadingEl.innerHTML = '<div style="font-family:Cormorant Garamond,serif;font-size:32px;font-weight:600;color:var(--text)">Event<span style="color:var(--gold);font-style:italic">OS</span></div>'+
+            '<div style="font-size:14px;color:var(--danger);margin-top:12px">This share link is invalid or has been revoked.</div>'+
+            '<div style="font-size:12px;color:var(--muted);margin-top:6px">Please ask the event organizer for a new link.</div>';
+          loadingEl.style.display = 'flex';
+        }
+      }
+    } catch(e){
+      console.error('Share link load error:', e);
+      if(loadingEl){
+        loadingEl.innerHTML += '<div style="font-size:13px;color:var(--danger);margin-top:12px">Could not load event. Check your connection.</div>';
+      }
+    }
   }
-  var res = findByToken();
-  if(res.found){
-    window.addEventListener('DOMContentLoaded', function(){
-      var loadingEl = document.getElementById('pg-loading');
-      var appEl = document.getElementById('pg-app');
-      if(loadingEl) loadingEl.style.display='none';
-      if(appEl) appEl.classList.add('hidden');
-      renderClientPortal(res.found, res.foundShare, false);
-    });
-  }
+
+  // Run after DOM is ready
+  if(document.readyState !== 'loading') loadShareByToken();
+  else window.addEventListener('DOMContentLoaded', loadShareByToken);
 })();
 
 
