@@ -7739,16 +7739,16 @@ async function callAIForAction(key, userMsg, p){
 
   var userContext = 'Event: '+p.name+' | Type: '+(p.type||'social')+' | Date: '+(p.date||'TBD')+' | Location: '+(p.location||'')+' | Budget: '+(p.budget||0)+' MXN | Guests: '+((p.guests||[]).length);
 
-  var jsonDemand = '\n\nRespond with ONLY a valid JSON object. No explanations, no markdown, no code fences. Start your response with { and end with }.';
+  var jsonDemand = '\n\nYou MUST respond with ONLY a valid JSON object. No text before or after. No markdown. No code fences. Your entire response must be parseable by JSON.parse(). Start with { and end with }.';
 
   var messages;
   if(key === 'guests'){
     var guestList = (p.guests||[]).filter(function(g){return g.rsvp!=='declined';}).map(function(g){
       return g.name+' ('+g.category+(g.notes?' — '+g.notes:'')+')';
     }).join('\n');
-    messages = [{ role:'user', content: userContext+'\n\nGuest list:\n'+guestList+'\n\n'+(userMsg||'Please assign tables.')+jsonDemand }];
+    messages = [{ role:'user', content: systemPrompts[key]+'\n\n'+userContext+'\n\nGuest list:\n'+guestList+'\n\n'+(userMsg||'Please assign tables.')+jsonDemand }];
   } else {
-    messages = [{ role:'user', content: userContext+'\n\nUser request: '+userMsg+jsonDemand }];
+    messages = [{ role:'user', content: systemPrompts[key]+'\n\n'+userContext+'\n\nUser request: '+userMsg+jsonDemand }];
   }
 
   if(!AI_PROXY_URL){
@@ -7761,7 +7761,6 @@ async function callAIForAction(key, userMsg, p){
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 1000,
-      system: systemPrompts[key],
       messages: messages,
     })
   });
