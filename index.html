@@ -1927,6 +1927,9 @@ var WIX_USER = null;                    // { userId, email, displayName, token }
 // ══════════════════════════════════════════════════════════════════
 // SUPABASE CONFIG
 // ══════════════════════════════════════════════════════════════════
+// ── AI Proxy (Cloudflare Worker URL — set after deploying worker) ──
+var AI_PROXY_URL = 'https://nameless-breeze-1837.jltg90.workers.dev';
+
 var SUPA_URL  = 'https://eocozdwfewowbfaxwabt.supabase.co';
 var SUPA_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvY296ZHdmZXdvd2JmYXh3YWJ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4MTM0MzYsImV4cCI6MjA4ODM4OTQzNn0.GPcZ7pmaYESBswMINCGaAZQ4v3puvbmI4zeFh2OFyis';
 var _saveTimer = null;
@@ -7736,7 +7739,11 @@ async function callAIForAction(key, userMsg, p){
     messages = [{ role:'user', content: userContext+'\n\nUser request: '+userMsg }];
   }
 
-  var resp = await fetch('https://api.anthropic.com/v1/messages', {
+  if(!AI_PROXY_URL){
+    throw new Error('AI proxy not configured. Please set up your Cloudflare Worker and update AI_PROXY_URL in the app.');
+  }
+
+  var resp = await fetch(AI_PROXY_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
