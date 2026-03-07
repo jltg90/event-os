@@ -1300,7 +1300,7 @@ tr:hover td { background: var(--bg2); }
       style="background:transparent;border:1.5px solid var(--border);border-radius:20px;padding:5px 13px;font-size:12px;font-weight:600;cursor:pointer;color:var(--muted);letter-spacing:.05em;transition:var(--tr);margin-right:12px;display:flex;align-items:center;gap:6px"
       onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold-h)'"
       onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
-      🌐 <span id="lang-label">ES</span>
+      🌐 <span id="lang-label">EN</span>
     </button>
     <button id="share-nav-btn" onclick="openShareFromNav()" title="Share project with client" style="background:transparent;border:1.5px solid var(--border);border-radius:20px;padding:5px 11px;font-size:12px;font-weight:600;cursor:pointer;color:var(--muted);letter-spacing:.05em;transition:var(--tr);display:flex;align-items:center;gap:5px" onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold-h)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
@@ -1430,7 +1430,7 @@ tr:hover td { background: var(--bg2); }
 // ══════════════════════════════════════════
 // TRANSLATION SYSTEM
 // ══════════════════════════════════════════
-var LANG = 'en';
+var LANG = 'es';
 var CURRENCY={code:'USD',symbol:'$',name:'US Dollar'};
 var CURRENCIES=[
   {code:'USD',symbol:'$',  name:'US Dollar'},
@@ -1857,7 +1857,7 @@ function t(key){ return (TRANSLATIONS[LANG]||TRANSLATIONS.en)[key] || TRANSLATIO
 function toggleLang(){
   LANG = LANG==='en' ? 'es' : 'en';
   const btn = document.getElementById('lang-label');
-  if(btn) btn.textContent = LANG==='en' ? 'ES' : 'EN';
+  if(btn) btn.textContent = LANG==='es' ? 'EN' : 'ES';
   applyTranslations();
   toast(LANG==='es'?'Idioma cambiado a Español':'Language changed to English','s');
 }
@@ -1915,6 +1915,12 @@ function applyTranslations(){
   // Update lang button tooltip
   const lb = document.getElementById('lang-btn');
   if(lb) lb.title = LANG==='en' ? 'Cambiar a Español' : 'Switch to English';
+  // Update mobile lang label
+  const mlb = document.getElementById('mob-lang-label');
+  if(mlb) mlb.textContent = LANG==='es' ? 'English / Inglés' : 'Español / Spanish';
+  // Update lang-label button to show what you can SWITCH TO
+  const ll = document.getElementById('lang-label');
+  if(ll) ll.textContent = LANG==='es' ? 'EN' : 'ES';
 }
 
 
@@ -2152,6 +2158,7 @@ function doLogout(){
 }
 
 function enterApp(){
+  applyTranslations(); // apply default language on startup
   document.getElementById('pg-loading').style.display = 'none';
   document.getElementById('pg-app').classList.remove('hidden');
   setTimeout(updateAIFabVisibility, 200);
@@ -7882,7 +7889,7 @@ window.SCI={};
     <!-- Settings -->
     <div class="mob-drawer-section">Settings</div>
     <button class="mob-drawer-item" onclick="toggleLang();closeMobDrawer()">
-      🌐 <span id="mob-lang-label">Toggle Language</span>
+      🌐 <span id="mob-lang-label">English / Inglés</span>
     </button>
     <button class="mob-drawer-item" onclick="openCurrencyPicker();closeMobDrawer()">
       💱 <span id="mob-currency-label">Currency</span>
