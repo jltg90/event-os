@@ -1124,6 +1124,153 @@ tr:hover td { background: var(--bg2); }
 .client-stat-value { font-size:15px; font-weight:600; color:rgba(240,230,204,.9); }
 @media(max-width:600px){ .client-hero{padding:28px 20px 24px;} .client-nav{padding:0 12px;} .client-body{padding:20px;} .client-tab{padding:12px 10px;font-size:12px;} }
 @keyframes spin { to { transform: rotate(360deg); } }
+/* ═══ AI ASSISTANT ════════════════════════════════════════════════ */
+#ai-fab {
+  position: fixed;
+  bottom: 28px; right: 28px;
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #c9a84c 0%, #a8862e 100%);
+  border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 20px rgba(201,168,76,.45), 0 2px 8px rgba(0,0,0,.15);
+  z-index: 400; transition: all .25s cubic-bezier(.34,1.56,.64,1);
+  color: #fff;
+}
+#ai-fab:hover { transform: scale(1.12); box-shadow: 0 8px 28px rgba(201,168,76,.6); }
+#ai-fab.active { border-radius: 14px; background: linear-gradient(135deg, #1a2235 0%, #2d3f5e 100%); }
+
+#ai-panel {
+  position: fixed;
+  bottom: 92px; right: 28px;
+  width: 380px; max-width: calc(100vw - 32px);
+  background: var(--card);
+  border-radius: var(--r-xl);
+  border: 1px solid var(--border);
+  box-shadow: var(--sh-lg);
+  z-index: 400;
+  display: flex; flex-direction: column;
+  max-height: calc(100vh - 120px);
+  overflow: hidden;
+  animation: aiPanelIn .3s cubic-bezier(.34,1.1,.64,1) forwards;
+}
+@keyframes aiPanelIn {
+  from { opacity: 0; transform: translateY(20px) scale(.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.ai-panel-header {
+  padding: 16px 18px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-m) 100%);
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  flex-shrink: 0;
+}
+.ai-panel-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 18px; font-weight: 600; color: #f0e6cc;
+  letter-spacing: -.01em; flex: 1;
+}
+.ai-panel-sub { font-size: 11px; color: rgba(240,230,204,.45); margin-top: 1px; }
+.ai-context-bar {
+  padding: 10px 16px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px; color: var(--muted);
+  display: flex; align-items: center; gap: 6px;
+  flex-shrink: 0;
+}
+.ai-actions {
+  padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 7px;
+  overflow-y: auto; flex: 1;
+}
+.ai-action-btn {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 14px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  cursor: pointer; transition: var(--tr);
+  text-align: left; width: 100%;
+  font-family: 'Jost', sans-serif;
+}
+.ai-action-btn:hover { border-color: var(--gold); background: var(--gold-l); }
+.ai-action-icon {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: var(--gold-l); border: 1px solid rgba(201,168,76,.25);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; flex-shrink: 0;
+}
+.ai-action-label { font-size: 12.5px; font-weight: 600; color: var(--text); }
+.ai-action-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.ai-input-row {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  display: flex; gap: 8px; align-items: flex-end;
+  flex-shrink: 0;
+}
+.ai-input-row textarea {
+  flex: 1; border: 1px solid var(--border); border-radius: var(--r-sm);
+  background: var(--bg); padding: 9px 12px;
+  font-family: 'Jost', sans-serif; font-size: 13px; color: var(--text);
+  resize: none; outline: none; line-height: 1.5; min-height: 40px; max-height: 100px;
+  transition: border-color .2s;
+}
+.ai-input-row textarea:focus { border-color: var(--gold); }
+.ai-send-btn {
+  width: 38px; height: 38px; border-radius: var(--r-sm);
+  background: linear-gradient(135deg, var(--gold), var(--gold-h));
+  border: none; cursor: pointer; display: flex; align-items: center;
+  justify-content: center; flex-shrink: 0; color: #fff;
+  transition: var(--tr);
+}
+.ai-send-btn:hover { transform: scale(1.08); }
+.ai-send-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+
+/* Loading shimmer */
+.ai-loading {
+  padding: 20px; text-align: center;
+  color: var(--muted); font-size: 13px;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+}
+.ai-spinner {
+  width: 28px; height: 28px; border-radius: 50%;
+  border: 3px solid var(--border); border-top-color: var(--gold);
+  animation: spin .8s linear infinite;
+}
+
+/* Preview card */
+.ai-preview {
+  padding: 14px 16px; overflow-y: auto; flex: 1;
+}
+.ai-preview-section {
+  margin-bottom: 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+.ai-preview-section-title {
+  padding: 8px 12px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--muted);
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+}
+.ai-preview-item {
+  padding: 8px 12px; font-size: 12.5px; color: var(--text);
+  border-bottom: 1px solid var(--border); line-height: 1.4;
+}
+.ai-preview-item:last-child { border-bottom: none; }
+.ai-preview-footer {
+  padding: 12px 16px; border-top: 1px solid var(--border);
+  display: flex; gap: 8px; flex-shrink: 0;
+}
+@media (max-width: 480px) {
+  #ai-panel { bottom: 84px; right: 12px; left: 12px; width: auto; }
+  #ai-fab { bottom: 20px; right: 16px; width: 46px; height: 46px; }
+}
+
 </style>
 </head>
 <body>
@@ -2004,6 +2151,7 @@ function doLogout(){
 function enterApp(){
   document.getElementById('pg-loading').style.display = 'none';
   document.getElementById('pg-app').classList.remove('hidden');
+  setTimeout(updateAIFabVisibility, 200);
   var name    = (WIX_USER && WIX_USER.displayName) ? WIX_USER.displayName : (WIX_USER && WIX_USER.email ? WIX_USER.email : DB.cur);
   var email   = (WIX_USER && WIX_USER.email) ? WIX_USER.email : DB.cur;
   var initial = name[0].toUpperCase();
@@ -7205,6 +7353,459 @@ function showChairImg(key){
 }
 
 
+// ═══════════════════════════════════════════════════════════════════
+// AI ASSISTANT ENGINE
+// ═══════════════════════════════════════════════════════════════════
+
+var _aiPanelOpen = false;
+var _aiCurrentAction = null; // currently running action key
+var _aiPreviewData = null;   // data pending user approval
+
+var AI_ACTIONS = [
+  { key:'dashboard',  icon:'📋', label:'Fill Event Details',     sub:'Generate description, type & key info from a brief',    section:'dashboard' },
+  { key:'budget',     icon:'💰', label:'Suggest Budget',         sub:'Estimate vendor costs for your event type & size',      section:'budget'    },
+  { key:'timeline',   icon:'📅', label:'Generate Timeline',      sub:'Build a task checklist tailored to your event',         section:'timeline'  },
+  { key:'guests',     icon:'👥', label:'Assign Seating',         sub:'Suggest table assignments from your guest list',        section:'guests'    },
+  { key:'layout',     icon:'🏛', label:'Design Room Layout',     sub:'Get a layout plan with item suggestions',               section:'layout'    },
+  { key:'moodboard',  icon:'🎨', label:'Suggest Theme & Palette',sub:'Get a color palette and mood direction for your event', section:'moodboard' },
+];
+
+function toggleAIPanel(){
+  if(_aiPanelOpen) closeAIPanel();
+  else openAIPanel();
+}
+
+function openAIPanel(){
+  _aiPanelOpen = true;
+  var fab = document.getElementById('ai-fab');
+  var panel = document.getElementById('ai-panel');
+  if(fab) fab.classList.add('active');
+  if(panel) panel.classList.remove('hidden');
+  renderAIHome();
+}
+
+function closeAIPanel(){
+  _aiPanelOpen = false;
+  var fab = document.getElementById('ai-fab');
+  var panel = document.getElementById('ai-panel');
+  if(fab) fab.classList.remove('active');
+  if(panel) panel.classList.add('hidden');
+  _aiCurrentAction = null;
+  _aiPreviewData = null;
+}
+
+function renderAIHome(){
+  _aiCurrentAction = null;
+  _aiPreviewData = null;
+  var p = proj();
+  var bar = document.getElementById('ai-context-bar');
+  var body = document.getElementById('ai-panel-body');
+  var inputRow = document.getElementById('ai-input-row');
+
+  if(bar){
+    if(p){
+      bar.innerHTML = '<svg width="12" height="12" fill="none" stroke="var(--gold-h)" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>'+
+        '<span style="color:var(--gold-h);font-weight:600">'+esc(p.name)+'</span>'+
+        '<span style="color:var(--muted)">· '+esc(p.type||'event')+'</span>';
+    } else {
+      bar.innerHTML = '<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg> Open a project to enable AI assistance';
+    }
+  }
+
+  if(!body) return;
+  if(inputRow) inputRow.style.display = 'flex';
+
+  if(!p){
+    body.innerHTML = '<div style="padding:30px 16px;text-align:center;color:var(--muted)">'+
+      '<div style="font-size:32px;margin-bottom:10px">✦</div>'+
+      '<div style="font-size:13px;font-weight:600;margin-bottom:6px">No project open</div>'+
+      '<div style="font-size:12px;line-height:1.5">Open a project first, then the AI can help fill in details, build timelines, suggest budgets, and more.</div>'+
+    '</div>';
+    if(inputRow) inputRow.style.display = 'none';
+    return;
+  }
+
+  body.innerHTML = AI_ACTIONS.map(function(a){
+    return '<button class="ai-action-btn" onclick="startAIAction(\''+a.key+'\')">'+
+      '<div class="ai-action-icon">'+a.icon+'</div>'+
+      '<div>'+
+        '<div class="ai-action-label">'+a.label+'</div>'+
+        '<div class="ai-action-sub">'+a.sub+'</div>'+
+      '</div>'+
+      '<svg style="margin-left:auto;flex-shrink:0;color:var(--light)" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>'+
+    '</button>';
+  }).join('');
+}
+
+function startAIAction(key){
+  var a = AI_ACTIONS.find(function(x){ return x.key===key; });
+  if(!a) return;
+  _aiCurrentAction = key;
+  var p = proj(); if(!p) return;
+
+  // Build context-aware default prompts per action
+  var prompts = {
+    dashboard: 'Describe the event in a few words and I\'ll fill in the details.',
+    budget:    'How many guests are expected? I\'ll estimate vendor costs.',
+    timeline:  'When is the event? I\'ll build a full task timeline.',
+    guests:    'I\'ll suggest table assignments based on your current guest list.',
+    layout:    'What type of space? (ballroom, outdoor, office, etc.)',
+    moodboard: 'What\'s the vibe or style you\'re going for?',
+  };
+
+  var body = document.getElementById('ai-panel-body');
+  if(!body) return;
+  var inputRow = document.getElementById('ai-input-row');
+  if(inputRow) inputRow.style.display = 'flex';
+
+  body.innerHTML =
+    '<div style="display:flex;align-items:center;gap:8px;padding:4px 0 12px">'+
+      '<button onclick="renderAIHome()" style="background:transparent;border:none;color:var(--muted);cursor:pointer;padding:4px;border-radius:6px;display:flex;align-items:center;gap:4px;font-size:12px;font-family:Jost,sans-serif;transition:.15s" onmouseover="this.style.color=\'var(--text)\'" onmouseout="this.style.color=\'var(--muted)\'">'+
+        '<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg> Back'+
+      '</button>'+
+      '<div style="font-size:13px;font-weight:600">'+a.icon+' '+a.label+'</div>'+
+    '</div>'+
+    '<div style="font-size:12px;color:var(--muted);line-height:1.6;padding:10px 12px;background:var(--bg2);border-radius:var(--r-sm);border:1px solid var(--border)">'+
+      prompts[key]+
+    '</div>'+
+    '<div style="font-size:11px;color:var(--muted);margin-top:10px;text-align:center">Type your details below and press Send ↵</div>';
+
+  // Pre-focus the textarea
+  var ta = document.getElementById('ai-prompt');
+  if(ta){ ta.value=''; ta.focus(); }
+}
+
+async function sendAIPrompt(){
+  var ta = document.getElementById('ai-prompt');
+  var btn = document.getElementById('ai-send-btn');
+  var userMsg = ta ? ta.value.trim() : '';
+  if(!userMsg && _aiCurrentAction !== 'guests') return; // guests can run without prompt
+
+  var p = proj(); if(!p) return;
+  if(ta) ta.value='';
+  if(btn) btn.disabled = true;
+
+  showAILoading();
+
+  try{
+    var result = await callAIForAction(_aiCurrentAction, userMsg, p);
+    _aiPreviewData = result;
+    showAIPreview(result, _aiCurrentAction);
+  } catch(e){
+    showAIError(e.message || 'Something went wrong. Try again.');
+  } finally {
+    if(btn) btn.disabled = false;
+  }
+}
+
+function showAILoading(){
+  var body = document.getElementById('ai-panel-body');
+  var inputRow = document.getElementById('ai-input-row');
+  if(inputRow) inputRow.style.display = 'none';
+  if(body) body.innerHTML =
+    '<div class="ai-loading">'+
+      '<div class="ai-spinner"></div>'+
+      '<div>Thinking<span id="ai-dots">.</span></div>'+
+    '</div>';
+  // Animate dots
+  var dots = 0;
+  window._aiDotsTimer = setInterval(function(){
+    var el = document.getElementById('ai-dots');
+    if(!el){ clearInterval(window._aiDotsTimer); return; }
+    dots=(dots+1)%4;
+    el.textContent='.'.repeat(dots+1);
+  }, 400);
+}
+
+function showAIError(msg){
+  clearInterval(window._aiDotsTimer);
+  var body = document.getElementById('ai-panel-body');
+  var inputRow = document.getElementById('ai-input-row');
+  if(inputRow) inputRow.style.display = 'flex';
+  if(body) body.innerHTML =
+    '<div style="padding:20px 16px;text-align:center">'+
+      '<div style="font-size:28px;margin-bottom:8px">⚠️</div>'+
+      '<div style="font-size:13px;color:var(--danger);font-weight:600;margin-bottom:6px">Error</div>'+
+      '<div style="font-size:12px;color:var(--muted);line-height:1.5">'+esc(msg)+'</div>'+
+      '<button class="btn btn-ghost btn-sm" onclick="startAIAction(\''+(_aiCurrentAction||'dashboard')+'\')" style="margin-top:14px">Try again</button>'+
+    '</div>';
+}
+
+// ── Render the preview (before user confirms) ──────────────────────
+function showAIPreview(data, key){
+  clearInterval(window._aiDotsTimer);
+  var a = AI_ACTIONS.find(function(x){ return x.key===key; });
+  var body = document.getElementById('ai-panel-body');
+  var inputRow = document.getElementById('ai-input-row');
+  if(inputRow) inputRow.style.display = 'none';
+  if(!body) return;
+
+  var html = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">'+
+    '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gold-h)">✦ Preview</div>'+
+    '<div style="font-size:11px;color:var(--muted)">Review before applying</div>'+
+  '</div>';
+
+  html += renderAIPreviewContent(key, data);
+
+  html += '<div class="ai-preview-footer">'+
+    '<button class="btn btn-ghost btn-sm" onclick="startAIAction(\''+key+'\')" style="gap:4px">'+
+      '<svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>'+
+      'Regenerate'+
+    '</button>'+
+    '<button class="btn btn-primary btn-sm" onclick="applyAIPreview()" style="flex:1;justify-content:center;gap:5px">'+
+      '<svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>'+
+      'Apply to Project'+
+    '</button>'+
+  '</div>';
+
+  body.innerHTML = html;
+}
+
+function renderAIPreviewContent(key, data){
+  var html = '';
+  if(key === 'dashboard'){
+    html += aiPreviewSection('Event Details', Object.entries(data).map(function(kv){
+      return '<div class="ai-preview-item"><span style="color:var(--muted);font-size:11px">'+kv[0]+'</span><br>'+esc(String(kv[1]))+'</div>';
+    }).join(''));
+  }
+  else if(key === 'budget'){
+    html += aiPreviewSection('Vendor Estimates', (data.vendors||[]).map(function(v){
+      return '<div class="ai-preview-item" style="display:flex;justify-content:space-between;gap:8px">'+
+        '<span>'+esc(v.name)+'<br><span style="font-size:11px;color:var(--muted)">'+esc(v.category)+'</span></span>'+
+        '<span style="color:var(--gold-h);font-weight:600;flex-shrink:0">'+fmtMoney(v.budget||0)+'</span>'+
+      '</div>';
+    }).join(''));
+    if(data.total) html += '<div style="text-align:right;font-size:12px;font-weight:700;color:var(--gold-h);padding:8px 12px">Total: '+fmtMoney(data.total)+'</div>';
+  }
+  else if(key === 'timeline'){
+    html += aiPreviewSection('Tasks', (data.tasks||[]).map(function(t){
+      return '<div class="ai-preview-item">'+esc(t.title)+'<br>'+
+        '<span style="font-size:11px;color:var(--muted)">'+esc(t.assignee||'')+(t.dueDate?' · '+fmtDate(t.dueDate):'')+'</span>'+
+      '</div>';
+    }).join(''));
+  }
+  else if(key === 'guests'){
+    var byTable = {};
+    (data.assignments||[]).forEach(function(a){
+      if(!byTable[a.table]) byTable[a.table] = [];
+      byTable[a.table].push(a.name);
+    });
+    html += Object.keys(byTable).sort(function(a,b){return Number(a)-Number(b);}).map(function(tbl){
+      return aiPreviewSection('Table '+tbl, byTable[tbl].map(function(n){
+        return '<div class="ai-preview-item">'+esc(n)+'</div>';
+      }).join(''));
+    }).join('');
+  }
+  else if(key === 'layout'){
+    html += aiPreviewSection('Layout Concept', '<div class="ai-preview-item" style="line-height:1.6">'+esc(data.description||'')+'</div>');
+    if((data.items||[]).length){
+      html += aiPreviewSection('Suggested Items', (data.items||[]).map(function(it){
+        return '<div class="ai-preview-item" style="display:flex;justify-content:space-between">'+
+          '<span>'+esc(it.label)+'</span>'+
+          '<span style="font-size:11px;color:var(--muted)">'+esc(it.type||'')+'</span>'+
+        '</div>';
+      }).join(''));
+    }
+  }
+  else if(key === 'moodboard'){
+    html += aiPreviewSection('Theme', '<div class="ai-preview-item">'+
+      '<strong>'+esc(data.theme||'')+'</strong><br>'+
+      '<span style="font-size:12px;color:var(--muted);line-height:1.5">'+esc(data.description||'')+'</span>'+
+    '</div>');
+    if((data.palette||[]).length){
+      html += aiPreviewSection('Color Palette',
+        '<div style="display:flex;gap:8px;padding:10px 12px;flex-wrap:wrap">'+
+        (data.palette||[]).map(function(c){
+          return '<div style="text-align:center">'+
+            '<div style="width:40px;height:40px;border-radius:8px;background:'+esc(c.hex)+';border:1px solid rgba(0,0,0,.1);margin-bottom:4px"></div>'+
+            '<div style="font-size:9px;color:var(--muted)">'+esc(c.name||c.hex)+'</div>'+
+          '</div>';
+        }).join('')+
+        '</div>');
+    }
+    if((data.keywords||[]).length){
+      html += aiPreviewSection('Keywords',
+        '<div style="display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px">'+
+        (data.keywords||[]).map(function(k){
+          return '<span style="padding:3px 10px;border-radius:20px;background:var(--gold-l);border:1px solid rgba(201,168,76,.3);font-size:11px;color:var(--gold-h)">'+esc(k)+'</span>';
+        }).join('')+
+        '</div>');
+    }
+  }
+  return html;
+}
+
+function aiPreviewSection(title, innerHtml){
+  return '<div class="ai-preview-section">'+
+    '<div class="ai-preview-section-title">'+esc(title)+'</div>'+
+    innerHtml+
+  '</div>';
+}
+
+// ── Apply confirmed preview to project ─────────────────────────────
+function applyAIPreview(){
+  var p = proj(); if(!p || !_aiPreviewData) return;
+  var key = _aiCurrentAction;
+  var data = _aiPreviewData;
+
+  if(key === 'dashboard'){
+    if(data.name)        p.name        = data.name;
+    if(data.description) p.description = data.description;
+    if(data.type)        p.type        = data.type;
+    if(data.location)    p.location    = data.location;
+    if(data.status)      p.status      = data.status;
+  }
+  else if(key === 'budget'){
+    (data.vendors||[]).forEach(function(aiV){
+      var existing = (p.vendors||[]).find(function(v){ return v.name===aiV.name; });
+      if(existing){ if(aiV.budget) existing.budget = aiV.budget; }
+      else { p.vendors = p.vendors||[]; p.vendors.push({id:'ai'+Date.now()+Math.random().toString(36).slice(2,6), name:aiV.name||'', category:aiV.category||'Other Services', subcategory:'Other', services:aiV.services||'', contact:'', phone:'', budget:aiV.budget||0, payments:[], hired:false, notes:aiV.notes||''}); }
+    });
+  }
+  else if(key === 'timeline'){
+    var base = new Date(); function dStr(n){var d=new Date(base);d.setDate(d.getDate()+n);return d.toISOString().split('T')[0];}
+    var tasks = (data.tasks||[]).map(function(t,i){
+      return { id:'ait'+Date.now()+i, title:t.title||'Task', desc:t.desc||'', assignee:t.assignee||'Event Coordinator', dueDate:t.dueDate||dStr(i*7), done:false, color:t.color||'#c9a84c' };
+    });
+    p.tasks = tasks;
+  }
+  else if(key === 'guests'){
+    (data.assignments||[]).forEach(function(a){
+      var g = (p.guests||[]).find(function(g){ return g.name===a.name; });
+      if(g) g.table = String(a.table||'');
+    });
+  }
+  else if(key === 'layout'){
+    // Add suggested items to layout (positioned in a grid)
+    var items = (data.items||[]).slice(0,20);
+    var col=0, row=0, perRow=3;
+    var newItems = items.map(function(it, i){
+      col = i % perRow; row = Math.floor(i / perRow);
+      return { id:'ail'+Date.now()+i, type:it.type||'rect', label:it.label||'Item', x:60+col*200, y:60+row*150, w:it.w||160, h:it.h||100, color:it.color||'#e8dcc8', rotation:0 };
+    });
+    p.layoutItems = (p.layoutItems||[]).concat(newItems);
+  }
+  else if(key === 'moodboard'){
+    // Add palette swatches as a note in project description if moodboard is empty
+    var note = '🎨 Theme: '+(data.theme||'')+'\n'+
+      (data.description||'')+'\n\nPalette: '+(data.palette||[]).map(function(c){return c.name||c.hex;}).join(', ')+
+      '\nKeywords: '+(data.keywords||[]).join(', ');
+    p.aiMoodNote = note;
+    // Store palette on project for moodboard render
+    p.aiPalette = data.palette||[];
+    p.aiTheme = data.theme||'';
+  }
+
+  saveProj(p);
+  toast('✦ AI suggestions applied!','s');
+  closeAIPanel();
+
+  // Navigate to the relevant section
+  var sectionMap = { dashboard:'dash', budget:'budget', timeline:'timeline', guests:'guests', layout:'layout', moodboard:'moodboard' };
+  var tab = sectionMap[key];
+  if(tab && CID) openTab(tab);
+}
+
+// ── API call per action ─────────────────────────────────────────────
+async function callAIForAction(key, userMsg, p){
+  var systemPrompts = {
+    dashboard: 'You are an event management assistant. The user describes an event in a few words. Return ONLY valid JSON (no markdown, no preamble) with these keys: name, description, type (one of: social, corporate, community, government, education), location, status (one of: planning, confirmed, in_progress, completed, cancelled). Be concise.',
+
+    budget: 'You are a luxury event planner. Given the event details and guest count, suggest realistic vendor budget allocations. Return ONLY valid JSON with: { "vendors": [ { "name": string, "category": string, "budget": number (in MXN), "notes": string } ], "total": number }. Include 5-8 key vendors relevant to the event type. Use MXN peso amounts appropriate for Mexico.',
+
+    timeline: 'You are an event planning expert. Generate a realistic task timeline for the event. Return ONLY valid JSON with: { "tasks": [ { "title": string, "desc": string, "assignee": string, "dueDate": "YYYY-MM-DD", "color": "#hexcolor", "done": false } ] }. Generate 10-15 tasks spread from today to the event date. Use these assignee roles: Event Coordinator, Vendor Manager, Creative Director. Colors: #7c3aed for admin, #10b981 for vendor, #f59e0b for guest, #ec4899 for creative, #c9a84c for logistics.',
+
+    guests: 'You are a seating arrangement expert. Given the guest list, assign each guest to a numbered table (1–N) based on their category, relationships hinted in notes, and RSVP status. Exclude declined guests. Return ONLY valid JSON with: { "assignments": [ { "name": string, "table": number } ] }. Group families together, VIPs at low-numbered tables, mix work colleagues.',
+
+    layout: 'You are an event space designer. Given the event type and venue description, suggest a room layout. Return ONLY valid JSON with: { "description": string (2-3 sentences describing the layout concept), "items": [ { "label": string, "type": string (one of: rect, circle, table-round, table-rect), "w": number, "h": number, "color": "#hex" } ] }. Generate 8-15 items. Tables: w~120 h~80. Stage: w~300 h~100. Bar: w~200 h~80. Dance floor: w~250 h~250. Use warm neutral colors (#e8dcc8, #d4c5a9, #c9b99a).',
+
+    moodboard: 'You are a luxury event creative director. Given the event description and the client\'s style notes, suggest a theme and color palette. Return ONLY valid JSON with: { "theme": string (theme name, 2-5 words), "description": string (2-3 sentences describing the mood), "palette": [ { "hex": "#RRGGBB", "name": string } ], "keywords": [ string ] }. Include 4-6 palette colors. Include 6-8 mood keywords.',
+  };
+
+  var userContext = 'Event: '+p.name+' | Type: '+(p.type||'social')+' | Date: '+(p.date||'TBD')+' | Location: '+(p.location||'')+' | Budget: '+(p.budget||0)+' MXN | Guests: '+((p.guests||[]).length);
+
+  var messages;
+
+  if(key === 'guests'){
+    // Pass full guest list
+    var guestList = (p.guests||[]).filter(function(g){return g.rsvp!=='declined';}).map(function(g){
+      return g.name+' ('+g.category+(g.notes?' — '+g.notes:'')+')';
+    }).join('\n');
+    messages = [{ role:'user', content: userContext+'\n\nGuest list:\n'+guestList+'\n\n'+(userMsg||'Please assign tables.') }];
+  } else {
+    messages = [{ role:'user', content: userContext+'\n\nUser request: '+userMsg }];
+  }
+
+  var resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      system: systemPrompts[key],
+      messages: messages,
+    })
+  });
+
+  if(!resp.ok){
+    var errData = await resp.json().catch(function(){return {};});
+    throw new Error((errData.error&&errData.error.message)||'API error '+resp.status);
+  }
+
+  var data = await resp.json();
+  var raw = (data.content||[]).map(function(c){return c.text||'';}).join('');
+
+  // Strip markdown code fences if present
+  raw = raw.replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
+
+  try {
+    return JSON.parse(raw);
+  } catch(e) {
+    // Try to extract JSON from the string
+    var match = raw.match(/\{[\s\S]*\}/);
+    if(match) return JSON.parse(match[0]);
+    throw new Error('Could not parse AI response. Please try again.');
+  }
+}
+
+// ── Show/hide FAB based on whether we're in the main app ──────────
+function updateAIFabVisibility(){
+  var fab = document.getElementById('ai-fab');
+  if(!fab) return;
+  var clientHidden = document.getElementById('pg-client').classList.contains('hidden');
+  var appHidden = document.getElementById('pg-app').classList.contains('hidden');
+  if(clientHidden && !appHidden && !window._shareMode){
+    fab.classList.remove('hidden');
+  } else {
+    fab.classList.add('hidden');
+    closeAIPanel();
+  }
+}
+
+// Hook into existing tab/nav functions to update FAB visibility
+var _origOpenProject = typeof openProject === 'function' ? openProject : null;
+var _origRenderEvents = typeof renderEvents === 'function' ? renderEvents : null;
+
+// Patch after DOM ready
+window.addEventListener('DOMContentLoaded', function(){
+  setTimeout(function(){ updateAIFabVisibility(); }, 500);
+});
+
+// Also update when project opens — patch openProject
+(function(){
+  var _op = window.openProject;
+  if(_op) window.openProject = function(){
+    _op.apply(this, arguments);
+    setTimeout(updateAIFabVisibility, 100);
+  };
+  var _rt = window.openTab;
+  if(_rt) window.openTab = function(){
+    _rt.apply(this, arguments);
+    if(_aiPanelOpen) renderAIHome(); // refresh context bar
+  };
+})();
+
+
 // Chair image zoom registry - built after showChairImg is defined
 window.SCI={};
 (function(){Object.keys(CHAIR_IMAGES).forEach(function(k){window.SCI[k]=function(){showChairImg(k);};});})();
@@ -7288,6 +7889,42 @@ window.SCI={};
     <div class="mob-drawer-divider"></div>
     <button class="mob-drawer-item" style="color:var(--danger)" onclick="doLogout()">
       🚪 Sign Out
+    </button>
+  </div>
+</div>
+
+<!-- ═══ AI ASSISTANT FAB + PANEL ══════════════════════════════════ -->
+<button id="ai-fab" onclick="toggleAIPanel()" title="AI Assistant" class="hidden">
+  <svg id="ai-fab-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M12 2a7 7 0 0 1 7 7c0 3-1.5 5.5-4 6.7V18a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-2.3C6.5 14.5 5 12 5 9a7 7 0 0 1 7-7z"/>
+    <path d="M9 21h6M10 17h4"/>
+  </svg>
+</button>
+
+<div id="ai-panel" class="hidden">
+  <div class="ai-panel-header">
+    <div style="width:34px;height:34px;border-radius:10px;background:rgba(201,168,76,.15);border:1px solid rgba(201,168,76,.3);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">✦</div>
+    <div>
+      <div class="ai-panel-title">AI Assistant</div>
+      <div class="ai-panel-sub">Powered by Claude</div>
+    </div>
+    <button onclick="closeAIPanel()" style="background:transparent;border:none;color:rgba(240,230,204,.4);cursor:pointer;padding:4px;border-radius:6px;transition:.15s" onmouseover="this.style.color='rgba(240,230,204,.8)'" onmouseout="this.style.color='rgba(240,230,204,.4)'">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div class="ai-context-bar" id="ai-context-bar">
+    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+    Open a project to enable AI assistance
+  </div>
+  <div id="ai-panel-body" class="ai-actions">
+    <!-- populated by renderAIActions() -->
+  </div>
+  <div class="ai-input-row" id="ai-input-row">
+    <textarea id="ai-prompt" placeholder="Ask anything about your event…" rows="1"
+      oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAIPrompt();}"></textarea>
+    <button class="ai-send-btn" id="ai-send-btn" onclick="sendAIPrompt()">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
     </button>
   </div>
 </div>
