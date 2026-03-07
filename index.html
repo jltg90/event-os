@@ -7718,26 +7718,29 @@ function applyAIPreview(){
 
 // ── API call per action ─────────────────────────────────────────────
 async function callAIForAction(key, userMsg, p){
+  // Language instruction — prepended to every system prompt
+  var langInstr = (typeof LANG !== 'undefined' && LANG === 'es')
+    ? 'IMPORTANT: All text values in the JSON (names, descriptions, labels, notes, keywords, assignee roles, etc.) must be written in Spanish. '
+    : 'IMPORTANT: All text values in the JSON must be written in English. ';
+
   var systemPrompts = {
-    dashboard: 'You are an event management assistant. The user describes an event in a few words. Return ONLY valid JSON (no markdown, no preamble) with these keys: name, description, type (one of: social, corporate, community, government, education), location, status (one of: planning, confirmed, in_progress, completed, cancelled). Be concise.',
+    dashboard: langInstr+'You are an event management assistant. The user describes an event in a few words. Return ONLY a raw JSON object (no markdown, no code fences, no explanation) with these exact keys: name, description, type (one of: social, corporate, community, government, education), location, status (one of: planning, confirmed, in_progress, completed, cancelled).',
 
-    budget: 'You are a luxury event planner. Given the event details and guest count, suggest realistic vendor budget allocations. Return ONLY valid JSON with: { "vendors": [ { "name": string, "category": string, "budget": number (in MXN), "notes": string } ], "total": number }. Include 5-8 key vendors relevant to the event type. Use MXN peso amounts appropriate for Mexico.',
+    budget: langInstr+'You are a luxury event planner. Given the event details and guest count, suggest realistic vendor budget allocations. Return ONLY a raw JSON object (no markdown, no code fences, no explanation) with: { "vendors": [ { "name": string, "category": string, "budget": number (in MXN), "notes": string } ], "total": number }. Include 5-8 key vendors relevant to the event type. Use MXN peso amounts appropriate for Mexico.',
 
-    timeline: 'You are an event planning expert. Generate a realistic task timeline for the event. Return ONLY valid JSON with: { "tasks": [ { "title": string, "desc": string, "assignee": string, "dueDate": "YYYY-MM-DD", "color": "#hexcolor", "done": false } ] }. Generate 10-15 tasks spread from today to the event date. Use these assignee roles: Event Coordinator, Vendor Manager, Creative Director. Colors: #7c3aed for admin, #10b981 for vendor, #f59e0b for guest, #ec4899 for creative, #c9a84c for logistics.',
+    timeline: langInstr+'You are an event planning expert. Generate a realistic task timeline for the event. Return ONLY a raw JSON object (no markdown, no code fences, no explanation) with: { "tasks": [ { "title": string, "desc": string, "assignee": string, "dueDate": "YYYY-MM-DD", "color": "#hexcolor", "done": false } ] }. Generate 10-15 tasks spread from today to the event date. Colors: #7c3aed for admin, #10b981 for vendor, #f59e0b for guest, #ec4899 for creative, #c9a84c for logistics.',
 
-    guests: 'You are a seating arrangement expert. Given the guest list, assign each guest to a numbered table (1–N) based on their category, relationships hinted in notes, and RSVP status. Exclude declined guests. Return ONLY valid JSON with: { "assignments": [ { "name": string, "table": number } ] }. Group families together, VIPs at low-numbered tables, mix work colleagues.',
+    guests: langInstr+'You are a seating arrangement expert. Given the guest list, assign each guest to a numbered table (1–N) based on their category, relationships hinted in notes, and RSVP status. Exclude declined guests. Return ONLY a raw JSON object (no markdown, no code fences, no explanation) with: { "assignments": [ { "name": string, "table": number } ] }. Group families together, VIPs at low-numbered tables.',
 
-    layout: 'You are an event space designer. Given the event type and venue description, suggest a room layout. Return ONLY valid JSON with: { "description": string (2-3 sentences describing the layout concept), "items": [ { "label": string, "type": string (one of: rect, circle, table-round, table-rect), "w": number, "h": number, "color": "#hex" } ] }. Generate 8-15 items. Tables: w~120 h~80. Stage: w~300 h~100. Bar: w~200 h~80. Dance floor: w~250 h~250. Use warm neutral colors (#e8dcc8, #d4c5a9, #c9b99a).',
+    layout: langInstr+'You are an event space designer. Given the event type and venue description, suggest a room layout. Return ONLY a raw JSON object (no markdown, no code fences, no explanation) with: { "description": string (2-3 sentences), "items": [ { "label": string, "type": string (one of: rect, circle, table-round, table-rect), "w": number, "h": number, "color": "#hex" } ] }. Generate 8-15 items. Use warm neutral colors (#e8dcc8, #d4c5a9, #c9b99a).',
 
-    moodboard: 'You are a luxury event creative director. Given the event description and the client\'s style notes, suggest a theme and color palette. Return ONLY valid JSON with: { "theme": string (theme name, 2-5 words), "description": string (2-3 sentences describing the mood), "palette": [ { "hex": "#RRGGBB", "name": string } ], "keywords": [ string ] }. Include 4-6 palette colors. Include 6-8 mood keywords.',
+    moodboard: langInstr+'You are a luxury event creative director. Given the event description and style notes, suggest a theme and color palette. Return ONLY a raw JSON object (no markdown, no code fences, no explanation) with: { "theme": string (2-5 words), "description": string (2-3 sentences), "palette": [ { "hex": "#RRGGBB", "name": string } ], "keywords": [ string ] }. Include 4-6 palette colors and 6-8 mood keywords.',
   };
 
   var userContext = 'Event: '+p.name+' | Type: '+(p.type||'social')+' | Date: '+(p.date||'TBD')+' | Location: '+(p.location||'')+' | Budget: '+(p.budget||0)+' MXN | Guests: '+((p.guests||[]).length);
 
   var messages;
-
   if(key === 'guests'){
-    // Pass full guest list
     var guestList = (p.guests||[]).filter(function(g){return g.rsvp!=='declined';}).map(function(g){
       return g.name+' ('+g.category+(g.notes?' — '+g.notes:'')+')';
     }).join('\n');
@@ -7747,7 +7750,7 @@ async function callAIForAction(key, userMsg, p){
   }
 
   if(!AI_PROXY_URL){
-    throw new Error('AI proxy not configured. Please set up your Cloudflare Worker and update AI_PROXY_URL in the app.');
+    throw new Error('AI proxy not configured.');
   }
 
   var resp = await fetch(AI_PROXY_URL, {
@@ -7769,17 +7772,20 @@ async function callAIForAction(key, userMsg, p){
   var data = await resp.json();
   var raw = (data.content||[]).map(function(c){return c.text||'';}).join('');
 
-  // Strip markdown code fences if present
-  raw = raw.replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
+  // Strip any markdown fences, leading/trailing whitespace
+  raw = raw.replace(/^```[a-z]*\s*/i,'').replace(/```\s*$/,'').trim();
 
-  try {
-    return JSON.parse(raw);
-  } catch(e) {
-    // Try to extract JSON from the string
-    var match = raw.match(/\{[\s\S]*\}/);
-    if(match) return JSON.parse(match[0]);
-    throw new Error('Could not parse AI response. Please try again.');
+  // Try direct parse first
+  try { return JSON.parse(raw); } catch(e){}
+
+  // Find the outermost {...} block and parse that
+  var start = raw.indexOf('{');
+  var end   = raw.lastIndexOf('}');
+  if(start !== -1 && end > start){
+    try { return JSON.parse(raw.slice(start, end+1)); } catch(e){}
   }
+
+  throw new Error('Could not parse AI response. Please try again.');
 }
 
 // ── Show/hide FAB based on whether we're in the main app ──────────
