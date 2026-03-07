@@ -7760,7 +7760,7 @@ async function callAIForAction(key, userMsg, p){
       model: 'claude-sonnet-4-20250514',
       max_tokens: 1000,
       system: systemPrompts[key],
-      messages: messages,
+      messages: messages.concat([{ role: 'assistant', content: '{' }]),
     })
   });
 
@@ -7778,7 +7778,7 @@ async function callAIForAction(key, userMsg, p){
     throw new Error(msg);
   }
 
-  var raw = (data.content||[]).map(function(c){return c.text||'';}).join('');
+  var raw = '{' + (data.content||[]).map(function(c){return c.text||'';}).join('');
   console.log('[EventOS AI] Raw text:', raw.slice(0, 200));
 
   if(!raw.trim()){
