@@ -1266,130 +1266,6 @@ tr:hover td { background: var(--bg2); }
   padding: 12px 16px; border-top: 1px solid var(--border);
   display: flex; gap: 8px; flex-shrink: 0;
 }
-/* Chat mode */
-#ai-chat-area {
-  display: none; flex-direction: column; gap: 10px;
-  padding: 12px 16px; overflow-y: auto; flex: 1;
-  scroll-behavior: smooth;
-}
-#ai-chat-area.active { display: flex; }
-.ai-msg { display: flex; flex-direction: column; gap: 3px; max-width: 92%; }
-.ai-msg.user { align-self: flex-end; align-items: flex-end; }
-.ai-msg.assistant { align-self: flex-start; align-items: flex-start; }
-.ai-bubble {
-  padding: 9px 13px; border-radius: 14px; font-size: 12.5px; line-height: 1.55;
-  font-family: 'Jost', sans-serif;
-}
-.ai-msg.user .ai-bubble {
-  background: linear-gradient(135deg, var(--gold), var(--gold-h));
-  color: #1c1a15; border-bottom-right-radius: 4px; font-weight: 500;
-}
-.ai-msg.assistant .ai-bubble {
-  background: var(--bg2); border: 1px solid var(--border); color: var(--text);
-  border-bottom-left-radius: 4px;
-}
-.ai-bubble-time { font-size: 10px; color: var(--light); padding: 0 4px; }
-.ai-suggestion-chips {
-  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px;
-}
-.ai-chip {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 5px 11px; border-radius: 20px;
-  border: 1px solid rgba(201,168,76,.35); background: var(--gold-l);
-  color: var(--gold-h); font-size: 11px; font-weight: 600;
-  cursor: pointer; transition: var(--tr); font-family: 'Jost', sans-serif;
-}
-.ai-chip:hover { background: rgba(201,168,76,.2); border-color: var(--gold); }
-.ai-chip-nav {
-  border-color: rgba(100,180,255,.3); background: rgba(100,180,255,.06);
-  color: #64b4ff;
-}
-.ai-chip-nav:hover { background: rgba(100,180,255,.12); border-color: #64b4ff; }
-.ai-typing {
-  display: flex; gap: 4px; align-items: center; padding: 10px 14px;
-  background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 14px; border-bottom-left-radius: 4px; width: fit-content;
-}
-.ai-typing span {
-  width: 6px; height: 6px; border-radius: 50%; background: var(--muted);
-  animation: aiTyping 1.2s infinite;
-}
-.ai-typing span:nth-child(2) { animation-delay: .2s; }
-.ai-typing span:nth-child(3) { animation-delay: .4s; }
-@keyframes aiTyping { 0%,60%,100%{transform:translateY(0);opacity:.4} 30%{transform:translateY(-4px);opacity:1} }
-
-/* Chat toggle tab */
-.ai-mode-tabs {
-  display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0;
-}
-.ai-mode-tab {
-  flex: 1; padding: 8px; font-size: 11px; font-weight: 600;
-  font-family: 'Jost', sans-serif; cursor: pointer; border: none;
-  background: transparent; color: var(--muted); transition: var(--tr);
-  letter-spacing: .03em; text-transform: uppercase;
-}
-.ai-mode-tab.active { color: var(--gold-h); border-bottom: 2px solid var(--gold); }
-.ai-mode-tab:hover:not(.active) { color: var(--text); }
-
-/* ── AI Chat mode ─────────────────────────────────────────── */
-#ai-chat-area {
-  display: none; flex-direction: column; gap: 10px;
-  padding: 12px 16px; overflow-y: auto; flex: 1;
-  scroll-behavior: smooth; min-height: 0;
-}
-#ai-chat-area.active { display: flex; }
-.ai-msg { display: flex; flex-direction: column; gap: 3px; max-width: 92%; }
-.ai-msg.user { align-self: flex-end; align-items: flex-end; }
-.ai-msg.assistant { align-self: flex-start; align-items: flex-start; }
-.ai-bubble {
-  padding: 9px 13px; border-radius: 14px; font-size: 12.5px; line-height: 1.55;
-  font-family: 'Jost', sans-serif;
-}
-.ai-msg.user .ai-bubble {
-  background: linear-gradient(135deg, var(--gold), var(--gold-h));
-  color: #1c1a15; border-bottom-right-radius: 4px; font-weight: 500;
-}
-.ai-msg.assistant .ai-bubble {
-  background: var(--bg2); border: 1px solid var(--border); color: var(--text);
-  border-bottom-left-radius: 4px;
-}
-.ai-bubble-time { font-size: 10px; color: var(--light); padding: 0 4px; }
-.ai-suggestion-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.ai-chip {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 5px 11px; border-radius: 20px;
-  border: 1px solid rgba(201,168,76,.35); background: var(--gold-l);
-  color: var(--gold-h); font-size: 11px; font-weight: 600;
-  cursor: pointer; transition: var(--tr); font-family: 'Jost', sans-serif;
-  white-space: nowrap;
-}
-.ai-chip:hover { background: rgba(201,168,76,.2); border-color: var(--gold); }
-.ai-chip-nav {
-  border-color: rgba(100,180,255,.3); background: rgba(100,180,255,.06); color: #64b4ff;
-}
-.ai-chip-nav:hover { background: rgba(100,180,255,.12); border-color: #64b4ff; }
-.ai-typing {
-  display: flex; gap: 4px; align-items: center; padding: 10px 14px;
-  background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 14px; border-bottom-left-radius: 4px; width: fit-content;
-}
-.ai-typing span {
-  width: 6px; height: 6px; border-radius: 50%; background: var(--muted);
-  animation: aiTyping 1.2s infinite;
-}
-.ai-typing span:nth-child(2) { animation-delay: .2s; }
-.ai-typing span:nth-child(3) { animation-delay: .4s; }
-@keyframes aiTyping { 0%,60%,100%{transform:translateY(0);opacity:.4} 30%{transform:translateY(-4px);opacity:1} }
-.ai-mode-tabs { display:flex; border-bottom:1px solid var(--border); flex-shrink:0; }
-.ai-mode-tab {
-  flex:1; padding:8px; font-size:11px; font-weight:600;
-  font-family:'Jost',sans-serif; cursor:pointer; border:none; border-bottom: 2px solid transparent;
-  background:transparent; color:var(--muted); transition:var(--tr);
-  letter-spacing:.03em; text-transform:uppercase;
-}
-.ai-mode-tab.active { color:var(--gold-h); border-bottom-color:var(--gold); }
-.ai-mode-tab:hover:not(.active) { color:var(--text); }
-
 @media (max-width: 480px) {
   #ai-panel { bottom: 84px; right: 12px; left: 12px; width: auto; }
   #ai-fab { bottom: 20px; right: 16px; width: 46px; height: 46px; }
@@ -1554,8 +1430,8 @@ tr:hover td { background: var(--bg2); }
 // ══════════════════════════════════════════
 // TRANSLATION SYSTEM
 // ══════════════════════════════════════════
-var LANG = 'es';
-var CURRENCY={code:'MXN',symbol:'$',name:'Mexican Peso'};
+var LANG = 'en';
+var CURRENCY={code:'USD',symbol:'$',name:'US Dollar'};
 var CURRENCIES=[
   {code:'USD',symbol:'$',  name:'US Dollar'},
   {code:'EUR',symbol:'€',  name:'Euro'},
@@ -1777,40 +1653,6 @@ var TRANSLATIONS = {
     'calibrate_scale': 'Scale',
     'upload_floorplan': 'Upload Floorplan',
     // end additions
-    // AI Panel
-    'ai_actions_tab': '⚡ Actions',
-    'ai_chat_tab': '💬 Ask',
-    'ai_context_no_project': 'Open a project to enable AI assistance',
-    'ai_no_project_title': 'No project open',
-    'ai_no_project_sub': 'Open a project first, then use the AI actions or chat for guidance.',
-    'ai_greeting': 'Hi! I\'m your EventOS guide. You\'re working on "{name}". What would you like help with?',
-    'ai_greeting_no_project': 'Hi! I\'m your EventOS guide. Open a project first and I can help you decide what to do next.',
-    'ai_thinking': 'Generating',
-    'ai_preview_label': '✦ Preview',
-    'ai_preview_sub': 'Review before applying',
-    'ai_regenerate': 'Regenerate',
-    'ai_apply': 'Apply to Project',
-    'ai_applied': '✦ AI suggestions applied!',
-    'ai_error_title': 'Error',
-    'ai_ref_prices': '⚠ Reference prices only — actual costs vary by vendor and market',
-    'ai_est_total': 'Estimated Total:',
-    'ai_type_hint': 'Type below and press Enter ↵',
-    'ai_chat_placeholder': 'Ask me anything about your event…',
-    'ai_connection_error': 'Connection error. Check your internet and try again.',
-    'ai_no_response': 'Sorry, I didn\'t get a response. Try again.',
-    // Hardcoded UI strings
-    'hired_badge': 'Hired',
-    'comparison_badge': 'Comparison',
-    'total_guests_label': 'total guests',
-    'tasks_done_label': 'done',
-    'tasks_overdue_label': 'tasks overdue',
-    'confirm_delete_vendor': 'Delete vendor?',
-    'confirm_delete_task': 'Delete task?',
-    'confirm_delete_guest': 'Delete guest?',
-    'vendor_hired_toast': 'Vendor hired',
-    'vendor_comparison_toast': 'Vendor moved to comparisons',
-    'vendor_deleted_toast': 'Vendor deleted',
-    'payment_deleted_toast': 'Payment deleted',
     // Toasts
     'saved': 'Saved',
     'deleted': 'Deleted',
@@ -2002,40 +1844,6 @@ var TRANSLATIONS = {
     'calibrate_scale': 'Escala',
     'upload_floorplan': 'Subir Plano',
     // end additions
-    // AI Panel
-    'ai_actions_tab': '⚡ Acciones',
-    'ai_chat_tab': '💬 Preguntar',
-    'ai_context_no_project': 'Abre un proyecto para usar el asistente',
-    'ai_no_project_title': 'Ningún proyecto abierto',
-    'ai_no_project_sub': 'Primero abre un proyecto, luego usa las acciones de IA o el chat para orientarte.',
-    'ai_greeting': '¡Hola! Soy tu guía de EventOS. Estás trabajando en "{name}". ¿En qué te puedo ayudar?',
-    'ai_greeting_no_project': '¡Hola! Soy tu guía de EventOS. Primero abre un proyecto y te ayudo a decidir qué hacer.',
-    'ai_thinking': 'Generando',
-    'ai_preview_label': '✦ Vista Previa',
-    'ai_preview_sub': 'Revisa antes de aplicar',
-    'ai_regenerate': 'Regenerar',
-    'ai_apply': 'Aplicar al Proyecto',
-    'ai_applied': '✦ ¡Sugerencias de IA aplicadas!',
-    'ai_error_title': 'Error',
-    'ai_ref_prices': '⚠ Precios de referencia — los costos reales varían según proveedor y mercado',
-    'ai_est_total': 'Total Estimado:',
-    'ai_type_hint': 'Escribe abajo y presiona Enter ↵',
-    'ai_chat_placeholder': 'Pregúntame lo que quieras sobre tu evento…',
-    'ai_connection_error': 'Error de conexión. Verifica tu internet e intenta de nuevo.',
-    'ai_no_response': 'No recibí respuesta. Intenta de nuevo.',
-    // Hardcoded UI strings
-    'hired_badge': 'Contratado',
-    'comparison_badge': 'Comparación',
-    'total_guests_label': 'invitados en total',
-    'tasks_done_label': 'hechas',
-    'tasks_overdue_label': 'tareas vencidas',
-    'confirm_delete_vendor': '¿Eliminar proveedor?',
-    'confirm_delete_task': '¿Eliminar tarea?',
-    'confirm_delete_guest': '¿Eliminar invitado?',
-    'vendor_hired_toast': 'Proveedor contratado',
-    'vendor_comparison_toast': 'Proveedor movido a comparaciones',
-    'vendor_deleted_toast': 'Proveedor eliminado',
-    'payment_deleted_toast': 'Pago eliminado',
     // Toasts
     'saved': 'Guardado',
     'deleted': 'Eliminado',
@@ -2049,7 +1857,7 @@ function t(key){ return (TRANSLATIONS[LANG]||TRANSLATIONS.en)[key] || TRANSLATIO
 function toggleLang(){
   LANG = LANG==='en' ? 'es' : 'en';
   const btn = document.getElementById('lang-label');
-  if(btn) btn.textContent = LANG==='es' ? 'EN' : 'ES';
+  if(btn) btn.textContent = LANG==='en' ? 'ES' : 'EN';
   applyTranslations();
   toast(LANG==='es'?'Idioma cambiado a Español':'Language changed to English','s');
 }
@@ -2107,14 +1915,6 @@ function applyTranslations(){
   // Update lang button tooltip
   const lb = document.getElementById('lang-btn');
   if(lb) lb.title = LANG==='en' ? 'Cambiar a Español' : 'Switch to English';
-  // Update AI panel placeholder and chat greeting language
-  const aiPrompt = document.getElementById('ai-prompt');
-  if(aiPrompt) aiPrompt.placeholder = t('ai_chat_placeholder');
-  // If chat is open and has content, don't reset — just let next message use new lang
-  // Reset greeting if no messages yet
-  if(typeof _aiChatHistory !== 'undefined' && _aiChatHistory.length === 0 && typeof sendAIGreeting === 'function'){
-    // Will greet in new language next time chat opens
-  }
 }
 
 
@@ -2640,7 +2440,7 @@ function renderDash(){
   <div class="sg">
     ${statCard('Budget Used','#fff0f0','#ef4444','<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',fmtMoney(paid),'of '+fmtMoney(tb)+' total',pct,'#ef4444')}
     ${statCard('Vendors','#fff7ed','#f59e0b','<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',hired.length,'hired of '+p.vendors.length+' total',p.vendors.length?Math.round(hired.length/p.vendors.length*100):0,'#f59e0b')}
-    ${statCard('Guests','#ecfdf5','#10b981','<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',confirmed,p.guests.length+' '+t('total_guests_label'),0,'#10b981')}
+    ${statCard('Guests','#ecfdf5','#10b981','<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',confirmed,p.guests.length+' total guests',0,'#10b981')}
     ${statCard('Event Date','#f7f0de','#a8862e','<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',fmtDateShort(p.date),(dl>=0?dl+'  '+t('days_away'):Math.abs(dl)+' days ago'),Math.min(100,100-Math.max(0,dl/180*100)),'#c9a84c')}
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
@@ -2648,7 +2448,7 @@ function renderDash(){
       <div style="font-weight:700;font-size:15px;margin-bottom:16px">Recent Vendors</div>
       ${p.vendors.slice(0,5).map(v=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--bg)">
         <div><div style="font-weight:600;font-size:13px">${v.name}</div><div style="font-size:11px;color:var(--muted)">${v.category}</div></div>
-        <span class="badge ${v.hired?'b-green':'b-gray'}">${v.hired?t('hired_badge'):t('comparison_badge')}</span>
+        <span class="badge ${v.hired?'b-green':'b-gray'}">${v.hired?'Hired':'Comparison'}</span>
       </div>`).join('')}
       ${!p.vendors.length?'<p style="text-align:center;color:var(--muted);padding:20px;font-size:13px">No vendors yet</p>':''}
     </div>
@@ -2656,9 +2456,9 @@ function renderDash(){
       <div style="font-weight:700;font-size:15px;margin-bottom:16px">${t('quick_actions')}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         ${qaction('#fff7ed','#f59e0b','<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>','Vendors',"switchTab('budget')")}
-        ${qaction('#ecfdf5','#10b981','<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',t('tab_guests'),"switchTab('guests')")}
-        ${qaction('#f5f3ff','#7c3aed','<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="9" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',t('tab_moodboard'),"switchTab('moodboard')")}
-        ${qaction('#f7f0de','#a8862e','<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>',t('tab_layout'),"switchTab('layout')")}
+        ${qaction('#ecfdf5','#10b981','<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>','Guests',"switchTab('guests')")}
+        ${qaction('#f5f3ff','#7c3aed','<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="9" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>','Moodboard',"switchTab('moodboard')")}
+        ${qaction('#f7f0de','#a8862e','<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>','Layout',"switchTab('layout')")}
         <div onclick="switchTab('timeline')" style="grid-column:1/-1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;border-radius:var(--r);border:1.5px solid var(--border);cursor:pointer;transition:var(--tr);background:#fff;text-align:center" onmouseover="this.style.borderColor='var(--gold)';this.style.background='var(--gold-l)'" onmouseout="this.style.borderColor='var(--border)';this.style.background='#fff'">
           <svg width="20" height="20" fill="none" stroke="#ec4899" stroke-width="2" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
           <span style="font-size:12px;font-weight:600;color:var(--muted);margin-top:6px">Timeline & Tasks</span>
@@ -2749,10 +2549,10 @@ function vendorCard(v){
   </div>`:''}
   </div>`;
 }
-function hireV(id){const p=proj();const v=p.vendors.find(v=>v.id===id);if(v){v.hired=true;saveProj(p);renderBudget();toast(t('vendor_hired_toast'),'s');}}
-function unhireV(id){const p=proj();const v=p.vendors.find(v=>v.id===id);if(v){v.hired=false;saveProj(p);renderBudget();toast(t('vendor_comparison_toast'));}}
-function delV(id){if(!confirm(t('confirm_delete_vendor')))return;const p=proj();p.vendors=p.vendors.filter(v=>v.id!==id);saveProj(p);renderBudget();toast(t('vendor_deleted_toast'));}
-function delPay(vid,pid){const p=proj();const v=p.vendors.find(v=>v.id===vid);if(v){v.payments=v.payments.filter(pay=>pay.id!==pid);saveProj(p);renderBudget();toast(t('payment_deleted_toast'));}}
+function hireV(id){const p=proj();const v=p.vendors.find(v=>v.id===id);if(v){v.hired=true;saveProj(p);renderBudget();toast('Vendor hired','s');}}
+function unhireV(id){const p=proj();const v=p.vendors.find(v=>v.id===id);if(v){v.hired=false;saveProj(p);renderBudget();toast('Vendor moved to comparisons');}}
+function delV(id){if(!confirm('Delete vendor?'))return;const p=proj();p.vendors=p.vendors.filter(v=>v.id!==id);saveProj(p);renderBudget();toast('Vendor deleted');}
+function delPay(vid,pid){const p=proj();const v=p.vendors.find(v=>v.id===vid);if(v){v.payments=v.payments.filter(pay=>pay.id!==pid);saveProj(p);renderBudget();toast('Payment deleted');}}
 function viewReceipt(vid,pid){
   const p=proj();const v=p.vendors.find(v=>v.id===vid);const pay=v?.payments.find(pay=>pay.id===pid);
   if(pay?.receipt)openMo(`<div class="mo-title">Receipt</div><img src="${pay.receipt}" style="width:100%;border-radius:8px"><div class="mo-foot"><button class="btn btn-ghost" onclick="closeMo()">${t('close')}</button></div>`);
@@ -2760,7 +2560,7 @@ function viewReceipt(vid,pid){
 
 function openVendorModal(vid){
   const p=proj();const v=vid?p.vendors.find(x=>x.id===vid):null;
-  openMo(`<div class="mo-title">${v?t('edit_vendor'):t('add_vendor')}</div>
+  openMo(`<div class="mo-title">${v?'Edit Vendor':'Add Vendor'}</div>
   <div class="form-grid">
     <div class="ig" style="grid-column:1/-1"><label>Vendor Name *</label><input class="input" id="vn-name" value="${esc(v?.name||'')}" placeholder="Vendor name"></div>
     <div class="ig"><label>${t('category')}</label><select class="select" id="vn-cat">${['Venue & Rentals','Food & Beverage','Floral & Decor','Photography & Video','Entertainment & Music','Staffing','Transportation','Admin & Compliance','Other'].map(c=>`<option${v?.category===c?' selected':''}>${c}</option>`).join('')}</select></div>
@@ -2843,8 +2643,8 @@ function renderTimeline(){
   </div>
   <div class="sg" style="margin-bottom:20px">
     ${statCard('Total Tasks','#f5f3ff','#7c3aed','<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',p.tasks.length,'tasks','0','#7c3aed')}
-    ${statCard(t('done'),'#ecfdf5','#10b981','<polyline points="20,6 9,17 4,12"/>',done,t('tasks_done_label'),pct,'#10b981')}
-    ${statCard(t('overdue'),'#fff0f0','#ef4444','<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/>',ov,t('tasks_overdue_label'),'0','#ef4444')}
+    ${statCard('Completed','#ecfdf5','#10b981','<polyline points="20,6 9,17 4,12"/>',done,'done',pct,'#10b981')}
+    ${statCard('Overdue','#fff0f0','#ef4444','<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/>',ov,'tasks overdue','0','#ef4444')}
     ${statCard('Progress','#f7f0de','#a8862e','<circle cx="12" cy="12" r="10"/>',pct+'%','completed',pct,'#c9a84c')}
   </div>
   <div class="vtabs">
@@ -2960,11 +2760,11 @@ function renderCal(p){
   </div>`;
 }
 function toggleTask(tid){const p=proj();const tk=p.tasks.find(tk=>tk.id===tid);if(tk){tk.done=!tk.done;saveProj(p);renderTimeline();}}
-function delTask(tid){if(!confirm(t('confirm_delete_task')))return;const p=proj();p.tasks=p.tasks.filter(tk=>tk.id!==tid);saveProj(p);renderTimeline();}
+function delTask(tid){if(!confirm('Delete task?'))return;const p=proj();p.tasks=p.tasks.filter(tk=>tk.id!==tid);saveProj(p);renderTimeline();}
 function openTaskModal(tid){
   const p=proj();const tk=tid?p.tasks.find(x=>x.id===tid):null;
   const colors=['#7c3aed','#c9a84c','#10b981','#f59e0b','#ec4899','#ef4444'];
-  openMo(`<div class="mo-title">${tk?t('edit_task'):t('add_task_btn')}</div>
+  openMo(`<div class="mo-title">${tk?'Edit Task':'Add Task'}</div>
   <div class="ig" style="margin-bottom:12px"><label>Task Title *</label><input class="input" id="tk-title" value="${esc(tk?.title||'')}" placeholder="Task name"></div>
   <div class="ig" style="margin-bottom:12px"><label>Description</label><textarea class="textarea" id="tk-desc" rows="2" placeholder="Describe the task...">${tk?.desc||''}</textarea></div>
   <div class="form-grid" style="margin-bottom:12px">
@@ -3130,7 +2930,7 @@ function renderSeating(p){
 }
 function openGuestModal(gid){
   const p=proj();const g=gid?p.guests.find(x=>x.id===gid):null;
-  openMo(`<div class="mo-title">${g?t('edit_guest'):t('add_guest')}</div>
+  openMo(`<div class="mo-title">${g?'Edit Guest':'Add Guest'}</div>
   <div class="form-grid">
     <div class="ig" style="grid-column:1/-1"><label>Full Name *</label><input class="input" id="gf-name" value="${esc(g?.name||'')}" placeholder="Jane Smith"></div>
     <div class="ig"><label>Email</label><input class="input" id="gf-email" type="email" value="${esc(g?.email||'')}" placeholder="jane@email.com"></div>
@@ -3156,7 +2956,7 @@ function saveGuest(gid){
   else{p.guests.push({id:'g'+Date.now(),...data});}
   saveProj(p);closeMo();renderGuests();toast(gid?'Guest updated':'Guest added','s');
 }
-function delGuest(gid){if(!confirm(t('confirm_delete_guest')))return;const p=proj();p.guests=p.guests.filter(g=>g.id!==gid);saveProj(p);renderGuests();}
+function delGuest(gid){if(!confirm('Delete guest?'))return;const p=proj();p.guests=p.guests.filter(g=>g.id!==gid);saveProj(p);renderGuests();}
 function importCSV(input){
   const files=Array.from(input.files);
   if(!files.length)return;
@@ -7557,242 +7357,211 @@ function showChairImg(key){
 
 
 // ═══════════════════════════════════════════════════════════════════
-// AI ASSISTANT ENGINE — Hybrid (Actions + Guide Chat)
+// AI ASSISTANT ENGINE
 // ═══════════════════════════════════════════════════════════════════
 
-var _aiPanelOpen  = false;
-var _aiMode       = 'actions'; // 'actions' | 'chat'
-var _aiCurrentAction = null;
-var _aiPreviewData   = null;
-var _aiChatHistory   = []; // { role, content } — session only
+var _aiPanelOpen = false;
+var _aiCurrentAction = null; // currently running action key
+var _aiPreviewData = null;   // data pending user approval
 
 var AI_ACTIONS = [
-  { key:'dashboard',  icon:'📋', label:'Fill Event Details',      sub:'Generate description, type & key info from a brief'   },
-  { key:'budget',     icon:'💰', label:'Suggest Budget',          sub:'Estimate vendor costs for your event type & size'     },
-  { key:'timeline',   icon:'📅', label:'Generate Timeline',       sub:'Build a task checklist tailored to your event'        },
-  { key:'guests',     icon:'👥', label:'Assign Seating',          sub:'Suggest table assignments from your guest list'       },
-  { key:'layout',     icon:'🏛',  label:'Design Room Layout',      sub:'Get a layout plan with item suggestions'              },
-  { key:'moodboard',  icon:'🎨', label:'Suggest Theme & Palette', sub:'Get a color palette and mood direction for your event'},
+  { key:'dashboard',  icon:'📋', label:'Fill Event Details',     sub:'Generate description, type & key info from a brief',    section:'dashboard' },
+  { key:'budget',     icon:'💰', label:'Suggest Budget',         sub:'Estimate vendor costs for your event type & size',      section:'budget'    },
+  { key:'timeline',   icon:'📅', label:'Generate Timeline',      sub:'Build a task checklist tailored to your event',         section:'timeline'  },
+  { key:'guests',     icon:'👥', label:'Assign Seating',         sub:'Suggest table assignments from your guest list',        section:'guests'    },
+  { key:'layout',     icon:'🏛', label:'Design Room Layout',     sub:'Get a layout plan with item suggestions',               section:'layout'    },
+  { key:'moodboard',  icon:'🎨', label:'Suggest Theme & Palette',sub:'Get a color palette and mood direction for your event', section:'moodboard' },
 ];
 
-// ── Panel open/close ───────────────────────────────────────────────
 function toggleAIPanel(){
-  if(_aiPanelOpen) closeAIPanel(); else openAIPanel();
+  if(_aiPanelOpen) closeAIPanel();
+  else openAIPanel();
 }
+
 function openAIPanel(){
   _aiPanelOpen = true;
-  document.getElementById('ai-fab').classList.add('active');
-  document.getElementById('ai-panel').classList.remove('hidden');
-  switchAIMode(_aiMode);
+  var fab = document.getElementById('ai-fab');
+  var panel = document.getElementById('ai-panel');
+  if(fab) fab.classList.add('active');
+  if(panel) panel.classList.remove('hidden');
+  renderAIHome();
 }
+
 function closeAIPanel(){
   _aiPanelOpen = false;
-  document.getElementById('ai-fab').classList.remove('active');
-  document.getElementById('ai-panel').classList.add('hidden');
+  var fab = document.getElementById('ai-fab');
+  var panel = document.getElementById('ai-panel');
+  if(fab) fab.classList.remove('active');
+  if(panel) panel.classList.add('hidden');
   _aiCurrentAction = null;
-  _aiPreviewData   = null;
+  _aiPreviewData = null;
 }
 
-// ── Mode switching ─────────────────────────────────────────────────
-function switchAIMode(mode){
-  _aiMode = mode;
-  var tabActions = document.getElementById('ai-tab-actions');
-  var tabChat    = document.getElementById('ai-tab-chat');
-  var bodyEl     = document.getElementById('ai-panel-body');
-  var chatEl     = document.getElementById('ai-chat-area');
-  var inputRow   = document.getElementById('ai-input-row');
-
-  if(mode === 'actions'){
-    tabActions.classList.add('active');
-    tabChat.classList.remove('active');
-    bodyEl.style.display = 'flex';
-    chatEl.classList.remove('active');
-    inputRow.style.display = 'none';
-    renderAIHome();
-  } else {
-    tabChat.classList.add('active');
-    tabActions.classList.remove('active');
-    bodyEl.style.display = 'none';
-    chatEl.classList.add('active');
-    inputRow.style.display = 'flex';
-    renderChatArea();
-    // Greet if first time this session
-    if(_aiChatHistory.length === 0) sendAIGreeting();
-    // Focus input
-    var ta = document.getElementById('ai-prompt');
-    if(ta) setTimeout(function(){ ta.focus(); }, 100);
-  }
-}
-
-// ── Context bar ────────────────────────────────────────────────────
-function updateContextBar(){
-  var p   = proj();
-  var bar = document.getElementById('ai-context-bar');
-  if(!bar) return;
-  if(p){
-    bar.innerHTML =
-      '<svg width="12" height="12" fill="none" stroke="var(--gold-h)" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>'+
-      '<span style="color:var(--gold-h);font-weight:600">'+esc(p.name)+'</span>'+
-      '<span style="color:var(--muted)">· '+esc(p.type||'event')+'</span>';
-  } else {
-    bar.innerHTML =
-      '<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg> Open a project to enable AI assistance';
-  }
-}
-
-// ── Actions home ───────────────────────────────────────────────────
 function renderAIHome(){
-  updateContextBar();
   _aiCurrentAction = null;
-  _aiPreviewData   = null;
-  var p      = proj();
-  var bodyEl = document.getElementById('ai-panel-body');
-  if(!bodyEl) return;
+  _aiPreviewData = null;
+  var p = proj();
+  var bar = document.getElementById('ai-context-bar');
+  var body = document.getElementById('ai-panel-body');
+  var inputRow = document.getElementById('ai-input-row');
+
+  if(bar){
+    if(p){
+      bar.innerHTML = '<svg width="12" height="12" fill="none" stroke="var(--gold-h)" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>'+
+        '<span style="color:var(--gold-h);font-weight:600">'+esc(p.name)+'</span>'+
+        '<span style="color:var(--muted)">· '+esc(p.type||'event')+'</span>';
+    } else {
+      bar.innerHTML = '<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg> Open a project to enable AI assistance';
+    }
+  }
+
+  if(!body) return;
+  if(inputRow) inputRow.style.display = 'flex';
 
   if(!p){
-    bodyEl.innerHTML =
-      '<div style="padding:30px 16px;text-align:center;color:var(--muted)">'+
-        '<div style="font-size:32px;margin-bottom:10px">✦</div>'+
-        '<div style="font-size:13px;font-weight:600;margin-bottom:6px">'+t('ai_no_project_title')+'</div>'+
-        '<div style="font-size:12px;line-height:1.5">'+t('ai_no_project_sub')+'</div>'+
-      '</div>';
+    body.innerHTML = '<div style="padding:30px 16px;text-align:center;color:var(--muted)">'+
+      '<div style="font-size:32px;margin-bottom:10px">✦</div>'+
+      '<div style="font-size:13px;font-weight:600;margin-bottom:6px">No project open</div>'+
+      '<div style="font-size:12px;line-height:1.5">Open a project first, then the AI can help fill in details, build timelines, suggest budgets, and more.</div>'+
+    '</div>';
+    if(inputRow) inputRow.style.display = 'none';
     return;
   }
 
-  bodyEl.innerHTML = AI_ACTIONS.map(function(a){
+  body.innerHTML = AI_ACTIONS.map(function(a){
     return '<button class="ai-action-btn" onclick="startAIAction(\''+a.key+'\')">'+
       '<div class="ai-action-icon">'+a.icon+'</div>'+
-      '<div><div class="ai-action-label">'+a.label+'</div><div class="ai-action-sub">'+a.sub+'</div></div>'+
+      '<div>'+
+        '<div class="ai-action-label">'+a.label+'</div>'+
+        '<div class="ai-action-sub">'+a.sub+'</div>'+
+      '</div>'+
       '<svg style="margin-left:auto;flex-shrink:0;color:var(--light)" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>'+
     '</button>';
   }).join('');
 }
 
-// ── Action flow (unchanged from before) ───────────────────────────
 function startAIAction(key){
   var a = AI_ACTIONS.find(function(x){ return x.key===key; });
   if(!a) return;
   _aiCurrentAction = key;
   var p = proj(); if(!p) return;
 
-  var hintsEN = {
-    dashboard: 'Describe the event briefly and I\'ll fill in the details.',
-    budget:    'Tell me the guest count and event style — I\'ll estimate vendor costs in MXN.',
-    timeline:  'Share the event date (or confirm it\'s set) and I\'ll build a full task list.',
-    guests:    'I\'ll read your guest list and suggest table groupings. Add any notes below or just send.',
-    layout:    'Describe the space — ballroom, rooftop, garden, office, etc.',
-    moodboard: 'What vibe or style are you going for? Describe it freely.',
+  // Build context-aware default prompts per action
+  var prompts = {
+    dashboard: 'Describe the event in a few words and I\'ll fill in the details.',
+    budget:    'How many guests are expected? I\'ll estimate vendor costs.',
+    timeline:  'When is the event? I\'ll build a full task timeline.',
+    guests:    'I\'ll suggest table assignments based on your current guest list.',
+    layout:    'What type of space? (ballroom, outdoor, office, etc.)',
+    moodboard: 'What\'s the vibe or style you\'re going for?',
   };
-  var hintsES = {
-    dashboard: 'Describe el evento brevemente y yo llenaré los detalles.',
-    budget:    'Dime cuántos invitados hay y el estilo del evento — estimaré los costos de proveedores en MXN.',
-    timeline:  'Comparte la fecha del evento (o confirma que ya está) y crearé una lista de tareas completa.',
-    guests:    'Leeré tu lista de invitados y sugeriré agrupaciones de mesas. Agrega notas abajo o simplemente envía.',
-    layout:    'Describe el espacio — salón de baile, terraza, jardín, oficina, etc.',
-    moodboard: '¿Qué ambiente o estilo buscas? Descríbelo libremente.',
-  };
-  var hints = (typeof LANG !== 'undefined' && LANG === 'es') ? hintsES : hintsEN;
 
-  var bodyEl   = document.getElementById('ai-panel-body');
+  var body = document.getElementById('ai-panel-body');
+  if(!body) return;
   var inputRow = document.getElementById('ai-input-row');
-  if(!bodyEl) return;
   if(inputRow) inputRow.style.display = 'flex';
 
-  bodyEl.innerHTML =
+  body.innerHTML =
     '<div style="display:flex;align-items:center;gap:8px;padding:4px 0 12px">'+
-      '<button onclick="renderAIHome()" style="background:transparent;border:none;color:var(--muted);cursor:pointer;padding:4px;border-radius:6px;display:flex;align-items:center;gap:4px;font-size:12px;font-family:Jost,sans-serif" onmouseover="this.style.color=\'var(--text)\'" onmouseout="this.style.color=\'var(--muted)\'">'+
+      '<button onclick="renderAIHome()" style="background:transparent;border:none;color:var(--muted);cursor:pointer;padding:4px;border-radius:6px;display:flex;align-items:center;gap:4px;font-size:12px;font-family:Jost,sans-serif;transition:.15s" onmouseover="this.style.color=\'var(--text)\'" onmouseout="this.style.color=\'var(--muted)\'">'+
         '<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg> Back'+
       '</button>'+
       '<div style="font-size:13px;font-weight:600">'+a.icon+' '+a.label+'</div>'+
     '</div>'+
     '<div style="font-size:12px;color:var(--muted);line-height:1.6;padding:10px 12px;background:var(--bg2);border-radius:var(--r-sm);border:1px solid var(--border)">'+
-      hints[key]+
+      prompts[key]+
     '</div>'+
-    '<div style="font-size:11px;color:var(--muted);margin-top:10px;text-align:center">'+t('ai_type_hint')+'</div>';
+    '<div style="font-size:11px;color:var(--muted);margin-top:10px;text-align:center">Type your details below and press Send ↵</div>';
 
+  // Pre-focus the textarea
   var ta = document.getElementById('ai-prompt');
   if(ta){ ta.value=''; ta.focus(); }
 }
 
 async function sendAIPrompt(){
-  var ta  = document.getElementById('ai-prompt');
+  var ta = document.getElementById('ai-prompt');
   var btn = document.getElementById('ai-send-btn');
-  var msg = ta ? ta.value.trim() : '';
-  if(!msg && _aiCurrentAction !== 'guests') return;
+  var userMsg = ta ? ta.value.trim() : '';
+  if(!userMsg && _aiCurrentAction !== 'guests') return; // guests can run without prompt
+
   var p = proj(); if(!p) return;
-  if(ta) ta.value = '';
+  if(ta) ta.value='';
   if(btn) btn.disabled = true;
+
   showAILoading();
+
   try{
-    var result = await callAIForAction(_aiCurrentAction, msg, p);
+    var result = await callAIForAction(_aiCurrentAction, userMsg, p);
     _aiPreviewData = result;
     showAIPreview(result, _aiCurrentAction);
   } catch(e){
-    showAIError(e.message || 'Something went wrong.');
+    showAIError(e.message || 'Something went wrong. Try again.');
   } finally {
     if(btn) btn.disabled = false;
   }
 }
 
 function showAILoading(){
-  var bodyEl   = document.getElementById('ai-panel-body');
+  var body = document.getElementById('ai-panel-body');
   var inputRow = document.getElementById('ai-input-row');
   if(inputRow) inputRow.style.display = 'none';
-  if(bodyEl) bodyEl.innerHTML =
+  if(body) body.innerHTML =
     '<div class="ai-loading">'+
       '<div class="ai-spinner"></div>'+
-      '<div>'+t('ai_thinking')+'<span id="ai-dots">.</span></div>'+
+      '<div>Thinking<span id="ai-dots">.</span></div>'+
     '</div>';
+  // Animate dots
   var dots = 0;
   window._aiDotsTimer = setInterval(function(){
     var el = document.getElementById('ai-dots');
     if(!el){ clearInterval(window._aiDotsTimer); return; }
-    dots=(dots+1)%4; el.textContent='.'.repeat(dots+1);
+    dots=(dots+1)%4;
+    el.textContent='.'.repeat(dots+1);
   }, 400);
 }
 
 function showAIError(msg){
   clearInterval(window._aiDotsTimer);
-  var bodyEl   = document.getElementById('ai-panel-body');
+  var body = document.getElementById('ai-panel-body');
   var inputRow = document.getElementById('ai-input-row');
   if(inputRow) inputRow.style.display = 'flex';
-  if(bodyEl) bodyEl.innerHTML =
+  if(body) body.innerHTML =
     '<div style="padding:20px 16px;text-align:center">'+
       '<div style="font-size:28px;margin-bottom:8px">⚠️</div>'+
-      '<div style="font-size:13px;color:var(--danger);font-weight:600;margin-bottom:6px">'+t('ai_error_title')+'</div>'+
+      '<div style="font-size:13px;color:var(--danger);font-weight:600;margin-bottom:6px">Error</div>'+
       '<div style="font-size:12px;color:var(--muted);line-height:1.5">'+esc(msg)+'</div>'+
       '<button class="btn btn-ghost btn-sm" onclick="startAIAction(\''+(_aiCurrentAction||'dashboard')+'\')" style="margin-top:14px">Try again</button>'+
     '</div>';
 }
 
+// ── Render the preview (before user confirms) ──────────────────────
 function showAIPreview(data, key){
   clearInterval(window._aiDotsTimer);
-  var bodyEl   = document.getElementById('ai-panel-body');
+  var a = AI_ACTIONS.find(function(x){ return x.key===key; });
+  var body = document.getElementById('ai-panel-body');
   var inputRow = document.getElementById('ai-input-row');
   if(inputRow) inputRow.style.display = 'none';
-  if(!bodyEl) return;
+  if(!body) return;
 
-  var html =
-    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">'+
-      '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gold-h)">'+t('ai_preview_label')+'</div>'+
-      '<div style="font-size:11px;color:var(--muted)">'+t('ai_preview_sub')+'</div>'+
-    '</div>';
+  var html = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">'+
+    '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gold-h)">✦ Preview</div>'+
+    '<div style="font-size:11px;color:var(--muted)">Review before applying</div>'+
+  '</div>';
 
   html += renderAIPreviewContent(key, data);
 
-  html +=
-    '<div class="ai-preview-footer">'+
-      '<button class="btn btn-ghost btn-sm" onclick="startAIAction(\''+key+'\')" style="gap:4px">'+
-        '<svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>'+
-        t('ai_regenerate')+
-      '</button>'+
-      '<button class="btn btn-primary btn-sm" onclick="applyAIPreview()" style="flex:1;justify-content:center;gap:5px">'+
-        '<svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>'+
-        t('ai_apply')+
-      '</button>'+
-    '</div>';
+  html += '<div class="ai-preview-footer">'+
+    '<button class="btn btn-ghost btn-sm" onclick="startAIAction(\''+key+'\')" style="gap:4px">'+
+      '<svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>'+
+      'Regenerate'+
+    '</button>'+
+    '<button class="btn btn-primary btn-sm" onclick="applyAIPreview()" style="flex:1;justify-content:center;gap:5px">'+
+      '<svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>'+
+      'Apply to Project'+
+    '</button>'+
+  '</div>';
 
-  bodyEl.innerHTML = html;
+  body.innerHTML = html;
 }
 
 function renderAIPreviewContent(key, data){
@@ -7803,17 +7572,13 @@ function renderAIPreviewContent(key, data){
     }).join(''));
   }
   else if(key === 'budget'){
-    html += aiPreviewSection('Vendor Estimates',
-      '<div style="font-size:11px;color:rgba(201,168,76,.7);padding:6px 12px;border-bottom:1px solid var(--border)">'+
-        t('ai_ref_prices')+
-      '</div>'+
-      (data.vendors||[]).map(function(v){
-        return '<div class="ai-preview-item" style="display:flex;justify-content:space-between;gap:8px">'+
-          '<span>'+esc(v.name)+'<br><span style="font-size:11px;color:var(--muted)">'+esc(v.category)+'</span></span>'+
-          '<span style="color:var(--gold-h);font-weight:600;flex-shrink:0">'+fmtMoney(v.budget||0)+'</span>'+
-        '</div>';
-      }).join(''));
-    if(data.total) html += '<div style="text-align:right;font-size:12px;font-weight:700;color:var(--gold-h);padding:8px 12px">'+t('ai_est_total')+' '+fmtMoney(data.total)+'</div>';
+    html += aiPreviewSection('Vendor Estimates', (data.vendors||[]).map(function(v){
+      return '<div class="ai-preview-item" style="display:flex;justify-content:space-between;gap:8px">'+
+        '<span>'+esc(v.name)+'<br><span style="font-size:11px;color:var(--muted)">'+esc(v.category)+'</span></span>'+
+        '<span style="color:var(--gold-h);font-weight:600;flex-shrink:0">'+fmtMoney(v.budget||0)+'</span>'+
+      '</div>';
+    }).join(''));
+    if(data.total) html += '<div style="text-align:right;font-size:12px;font-weight:700;color:var(--gold-h);padding:8px 12px">Total: '+fmtMoney(data.total)+'</div>';
   }
   else if(key === 'timeline'){
     html += aiPreviewSection('Tasks', (data.tasks||[]).map(function(t){
@@ -7825,7 +7590,7 @@ function renderAIPreviewContent(key, data){
   else if(key === 'guests'){
     var byTable = {};
     (data.assignments||[]).forEach(function(a){
-      if(!byTable[a.table]) byTable[a.table]=[];
+      if(!byTable[a.table]) byTable[a.table] = [];
       byTable[a.table].push(a.name);
     });
     html += Object.keys(byTable).sort(function(a,b){return Number(a)-Number(b);}).map(function(tbl){
@@ -7835,7 +7600,7 @@ function renderAIPreviewContent(key, data){
     }).join('');
   }
   else if(key === 'layout'){
-    html += aiPreviewSection('Layout Concept','<div class="ai-preview-item" style="line-height:1.6">'+esc(data.description||'')+'</div>');
+    html += aiPreviewSection('Layout Concept', '<div class="ai-preview-item" style="line-height:1.6">'+esc(data.description||'')+'</div>');
     if((data.items||[]).length){
       html += aiPreviewSection('Suggested Items', (data.items||[]).map(function(it){
         return '<div class="ai-preview-item" style="display:flex;justify-content:space-between">'+
@@ -7846,7 +7611,10 @@ function renderAIPreviewContent(key, data){
     }
   }
   else if(key === 'moodboard'){
-    html += aiPreviewSection('Theme','<div class="ai-preview-item"><strong>'+esc(data.theme||'')+'</strong><br><span style="font-size:12px;color:var(--muted);line-height:1.5">'+esc(data.description||'')+'</span></div>');
+    html += aiPreviewSection('Theme', '<div class="ai-preview-item">'+
+      '<strong>'+esc(data.theme||'')+'</strong><br>'+
+      '<span style="font-size:12px;color:var(--muted);line-height:1.5">'+esc(data.description||'')+'</span>'+
+    '</div>');
     if((data.palette||[]).length){
       html += aiPreviewSection('Color Palette',
         '<div style="display:flex;gap:8px;padding:10px 12px;flex-wrap:wrap">'+
@@ -7855,14 +7623,16 @@ function renderAIPreviewContent(key, data){
             '<div style="width:40px;height:40px;border-radius:8px;background:'+esc(c.hex)+';border:1px solid rgba(0,0,0,.1);margin-bottom:4px"></div>'+
             '<div style="font-size:9px;color:var(--muted)">'+esc(c.name||c.hex)+'</div>'+
           '</div>';
-        }).join('')+'</div>');
+        }).join('')+
+        '</div>');
     }
     if((data.keywords||[]).length){
       html += aiPreviewSection('Keywords',
         '<div style="display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px">'+
         (data.keywords||[]).map(function(k){
           return '<span style="padding:3px 10px;border-radius:20px;background:var(--gold-l);border:1px solid rgba(201,168,76,.3);font-size:11px;color:var(--gold-h)">'+esc(k)+'</span>';
-        }).join('')+'</div>');
+        }).join('')+
+        '</div>');
     }
   }
   return html;
@@ -7870,13 +7640,15 @@ function renderAIPreviewContent(key, data){
 
 function aiPreviewSection(title, innerHtml){
   return '<div class="ai-preview-section">'+
-    '<div class="ai-preview-section-title">'+esc(title)+'</div>'+innerHtml+
+    '<div class="ai-preview-section-title">'+esc(title)+'</div>'+
+    innerHtml+
   '</div>';
 }
 
+// ── Apply confirmed preview to project ─────────────────────────────
 function applyAIPreview(){
   var p = proj(); if(!p || !_aiPreviewData) return;
-  var key  = _aiCurrentAction;
+  var key = _aiCurrentAction;
   var data = _aiPreviewData;
 
   if(key === 'dashboard'){
@@ -7890,269 +7662,125 @@ function applyAIPreview(){
     (data.vendors||[]).forEach(function(aiV){
       var existing = (p.vendors||[]).find(function(v){ return v.name===aiV.name; });
       if(existing){ if(aiV.budget) existing.budget = aiV.budget; }
-      else { p.vendors = p.vendors||[]; p.vendors.push({id:'ai'+Date.now()+Math.random().toString(36).slice(2,6),name:aiV.name||'',category:aiV.category||'Other Services',subcategory:'Other',services:aiV.services||'',contact:'',phone:'',budget:aiV.budget||0,payments:[],hired:false,notes:aiV.notes||''}); }
+      else { p.vendors = p.vendors||[]; p.vendors.push({id:'ai'+Date.now()+Math.random().toString(36).slice(2,6), name:aiV.name||'', category:aiV.category||'Other Services', subcategory:'Other', services:aiV.services||'', contact:'', phone:'', budget:aiV.budget||0, payments:[], hired:false, notes:aiV.notes||''}); }
     });
   }
   else if(key === 'timeline'){
-    var base=new Date(); function dStr(n){var d=new Date(base);d.setDate(d.getDate()+n);return d.toISOString().split('T')[0];}
-    p.tasks = (data.tasks||[]).map(function(t,i){
-      return {id:'ait'+Date.now()+i,title:t.title||'Task',desc:t.desc||'',assignee:t.assignee||'Event Coordinator',dueDate:t.dueDate||dStr(i*7),done:false,color:t.color||'#c9a84c'};
+    var base = new Date(); function dStr(n){var d=new Date(base);d.setDate(d.getDate()+n);return d.toISOString().split('T')[0];}
+    var tasks = (data.tasks||[]).map(function(t,i){
+      return { id:'ait'+Date.now()+i, title:t.title||'Task', desc:t.desc||'', assignee:t.assignee||'Event Coordinator', dueDate:t.dueDate||dStr(i*7), done:false, color:t.color||'#c9a84c' };
     });
+    p.tasks = tasks;
   }
   else if(key === 'guests'){
     (data.assignments||[]).forEach(function(a){
-      var g=(p.guests||[]).find(function(g){return g.name===a.name;});
-      if(g) g.table=String(a.table||'');
+      var g = (p.guests||[]).find(function(g){ return g.name===a.name; });
+      if(g) g.table = String(a.table||'');
     });
   }
   else if(key === 'layout'){
-    var items=(data.items||[]).slice(0,20);
-    p.layoutItems=(p.layoutItems||[]).concat(items.map(function(it,i){
-      return {id:'ail'+Date.now()+i,type:it.type||'rect',label:it.label||'Item',x:60+(i%3)*200,y:60+Math.floor(i/3)*150,w:it.w||160,h:it.h||100,color:it.color||'#e8dcc8',rotation:0};
-    }));
+    // Add suggested items to layout (positioned in a grid)
+    var items = (data.items||[]).slice(0,20);
+    var col=0, row=0, perRow=3;
+    var newItems = items.map(function(it, i){
+      col = i % perRow; row = Math.floor(i / perRow);
+      return { id:'ail'+Date.now()+i, type:it.type||'rect', label:it.label||'Item', x:60+col*200, y:60+row*150, w:it.w||160, h:it.h||100, color:it.color||'#e8dcc8', rotation:0 };
+    });
+    p.layoutItems = (p.layoutItems||[]).concat(newItems);
   }
   else if(key === 'moodboard'){
+    // Add palette swatches as a note in project description if moodboard is empty
+    var note = '🎨 Theme: '+(data.theme||'')+'\n'+
+      (data.description||'')+'\n\nPalette: '+(data.palette||[]).map(function(c){return c.name||c.hex;}).join(', ')+
+      '\nKeywords: '+(data.keywords||[]).join(', ');
+    p.aiMoodNote = note;
+    // Store palette on project for moodboard render
     p.aiPalette = data.palette||[];
-    p.aiTheme   = data.theme||'';
-    p.aiMoodNote= '🎨 Theme: '+(data.theme||'')+'\n'+(data.description||'')+'\nPalette: '+(data.palette||[]).map(function(c){return c.name||c.hex;}).join(', ')+'\nKeywords: '+(data.keywords||[]).join(', ');
+    p.aiTheme = data.theme||'';
   }
 
   saveProj(p);
-  // Force re-render of the current tab
-  var tabNow = document.querySelector('.ptab.active');
-  if(tabNow && tabNow.dataset && tabNow.dataset.tab) openTab(tabNow.dataset.tab);
-  toast(t('ai_applied'),'s');
+  toast('✦ AI suggestions applied!','s');
   closeAIPanel();
+
+  // Navigate to the relevant section
+  var sectionMap = { dashboard:'dash', budget:'budget', timeline:'timeline', guests:'guests', layout:'layout', moodboard:'moodboard' };
+  var tab = sectionMap[key];
+  if(tab && CID) openTab(tab);
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// GUIDE CHAT ENGINE
-// ═══════════════════════════════════════════════════════════════════
-
-var AI_GUIDE_SYSTEM = function(){
-  var lang = typeof LANG !== 'undefined' ? LANG : 'es';
-  var langInstr = lang === 'es' ? 'IMPORTANT: Always respond in Spanish (español). ' : 'IMPORTANT: Always respond in English. ';
-  return langInstr+'You are the built-in AI guide for EventOS, a luxury event management app. '+
-  'Your ONLY job is to help users navigate the app, understand its features, and decide which action to use. '+
-  'You do NOT generate event data yourself — the action buttons do that. '+
-  'Keep replies short (2–4 sentences max). Be warm, direct, and practical. '+
-  'When you suggest an action, always end your message with a JSON block on its own line like: '+
-  '{"suggest":["budget","timeline"]} — use only keys from: dashboard, budget, timeline, guests, layout, moodboard. '+
-  'If no action is relevant, omit the JSON block entirely. '+
-  'Current app sections: Dashboard (event overview & details), Budget (vendors & cost tracking), '+
-  'Timeline (tasks & deadlines), Guests (guest list & seating), Layout (room/floor plan designer), Moodboard (inspiration images & themes). '+
-  'The 6 AI actions are: Fill Event Details, Suggest Budget, Generate Timeline, Assign Seating, Design Room Layout, Suggest Theme & Palette. '+
-  'Context about the current project will be provided in each message.';
-};
-
-function renderChatArea(){
-  var chatEl = document.getElementById('ai-chat-area');
-  if(!chatEl) return;
-  if(_aiChatHistory.length === 0){
-    chatEl.innerHTML = '';
-    return;
-  }
-  chatEl.innerHTML = _aiChatHistory.map(function(m){
-    if(m.role === 'user') return renderChatBubble('user', m.content);
-    // For assistant, parse out suggestion chips
-    return renderAssistantBubble(m.content);
-  }).join('');
-  chatEl.scrollTop = chatEl.scrollHeight;
-}
-
-function renderChatBubble(role, text){
-  return '<div class="ai-msg '+role+'">'+
-    '<div class="ai-bubble">'+esc(text)+'</div>'+
-  '</div>';
-}
-
-function renderAssistantBubble(raw){
-  // Split out the JSON suggest block if present
-  var suggest = [];
-  var text = raw.replace(/\{"suggest":\[([^\]]*)\]\}/g, function(match, inner){
-    try{
-      suggest = JSON.parse('['+inner+']');
-    }catch(e){}
-    return '';
-  }).trim();
-
-  var chips = '';
-  if(suggest.length){
-    chips = '<div class="ai-suggestion-chips">'+
-      suggest.map(function(key){
-        var a = AI_ACTIONS.find(function(x){return x.key===key;});
-        if(!a) return '';
-        return '<button class="ai-chip" onclick="launchActionFromChat(\''+key+'\')">'+
-          a.icon+' '+a.label+
-        '</button>';
-      }).join('')+
-    '</div>';
-  }
-
-  return '<div class="ai-msg assistant">'+
-    '<div class="ai-bubble">'+
-      text.split('\n').map(function(line){ return esc(line); }).join('<br>')+
-    '</div>'+
-    chips+
-  '</div>';
-}
-
-function appendChatMessage(role, content){
-  _aiChatHistory.push({role:role, content:content});
-  var chatEl = document.getElementById('ai-chat-area');
-  if(!chatEl) return;
-  var el = document.createElement('div');
-  el.innerHTML = role === 'user'
-    ? renderChatBubble('user', content)
-    : renderAssistantBubble(content);
-  chatEl.appendChild(el.firstChild);
-  chatEl.scrollTop = chatEl.scrollHeight;
-}
-
-function showChatTyping(){
-  var chatEl = document.getElementById('ai-chat-area');
-  if(!chatEl) return;
-  var el = document.createElement('div');
-  el.id = 'ai-typing-indicator';
-  el.className = 'ai-msg assistant';
-  el.innerHTML = '<div class="ai-typing"><span></span><span></span><span></span></div>';
-  chatEl.appendChild(el);
-  chatEl.scrollTop = chatEl.scrollHeight;
-}
-
-function removeChatTyping(){
-  var el = document.getElementById('ai-typing-indicator');
-  if(el) el.parentNode.removeChild(el);
-}
-
-function sendAIGreeting(){
-  var p = proj();
-  var greeting = p
-    ? t('ai_greeting').replace('{name}', p.name)
-    : t('ai_greeting_no_project');
-  appendChatMessage('assistant', greeting);
-}
-
-async function sendAIChatMessage(){
-  // If we're in actions mode and an action is active, delegate to the action prompt
-  if(_aiMode === 'actions' && _aiCurrentAction){
-    sendAIPrompt();
-    return;
-  }
-
-  var ta  = document.getElementById('ai-prompt');
-  var btn = document.getElementById('ai-send-btn');
-  var msg = ta ? ta.value.trim() : '';
-  if(!msg) return;
-  if(ta){ ta.value=''; ta.style.height='auto'; }
-  if(btn) btn.disabled = true;
-
-  appendChatMessage('user', msg);
-  showChatTyping();
-
-  try{
-    var p = proj();
-    var context = p
-      ? 'Project context: name="'+p.name+'", type='+(p.type||'unknown')+', date='+(p.date||'TBD')+', guests='+(p.guests||[]).length+', budget='+(p.budget||0)+' MXN, vendors='+(p.vendors||[]).length+', tasks='+(p.tasks||[]).length+'.'
-      : 'No project is currently open.';
-
-    // Build message history for API (last 8 turns max to stay within token budget)
-    var history = _aiChatHistory.slice(-8).map(function(m){
-      return {role: m.role==='assistant'?'assistant':'user', content: m.content};
-    });
-    // Replace the last user message with context prepended
-    if(history.length && history[history.length-1].role === 'user'){
-      history[history.length-1].content = context+'\n\nUser: '+history[history.length-1].content;
-    }
-
-    var resp = await fetch(AI_PROXY_URL, {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 300,
-        system: AI_GUIDE_SYSTEM(),
-        messages: history,
-      })
-    });
-
-    var data = await resp.json();
-    var reply = (data.content||[]).map(function(c){return c.text||'';}).join('').trim();
-
-    removeChatTyping();
-    if(reply) appendChatMessage('assistant', reply);
-    else appendChatMessage('assistant', t('ai_no_response'));
-
-  } catch(e){
-    removeChatTyping();
-    appendChatMessage('assistant', t('ai_connection_error'));
-  } finally {
-    if(btn) btn.disabled = false;
-    // Refocus
-    var ta2 = document.getElementById('ai-prompt');
-    if(ta2) ta2.focus();
-  }
-}
-
-function launchActionFromChat(key){
-  // Switch to actions mode and start the action
-  switchAIMode('actions');
-  startAIAction(key);
-}
-
-// ── Action API calls (unchanged) ───────────────────────────────────
+// ── API call per action ─────────────────────────────────────────────
 async function callAIForAction(key, userMsg, p){
   var systemPrompts = {
-    dashboard: 'You are an event management assistant. The user describes an event. Return ONLY valid JSON with: name, description, type (one of: social,corporate,community,government,education), location, status (one of: planning,confirmed,in_progress,completed,cancelled).',
-    budget:    'You are a luxury event planner in Mexico. Suggest vendor budget allocations in MXN. Return ONLY valid JSON: {"vendors":[{"name":string,"category":string,"budget":number,"notes":string}],"total":number}. 5-8 vendors. Add a note that prices are reference estimates.',
-    timeline:  'You are an event planning expert. Return ONLY valid JSON: {"tasks":[{"title":string,"desc":string,"assignee":string,"dueDate":"YYYY-MM-DD","color":"#hex","done":false}]}. 10-15 tasks. Assignees: Event Coordinator, Vendor Manager, Creative Director. Colors: #7c3aed admin, #10b981 vendor, #f59e0b guest, #ec4899 creative, #c9a84c logistics.',
-    guests:    'Seating expert. Assign tables based on category and notes. Exclude declined guests. Return ONLY valid JSON: {"assignments":[{"name":string,"table":number}]}. VIPs at table 1, families together.',
-    layout:    'Event space designer. Return ONLY valid JSON: {"description":string,"items":[{"label":string,"type":"rect"|"circle"|"table-round"|"table-rect","w":number,"h":number,"color":"#hex"}]}. 8-15 items.',
-    moodboard: 'Luxury event creative director. Return ONLY valid JSON: {"theme":string,"description":string,"palette":[{"hex":"#RRGGBB","name":string}],"keywords":[string]}. 4-6 palette colors, 6-8 keywords.',
+    dashboard: 'You are an event management assistant. The user describes an event in a few words. Return ONLY valid JSON (no markdown, no preamble) with these keys: name, description, type (one of: social, corporate, community, government, education), location, status (one of: planning, confirmed, in_progress, completed, cancelled). Be concise.',
+
+    budget: 'You are a luxury event planner. Given the event details and guest count, suggest realistic vendor budget allocations. Return ONLY valid JSON with: { "vendors": [ { "name": string, "category": string, "budget": number (in MXN), "notes": string } ], "total": number }. Include 5-8 key vendors relevant to the event type. Use MXN peso amounts appropriate for Mexico.',
+
+    timeline: 'You are an event planning expert. Generate a realistic task timeline for the event. Return ONLY valid JSON with: { "tasks": [ { "title": string, "desc": string, "assignee": string, "dueDate": "YYYY-MM-DD", "color": "#hexcolor", "done": false } ] }. Generate 10-15 tasks spread from today to the event date. Use these assignee roles: Event Coordinator, Vendor Manager, Creative Director. Colors: #7c3aed for admin, #10b981 for vendor, #f59e0b for guest, #ec4899 for creative, #c9a84c for logistics.',
+
+    guests: 'You are a seating arrangement expert. Given the guest list, assign each guest to a numbered table (1–N) based on their category, relationships hinted in notes, and RSVP status. Exclude declined guests. Return ONLY valid JSON with: { "assignments": [ { "name": string, "table": number } ] }. Group families together, VIPs at low-numbered tables, mix work colleagues.',
+
+    layout: 'You are an event space designer. Given the event type and venue description, suggest a room layout. Return ONLY valid JSON with: { "description": string (2-3 sentences describing the layout concept), "items": [ { "label": string, "type": string (one of: rect, circle, table-round, table-rect), "w": number, "h": number, "color": "#hex" } ] }. Generate 8-15 items. Tables: w~120 h~80. Stage: w~300 h~100. Bar: w~200 h~80. Dance floor: w~250 h~250. Use warm neutral colors (#e8dcc8, #d4c5a9, #c9b99a).',
+
+    moodboard: 'You are a luxury event creative director. Given the event description and the client\'s style notes, suggest a theme and color palette. Return ONLY valid JSON with: { "theme": string (theme name, 2-5 words), "description": string (2-3 sentences describing the mood), "palette": [ { "hex": "#RRGGBB", "name": string } ], "keywords": [ string ] }. Include 4-6 palette colors. Include 6-8 mood keywords.',
   };
 
   var userContext = 'Event: '+p.name+' | Type: '+(p.type||'social')+' | Date: '+(p.date||'TBD')+' | Location: '+(p.location||'')+' | Budget: '+(p.budget||0)+' MXN | Guests: '+((p.guests||[]).length);
+
   var messages;
 
   if(key === 'guests'){
+    // Pass full guest list
     var guestList = (p.guests||[]).filter(function(g){return g.rsvp!=='declined';}).map(function(g){
       return g.name+' ('+g.category+(g.notes?' — '+g.notes:'')+')';
     }).join('\n');
-    messages = [{role:'user', content:userContext+'\n\nGuest list:\n'+guestList+'\n\n'+(userMsg||'Please assign tables.')}];
+    messages = [{ role:'user', content: userContext+'\n\nGuest list:\n'+guestList+'\n\n'+(userMsg||'Please assign tables.') }];
   } else {
-    messages = [{role:'user', content:userContext+'\n\nUser request: '+userMsg}];
+    messages = [{ role:'user', content: userContext+'\n\nUser request: '+userMsg }];
   }
 
-  if(!AI_PROXY_URL) throw new Error('AI proxy not configured.');
+  if(!AI_PROXY_URL){
+    throw new Error('AI proxy not configured. Please set up your Cloudflare Worker and update AI_PROXY_URL in the app.');
+  }
 
-  var resp = await fetch(AI_PROXY_URL,{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:systemPrompts[key],messages:messages})
+  var resp = await fetch(AI_PROXY_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      system: systemPrompts[key],
+      messages: messages,
+    })
   });
 
   if(!resp.ok){
-    var err = await resp.json().catch(function(){return {};});
-    throw new Error((err.error&&err.error.message)||'API error '+resp.status);
+    var errData = await resp.json().catch(function(){return {};});
+    throw new Error((errData.error&&errData.error.message)||'API error '+resp.status);
   }
 
   var data = await resp.json();
-  var raw = (data.content||[]).map(function(c){return c.text||'';}).join('').replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
+  var raw = (data.content||[]).map(function(c){return c.text||'';}).join('');
 
-  try{ return JSON.parse(raw); }
-  catch(e){
-    var m = raw.match(/\{[\s\S]*\}/);
-    if(m) return JSON.parse(m[0]);
+  // Strip markdown code fences if present
+  raw = raw.replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
+
+  try {
+    return JSON.parse(raw);
+  } catch(e) {
+    // Try to extract JSON from the string
+    var match = raw.match(/\{[\s\S]*\}/);
+    if(match) return JSON.parse(match[0]);
     throw new Error('Could not parse AI response. Please try again.');
   }
 }
 
-// ── FAB visibility ─────────────────────────────────────────────────
+// ── Show/hide FAB based on whether we're in the main app ──────────
 function updateAIFabVisibility(){
   var fab = document.getElementById('ai-fab');
   if(!fab) return;
   var clientHidden = document.getElementById('pg-client').classList.contains('hidden');
-  var appHidden    = document.getElementById('pg-app').classList.contains('hidden');
+  var appHidden = document.getElementById('pg-app').classList.contains('hidden');
   if(clientHidden && !appHidden && !window._shareMode){
     fab.classList.remove('hidden');
   } else {
@@ -8161,8 +7789,13 @@ function updateAIFabVisibility(){
   }
 }
 
+// Hook into existing tab/nav functions to update FAB visibility
+var _origOpenProject = typeof openProject === 'function' ? openProject : null;
+var _origRenderEvents = typeof renderEvents === 'function' ? renderEvents : null;
+
+// Patch after DOM ready
 window.addEventListener('DOMContentLoaded', function(){
-  setTimeout(updateAIFabVisibility, 500);
+  setTimeout(function(){ updateAIFabVisibility(); }, 500);
 });
 
 // Also update when project opens — patch openProject
@@ -8175,10 +7808,9 @@ window.addEventListener('DOMContentLoaded', function(){
   var _rt = window.openTab;
   if(_rt) window.openTab = function(){
     _rt.apply(this, arguments);
-    if(_aiPanelOpen) updateContextBar();
+    if(_aiPanelOpen) renderAIHome(); // refresh context bar
   };
 })();
-
 
 
 // Chair image zoom registry - built after showChairImg is defined
@@ -8289,26 +7921,16 @@ window.SCI={};
   </div>
   <div class="ai-context-bar" id="ai-context-bar">
     <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
-    <span data-i18n="ai_context_no_project">Abre un proyecto para usar el asistente</span>
+    Open a project to enable AI assistance
   </div>
-  <!-- Mode tabs -->
-  <div class="ai-mode-tabs" id="ai-mode-tabs">
-    <button class="ai-mode-tab active" id="ai-tab-actions" onclick="switchAIMode('actions')" data-i18n="ai_actions_tab">⚡ Acciones</button>
-    <button class="ai-mode-tab" id="ai-tab-chat" onclick="switchAIMode('chat')" data-i18n="ai_chat_tab">💬 Preguntar</button>
-  </div>
-  <!-- Actions mode -->
   <div id="ai-panel-body" class="ai-actions">
-    <!-- populated by renderAIHome() -->
+    <!-- populated by renderAIActions() -->
   </div>
-  <!-- Chat mode -->
-  <div id="ai-chat-area">
-    <!-- chat messages injected here -->
-  </div>
-  <div class="ai-input-row" id="ai-input-row" style="display:none">
-    <textarea id="ai-prompt" rows="1"
+  <div class="ai-input-row" id="ai-input-row">
+    <textarea id="ai-prompt" placeholder="Ask anything about your event…" rows="1"
       oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"
-      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAIChatMessage();}"></textarea>
-    <button class="ai-send-btn" id="ai-send-btn" onclick="sendAIChatMessage()">
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAIPrompt();}"></textarea>
+    <button class="ai-send-btn" id="ai-send-btn" onclick="sendAIPrompt()">
       <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
     </button>
   </div>
