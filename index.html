@@ -7719,9 +7719,15 @@ function applyAIPreview(){
 // ── API call per action ─────────────────────────────────────────────
 async function callAIForAction(key, userMsg, p){
   // Language instruction — prepended to every system prompt
-  var langInstr = (typeof LANG !== 'undefined' && LANG === 'es')
-    ? 'IMPORTANT: All text values in the JSON (names, descriptions, labels, notes, keywords, assignee roles, etc.) must be written in Spanish. '
-    : 'IMPORTANT: All text values in the JSON must be written in English. ';
+  var isSpanish = (typeof LANG !== 'undefined' && LANG === 'es');
+
+  var langInstr = isSpanish
+    ? 'INSTRUCCIÓN CRÍTICA: Todos los valores de texto en el JSON deben estar en ESPAÑOL. Nombres, descripciones, etiquetas, notas, palabras clave, roles — todo en español. '
+    : 'CRITICAL INSTRUCTION: All text values in the JSON must be in ENGLISH. Names, descriptions, labels, notes, keywords, roles — all in English. ';
+
+  var jsonDemand = isSpanish
+    ? '\n\nRECUERDA: Responde ÚNICAMENTE con un objeto JSON válido. Sin texto antes ni después. Sin markdown. Sin bloques de código. Tu respuesta completa debe ser parseable por JSON.parse(). Empieza con { y termina con }.'
+    : '\n\nREMEMBER: Respond ONLY with a valid JSON object. No text before or after. No markdown. No code fences. Your entire response must be parseable by JSON.parse(). Start with { and end with }.';
 
   var systemPrompts = {
     dashboard: langInstr+'You are an event management assistant. The user describes an event in a few words. Return ONLY a raw JSON object (no markdown, no code fences, no explanation) with these exact keys: name, description, type (one of: social, corporate, community, government, education), location, status (one of: planning, confirmed, in_progress, completed, cancelled).',
@@ -7738,8 +7744,6 @@ async function callAIForAction(key, userMsg, p){
   };
 
   var userContext = 'Event: '+p.name+' | Type: '+(p.type||'social')+' | Date: '+(p.date||'TBD')+' | Location: '+(p.location||'')+' | Budget: '+(p.budget||0)+' MXN | Guests: '+((p.guests||[]).length);
-
-  var jsonDemand = '\n\nYou MUST respond with ONLY a valid JSON object. No text before or after. No markdown. No code fences. Your entire response must be parseable by JSON.parse(). Start with { and end with }.';
 
   var messages;
   if(key === 'guests'){
