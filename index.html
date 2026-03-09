@@ -888,58 +888,65 @@ tr:hover td { background: var(--bg2); }
   /* ── Top nav ── */
   .tnav { padding: 0 14px; height: 54px; }
   .tnav-logo { font-size: 21px; }
-  #lang-btn, #currency-btn { display: none !important; }
+  #lang-btn, #currency-btn, #sync-btn { display: none !important; }
   #share-nav-btn span { display: none; }
   #share-nav-btn { padding: 5px 9px !important; }
   .share-btn-label { display: none; }
-  /* Hide sync status on mobile - keep in drawer */
-  #sync-btn { display: none !important; }
 
-  /* ── Project nav — sticky tab bar ── */
-  .pnav { 
-    flex-direction: column; height: auto; 
-    padding: 6px 12px 4px; gap: 4px; top: 54px;
-    background: var(--card);
-  }
+  /* ── Project nav ── */
+  .pnav { flex-direction: column; height: auto; padding: 10px 14px 6px; gap: 6px; top: 54px; }
   .pnav > div:first-child { width: 100%; justify-content: space-between; }
-  #pnav-name { font-size: 13px; font-weight: 600; }
-  #pnav-type { font-size: 10px; color: var(--muted); }
-  /* Show tabs as horizontal scrollable pills on mobile */
-  .ptabs { 
-    display: flex !important;
-    overflow-x: auto; 
-    width: 100%; 
-    -webkit-overflow-scrolling: touch; 
-    padding-bottom: 2px;
-    gap: 4px;
-    scrollbar-width: none;
-  }
+  #pnav-name { font-size: 13px; }
+  #pnav-type { font-size: 10px; }
+  .ptabs { overflow-x: auto; width: 100%; -webkit-overflow-scrolling: touch; padding-bottom: 2px; display: flex !important; flex-wrap: nowrap; }
   .ptabs::-webkit-scrollbar { display: none; }
-  .ptab { 
-    padding: 6px 12px; 
-    font-size: 11px; 
-    white-space: nowrap; 
-    flex-shrink: 0;
-    border-radius: 20px;
-  }
-  .ptab svg { width: 12px; height: 12px; }
+  .ptab { padding: 6px 10px; font-size: 11px; white-space: nowrap; }
+  .ptab svg { display: none; }
 
   /* ── Events page ── */
   .evgrid { grid-template-columns: 1fr; gap: 14px; }
-  .pcontent { padding: 12px; }
+  .pcontent { padding: 14px; }
   .sh { flex-direction: column; gap: 10px; align-items: flex-start; }
-  #pg-events > div { padding: 16px 12px; }
 
-  /* ── Stat grids — 2 columns on mobile ── */
-  .sg { grid-template-columns: repeat(2,1fr); gap: 10px; margin-bottom: 16px; }
-  .sc { padding: 14px 12px; }
-  .sc-val { font-size: 22px; }
-  .gs-stats { grid-template-columns: repeat(2,1fr); gap: 8px; }
-  .gs-stat { padding: 12px 10px; }
-  .gs-val { font-size: 20px; }
+  /* Events page header: stack title + button vertically */
+  #pg-events > div { padding: 16px 14px; }
+  #pg-events > div > div:first-child {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+    margin-bottom: 18px !important;
+  }
+  #pg-events > div > div:first-child > button {
+    width: 100% !important;
+    justify-content: center !important;
+  }
 
-  /* ── Dashboard — 1 column ── */
+  /* Events toolbar: stack sort + filter on separate rows */
+  #pg-events > div > div:nth-child(2) {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+  #pg-events > div > div:nth-child(2) > div:first-child {
+    flex-wrap: wrap !important;
+  }
+
+  /* Event cards: fix badge overlap and footer wrapping on mobile */
+  .evc-body { padding: 16px 14px; }
+  .evc-body > div:first-child { flex-wrap: wrap; gap: 8px; }
+  .evc-body > div:first-child > div:first-child { min-width: 0; flex: 1; }
+  .evc-body > div:first-child .badge { flex-shrink: 0; }
+  .evc-foot { padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
+  .evc-foot > div { flex-wrap: wrap; }
+
+  /* ── Stat grids ── */
+  .sg { grid-template-columns: repeat(2,1fr); gap: 12px; }
+  .gs-stats { grid-template-columns: repeat(2,1fr); gap: 10px; }
+  .gs-stat { padding: 14px 12px; }
+
+  /* ── Dashboard ── */
   .dash-card { padding: 18px 14px; }
+
   /* Dashboard two-col grid → single col */
   #tab-dashboard > div:last-child { grid-template-columns: 1fr !important; }
 
@@ -950,52 +957,12 @@ tr:hover td { background: var(--bg2); }
   .mo-foot { flex-direction: column-reverse; gap: 8px; }
   .mo-foot .btn { width: 100%; justify-content: center; }
 
-  /* ── Layout tab — full canvas + floating panel ── */
-  .layout-shell { flex-direction: column; height: calc(100vh - 110px); }
-  .layout-sidebar { 
-    width: 100%; 
-    max-height: 38vh; 
-    border-right: none; 
-    border-bottom: 1px solid var(--border); 
-    flex-shrink: 0;
-    overflow-y: auto;
-  }
-  /* Collapse layout sidebar sections by default on mobile */
-  .layout-sidebar .layout-sb-section:not(:first-child) [id^="sb-"] { display: none; }
-  .layout-canvas-outer { flex: 1; min-height: 200px; }
-  .layout-toolbar { 
-    padding: 6px 10px; gap: 4px; 
-    overflow-x: auto; flex-wrap: nowrap; 
-    -webkit-overflow-scrolling: touch; 
-  }
+  /* ── Layout tab ── */
+  .layout-wrap { flex-direction: column; }
+  .layout-sidebar { width: 100%; max-height: 45vh; border-right: none; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .layout-toolbar { padding: 8px 10px; gap: 5px; overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
   .layout-toolbar::-webkit-scrollbar { display: none; }
-  .layout-toolbar .btn { font-size: 11px; padding: 5px 8px; white-space: nowrap; flex-shrink: 0; }
-  /* Props panel becomes floating bottom sheet on mobile */
-  #lsb-props { 
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
-    background: var(--card);
-    border-top: 2px solid var(--gold);
-    border-radius: 16px 16px 0 0;
-    padding: 12px 16px 24px;
-    z-index: 300;
-    max-height: 45vh;
-    overflow-y: auto;
-    box-shadow: 0 -4px 24px rgba(28,26,21,.15);
-    transform: translateY(100%);
-    transition: transform .3s cubic-bezier(.4,0,.2,1);
-  }
-  #lsb-props.has-selection {
-    transform: translateY(0);
-  }
-  #lsb-props::before {
-    content: '';
-    display: block;
-    width: 40px; height: 4px;
-    background: var(--border-strong);
-    border-radius: 2px;
-    margin: 0 auto 12px;
-  }
+  .layout-toolbar .btn { font-size: 11px; padding: 4px 8px; white-space: nowrap; flex-shrink: 0; }
 
   /* ── Budget tab ── */
   .bud-header { flex-direction: column; gap: 8px; align-items: flex-start; }
@@ -1007,26 +974,15 @@ tr:hover td { background: var(--bg2); }
   .guest-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .guest-table-wrap table { min-width: 500px; }
 
-  /* ── Timeline — list view default on mobile ── */
+  /* ── Timeline ── */
   .gantt-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .vtabs { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
-  .vtabs::-webkit-scrollbar { display: none; }
-  .vtab { white-space: nowrap; flex-shrink: 0; padding: 7px 14px; }
 
-  /* ── Buttons in header rows — icon only ── */
-  .sh .btn .btn-label { display: none; }
+  /* ── Buttons in header rows ── */
+  .sh .btn span { display: none; }
+  .sh .btn svg + span { display: none; }
 
-  /* ── Cards in events — more compact ── */
-  .evc-body { padding: 16px 14px; }
-  .evc-foot { padding: 10px 14px; }
-  
-  /* ── Analytics — stack charts ── */
-  #analytics-content > div[style*="grid-template-columns:1fr 1fr"] { 
-    display: block !important; 
-  }
-  #analytics-content > div[style*="grid-template-columns:1fr 1fr"] > div {
-    margin-bottom: 14px;
-  }
+  /* ── Event card list-view rows: stack on mobile ── */
+  .ev-list-rows { flex-wrap: wrap; gap: 6px 14px; }
 }
 
 /* ═══ RESPONSIVE — SMALL MOBILE (≤ 480px) ════════════════════════ */
@@ -1034,11 +990,11 @@ tr:hover td { background: var(--bg2); }
   .tnav { height: 50px; padding: 0 12px; }
   .tnav-logo { font-size: 19px; }
 
-  .pnav { top: 50px; padding: 6px 10px 4px; }
-  .ptab { padding: 5px 9px; font-size: 10.5px; }
+  .pnav { top: 50px; padding: 8px 12px 4px; }
+  .ptab { padding: 5px 8px; font-size: 10.5px; }
 
   .evgrid { gap: 10px; }
-  .evc-body { padding: 12px 10px; }
+  .evc-body { padding: 14px 12px; }
 
   .sg { grid-template-columns: repeat(2,1fr); gap: 8px; }
   .gs-stats { grid-template-columns: repeat(2,1fr); gap: 8px; }
@@ -1049,11 +1005,12 @@ tr:hover td { background: var(--bg2); }
   .btn { font-size: 11.5px; }
   .btn-sm { font-size: 10.5px; padding: 4px 10px; }
 
-  .layout-sidebar { max-height: 32vh; }
+  .layout-sidebar { max-height: 40vh; }
+  .layout-toolbar .btn-label { display: none; }
 
   /* ── Stats condensed ── */
-  .sc { padding: 12px 10px; }
-  .sc-val { font-size: 20px; }
+  .sc { padding: 14px 10px; }
+  .stat-n { font-size: 20px; }
 
   /* ── Page padding ── */
   .pcontent { padding: 10px; }
@@ -1061,11 +1018,6 @@ tr:hover td { background: var(--bg2); }
   /* ── Hide less important table cols on tiny screens ── */
   .guest-col-table { display: none; }
   .guest-col-dietary { display: none; }
-  
-  /* ── Tab text shortened on very small screens ── */
-  .ptab[data-tab="dashboard"]::after { content: ''; }
-  .ptab[data-tab="timeline"]::after { content: ''; }
-  .ptab[data-tab="moodboard"]::after { content: ''; }
 }
 
 /* ═══ HAMBURGER MENU (mobile nav) ════════════════════════════════ */
@@ -2640,16 +2592,15 @@ async function loadProjectsFromCloud(userId){
     var rows = await res.json();
 
     // Build projects map from API rows.
-    // IMPORTANT: only replace local data if cloud has rows, OR if we had no
-    // local cache. This prevents an empty cloud response (e.g. RLS blocking
-    // saves) from wiping projects the user just created locally.
+    // Only replace local data when the cloud actually returned rows.
+    // If cloud returns 0 rows but we had no local cache either, just
+    // ensure the user bucket exists so the app doesn't crash.
     if(rows.length > 0){
       var projects = {};
       rows.forEach(function(row){ projects[row.id] = row.data; });
       DB.projects[userId] = projects;
       cacheDB();
     } else if(!hadCache){
-      // No cache and no cloud rows — initialize empty so UI shows "no events"
       if(!DB.projects[userId]) DB.projects[userId] = {};
     }
     renderEvents();
@@ -3225,9 +3176,9 @@ function renderEvents(){
       return `<div class="evc fade-in" onclick="openProject('${p.id}')">
         <div class="evc-top"></div>
         <div class="evc-body">
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px">
-            <div>
-              <div style="font-size:17px;font-weight:700">${p.name}</div>
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:14px">
+            <div style="min-width:0;flex:1">
+              <div style="font-size:17px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name}</div>
               <div style="font-size:12px;color:var(--muted);margin-top:2px">${p.description||''}</div>
             </div>
             <span class="badge ${tc[p.type]||'b-gray'}">${tl[p.type]||p.type}</span>
@@ -3308,7 +3259,6 @@ function saveEvent(id){
   if(p){Object.assign(p,data);saveProj(p);if(CID===id)renderPNav();}
   else{const np={id:'p'+Date.now(),vendors:defaultVendors(),vendorsInitialized:true,tasks:defaultTasks(),guests:[],layoutItems:[],savedLayouts:[],moodboard:[],...data};saveProj(np);}
   closeMo();
-  // Small delay to let saveProj update DB.projects before rendering
   setTimeout(function(){ renderEvents(); }, 50);
   toast(id?'Event updated':'Event created!','s');
 }
@@ -5104,14 +5054,7 @@ function updateSelUI(){
     el.classList.toggle('sel',LState.sel.includes(el.dataset.id));
   });
   const panel=document.getElementById('lsb-props');
-  if(panel){
-    const show=LState.sel.length===1;
-    panel.style.display=show?'block':'none';
-    // Mobile: toggle bottom sheet
-    if(window.innerWidth<=768){
-      panel.classList.toggle('has-selection', show);
-    }
-  }
+  if(panel){panel.style.display=LState.sel.length===1?'block':'none';}
   if(LState.sel.length===1){renderLPropsPanel();}
   // Update list
   document.querySelectorAll('.litem-list-row').forEach(row=>{
@@ -5199,8 +5142,6 @@ function addNewChairType(){
   var p=proj();if(!p.chairTypes)p.chairTypes={};
   p.chairTypes[key]=CHAIR_TYPES[key];saveProj(p);
   closeMo();openChairEditor();toast('Chair style added','s');
-  // Update layout sidebar if layout tab is active
-  if(CTAB==='layout') setTimeout(function(){ var pp=document.getElementById('lsb-props-inner'); if(pp&&LState.sel.length) renderLPropsPanel(); },100);
 }
 
 function saveChairEditor(){
@@ -5213,9 +5154,7 @@ function saveChairEditor(){
     if(cost) CHAIR_TYPES[k].costPerChair=+cost.value||0;
   });
   var p=proj();p.chairTypes=JSON.parse(JSON.stringify(CHAIR_TYPES));saveProj(p);
-  closeMo();
-  if(CTAB==='layout') renderLayout();
-  toast('Chair styles saved','s');
+  closeMo();renderLayout();toast('Chair styles saved','s');
 }
 
 function openCenterpieceEditor(){
@@ -6091,18 +6030,44 @@ function renderLPropsPanel(){
 
 function lPropChange(id, key, val){
   const item=LState.items.find(i=>i.id===id);if(!item)return;
-  // All keys (including cost) apply only to this specific item
-  item[key]=val;
-  const p=proj();p.layoutItems=LState.items;saveProj(p);
-  // Re-render just this item in the DOM
-  const el=document.getElementById('li_'+id);
-  if(el){
-    const newEl=document.createElement('div');
-    newEl.innerHTML=renderLItem(item);
-    const ni=newEl.firstChild;
-    el.replaceWith(ni);
-    ni.addEventListener('mousedown',lItemDown,{passive:false});
+
+  // Keys that are per-element only and never propagate
+  const perElementOnly=['label','x','y','rotation'];
+
+  if(perElementOnly.includes(key)){
+    // Apply only to this one item
+    item[key]=val;
+  } else {
+    // ALL other properties (w, h, bg, bdClr, chairs, chairType, centerpiece, cost, radius, shape)
+    // propagate to ALL items of the same shape on this layout
+    LState.items.forEach(it=>{ if(it.shape===item.shape) it[key]=val; });
+    // Also apply to any additionally-selected items (even if a different shape)
+    LState.sel.forEach(selId=>{
+      const selItem=LState.items.find(i=>i.id===selId);
+      if(selItem && selItem.shape!==item.shape) selItem[key]=val;
+    });
   }
+
+  const p=proj();p.layoutItems=LState.items;saveProj(p);
+  // Re-render affected items in the DOM (same shape + selected)
+  const toUpdate=new Set();
+  if(perElementOnly.includes(key)){
+    toUpdate.add(id);
+  } else {
+    LState.items.forEach(it=>{ if(it.shape===item.shape) toUpdate.add(it.id); });
+    LState.sel.forEach(selId=>toUpdate.add(selId));
+  }
+  toUpdate.forEach(uid=>{
+    const it=LState.items.find(i=>i.id===uid); if(!it) return;
+    const el=document.getElementById('li_'+uid);
+    if(el){
+      const newEl=document.createElement('div');
+      newEl.innerHTML=renderLItem(it);
+      const ni=newEl.firstChild;
+      el.replaceWith(ni);
+      ni.addEventListener('mousedown',lItemDown,{passive:false});
+    }
+  });
 }
 
 function openLItemModal(id){
@@ -6159,7 +6124,7 @@ function openLItemModal(id){
     <input class="input" id="li-cost" type="number" step="0.01" min="0" value="${item.cost||0}">
   </div>
   <div style="font-size:10.5px;color:var(--muted);margin-bottom:8px;padding:8px;background:rgba(201,168,76,.06);border-radius:6px;border:1px solid rgba(201,168,76,.15)">
-    ℹ️ ${_es?`<strong>Tamaño y color</strong> se aplicarán a todos los ${item.shape.replace(/-/g,' ')}s. <strong>Sillas, centro de mesa, precio y etiqueta</strong> son por este elemento individual.`:`<strong>Size & color</strong> apply to all ${item.shape.replace(/-/g,' ')}s. <strong>Chairs, centerpiece, price & label</strong> apply to this element only.`}
+    ℹ️ ${_es?`Al guardar se aplicará tamaño, color, sillas y centro de mesa a <strong>todos los ${item.shape.replace(/-/g,' ')}s</strong> en este plano.`:`Saving will apply size, color, chairs and centerpiece to <strong>all ${item.shape.replace(/-/g,' ')}s</strong> in this layout.`}
   </div>
   <div class="mo-foot">
     <button class="btn btn-ghost" onclick="closeMo()">${t('cancel')}</button>
@@ -6199,22 +6164,38 @@ function saveLItem(id){
     it.w=newW; it.h=newH;
     it.bg=newBg; it.bdClr=newBdClr;
     it.chairs=newChairs;
+    it.chairType=newCtype;
+    it.centerpiece=newCp;
     it.radius=newRadius;
     it.shape=newShape;
   });
 
-  // Per-element only: chair type, centerpiece, cost, label
-  item.chairType=newCtype;
-  item.centerpiece=newCp;
+  // Cost from the modal applies to all same-shape items too
   const newCost=+(document.getElementById('li-cost')||{value:0}).value||0;
-  item.cost=newCost;
+  sameShape.forEach(it=>{ it.cost=newCost; });
+
+  // Also apply all props to any other selected items (different shapes)
+  LState.sel.forEach(selId=>{
+    const selItem=LState.items.find(i=>i.id===selId);
+    if(selItem && selItem.shape!==item.shape){
+      selItem.w=newW; selItem.h=newH;
+      selItem.bg=newBg; selItem.bdClr=newBdClr;
+      selItem.chairs=newChairs;
+      selItem.chairType=newCtype;
+      selItem.centerpiece=newCp;
+      selItem.cost=newCost;
+    }
+  });
+
   // Only apply label to this specific item
   item.label=newLabel;
 
   const p=proj();p.layoutItems=LState.items;saveProj(p);
   lHistorySave();
   closeMo();renderLayout();
-  toast('Applied to all '+sameShape.length+' '+item.shape.replace(/-/g,' ')+(sameShape.length>1?'s':''),'s');
+  const selExtra=LState.sel.filter(sid=>{const si=LState.items.find(i=>i.id===sid);return si&&si.shape!==item.shape;}).length;
+  const totalUpdated=sameShape.length+selExtra;
+  toast('Applied to '+totalUpdated+' item'+(totalUpdated!==1?'s':''),'s');
 }
 
 
