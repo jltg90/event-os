@@ -2566,7 +2566,7 @@ async function loadProjectsFromCloud(userId){
     if(e && e.name==='AbortError'){
       console.warn('EventOS: cloud fetch timed out — using cached data');
       if(!hadCache){
-        if(typeof DB.cur==='string'&&DB.cur==='dev_user_local') return true;
+        if(DB.cur==='dev_user_local') return true;
         showLoadingError('Connection timed out. Check your connection and reload.');
         return false;
       }
@@ -2574,9 +2574,7 @@ async function loadProjectsFromCloud(userId){
       return true; // have cache, continue into app
     }
     if(!hadCache){
-      // Dev/direct mode: skip error, enter with empty project list
-      if(typeof DB.cur==='string'&&DB.cur==='dev_user_local') return true;
-      // No cache AND no cloud — show an error in the loading screen
+      if(DB.cur==='dev_user_local') return true;
       showLoadingError('Could not load your projects. Check your connection and reload.');
       return false;
     }
@@ -2730,7 +2728,6 @@ var _appInitialized = false;
 async function initApp(){
   if(_appInitialized) return;
   _appInitialized = true;
-  // Make sure loading screen is visible while we fetch
   var pgApp = document.getElementById('pg-app');
   var pgLoad = document.getElementById('pg-loading');
   if(pgApp) pgApp.classList.add('hidden');
@@ -2739,7 +2736,6 @@ async function initApp(){
   if(errEl) errEl.style.display = 'none';
   var isDevMode = (DB.cur === 'dev_user_local');
   var ok = await loadProjectsFromCloud(DB.cur);
-  // Dev/direct-open mode: always enter app even if cloud unavailable
   if(ok !== false || isDevMode) enterApp();
 }
 
@@ -3053,7 +3049,7 @@ function renderEvents(){
   const efBtn=document.getElementById('ef-alltime');
   if(efBtn) efBtn.classList.toggle('active',_evFilterAllTime);
 
-  let list=Object.values(uproj());
+  let list=Object.values(uproj()).filter(p=>p&&p.id&&p.id!=='__library__'&&p.status);
   // Date filter
   if(!_evFilterAllTime){
     const fp=new Date('1900-01-01'); const ff=new Date('2100-12-31');
@@ -3106,7 +3102,7 @@ function renderEvents(){
             <div style="font-size:12px;white-space:nowrap"><span style="color:var(--light);font-size:10px;display:block;text-transform:uppercase;letter-spacing:.4px">${t('event_date')}</span>${fmtDate(p.date)}</div>
             <div style="font-size:12px;white-space:nowrap"><span style="color:var(--light);font-size:10px;display:block;text-transform:uppercase;letter-spacing:.4px">${t('location')}</span>${p.location||'TBD'}</div>
             <div style="font-size:12px;white-space:nowrap"><span style="color:var(--light);font-size:10px;display:block;text-transform:uppercase;letter-spacing:.4px">${t('total_budget')}</span>${fmtMoney(p.budget)}</div>
-            <div style="font-size:12px;white-space:nowrap"><span style="color:var(--light);font-size:10px;display:block;text-transform:uppercase;letter-spacing:.4px">${t('status')}</span>${t('status_'+p.status.replace('-','_'))||p.status}</div>
+            <div style="font-size:12px;white-space:nowrap"><span style="color:var(--light);font-size:10px;display:block;text-transform:uppercase;letter-spacing:.4px">${t('status')}</span>${p.status?t('status_'+p.status.replace('-','_'))||p.status:''}</div>
           </div>
           <div style="flex-shrink:0;display:flex;gap:5px;align-items:center" onclick="event.stopPropagation()">
             <span style="font-size:11px;font-weight:600;color:${isPast?'var(--light)':'var(--accent)'};white-space:nowrap;margin-right:6px">${dLabel}</span>
@@ -3136,7 +3132,7 @@ function renderEvents(){
           ${evcRow('#fdf4e0','#b8861a','<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',t('total_budget'),fmtMoney(p.budget))}
         </div>
         <div class="evc-foot">
-          <span style="font-size:12px;font-weight:600;text-transform:capitalize;color:var(--muted)">${t('status_'+p.status.replace('-','_'))||p.status}</span>
+          <span style="font-size:12px;font-weight:600;text-transform:capitalize;color:var(--muted)">${p.status?t('status_'+p.status.replace('-','_'))||p.status:''}</span>
           <div style="display:flex;align-items:center;gap:10px">
             <span style="font-size:12px;font-weight:600;color:${isPast?'var(--light)':'var(--accent)'}">${dLabel}</span>
             <div style="display:flex;gap:6px" onclick="event.stopPropagation()">
@@ -8905,7 +8901,7 @@ function updateAnalyticsLabels(){
 }
 
 function renderAnalytics(){
-  const allProjects = Object.values(uproj());
+  const allProjects = Object.values(uproj()).filter(p=>p&&p.id&&p.id!=='__library__'&&p.status);
   // (range computed inside renderAnalytics directly)
   const farPast=new Date('1900-01-01'); const farFuture=new Date('2100-12-31');
   const from = _analyticsAllTime ? farPast  : (_analyticsFrom||farPast);
@@ -8945,7 +8941,7 @@ function renderAnalytics(){
   inPeriod.forEach(p=>{ byType[p.type]=(byType[p.type]||0)+1; });
   // By status
   const byStatus = {};
-  inPeriod.forEach(p=>{ byStatus[p.status]=(byStatus[p.status]||0)+1; });
+  inPeriod.forEach(p=>{ if(p.status) byStatus[p.status]=(byStatus[p.status]||0)+1; });
   // Top vendor categories
   const vendorCats = {};
   inPeriod.forEach(p=>{ p.vendors.filter(v=>v.hired).forEach(v=>{ vendorCats[v.category]=(vendorCats[v.category]||0)+1; }); });
@@ -9086,7 +9082,7 @@ function renderAnalytics(){
           </div>
           <div style="text-align:right">
             <div style="font-size:12px;font-weight:700;color:var(--gold-h)">${fmtMoney(p.budget)}</div>
-            <div style="font-size:10px;color:var(--muted);margin-top:2px">${t('status_'+p.status.replace('-','_'))||p.status}</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px">${p.status?t('status_'+p.status.replace('-','_'))||p.status:''}</div>
           </div>
         </div>`).join('')}
     </div>
@@ -9203,7 +9199,7 @@ function generateExportPDF(){
       ${kv(t('event_type'), tl[p.type]||p.type)}
       ${kv(t('event_date'), fmtDate(p.date))}
       ${kv(t('location'), p.location||'TBD')}
-      ${kv(t('status'), t('status_'+p.status.replace('-','_'))||p.status)}
+      ${kv(t('status'), p.status?t('status_'+p.status.replace('-','_'))||p.status:'')}
       ${p.description?kv(t('description'),p.description):''}
       <div class="pdf-prog-wrap" style="margin-top:12px">
         <div class="pdf-prog-label"><span>${t('tasks_completed')}</span><span>${tpct}%</span></div>
