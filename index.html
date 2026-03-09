@@ -1705,6 +1705,8 @@ var TRANSLATIONS = {
     'progress': 'Progress',
     'tasks_lbl': 'tasks',
     'overdue_lbl': 'Overdue',
+    'tasks_overdue_sub': 'tasks overdue',
+    'tasks_sub': 'tasks',
     'unassigned': 'Unassigned',
     'task_title_lbl': 'Task Title',
     'description_lbl': 'Description',
@@ -1751,6 +1753,34 @@ var TRANSLATIONS = {
     'tables_lbl': 'tables',
     'chairs_lbl': 'chairs',
     'rotate_lbl': 'Rotate',
+    // Layout editor modals
+    'edit_table_types': 'Edit Table Types',
+    'edit_event_elements': 'Edit Event Elements',
+    'edit_chairs': 'Chairs',
+    'edit_centerpieces': 'Centros de Mesa',
+    'col_name': 'Name',
+    'col_shape': 'Shape',
+    'col_chairs': 'Chairs',
+    'col_price': 'Price',
+    'col_color': 'Color',
+    'col_photo': 'Photo',
+    'shape_round': '⭕ Round',
+    'shape_rect': '▬ Rect',
+    'shape_square': '⬛ Square',
+    'add_custom_table': '+ Add Custom Table',
+    'add_custom_element': '+ Add Custom Element',
+    'add_new_chair': '+ Add New Chair Style',
+    'add_new_centerpiece': '+ Add New Centerpiece',
+    // Vendor categories
+    'vcat_venue': 'Venue & Rentals',
+    'vcat_food': 'Food & Beverage',
+    'vcat_floral': 'Floral & Decor',
+    'vcat_photo': 'Photography & Video',
+    'vcat_entertainment': 'Entertainment & Music',
+    'vcat_staffing': 'Staffing',
+    'vcat_transport': 'Transportation',
+    'vcat_admin': 'Admin & Compliance',
+    'vcat_other': 'Other',
     'round_table_lbl': 'Round Table',
     'rect_table_lbl': 'Rect Table',
     'square_table_lbl': 'Square Table',
@@ -2014,6 +2044,8 @@ var TRANSLATIONS = {
     'progress': 'Progreso',
     'tasks_lbl': 'tareas',
     'overdue_lbl': 'Vencida',
+    'tasks_overdue_sub': 'Tareas Vencidas',
+    'tasks_sub': 'Tareas',
     'unassigned': 'Sin asignar',
     'task_title_lbl': 'Título de Tarea',
     'description_lbl': 'Descripción',
@@ -2060,6 +2092,34 @@ var TRANSLATIONS = {
     'tables_lbl': 'mesas',
     'chairs_lbl': 'sillas',
     'rotate_lbl': 'Rotar',
+    // Layout editor modals
+    'edit_table_types': 'Editar Tipos de Mesa',
+    'edit_event_elements': 'Editar Elementos del Evento',
+    'edit_chairs': 'Sillas',
+    'edit_centerpieces': 'Centros de Mesa',
+    'col_name': 'Nombre',
+    'col_shape': 'Forma',
+    'col_chairs': 'Sillas',
+    'col_price': 'Precio',
+    'col_color': 'Color',
+    'col_photo': 'Foto',
+    'shape_round': '⭕ Redonda',
+    'shape_rect': '▬ Rectangular',
+    'shape_square': '⬛ Cuadrada',
+    'add_custom_table': '+ Agregar Mesa Personalizada',
+    'add_custom_element': '+ Agregar Elemento Personalizado',
+    'add_new_chair': '+ Agregar Estilo de Silla',
+    'add_new_centerpiece': '+ Agregar Centro de Mesa',
+    // Vendor categories
+    'vcat_venue': 'Venue y Rentas',
+    'vcat_food': 'Alimentos y Bebidas',
+    'vcat_floral': 'Floral y Decoración',
+    'vcat_photo': 'Fotografía y Video',
+    'vcat_entertainment': 'Entretenimiento y Música',
+    'vcat_staffing': 'Personal',
+    'vcat_transport': 'Transporte',
+    'vcat_admin': 'Administración y Permisos',
+    'vcat_other': 'Otros',
     'round_table_lbl': 'Mesa Redonda',
     'rect_table_lbl': 'Mesa Rectangular',
     'square_table_lbl': 'Mesa Cuadrada',
@@ -2094,8 +2154,37 @@ function toggleLang(){
   LANG = LANG==='en' ? 'es' : 'en';
   const btn = document.getElementById('lang-label');
   if(btn) btn.textContent = LANG==='es' ? 'EN' : 'ES';
+  // Refresh default vendors/tasks in current project to match new language
+  refreshDefaultData();
   applyTranslations();
   toast(LANG==='es'?'Idioma cambiado a Español':'Language changed to English','s');
+}
+
+function refreshDefaultData(){
+  // Re-seed default vendors (id starts with 'dv') and tasks (id starts with 't' + digit)
+  // in the current project when language switches. User-added items are never touched.
+  const p = proj ? proj() : null;
+  if(!p) return;
+  let changed = false;
+  // Refresh default vendors (those with id matching 'dv0'–'dv9')
+  const freshVendors = defaultVendors();
+  p.vendors = p.vendors.map(v => {
+    if(/^dv\d$/.test(v.id)){
+      const fresh = freshVendors.find(f => f.id === v.id);
+      if(fresh) return Object.assign({}, fresh, { budget: v.budget, hired: v.hired, payments: v.payments, notes: v.notes });
+    }
+    return v;
+  });
+  // Refresh default tasks (those with id 't1'–'t12')
+  const freshTasks = defaultTasks();
+  p.tasks = p.tasks.map(tk => {
+    if(/^t\d{1,2}$/.test(tk.id)){
+      const fresh = freshTasks.find(f => f.id === tk.id);
+      if(fresh) return Object.assign({}, fresh, { done: tk.done, dueDate: tk.dueDate });
+    }
+    return tk;
+  });
+  saveProj(p);
 }
 
 function applyTranslations(){
@@ -2842,7 +2931,7 @@ function openVendorModal(vid){
   openMo(`<div class="mo-title">${v?t('edit_vendor'):t('add_vendor')}</div>
   <div class="form-grid">
     <div class="ig" style="grid-column:1/-1"><label>${t('vendor_name_lbl')} *</label><input class="input" id="vn-name" value="${esc(v?.name||'')}" placeholder="${t('vendor_name_lbl')}"></div>
-    <div class="ig"><label>${t('category')}</label><select class="select" id="vn-cat">${['Venue & Rentals','Food & Beverage','Floral & Decor','Photography & Video','Entertainment & Music','Staffing','Transportation','Admin & Compliance','Other'].map(c=>`<option${v?.category===c?' selected':''}>${c}</option>`).join('')}</select></div>
+    <div class="ig"><label>${t('category')}</label><select class="select" id="vn-cat">${[['Venue & Rentals','vcat_venue'],['Food & Beverage','vcat_food'],['Floral & Decor','vcat_floral'],['Photography & Video','vcat_photo'],['Entertainment & Music','vcat_entertainment'],['Staffing','vcat_staffing'],['Transportation','vcat_transport'],['Admin & Compliance','vcat_admin'],['Other','vcat_other']].map(([val,key])=>`<option value="${val}"${v?.category===val?' selected':''}>${t(key)}</option>`).join('')}</select></div>
     <div class="ig"><label>${t('sub_category')}</label><input class="input" id="vn-sub" value="${esc(v?.subcategory||'')}" placeholder="e.g. Florals"></div>
     <div class="ig" style="grid-column:1/-1"><label>${t('services_lbl')}</label><input class="input" id="vn-svc" value="${esc(v?.services||'')}" placeholder="Describe services..."></div>
     <div class="ig"><label>${t('contact_email')}</label><input class="input" id="vn-email" type="email" value="${esc(v?.contact||'')}" placeholder="vendor@email.com"></div>
@@ -2921,9 +3010,9 @@ function renderTimeline(){
     </button>
   </div>
   <div class="sg" style="margin-bottom:20px">
-    ${statCard(t('total_tasks'),'#f5f3ff','#7c3aed','<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',p.tasks.length,t('tasks_lbl'),'0','#7c3aed')}
+    ${statCard(t('total_tasks'),'#f5f3ff','#7c3aed','<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',p.tasks.length,t('tasks_sub'),'0','#7c3aed')}
     ${statCard(t('completed_tasks'),'#ecfdf5','#10b981','<polyline points="20,6 9,17 4,12"/>',done,t('done'),pct,'#10b981')}
-    ${statCard(t('overdue_tasks'),'#fff0f0','#ef4444','<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/>',ov,t('tasks_lbl')+' '+t('overdue'),'0','#ef4444')}
+    ${statCard(t('overdue_tasks'),'#fff0f0','#ef4444','<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/>',ov,t('tasks_overdue_sub'),'0','#ef4444')}
     ${statCard(t('progress'),'#f7f0de','#a8862e','<circle cx="12" cy="12" r="10"/>',pct+'%',t('completed_tasks'),pct,'#c9a84c')}
   </div>
   <div class="vtabs">
@@ -3755,7 +3844,7 @@ function renderLayout(){
           <button title="Distribute Vertically" onclick="alignSelected('dist-v')" style="width:26px;height:26px;border:none;background:transparent;cursor:pointer;border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--muted)" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="6" y="1" width="12" height="5" rx="1"/><rect x="8" y="9.5" width="8" height="5" rx="1"/><rect x="5" y="18" width="14" height="5" rx="1"/><line x1="3" y1="3.5" x2="21" y2="3.5" stroke-dasharray="2 2" stroke-width="1.2"/><line x1="3" y1="12" x2="21" y2="12" stroke-dasharray="2 2" stroke-width="1.2"/><line x1="3" y1="20.5" x2="21" y2="20.5" stroke-dasharray="2 2" stroke-width="1.2"/></svg></button>
         </div>
         <div style="display:flex;align-items:center;gap:3px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:3px 6px;opacity:1">
-          <span style="font-size:10px;color:var(--muted);margin-right:2px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Rotate</span>
+          <span style="font-size:10px;color:var(--muted);margin-right:2px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">${t('rotate_lbl')}</span>
           <button title="Rotate -90°" onclick="rotateSelected(-90)" style="width:26px;height:26px;border:none;background:transparent;cursor:pointer;border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;font-weight:700" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
           </button>
@@ -4448,27 +4537,27 @@ function openChairEditor(){
       '<input class="input" type="number" style="font-size:11px;padding:4px 6px" id="ch-cost-'+k+'" value="'+(v.costPerChair||0)+'" placeholder="0">'+
       '</div>';
   }).join('');
-  openMo('<div class="mo-title">Chairs</div>'+
+  openMo('<div class="mo-title">'+t('edit_chairs')+'</div>'+
     '<div style="display:grid;grid-template-columns:50px 1fr 36px 80px;gap:8px;padding:4px 0 8px;border-bottom:2px solid var(--border);margin-bottom:4px">'+
-      '<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase">Photo</span>'+
-      '<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase">Name</span>'+
-      '<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase">Color</span>'+
-      '<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase">Price ($)</span>'+
+      '<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase">'+t('col_photo')+'</span>'+
+      '<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase">'+t('col_name')+'</span>'+
+      '<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase">'+t('col_color')+'</span>'+
+      '<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase">'+t('col_price')+' ($)</span>'+
     '</div>'+
     '<div style="max-height:60vh;overflow-y:auto">'+rows+
     '<div style="padding:10px 0;border-top:1px solid var(--border);margin-top:8px">'+
-      '<div style="font-weight:700;font-size:11px;color:var(--gold-h);margin-bottom:8px">+ Add New Chair Style</div>'+
+      '<div style="font-weight:700;font-size:11px;color:var(--gold-h);margin-bottom:8px">'+t('add_new_chair')+'</div>'+
       '<div style="display:flex;gap:6px">'+
         '<input class="input" id="ch-new-label" placeholder="Name" style="flex:2;font-size:11px">'+
         '<input class="input" type="color" id="ch-new-fill" value="#e8d8c8" style="width:34px;height:34px;padding:2px;flex-shrink:0">'+
         '<input class="input" type="number" id="ch-new-cost" placeholder="$/silla" value="0" style="width:64px;font-size:11px">'+
-        '<button class="btn btn-ghost btn-sm" onclick="addNewChairType()" style="white-space:nowrap">Add</button>'+
+        '<button class="btn btn-ghost btn-sm" onclick="addNewChairType()" style="white-space:nowrap">'+t('add')+'</button>'+
       '</div>'+
     '</div>'+
     '</div>'+
     '<div class="mo-foot">'+
-      '<button class="btn btn-ghost" onclick="closeMo()">Cancel</button>'+
-      '<button class="btn btn-primary" onclick="saveChairEditor()">Save</button>'+
+      '<button class="btn btn-ghost" onclick="closeMo()">'+t('cancel')+'</button>'+
+      '<button class="btn btn-primary" onclick="saveChairEditor()">'+t('save')+'</button>'+
     '</div>');
 }
 
@@ -4504,26 +4593,26 @@ function openCenterpieceEditor(){
       <input class="input" type="color" style="width:34px;height:28px;padding:2px" id="cp-color-${k}" value="${v.color||'#ff8080'}" title="Color">
       <input class="input" type="number" style="font-size:11px;padding:4px 6px" id="cp-cost-${k}" value="${v.cost||0}" placeholder="0">
     </div>`).join('');
-  openMo(`<div class="mo-title">Centros de Mesa</div>
+  openMo(`<div class="mo-title">${t('edit_centerpieces')}</div>
     <div style="display:grid;grid-template-columns:1fr 36px 80px;gap:6px;padding:4px 0 8px;border-bottom:2px solid var(--border);margin-bottom:4px">
-      <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Name</span>
-      <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Color</span>
-      <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Price ($)</span>
+      <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">${t('col_name')}</span>
+      <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">${t('col_color')}</span>
+      <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">${t('col_price')} ($)</span>
     </div>
     <div style="max-height:60vh;overflow-y:auto">${rows}
     <div style="padding:10px 0;border-top:1px solid var(--border);margin-top:8px">
-      <div style="font-weight:700;font-size:11px;color:var(--gold-h);margin-bottom:8px">+ Add New Centerpiece</div>
+      <div style="font-weight:700;font-size:11px;color:var(--gold-h);margin-bottom:8px">${t('add_new_centerpiece')}</div>
       <div style="display:flex;gap:6px">
         <input class="input" id="cp-new-label" placeholder="Name" style="flex:2;font-size:11px">
         <input class="input" type="color" id="cp-new-color" value="#e05080" style="width:34px;height:34px;padding:2px;flex-shrink:0">
         <input class="input" type="number" id="cp-new-cost" placeholder="$/pc" value="0" style="width:64px;font-size:11px">
-        <button class="btn btn-ghost btn-sm" onclick="addNewCenterpieceType()" style="white-space:nowrap">Add</button>
+        <button class="btn btn-ghost btn-sm" onclick="addNewCenterpieceType()" style="white-space:nowrap">${t('add')}</button>
       </div>
     </div>
     </div>
     <div class="mo-foot">
-      <button class="btn btn-ghost" onclick="closeMo()">Cancel</button>
-      <button class="btn btn-primary" onclick="saveCenterpieceEditor()">Save</button>
+      <button class="btn btn-ghost" onclick="closeMo()">${t('cancel')}</button>
+      <button class="btn btn-primary" onclick="saveCenterpieceEditor()">${t('save')}</button>
     </div>`);
 }
 
@@ -4632,9 +4721,9 @@ function openTableTypesEditor(){
     <div style="display:grid;grid-template-columns:110px 80px 65px 65px 50px 80px 34px;gap:5px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
       <input class="input" style="font-size:11px;padding:4px 8px" id="tt-${k}-label" value="${s.label}" placeholder="Name">
       <select class="input" style="font-size:11px;padding:3px 4px" id="tt-${k}-shape">
-        <option value="round" ${shapeVal==='round'?'selected':''}>⭕ Round</option>
-        <option value="rect" ${shapeVal==='rect'?'selected':''}>▬ Rect</option>
-        <option value="square" ${shapeVal==='square'?'selected':''}>⬛ Square</option>
+        <option value="round" ${shapeVal==='round'?'selected':''}>${t('shape_round')}</option>
+        <option value="rect" ${shapeVal==='rect'?'selected':''}>${t('shape_rect')}</option>
+        <option value="square" ${shapeVal==='square'?'selected':''}>${t('shape_square')}</option>
       </select>
       <input class="input" type="number" step="0.1" style="font-size:11px;padding:4px 6px" id="tt-${k}-w" value="${s.wm}">
       <input class="input" type="number" step="0.1" style="font-size:11px;padding:4px 6px" id="tt-${k}-h" value="${s.hm}">
@@ -4642,25 +4731,25 @@ function openTableTypesEditor(){
       <input class="input" type="number" step="0.01" style="font-size:11px;padding:4px 6px" id="tt-${k}-price" value="${s.price||0}" placeholder="0">
       <input class="input" type="color" id="tt-${k}-bg" value="${s.bg}" style="width:34px;height:34px;padding:2px" title="Fill color">
     </div>`;}).join('');
-  openMo(`<div class="mo-title">Edit Table Types</div>
+  openMo(`<div class="mo-title">${t('edit_table_types')}</div>
     <div style="display:grid;grid-template-columns:110px 80px 65px 65px 50px 80px 34px;gap:5px;padding:4px 0 8px;border-bottom:2px solid var(--border);margin-bottom:4px">
-      <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Name</span>
-      <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Shape</span>
+      <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">${t('col_name')}</span>
+      <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">${t('col_shape')}</span>
       <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">W (m)</span>
       <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">H (m)</span>
-      <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Chairs</span>
-      <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Price</span>
-      <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Color</span>
+      <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">${t('col_chairs')}</span>
+      <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">${t('col_price')}</span>
+      <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">${t('col_color')}</span>
     </div>
     <div style="max-height:55vh;overflow-y:auto">${rows}</div>
     <div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-top:8px">
-      <div style="font-weight:700;font-size:11px;color:var(--gold-h);margin-bottom:8px">+ Add Custom Table</div>
+      <div style="font-weight:700;font-size:11px;color:var(--gold-h);margin-bottom:8px">${t('add_custom_table')}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:6px;align-items:end">
-        <div class="ig"><label>Name</label><input class="input" style="font-size:11px" id="tt-new-label" placeholder="Name"></div>
-        <div class="ig"><label>Shape</label><select class="input" style="font-size:11px;padding:3px 4px" id="tt-new-shape"><option value="round">⭕ Round</option><option value="rect">▬ Rect</option><option value="square">⬛ Square</option></select></div>
+        <div class="ig"><label>${t('col_name')}</label><input class="input" style="font-size:11px" id="tt-new-label" placeholder="${t('col_name')}"></div>
+        <div class="ig"><label>${t('col_shape')}</label><select class="input" style="font-size:11px;padding:3px 4px" id="tt-new-shape"><option value="round">${t('shape_round')}</option><option value="rect">${t('shape_rect')}</option><option value="square">${t('shape_square')}</option></select></div>
         <div class="ig"><label>W (m)</label><input class="input" type="number" step="0.1" style="font-size:11px" id="tt-new-w" value="1.5"></div>
         <div class="ig"><label>H (m)</label><input class="input" type="number" step="0.1" style="font-size:11px" id="tt-new-h" value="1.5"></div>
-        <div class="ig"><label>Chairs</label><input class="input" type="number" style="font-size:11px" id="tt-new-chairs" value="8"></div>
+        <div class="ig"><label>${t('col_chairs')}</label><input class="input" type="number" style="font-size:11px" id="tt-new-chairs" value="8"></div>
         <div style="display:flex;gap:4px;align-items:flex-end;padding-bottom:1px">
           <input class="input" type="color" id="tt-new-bg" value="#e8d5c4" style="width:34px;height:34px;padding:2px" title="Fill color">
           <button class="btn btn-ghost btn-sm" onclick="addCustomTable()">Add</button>
@@ -4668,8 +4757,8 @@ function openTableTypesEditor(){
       </div>
     </div>
     <div class="mo-foot">
-      <button class="btn btn-ghost" onclick="closeMo()">Cancel</button>
-      <button class="btn btn-primary" onclick="saveTableTypes()">Save</button>
+      <button class="btn btn-ghost" onclick="closeMo()">${t('cancel')}</button>
+      <button class="btn btn-primary" onclick="saveTableTypes()">${t('save')}</button>
     </div>`);
 }
 
@@ -4732,19 +4821,19 @@ function openElementTypesEditor(){
       <input class="input" type="number" step="0.01" style="font-size:11px;padding:4px 6px" id="et-${k}-price" value="${s.price||0}" placeholder="0">
       <input class="input" type="color" id="et-${k}-bg" value="${s.bg}" style="width:34px;height:34px;padding:2px" title="Fill color">
     </div>`;}).join('');
-  openMo(`<div class="mo-title">Edit Event Elements</div>
+  openMo(`<div class="mo-title">${t('edit_event_elements')}</div>
     <div style="display:grid;grid-template-columns:1fr 80px 80px 60px 40px;gap:6px;padding:4px 0 8px;border-bottom:2px solid var(--border);margin-bottom:4px">
-      <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Name</span>
+      <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">${t('col_name')}</span>
       <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">W (m)</span>
       <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">H (m)</span>
-      <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Price</span>
-      <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Color</span>
+      <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">${t('col_price')}</span>
+      <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">${t('col_color')}</span>
     </div>
     <div style="max-height:55vh;overflow-y:auto">${rows}</div>
     <div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-top:8px">
-      <div style="font-weight:700;font-size:11px;color:var(--gold-h);margin-bottom:8px">+ Add Custom Element</div>
+      <div style="font-weight:700;font-size:11px;color:var(--gold-h);margin-bottom:8px">${t('add_custom_element')}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px;align-items:end">
-        <div class="ig"><label>Name</label><input class="input" style="font-size:11px" id="et-new-label" placeholder="Name"></div>
+        <div class="ig"><label>${t('col_name')}</label><input class="input" style="font-size:11px" id="et-new-label" placeholder="${t('col_name')}"></div>
         <div class="ig"><label>W (m)</label><input class="input" type="number" step="0.1" style="font-size:11px" id="et-new-w" value="2.0"></div>
         <div class="ig"><label>H (m)</label><input class="input" type="number" step="0.1" style="font-size:11px" id="et-new-h" value="1.0"></div>
         <div style="display:flex;gap:4px;align-items:flex-end;padding-bottom:1px">
@@ -4754,8 +4843,8 @@ function openElementTypesEditor(){
       </div>
     </div>
     <div class="mo-foot">
-      <button class="btn btn-ghost" onclick="closeMo()">Cancel</button>
-      <button class="btn btn-primary" onclick="saveElementTypes()">Save</button>
+      <button class="btn btn-ghost" onclick="closeMo()">${t('cancel')}</button>
+      <button class="btn btn-primary" onclick="saveElementTypes()">${t('save')}</button>
     </div>`);
 }
 
