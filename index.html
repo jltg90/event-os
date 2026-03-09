@@ -351,6 +351,9 @@ h1, h2, h3 { font-family: 'Cormorant Garamond', serif; font-weight: 600; line-he
 .umenu-item:hover { background: var(--bg2); }
 
 /* ─── EVENTS GRID ────────────────────────────── */
+.ev-sort-opt { display:block;width:100%;text-align:left;padding:7px 14px;background:none;border:none;cursor:pointer;font-size:12px;font-family:inherit;color:var(--text); }
+.ev-sort-opt:hover { background:var(--bg2) !important; }
+.ev-sort-opt.active { color:var(--gold-h) !important; font-weight:700; }
 .evgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px,1fr)); gap: 22px; }
 .evgrid.ev-list { grid-template-columns: 1fr; gap: 0; border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
 .evgrid.ev-list .evc { border-radius: 0; border: none; border-bottom: 1px solid var(--border); transform: none !important; box-shadow: none !important; }
@@ -880,6 +883,7 @@ tr:hover td { background: var(--bg2); }
 
 /* ═══ RESPONSIVE — MOBILE (≤ 768px) ══════════════════════════════ */
 @media (max-width: 768px) {
+  body, .pg, #pg-events>div, .pcontent { max-width:100vw; overflow-x:hidden; }
 
   /* ── Top nav ── */
   .tnav { padding: 0 14px; height: 54px; }
@@ -1370,16 +1374,32 @@ tr:hover td { background: var(--bg2); }
           <span data-i18n="create_event">New Event</span>
         </button>
       </div>
+      <!-- Events toolbar: order dropdown + dir + date filter + view toggle — single row -->
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <div style="display:flex;gap:4px;flex-wrap:wrap" id="ev-sort-btns">
-            <button class="tb active" onclick="setEvSort('date')" id="evsort-date">Date</button>
-            <button class="tb" onclick="setEvSort('name')" id="evsort-name">Name</button>
-            <button class="tb" onclick="setEvSort('type')" id="evsort-type">Type</button>
-            <button class="tb" onclick="setEvSort('location')" id="evsort-location">Location</button>
-            <button class="tb" onclick="setEvSort('budget')" id="evsort-budget">Budget</button>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <!-- Order by dropdown -->
+          <div style="position:relative;display:inline-block">
+            <button class="tb" id="ev-sort-trigger" onclick="toggleEvSortMenu()" style="display:flex;align-items:center;gap:5px;padding:4px 10px;font-size:11px">
+              <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 6h18M6 12h12M10 18h4"/></svg>
+              <span id="ev-sort-label" style="white-space:nowrap"></span>
+              <svg width="9" height="9" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <div id="ev-sort-menu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.12);z-index:200;min-width:150px;padding:4px 0">
+              <button class="ev-sort-opt active" onclick="setEvSort('date')" id="evsort-date"></button>
+              <button class="ev-sort-opt" onclick="setEvSort('name')" id="evsort-name"></button>
+              <button class="ev-sort-opt" onclick="setEvSort('type')" id="evsort-type"></button>
+              <button class="ev-sort-opt" onclick="setEvSort('location')" id="evsort-location"></button>
+              <button class="ev-sort-opt" onclick="setEvSort('budget')" id="evsort-budget"></button>
+            </div>
           </div>
-          <button class="tb" id="ev-sort-dir" onclick="toggleEvSortDir()" style="min-width:28px">↑</button>
+          <button class="tb" id="ev-sort-dir" onclick="toggleEvSortDir()" style="padding:4px 8px;font-size:13px" title="Toggle sort direction">↑</button>
+          <!-- Date filter inline -->
+          <button class="tb active" id="ef-alltime" onclick="setEvFilter('alltime')" style="font-size:11px;padding:4px 9px;white-space:nowrap"></button>
+          <div style="display:flex;align-items:center;gap:4px">
+            <input type="date" id="ef-from" class="input" style="font-size:11px;padding:3px 6px;height:28px;width:125px" onchange="setEvFilterDates()">
+            <span style="color:var(--muted);font-size:11px">→</span>
+            <input type="date" id="ef-to" class="input" style="font-size:11px;padding:3px 6px;height:28px;width:125px" onchange="setEvFilterDates()">
+          </div>
         </div>
         <div style="display:flex;gap:4px">
           <button class="tb active" id="ev-view-grid" onclick="setEvView('grid')" title="Grid view">
@@ -1388,15 +1408,6 @@ tr:hover td { background: var(--bg2); }
           <button class="tb" id="ev-view-list" onclick="setEvView('list')" title="List view">
             <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
           </button>
-        </div>
-      </div>
-      <!-- Date filter row -->
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px">
-        <button class="tb active" id="ef-alltime" onclick="setEvFilter('alltime')"></button>
-        <div style="display:flex;align-items:center;gap:6px">
-          <input type="date" id="ef-from" class="input" style="font-size:12px;padding:4px 8px;height:30px;width:140px" onchange="setEvFilterDates()">
-          <span style="color:var(--muted);font-size:12px">→</span>
-          <input type="date" id="ef-to" class="input" style="font-size:12px;padding:4px 8px;height:30px;width:140px" onchange="setEvFilterDates()">
         </div>
       </div>
       <div id="evgrid"></div>
@@ -1455,7 +1466,7 @@ tr:hover td { background: var(--bg2); }
       <div style="display:flex;align-items:center;gap:8px;margin-left:auto;padding-right:8px">
         <button class="btn btn-ghost btn-sm" onclick="openExportPDFModal()" title="Export Presentation PDF" style="display:flex;align-items:center;gap:5px;font-size:11px">
           <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
-          <span id="export-pdf-btn-lbl">Export PDF</span>
+          <span id="export-pdf-btn-lbl" data-i18n="export_pdf_btn">Export Project PDF</span>
         </button>
       </div>
       <div class="ptabs" id="ptabs">
@@ -1948,7 +1959,7 @@ var TRANSLATIONS = {
     'moodboard_library_title': 'Moodboard Library',
     'new_folder_btn': 'New Folder',
     'add_to_root_btn': 'Add to Root',
-    'export_pdf_btn': 'Export PDF',
+    'export_pdf_btn': 'Export Project PDF',
     'create_folder_btn': 'Create Folder',
     'upload_images_btn': 'Upload Images',
     'no_images_yet': 'No images yet',
@@ -2161,7 +2172,7 @@ var TRANSLATIONS = {
     'chairs_section': 'Sillas',
     'centrepieces_section': 'Centros de Mesa',
     'floorplan_section': '🗺️ Plano',
-    'create_general_layout': 'Crear Distribución General',
+    'create_general_layout': 'Crear Layout General',
     'properties': 'Propiedades',
     'measure_distances': 'Medir distancias',
     'save_layout': '💾 Guardar Diseño',
@@ -2359,7 +2370,7 @@ var TRANSLATIONS = {
     'moodboard_library_title': 'Biblioteca de Inspiración',
     'new_folder_btn': 'Nueva Carpeta',
     'add_to_root_btn': 'Agregar aquí',
-    'export_pdf_btn': 'Exportar PDF',
+    'export_pdf_btn': 'Exportar PDF del Proyecto',
     'create_folder_btn': 'Crear Carpeta',
     'upload_images_btn': 'Subir Imágenes',
     'no_images_yet': 'Sin imágenes aún',
@@ -2448,8 +2459,7 @@ function applyTranslations(){
     }
   }
   // Always update sort buttons & analytics period labels regardless of page
-  const sortKeysAT={date:'sort_date',name:'sort_name',type:'sort_type',location:'sort_location',budget:'sort_budget'};
-  Object.entries(sortKeysAT).forEach(([k,tk])=>{const b=document.getElementById('evsort-'+k);if(b)b.textContent=t(tk);});
+  updateEvSortLabel();
   updateAnalyticsLabels();
   updateEvFilterLabels();
   updateLibraryLabels();
@@ -3019,13 +3029,29 @@ function setEvFilterDates(){
 function updateEvFilterLabels(){
   const btn=document.getElementById('ef-alltime'); if(btn)btn.textContent=t('filter_all_dates');
 }
+function toggleEvSortMenu(){
+  var m=document.getElementById('ev-sort-menu');
+  if(!m)return;
+  m.style.display=(m.style.display==='none'||m.style.display==='')?'block':'none';
+}
+function closeEvSortMenu(){ var m=document.getElementById('ev-sort-menu');if(m)m.style.display='none'; }
+function updateEvSortLabel(){
+  var sortKeys={date:'sort_date',name:'sort_name',type:'sort_type',location:'sort_location',budget:'sort_budget'};
+  var lbl=document.getElementById('ev-sort-label');
+  var prefix=LANG==='es'?'Ordenar: ':'Sort: ';
+  if(lbl) lbl.textContent=prefix+t(sortKeys[_evSort]||'sort_date');
+  Object.entries(sortKeys).forEach(function([k,tk]){
+    var b=document.getElementById('evsort-'+k);
+    if(b){ b.textContent=t(tk); b.classList.toggle('active',k===_evSort); }
+  });
+}
 function setEvSort(s){
   if(_evSort===s){ _evSortDir*=-1; }
   else{ _evSort=s; _evSortDir=1; }
-  document.querySelectorAll('[id^="evsort-"]').forEach(b=>b.classList.remove('active'));
-  const sb=document.getElementById('evsort-'+s);if(sb)sb.classList.add('active');
-  const dirBtn=document.getElementById('ev-sort-dir');
+  closeEvSortMenu();
+  var dirBtn=document.getElementById('ev-sort-dir');
   if(dirBtn) dirBtn.textContent=_evSortDir===1?'↑':'↓';
+  updateEvSortLabel();
   saveEvPrefs(); renderEvents();
 }
 function toggleEvSortDir(){ _evSortDir*=-1; const b=document.getElementById('ev-sort-dir');if(b)b.textContent=_evSortDir===1?'↑':'↓'; saveEvPrefs(); renderEvents(); }
@@ -3036,11 +3062,7 @@ function setEvView(v){
   saveEvPrefs(); renderEvents();
 }
 function renderEvents(){
-  // Update sort btn labels with current lang
-  const sortKeys={date:'sort_date',name:'sort_name',type:'sort_type',location:'sort_location',budget:'sort_budget'};
-  Object.entries(sortKeys).forEach(([k,tk])=>{const b=document.getElementById('evsort-'+k);if(b)b.textContent=t(tk);});
-
-  // Update filter button label
+  updateEvSortLabel();
   updateEvFilterLabels();
   // Restore date filter inputs from state
   const efFrom=document.getElementById('ef-from'); const efTo=document.getElementById('ef-to');
@@ -4030,19 +4052,24 @@ var CHAIR_IMAGES = {"elisa":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGMAA
 
 function syncLayoutStyles(p){
   if(p.chairTypes){
-    const defaults = defaultChairTypes();
-    CHAIR_TYPES = {};
-    Object.keys(defaults).forEach(k=>{
-      CHAIR_TYPES[k] = Object.assign({}, defaults[k], p.chairTypes[k]||{});
+    const defaults=defaultChairTypes();
+    CHAIR_TYPES=Object.assign({},defaults);
+    Object.keys(p.chairTypes).forEach(k=>{
+      CHAIR_TYPES[k]=Object.assign({},defaults[k]||{},p.chairTypes[k]);
     });
   } else CHAIR_TYPES=defaultChairTypes();
   if(p.centerpieceTypes){
-    const defaults = defaultCenterpieceTypes();
-    CENTERPIECE_TYPES = {};
-    Object.keys(defaults).forEach(k=>{
-      CENTERPIECE_TYPES[k] = Object.assign({}, defaults[k], p.centerpieceTypes[k]||{});
+    const defaults=defaultCenterpieceTypes();
+    CENTERPIECE_TYPES=Object.assign({},defaults);
+    Object.keys(p.centerpieceTypes).forEach(k=>{
+      CENTERPIECE_TYPES[k]=Object.assign({},defaults[k]||{},p.centerpieceTypes[k]);
     });
   } else CENTERPIECE_TYPES=defaultCenterpieceTypes();
+  // Restore custom table/element shapes
+  if(p.customShapes){
+    Object.keys(p.customShapes).forEach(k=>{ LSHAPES_M[k]=p.customShapes[k]; });
+    LSHAPES=getLSHAPES();
+  }
 }
 
 
@@ -4222,7 +4249,7 @@ function renderLayout(){
             <button onclick="toggleFloorplanLock()" title="${LState.floorplan.locked?'Unlock floorplan to move/scale':'Lock floorplan to prevent accidental moves'}"
               style="font-size:10px;font-weight:700;letter-spacing:.03em;background:${LState.floorplan.locked?'var(--gold-l)':'transparent'};border:1px solid ${LState.floorplan.locked?'var(--gold)':'var(--border)'};border-radius:5px;cursor:pointer;color:${LState.floorplan.locked?'var(--gold-h)':'var(--muted)'};padding:3px 8px;line-height:1.4;transition:var(--tr)"
               onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold-h)'" onmouseout="this.style.borderColor='${LState.floorplan.locked?'var(--gold)':'var(--border)'}';this.style.color='${LState.floorplan.locked?'var(--gold-h)':'var(--muted)'}'">${LState.floorplan.locked?'Unlock':'Lock'}</button>
-            <button onclick="removeFloorplan()" style="font-size:10px;background:transparent;border:none;cursor:pointer;color:var(--danger);padding:0" title="Remove floorplan">✕</button>
+            <button onclick="removeFloorplan()" class="btn btn-danger btn-sm" style="font-size:10px;padding:3px 8px">${LANG==='es'?'Quitar plano':'Remove plan'}</button>
           </div>`:''} 
         </div>
         ${LState.floorplan.img?`
@@ -4431,6 +4458,7 @@ function renderLayout(){
   if(co){
     co.removeEventListener('wheel',lWheel);
     co.addEventListener('wheel',lWheel,{passive:false});
+    initLayoutTouchHandlers();
     // Restore scroll position (prevents jump to top-left on re-render)
     if(_savedScroll.x||_savedScroll.y){
       co.scrollLeft=_savedScroll.x;
@@ -4680,7 +4708,17 @@ function lPaste(){
   const newIds=[];
   const offset=20;
   window.LClipboard.forEach(src=>{
-    const newItem=Object.assign({},src,{id:'li'+Date.now()+Math.random().toString(36).slice(2,6),x:src.x+offset,y:src.y+offset});
+    const isTable=['round-table','rect-table','square-table'].includes(src.shape)||(LSHAPES_M[src.shape]&&LSHAPES_M[src.shape]._isCustomTable);
+    let newLabel=src.label;
+    if(isTable){
+      const nums=LState.items.map(i=>parseInt(i.label,10)).filter(n=>!isNaN(n));
+      newLabel=String(nums.length?Math.max(...nums)+1:1);
+    } else {
+      const base=src.label.replace(/\s*\(copy\s*\d*\)\s*$/,'').trim();
+      const c=LState.items.filter(i=>i.shape===src.shape&&i.label.startsWith(base)).length;
+      newLabel=c?base+' (copy '+c+')':base+' (copy)';
+    }
+    const newItem=Object.assign({},src,{id:'li'+Date.now()+Math.random().toString(36).slice(2,6),x:src.x+offset,y:src.y+offset,label:newLabel});
     LState.items.push(newItem);
     newIds.push(newItem.id);
   });
@@ -5269,7 +5307,8 @@ function addCustomTable(){
   var key='custom-table-'+Date.now();
   LSHAPES_M[key]={label:lbl,wm:wm,hm:hm,bg:document.getElementById('tt-new-bg').value||'#e8d5c4',bdClr:'#8a5e3c',radius:sh==='round'?'50%':'0px',chairs:+document.getElementById('tt-new-chairs').value||8,_isCustomTable:true};
   LSHAPES=getLSHAPES();
-  closeMo();openTableTypesEditor();toast('Table type added','s');
+  var p=proj();if(!p.customShapes)p.customShapes={};p.customShapes[key]=LSHAPES_M[key];saveProj(p);
+  closeMo();openTableTypesEditor();toast(LANG==='es'?'Tipo de mesa agregado':'Table type added','s');
 }
 
 function saveTableTypes(){
@@ -5303,8 +5342,10 @@ function saveTableTypes(){
     if(sh){ it.radius=sh.radius||'0px'; }
   });
   LSHAPES=getLSHAPES();
-  var p=proj();p.layoutItems=LState.items;saveProj(p);
-  closeMo();renderLayout();toast('Table types updated','s');
+  var p=proj();p.layoutItems=LState.items;
+  var cs={};Object.keys(LSHAPES_M).forEach(k=>{if(LSHAPES_M[k]._isCustomTable||LSHAPES_M[k]._isCustomElem)cs[k]=LSHAPES_M[k];});
+  p.customShapes=cs;saveProj(p);
+  closeMo();renderLayout();toast(LANG==='es'?'Tipos de mesa actualizados':'Table types updated','s');
 }
 
 function openElementTypesEditor(){
@@ -5350,8 +5391,9 @@ function addCustomElement(){
   var key='custom-elem-'+Date.now();
   LSHAPES_M[key]={label:lbl,wm:+document.getElementById('et-new-w').value||2.0,hm:+document.getElementById('et-new-h').value||1.0,bg:document.getElementById('et-new-bg').value||'#d0e8d0',bdClr:'#4a7a4a',radius:'0px',chairs:0,_isCustomElem:true};
   LSHAPES=getLSHAPES();
-  closeMo();openElementTypesEditor();toast('Element added — it will appear in the sidebar','s');
-  renderLayoutUI(); // Refresh sidebar to show new element
+  var p=proj();if(!p.customShapes)p.customShapes={};p.customShapes[key]=LSHAPES_M[key];saveProj(p);
+  closeMo();openElementTypesEditor();toast(LANG==='es'?'Elemento agregado':'Element added','s');
+  renderLayoutUI();
 }
 
 function saveElementTypes(){
@@ -5371,7 +5413,10 @@ function saveElementTypes(){
     }
   });
   LSHAPES=getLSHAPES();
-  closeMo();renderLayout();toast('Event elements updated','s');
+  var p2=proj();var cs2=p2.customShapes||{};
+  Object.keys(LSHAPES_M).forEach(k=>{if(LSHAPES_M[k]._isCustomElem||LSHAPES_M[k]._isCustomTable)cs2[k]=LSHAPES_M[k];});
+  p2.customShapes=cs2;saveProj(p2);
+  closeMo();renderLayout();toast(LANG==='es'?'Elementos actualizados':'Event elements updated','s');
 }
 
 function openGeneralLayoutModal(){
@@ -5968,7 +6013,7 @@ function lPropChange(id, key, val){
 
 function openLItemModal(id){
   const item=LState.items.find(i=>i.id===id);if(!item)return;
-  const isTable=['round-table','rect-table','square-table'].includes(item.shape);
+  const isTable=['round-table','rect-table','square-table'].includes(item.shape)||(LSHAPES_M[item.shape]&&LSHAPES_M[item.shape]._isCustomTable);
   const hasChairs=item.chairs>0;
   // Chair type options
   const chairOpts=Object.entries(CHAIR_TYPES).map(([k,v])=>
@@ -5996,7 +6041,8 @@ function openLItemModal(id){
     ${isTable?`<div class="ig" style="grid-column:1/-1"><label>${_es?'Forma de Mesa':'Table Shape'}</label>
       <select class="input" id="li-shape">
         <option value="round" ${(item.radius==='50%'||(LSHAPES_M[item.shape]&&LSHAPES_M[item.shape].radius==='50%'))?'selected':''}>${_es?'Redonda':'Round'}</option>
-        <option value="rect" ${!(item.radius==='50%'||(LSHAPES_M[item.shape]&&LSHAPES_M[item.shape].radius==='50%'))?'selected':''}>${_es?'Rectangular / Cuadrada':'Rectangular / Square'}</option>
+        <option value="rect" ${(item.shape==='rect-table'&&item.radius!=='50%')?'selected':''}>${_es?'Rectangular':'Rectangular'}</option>
+        <option value="square" ${(item.shape==='square-table'&&item.radius!=='50%')?'selected':''}>${_es?'Cuadrada':'Square'}</option>
       </select>
     </div>`:''}
     <div class="ig"><label>${_es?'Color de Relleno':'Fill Color'}</label>
@@ -6014,6 +6060,10 @@ function openLItemModal(id){
     <label style="font-size:10.5px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:.07em;display:block;margin-bottom:8px">${_es?'Centro de Mesa':'Centerpiece'}</label>
     <select class="input" id="li-cp" style="font-size:12px">${cpOpts}</select>
   </div>`:''}
+  <div class="ig" style="grid-column:1/-1">
+    <label>${_es?'Precio (por elemento)':'Price (per element)'}</label>
+    <input class="input" id="li-cost" type="number" step="0.01" min="0" value="${item.cost||0}">
+  </div>
   <div style="font-size:10.5px;color:var(--muted);margin-bottom:8px;padding:8px;background:rgba(201,168,76,.06);border-radius:6px;border:1px solid rgba(201,168,76,.15)">
     ℹ️ ${_es?`Al guardar se aplicará tamaño, color, sillas y centro de mesa a <strong>todos los ${item.shape.replace(/-/g,' ')}s</strong> en este plano.`:`Saving will apply size, color, chairs and centerpiece to <strong>all ${item.shape.replace(/-/g,' ')}s</strong> in this layout.`}
   </div>
@@ -6040,6 +6090,12 @@ function saveLItem(id){
   const cpEl=document.getElementById('li-cp');
   const shapeEl=document.getElementById('li-shape');
   const newRadius=shapeEl?(shapeEl.value==='round'?'50%':'0px'):item.radius;
+  let newShape=item.shape;
+  if(shapeEl){
+    if(shapeEl.value==='round') newShape='round-table';
+    else if(shapeEl.value==='square') newShape='square-table';
+    else if(shapeEl.value==='rect') newShape='rect-table';
+  }
   const newCtype=ctEl?ctEl.value:(item.chairType||'default');
   const newCp=cpEl?cpEl.value:(item.centerpiece||'none');
 
@@ -6052,8 +6108,11 @@ function saveLItem(id){
     it.chairType=newCtype;
     it.centerpiece=newCp;
     it.radius=newRadius;
+    it.shape=newShape;
   });
 
+  const newCost=+(document.getElementById('li-cost')||{value:0}).value||0;
+  sameShape.forEach(it=>{ it.cost=newCost; });
   // Only apply label to this specific item
   item.label=newLabel;
 
@@ -6063,6 +6122,54 @@ function saveLItem(id){
   toast('Applied to all '+sameShape.length+' '+item.shape.replace(/-/g,' ')+(sameShape.length>1?'s':''),'s');
 }
 
+
+
+// ── Layout touch: pinch-zoom, drag items, double-tap to edit ──
+var _lt={pinching:false,lastDist:0,lastTap:0,tapId:null,dragId:null,offX:0,offY:0};
+function _ltDist(t){ return Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY); }
+function initLayoutTouchHandlers(){
+  var co=document.getElementById('lcanvas-outer');
+  var cv=document.getElementById('lcanvas');
+  if(!co||!cv||co._ltBound) return;
+  co._ltBound=true;
+  co.addEventListener('touchstart',function(e){
+    if(e.touches.length===2){
+      _lt.pinching=true; _lt.lastDist=_ltDist(e.touches); e.preventDefault(); return;
+    }
+    _lt.pinching=false;
+    var touch=e.touches[0];
+    var item=touch.target.closest('.litem');
+    if(item){
+      var id=item.dataset.id;
+      var now=Date.now();
+      if(now-_lt.lastTap<350&&_lt.tapId===id){ openLItemModal(id); _lt.lastTap=0; _lt.tapId=null; e.preventDefault(); return; }
+      _lt.lastTap=now; _lt.tapId=id;
+      var cr=cv.getBoundingClientRect();
+      var mx=(touch.clientX-cr.left)/LState.zoom, my=(touch.clientY-cr.top)/LState.zoom;
+      var it=LState.items.find(i=>i.id===id);
+      if(it){ _lt.dragId=id; _lt.offX=mx-it.x; _lt.offY=my-it.y; if(!LState.sel.includes(id)){LState.sel=[id];updateSelUI();} }
+      e.preventDefault();
+    } else { _lt.dragId=null; }
+  },{passive:false});
+  co.addEventListener('touchmove',function(e){
+    if(_lt.pinching&&e.touches.length===2){
+      var nd=_ltDist(e.touches), ratio=nd/(_lt.lastDist||nd);
+      if(Math.abs(ratio-1)>0.005){ lZoom((ratio>1?1:-1)*0.05); }
+      _lt.lastDist=nd; e.preventDefault(); return;
+    }
+    if(!_lt.pinching&&_lt.dragId&&e.touches.length===1){
+      var t2=e.touches[0], cr2=cv.getBoundingClientRect();
+      var mx2=(t2.clientX-cr2.left)/LState.zoom, my2=(t2.clientY-cr2.top)/LState.zoom;
+      var it2=LState.items.find(i=>i.id===_lt.dragId);
+      if(it2){ it2.x=Math.round(mx2-_lt.offX); it2.y=Math.round(my2-_lt.offY); var el=document.getElementById('li_'+it2.id); if(el){el.style.left=it2.x+'px';el.style.top=it2.y+'px';} }
+      e.preventDefault();
+    }
+  },{passive:false});
+  co.addEventListener('touchend',function(){
+    if(_lt.dragId){ var p=proj();p.layoutItems=LState.items;saveProj(p);lHistorySave(); _lt.dragId=null; }
+    _lt.pinching=false;
+  });
+}
 
 function lZoom(delta,mode,cx,cy){
   const outer=document.getElementById('lcanvas-outer');
@@ -6604,6 +6711,7 @@ function exportLayoutFull(layoutName){
   ${svgItems}
 </svg>`;
 
+  const _pdfEs=LANG==='es';
   const html=`<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>Layout Export — ${esc(name)}</title>
 <style>
@@ -6632,20 +6740,20 @@ function exportLayoutFull(layoutName){
   }
 </style></head><body>
 <h1>Layout — ${esc(name)}</h1>
-<div class="meta">Event: ${esc(p.name)} &nbsp;·&nbsp; ${new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})}</div>
+<div class="meta">${_pdfEs?'Evento':'Event'}: ${esc(p.name)} &nbsp;·&nbsp; ${new Date().toLocaleDateString(_pdfEs?'es-MX':'en-US',{year:'numeric',month:'long',day:'numeric'})}</div>
 <div class="stats">
-  <div class="stat"><div class="stat-n">${items.length}</div><div class="stat-l">Elements</div></div>
-  <div class="stat"><div class="stat-n">${items.filter(i=>i.shape.includes('table')||i.shape.includes('round')||i.shape.includes('rect')||i.shape.includes('square')).length}</div><div class="stat-l">Tables</div></div>
-  <div class="stat"><div class="stat-n">${totalSeats}</div><div class="stat-l">Total Seats</div></div>
-  <div class="stat"><div class="stat-n">${fmtMoney(total)}</div><div class="stat-l">Budget</div></div>
+  <div class="stat"><div class="stat-n">${items.length}</div><div class="stat-l">${_pdfEs?'Elementos':'Elements'}</div></div>
+  <div class="stat"><div class="stat-n">${items.filter(i=>i.shape.includes('table')||i.shape.includes('round')||i.shape.includes('rect')||i.shape.includes('square')).length}</div><div class="stat-l">${_pdfEs?'Mesas':'Tables'}</div></div>
+  <div class="stat"><div class="stat-n">${totalSeats}</div><div class="stat-l">${_pdfEs?'Asientos':'Total Seats'}</div></div>
+  <div class="stat"><div class="stat-n">${fmtMoney(total)}</div><div class="stat-l">${_pdfEs?'Presupuesto':'Budget'}</div></div>
 </div>
 
-<h2>Floor Plan</h2>
+${_pdfEs?'<h2>Plano</h2>':'<h2>Floor Plan</h2>'}
 <div class="layout-wrap">${svgGraphic}</div>
 
-<h2>Element Summary</h2>
+${_pdfEs?'<h2>Resumen de Elementos</h2>':'<h2>Element Summary</h2>'}
 <table>
-  <thead><tr><th>Type</th><th>Chair Style</th><th>Centerpiece</th><th style="text-align:center">Seats/Unit</th><th style="text-align:center">Qty</th><th style="text-align:right">Element Cost</th><th style="text-align:right">Chair Cost</th><th style="text-align:right">CP Cost</th><th style="text-align:right">Row Total</th></tr></thead>
+  <thead><tr><th>${_pdfEs?'Tipo':'Type'}</th><th>${_pdfEs?'Sillas':'Chair Style'}</th><th>${_pdfEs?'Centro':'Centerpiece'}</th><th style="text-align:center">${_pdfEs?'Asientos':'Seats/Unit'}</th><th style="text-align:center">${_pdfEs?'Cant.':'Qty'}</th><th style="text-align:right">${_pdfEs?'Costo Elem.':'Element Cost'}</th><th style="text-align:right">${_pdfEs?'Costo Sillas':'Chair Cost'}</th><th style="text-align:right">${_pdfEs?'Centro Mesa':'CP Cost'}</th><th style="text-align:right">${_pdfEs?'Subtotal':'Row Total'}</th></tr></thead>
   <tbody>${rows.map(r=>{
     const chairCostPerUnit = r.chairs>0&&r.chairType&&r.chairType!=='default'?(CHAIR_TYPES[r.chairType]?Number(CHAIR_TYPES[r.chairType].costPerChair||0)*r.chairs:0):0;
     const cpCostPerUnit = r.centerpieceKey&&r.centerpieceKey!=='none'?(CENTERPIECE_TYPES[r.centerpieceKey]?Number(CENTERPIECE_TYPES[r.centerpieceKey].cost||0):0):0;
@@ -6661,7 +6769,7 @@ function exportLayoutFull(layoutName){
     <td style="text-align:right">${cpCostPerUnit>0?fmtMoney(cpCostPerUnit):'—'}</td>
     <td style="text-align:right;font-weight:700">${rowTotal>0?fmtMoney(rowTotal):'—'}</td>
   </tr>`;}).join('')}
-  <tr class="total-row"><td colspan="8">TOTAL</td><td style="text-align:right">${fmtMoney(total)}</td></tr>
+  <tr class="total-row"><td colspan="8">${_pdfEs?'TOTAL':'TOTAL'}</td><td style="text-align:right">${fmtMoney(total)}</td></tr>
   </tbody>
 </table>
 
@@ -9287,7 +9395,14 @@ function generateExportPDF(){
 // ══════════════════════════════════════════════════════════
 // Expose functions to global scope (called from HTML attrs)
 // ══════════════════════════════════════════════════════════
+// Close sort menu on outside click
+document.addEventListener('click',function(e){
+  var trigger=document.getElementById('ev-sort-trigger');
+  var menu=document.getElementById('ev-sort-menu');
+  if(menu&&trigger&&!trigger.contains(e.target)&&!menu.contains(e.target)) menu.style.display='none';
+});
 window.setEvSort = setEvSort;
+window.toggleEvSortMenu = toggleEvSortMenu;
 window.toggleEvSortDir = toggleEvSortDir;
 window.setEvView = setEvView;
 window.openExportPDFModal = openExportPDFModal;
