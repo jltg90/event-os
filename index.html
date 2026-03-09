@@ -893,22 +893,50 @@ tr:hover td { background: var(--bg2); }
   #share-nav-btn { padding: 5px 9px !important; }
   .share-btn-label { display: none; }
 
-  /* ── Project nav ── */
-  .pnav { flex-direction: column; height: auto; padding: 10px 14px 6px; gap: 6px; top: 54px; }
-  .pnav > div:first-child { width: 100%; justify-content: space-between; }
-  #pnav-name { font-size: 13px; }
-  #pnav-type { font-size: 10px; }
-  .ptabs { overflow-x: auto; width: 100%; -webkit-overflow-scrolling: touch; padding-bottom: 2px; display: flex !important; flex-wrap: nowrap; }
+  /* ── Project nav: compact single row, no tall stacking ── */
+  .pnav {
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    height: auto !important;
+    min-height: 46px;
+    padding: 0 8px 0 6px !important;
+    gap: 0 !important;
+    top: 54px;
+    align-items: stretch;
+    overflow: hidden;
+  }
+  /* Back button: icon only on mobile */
+  .pnav .back-btn { padding: 0 8px; gap: 0; min-width: 30px; justify-content: center; }
+  .pnav .back-btn span { display: none; }
+  /* Project name/type: compact */
+  .pnav > div:first-child { flex-shrink: 0; gap: 4px; align-items: center; }
+  #pnav-name { font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90px; }
+  #pnav-type { display: none; }
+  /* Hide the export PDF button in pnav on mobile */
+  .pnav > div:nth-child(2) { display: none !important; }
+  /* Tabs: scrollable, fill remaining space */
+  .ptabs {
+    display: flex !important;
+    flex: 1;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    align-items: center;
+    gap: 2px;
+    padding: 5px 4px;
+    min-width: 0;
+  }
   .ptabs::-webkit-scrollbar { display: none; }
-  .ptab { padding: 6px 10px; font-size: 11px; white-space: nowrap; }
+  .ptab { padding: 5px 9px; font-size: 11px; white-space: nowrap; flex-shrink: 0; }
   .ptab svg { display: none; }
+
+  /* ── pcontent ── */
+  .pcontent { padding: 14px; }
 
   /* ── Events page ── */
   .evgrid { grid-template-columns: 1fr; gap: 14px; }
-  .pcontent { padding: 14px; }
   .sh { flex-direction: column; gap: 10px; align-items: flex-start; }
 
-  /* Events page header: stack title + button vertically */
   #pg-events > div { padding: 16px 14px; }
   #pg-events > div > div:first-child {
     flex-direction: column !important;
@@ -920,24 +948,32 @@ tr:hover td { background: var(--bg2); }
     width: 100% !important;
     justify-content: center !important;
   }
-
-  /* Events toolbar: stack sort + filter on separate rows */
   #pg-events > div > div:nth-child(2) {
     flex-direction: column !important;
     align-items: stretch !important;
     gap: 8px !important;
   }
-  #pg-events > div > div:nth-child(2) > div:first-child {
-    flex-wrap: wrap !important;
-  }
+  #pg-events > div > div:nth-child(2) > div:first-child { flex-wrap: wrap !important; }
 
-  /* Event cards: fix badge overlap and footer wrapping on mobile */
+  /* ── Event grid cards: fix badge/name overlap and footer ── */
   .evc-body { padding: 16px 14px; }
   .evc-body > div:first-child { flex-wrap: wrap; gap: 8px; }
   .evc-body > div:first-child > div:first-child { min-width: 0; flex: 1; }
   .evc-body > div:first-child .badge { flex-shrink: 0; }
   .evc-foot { padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
   .evc-foot > div { flex-wrap: wrap; }
+
+  /* ── Event list-view: restack entire row ── */
+  .evgrid.ev-list .evc-body {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+    padding: 14px !important;
+  }
+  .evgrid.ev-list .evc-body .ev-list-main { width: 100%; }
+  .evgrid.ev-list .evc-body .ev-list-rows { flex-wrap: wrap !important; gap: 6px 16px !important; width: 100%; }
+  .evgrid.ev-list .evc-body > div:last-child { width: 100%; justify-content: flex-end !important; }
+  .evgrid.ev-list .evc-foot { display: none; }
 
   /* ── Stat grids ── */
   .sg { grid-template-columns: repeat(2,1fr); gap: 12px; }
@@ -946,23 +982,47 @@ tr:hover td { background: var(--bg2); }
 
   /* ── Dashboard ── */
   .dash-card { padding: 18px 14px; }
-
-  /* Dashboard two-col grid → single col */
   #tab-dashboard > div:last-child { grid-template-columns: 1fr !important; }
 
-  /* ── Forms ── */
+  /* ── Forms/modals ── */
   .form-grid { grid-template-columns: 1fr; }
   .mo-box { padding: 20px 16px; max-height: 95vh; border-radius: 16px; }
   .mo-title { font-size: 18px; }
   .mo-foot { flex-direction: column-reverse; gap: 8px; }
   .mo-foot .btn { width: 100%; justify-content: center; }
 
-  /* ── Layout tab ── */
-  .layout-wrap { flex-direction: column; }
-  .layout-sidebar { width: 100%; max-height: 45vh; border-right: none; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-  .layout-toolbar { padding: 8px 10px; gap: 5px; overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+  /* ── Vendor cards: fix button overflow on narrow screens ── */
+  .vc > div > div:first-child { flex-wrap: wrap !important; gap: 8px !important; }
+  .vc > div > div:first-child > div:first-child { width: 100%; }
+  .vc > div > div:first-child > div:last-child { flex-wrap: wrap !important; width: 100%; }
+
+  /* ── Layout tab: sidebar on top, toolbar next, then canvas ── */
+  .layout-shell {
+    flex-direction: column !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+  .layout-sidebar {
+    width: 100% !important;
+    max-height: 42vh;
+    border-right: none !important;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    overflow-y: auto;
+  }
+  .layout-main { display: flex; flex-direction: column; min-height: 0; }
+  .layout-toolbar {
+    padding: 8px 10px;
+    gap: 5px;
+    overflow-x: auto;
+    flex-wrap: nowrap !important;
+    -webkit-overflow-scrolling: touch;
+    flex-shrink: 0;
+  }
   .layout-toolbar::-webkit-scrollbar { display: none; }
   .layout-toolbar .btn { font-size: 11px; padding: 4px 8px; white-space: nowrap; flex-shrink: 0; }
+  .layout-canvas-outer { height: 55vh !important; flex: none !important; overflow: auto; }
 
   /* ── Budget tab ── */
   .bud-header { flex-direction: column; gap: 8px; align-items: flex-start; }
@@ -977,12 +1037,9 @@ tr:hover td { background: var(--bg2); }
   /* ── Timeline ── */
   .gantt-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
-  /* ── Buttons in header rows ── */
+  /* ── Buttons in section headers ── */
   .sh .btn span { display: none; }
   .sh .btn svg + span { display: none; }
-
-  /* ── Event card list-view rows: stack on mobile ── */
-  .ev-list-rows { flex-wrap: wrap; gap: 6px 14px; }
 }
 
 /* ═══ RESPONSIVE — SMALL MOBILE (≤ 480px) ════════════════════════ */
@@ -990,8 +1047,9 @@ tr:hover td { background: var(--bg2); }
   .tnav { height: 50px; padding: 0 12px; }
   .tnav-logo { font-size: 19px; }
 
-  .pnav { top: 50px; padding: 8px 12px 4px; }
+  .pnav { top: 50px !important; }
   .ptab { padding: 5px 8px; font-size: 10.5px; }
+  #pnav-name { max-width: 70px; }
 
   .evgrid { gap: 10px; }
   .evc-body { padding: 14px 12px; }
@@ -4194,10 +4252,16 @@ function renderLayout(){
   if(typeof _measureLines==='undefined')window._measureLines=[];
   if(typeof _measurePoints==='undefined')window._measurePoints=[];
   const el=document.getElementById('tab-layout');
-  // Dynamically calculate height based on actual nav bar heights (important for mobile/iframe)
-  var tnavH = (document.querySelector('.tnav')||{}).offsetHeight || 62;
-  var pnavH = (document.querySelector('.pnav')||{}).offsetHeight || 58;
-  el.style.height = 'calc(100vh - ' + (tnavH + pnavH) + 'px)';
+  // On mobile (stacked), layout height is auto; on desktop use viewport calc
+  if(window.innerWidth <= 768){
+    el.style.height = 'auto';
+    el.style.overflow = 'visible';
+  } else {
+    var tnavH = (document.querySelector('.tnav')||{}).offsetHeight || 62;
+    var pnavH = (document.querySelector('.pnav')||{}).offsetHeight || 58;
+    el.style.height = 'calc(100vh - ' + (tnavH + pnavH) + 'px)';
+    el.style.overflow = 'hidden';
+  }
   el.innerHTML=`
   <div class="layout-shell">
     <!-- SIDEBAR -->
