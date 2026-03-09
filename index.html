@@ -1357,7 +1357,7 @@ tr:hover td { background: var(--bg2); }
   </nav>
 
   <!-- EVENTS PAGE -->
-  <div id="pg-events" class="hidden">
+  <div id="pg-events" class="pg hidden">
     <div style="max-width:1200px;margin:0 auto;padding:32px 24px;width:100%">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px">
         <div>
@@ -1389,12 +1389,21 @@ tr:hover td { background: var(--bg2); }
           </button>
         </div>
       </div>
+      <!-- Date filter row -->
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+        <button class="tb active" id="ef-alltime" onclick="setEvFilter('alltime')"></button>
+        <div style="display:flex;align-items:center;gap:6px">
+          <input type="date" id="ef-from" class="input" style="font-size:12px;padding:4px 8px;height:30px;width:140px" onchange="setEvFilterDates()">
+          <span style="color:var(--muted);font-size:12px">→</span>
+          <input type="date" id="ef-to" class="input" style="font-size:12px;padding:4px 8px;height:30px;width:140px" onchange="setEvFilterDates()">
+        </div>
+      </div>
       <div id="evgrid"></div>
     </div>
   </div>
 
   <!-- ANALYTICS PAGE -->
-  <div id="pg-analytics" class="hidden">
+  <div id="pg-analytics" class="pg hidden">
     <div style="max-width:1200px;margin:0 auto;padding:32px 24px;width:100%">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px">
         <div>
@@ -1402,23 +1411,11 @@ tr:hover td { background: var(--bg2); }
           <p style="color:var(--muted);font-size:14px;margin-top:2px" id="analytics-sub">Insights across all your events</p>
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap" id="analytics-controls">
-          <!-- Quick presets -->
-          <div style="display:flex;gap:4px;flex-wrap:wrap" id="analytics-period-btns">
-            <button class="tb" onclick="setAnalyticsPeriod('1m')" id="ap-1m">1M</button>
-            <button class="tb" onclick="setAnalyticsPeriod('3m')" id="ap-3m">3M</button>
-            <button class="tb" onclick="setAnalyticsPeriod('6m')" id="ap-6m">6M</button>
-            <button class="tb" onclick="setAnalyticsPeriod('1y')" id="ap-1y">1Y</button>
-            <button class="tb" onclick="setAnalyticsPeriod('thisyear')" id="ap-thisyear"></button>
-            <button class="tb" onclick="setAnalyticsPeriod('next1y')" id="ap-next1y"></button>
-            <button class="tb active" onclick="setAnalyticsPeriod('alltime')" id="ap-alltime"></button>
-          </div>
-          <!-- Custom date range -->
+          <button class="tb active" id="ap-alltime" onclick="setAnalyticsAllTime()" id="ap-alltime"></button>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <input type="date" id="ap-from" class="input" style="font-size:12px;padding:4px 8px;height:30px;width:140px"
-              onchange="setAnalyticsCustomRange()">
-            <span style="color:var(--muted);font-size:12px">→</span>
-            <input type="date" id="ap-to" class="input" style="font-size:12px;padding:4px 8px;height:30px;width:140px"
-              onchange="setAnalyticsCustomRange()">
+            <input type="date" id="ap-from" class="input" style="font-size:12px;padding:4px 8px;height:30px;width:140px" onchange="setAnalyticsDateRange()">
+            <span style="color:var(--muted);font-size:12px" id="ap-arrow">→</span>
+            <input type="date" id="ap-to" class="input" style="font-size:12px;padding:4px 8px;height:30px;width:140px" onchange="setAnalyticsDateRange()">
           </div>
         </div>
       </div>
@@ -1427,7 +1424,7 @@ tr:hover td { background: var(--bg2); }
   </div>
 
   <!-- PROJECT PAGE -->
-  <div id="pg-project" class="hidden">
+  <div id="pg-project" class="pg hidden">
     <nav class="pnav">
       <div style="display:flex;align-items:center;gap:16px">
         <div class="back-btn" onclick="showPage('events')">
@@ -1600,6 +1597,8 @@ var TRANSLATIONS = {
     'period_next1y': 'Next 12 mo',
     'period_alltime': 'All Time',
     'period_custom': 'Custom',
+    'filter_all_dates': 'All Dates',
+    'filter_date_range': 'Date Range',
     'analytics_events': 'Events in Period',
     'analytics_avg_budget': 'Avg Budget',
     'analytics_avg_guests': 'Avg Guests',
@@ -1982,6 +1981,8 @@ var TRANSLATIONS = {
     'period_next1y': 'Próximos 12 m',
     'period_alltime': 'Todo',
     'period_custom': 'Personalizado',
+    'filter_all_dates': 'Todas las Fechas',
+    'filter_date_range': 'Rango de Fechas',
     'analytics_events': 'Eventos en el Período',
     'analytics_avg_budget': 'Presupuesto Promedio',
     'analytics_avg_guests': 'Invitados Promedio',
@@ -2363,7 +2364,7 @@ function applyTranslations(){
   if(page){
     const pid = page.id;
     if(pid==='pg-events') renderEvents();
-    else if(pid==='pg-analytics') renderAnalytics();
+    else if(pid==='pg-analytics'){ renderAnalytics(); updateAnalyticsLabels(); }
     else if(pid==='pg-project'){
       renderPNav();
       const tabs = ['dashboard','budget','timeline','guests','layout','moodboard'];
@@ -2375,6 +2376,11 @@ function applyTranslations(){
       });
     }
   }
+  // Always update sort buttons & analytics period labels regardless of page
+  const sortKeysAT={date:'sort_date',name:'sort_name',type:'sort_type',location:'sort_location',budget:'sort_budget'};
+  Object.entries(sortKeysAT).forEach(([k,tk])=>{const b=document.getElementById('evsort-'+k);if(b)b.textContent=t(tk);});
+  updateAnalyticsLabels();
+  updateEvFilterLabels();
   // Update tab buttons
   const tabMap = {dashboard:'tab_dashboard',budget:'tab_budget',timeline:'tab_timeline',guests:'tab_guests',layout:'tab_layout',moodboard:'tab_moodboard'};
   document.querySelectorAll('.ptab[data-tab]').forEach(btn=>{
@@ -2639,6 +2645,7 @@ function doLogout(){
 }
 
 function enterApp(){
+  loadEvPrefs();
   applyTranslations(); // apply default language on startup
   document.getElementById('pg-loading').style.display = 'none';
   document.getElementById('pg-app').classList.remove('hidden');
@@ -2841,6 +2848,61 @@ function defaultTasks(){
 // EVENTS LIST
 // ══════════════════════════════════════════
 var _evSort='date', _evSortDir=1, _evView='grid';
+var _evFilterAllTime=true, _evFilterFrom=null, _evFilterTo=null;
+
+function loadEvPrefs(){
+  try{
+    var s=localStorage.getItem('eventos_evprefs_'+(DB.cur||'local'));
+    if(s){
+      var p=JSON.parse(s);
+      if(p.sort) _evSort=p.sort;
+      if(p.sortDir) _evSortDir=p.sortDir;
+      if(p.view) _evView=p.view;
+      _evFilterAllTime = p.filterAllTime!==false;
+      _evFilterFrom = p.filterFrom?new Date(p.filterFrom):null;
+      _evFilterTo   = p.filterTo  ?new Date(p.filterTo)  :null;
+      // Restore analytics prefs
+      if(p.analyticsAllTime!==undefined) _analyticsAllTime=p.analyticsAllTime;
+      if(p.analyticsFrom) _analyticsFrom=new Date(p.analyticsFrom);
+      if(p.analyticsTo)   _analyticsTo  =new Date(p.analyticsTo);
+    }
+  }catch(e){}
+}
+
+function saveEvPrefs(){
+  try{
+    var p={sort:_evSort,sortDir:_evSortDir,view:_evView,
+      filterAllTime:_evFilterAllTime,
+      filterFrom:_evFilterFrom?_evFilterFrom.toISOString():null,
+      filterTo:_evFilterTo?_evFilterTo.toISOString():null,
+      analyticsAllTime:_analyticsAllTime,
+      analyticsFrom:_analyticsFrom?_analyticsFrom.toISOString():null,
+      analyticsTo:_analyticsTo?_analyticsTo.toISOString():null};
+    localStorage.setItem('eventos_evprefs_'+(DB.cur||'local'),JSON.stringify(p));
+  }catch(e){}
+}
+
+function setEvFilter(mode){
+  _evFilterAllTime=true; _evFilterFrom=null; _evFilterTo=null;
+  const fromEl=document.getElementById('ef-from'); const toEl=document.getElementById('ef-to');
+  if(fromEl)fromEl.value=''; if(toEl)toEl.value='';
+  const btn=document.getElementById('ef-alltime'); if(btn)btn.classList.add('active');
+  saveEvPrefs(); renderEvents();
+}
+
+function setEvFilterDates(){
+  const fromVal=(document.getElementById('ef-from')||{}).value;
+  const toVal=(document.getElementById('ef-to')||{}).value;
+  _evFilterAllTime=false;
+  _evFilterFrom=fromVal?new Date(fromVal+'T00:00:00'):null;
+  _evFilterTo  =toVal  ?new Date(toVal+'T23:59:59')  :null;
+  const btn=document.getElementById('ef-alltime'); if(btn)btn.classList.remove('active');
+  saveEvPrefs(); renderEvents();
+}
+
+function updateEvFilterLabels(){
+  const btn=document.getElementById('ef-alltime'); if(btn)btn.textContent=t('filter_all_dates');
+}
 function setEvSort(s){
   if(_evSort===s){ _evSortDir*=-1; }
   else{ _evSort=s; _evSortDir=1; }
@@ -2848,21 +2910,40 @@ function setEvSort(s){
   const sb=document.getElementById('evsort-'+s);if(sb)sb.classList.add('active');
   const dirBtn=document.getElementById('ev-sort-dir');
   if(dirBtn) dirBtn.textContent=_evSortDir===1?'↑':'↓';
-  renderEvents();
+  saveEvPrefs(); renderEvents();
 }
-function toggleEvSortDir(){ _evSortDir*=-1; const b=document.getElementById('ev-sort-dir');if(b)b.textContent=_evSortDir===1?'↑':'↓'; renderEvents(); }
+function toggleEvSortDir(){ _evSortDir*=-1; const b=document.getElementById('ev-sort-dir');if(b)b.textContent=_evSortDir===1?'↑':'↓'; saveEvPrefs(); renderEvents(); }
 function setEvView(v){
   _evView=v;
   document.getElementById('ev-view-grid').classList.toggle('active',v==='grid');
   document.getElementById('ev-view-list').classList.toggle('active',v==='list');
-  renderEvents();
+  saveEvPrefs(); renderEvents();
 }
 function renderEvents(){
   // Update sort btn labels with current lang
   const sortKeys={date:'sort_date',name:'sort_name',type:'sort_type',location:'sort_location',budget:'sort_budget'};
   Object.entries(sortKeys).forEach(([k,tk])=>{const b=document.getElementById('evsort-'+k);if(b)b.textContent=t(tk);});
 
+  // Update filter button label
+  updateEvFilterLabels();
+  // Restore date filter inputs from state
+  const efFrom=document.getElementById('ef-from'); const efTo=document.getElementById('ef-to');
+  if(efFrom&&!efFrom.value&&_evFilterFrom) efFrom.value=_evFilterFrom.toISOString().slice(0,10);
+  if(efTo&&!efTo.value&&_evFilterTo)       efTo.value=_evFilterTo.toISOString().slice(0,10);
+  const efBtn=document.getElementById('ef-alltime');
+  if(efBtn) efBtn.classList.toggle('active',_evFilterAllTime);
+
   let list=Object.values(uproj());
+  // Date filter
+  if(!_evFilterAllTime){
+    const fp=new Date('1900-01-01'); const ff=new Date('2100-12-31');
+    const fFrom=_evFilterFrom||fp; const fTo=_evFilterTo||ff;
+    list=list.filter(p=>{
+      if(!p.date)return false;
+      const d=new Date(p.date); d.setHours(0,0,0,0);
+      return d>=fFrom&&d<=fTo;
+    });
+  }
   // Sort
   list.sort((a,b)=>{
     let av,bv;
@@ -8631,82 +8712,48 @@ window.SCI={};
 // ══════════════════════════════════════════════════════════
 // ANALYTICS
 // ══════════════════════════════════════════════════════════
-var _analyticsPeriod = 'alltime';
-var _analyticsFrom = null;  // custom override (Date or null)
+var _analyticsAllTime = true;
+var _analyticsFrom = null;
 var _analyticsTo   = null;
 
-function setAnalyticsPeriod(p){
-  _analyticsPeriod = p;
+function setAnalyticsAllTime(){
+  _analyticsAllTime = true;
   _analyticsFrom = null;
   _analyticsTo   = null;
-  // Sync date inputs to preset range
-  const range = getAnalyticsPeriodRange(p);
-  const fromEl = document.getElementById('ap-from');
-  const toEl   = document.getElementById('ap-to');
-  if(fromEl && range.from) fromEl.value = range.from.toISOString().slice(0,10);
-  if(toEl   && range.to)   toEl.value   = range.to.toISOString().slice(0,10);
-  // Highlight preset, clear dates for alltime
-  document.querySelectorAll('[id^="ap-"]').forEach(b=>b.classList.remove('active'));
-  const btn = document.getElementById('ap-'+p);
-  if(btn) btn.classList.add('active');
+  const fromEl=document.getElementById('ap-from'); const toEl=document.getElementById('ap-to');
+  if(fromEl) fromEl.value=''; if(toEl) toEl.value='';
+  const btn=document.getElementById('ap-alltime'); if(btn) btn.classList.add('active');
+  saveEvPrefs();
   renderAnalytics();
 }
 
-function setAnalyticsCustomRange(){
-  const fromVal = (document.getElementById('ap-from')||{}).value;
-  const toVal   = (document.getElementById('ap-to')||{}).value;
-  if(!fromVal && !toVal) return;
-  _analyticsPeriod = 'custom';
+function setAnalyticsDateRange(){
+  const fromVal=(document.getElementById('ap-from')||{}).value;
+  const toVal=(document.getElementById('ap-to')||{}).value;
+  _analyticsAllTime = false;
   _analyticsFrom = fromVal ? new Date(fromVal+'T00:00:00') : null;
-  _analyticsTo   = toVal   ? new Date(toVal  +'T23:59:59') : null;
-  // Deactivate all preset buttons
-  document.querySelectorAll('[id^="ap-"]').forEach(b=>b.classList.remove('active'));
+  _analyticsTo   = toVal   ? new Date(toVal+'T23:59:59')   : null;
+  const btn=document.getElementById('ap-alltime'); if(btn) btn.classList.remove('active');
+  saveEvPrefs();
   renderAnalytics();
 }
 
-function getAnalyticsPeriodRange(period){
-  const now = new Date(); now.setHours(0,0,0,0);
-  const farPast  = new Date('1900-01-01');
-  const farFuture= new Date('2100-12-31');
-  if(period==='custom'){
-    return { from: _analyticsFrom||farPast, to: _analyticsTo||farFuture };
-  }
-  if(period==='alltime') return { from: farPast, to: farFuture };
-  let from, to;
-  if(period==='1m'){ from=new Date(now); from.setMonth(from.getMonth()-1); to=new Date(now); }
-  else if(period==='3m'){ from=new Date(now); from.setMonth(from.getMonth()-3); to=new Date(now); }
-  else if(period==='6m'){ from=new Date(now); from.setMonth(from.getMonth()-6); to=new Date(now); }
-  else if(period==='1y'){ from=new Date(now); from.setFullYear(from.getFullYear()-1); to=new Date(now); }
-  else if(period==='thisyear'){ from=new Date(now.getFullYear(),0,1); to=new Date(now.getFullYear(),11,31); }
-  else if(period==='next1y'){ from=new Date(now); to=new Date(now); to.setFullYear(to.getFullYear()+1); }
-  else { from=farPast; to=farFuture; } // fallback = all time
-  return { from, to };
+function updateAnalyticsLabels(){
+  const btn=document.getElementById('ap-alltime'); if(btn) btn.textContent=t('period_alltime');
 }
 
 function renderAnalytics(){
   const allProjects = Object.values(uproj());
-  const { from, to } = getAnalyticsPeriodRange(_analyticsPeriod);
-  const isAllTime = (_analyticsPeriod==='alltime');
+  // (range computed inside renderAnalytics directly)
+  const farPast=new Date('1900-01-01'); const farFuture=new Date('2100-12-31');
+  const from = _analyticsAllTime ? farPast  : (_analyticsFrom||farPast);
+  const to   = _analyticsAllTime ? farFuture: (_analyticsTo  ||farFuture);
   const inPeriod = allProjects.filter(p=>{
-    if(!p.date) return isAllTime; // projects without a date only included in alltime
-    const d = new Date(p.date); d.setHours(0,0,0,0);
-    return d >= from && d <= to;
+    if(!p.date) return _analyticsAllTime;
+    const d=new Date(p.date); d.setHours(0,0,0,0);
+    return d>=from && d<=to;
   });
-
-  // Update period button labels
-  const periodLabels = {'1m':t('period_1m'),'3m':t('period_3m'),'6m':t('period_6m'),'1y':t('period_1y'),'thisyear':t('period_thisyear'),'next1y':t('period_next1y'),'alltime':t('period_alltime')};
-  Object.entries(periodLabels).forEach(([k,v])=>{const b=document.getElementById('ap-'+k);if(b)b.textContent=v;});
-  // Sync date inputs if using a preset (not custom)
-  if(_analyticsPeriod!=='custom'){
-    const fromEl=document.getElementById('ap-from'); const toEl=document.getElementById('ap-to');
-    if(_analyticsPeriod==='alltime'){
-      if(fromEl)fromEl.value=''; if(toEl)toEl.value='';
-    } else {
-      const r=getAnalyticsPeriodRange(_analyticsPeriod);
-      if(fromEl&&r.from)fromEl.value=r.from.toISOString().slice(0,10);
-      if(toEl&&r.to)toEl.value=r.to.toISOString().slice(0,10);
-    }
-  }
+  updateAnalyticsLabels();
 
   // Update page titles
   const title=document.getElementById('analytics-title');if(title)title.textContent=t('analytics_title');
