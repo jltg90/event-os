@@ -2532,12 +2532,19 @@ async function loadProjectsFromCloud(userId){
   var hadCache = loadCache(userId);
   if(hadCache) renderEvents();
 
-  // 2. Fetch fresh from cloud
+  // 2. Fetch fresh from cloud — with a 12-second timeout so the app
+  //    never hangs after a network hiccup or token expiry.
   try{
+    var controller = typeof AbortController!=='undefined' ? new AbortController() : null;
+    var timeoutId = controller ? setTimeout(function(){ controller.abort(); }, 12000) : null;
+    var fetchOpts = { headers: supaHeaders() };
+    if(controller) fetchOpts.signal = controller.signal;
+
     var res = await fetch(
       SUPA_URL+'/rest/v1/projects?user_id=eq.'+encodeURIComponent(userId)+'&select=id,data,updated_at',
-      { headers: supaHeaders() }
+      fetchOpts
     );
+    if(timeoutId) clearTimeout(timeoutId);
     if(!res.ok) throw new Error('HTTP '+res.status);
     var rows = await res.json();
 
@@ -2556,6 +2563,15 @@ async function loadProjectsFromCloud(userId){
     setSyncStatus('ok');
   } catch(e){
     console.error('loadProjectsFromCloud:', e);
+    if(e && e.name==='AbortError'){
+      console.warn('EventOS: cloud fetch timed out — using cached data');
+      if(!hadCache){
+        showLoadingError('Connection timed out. Check your connection and reload.');
+        return false;
+      }
+      setSyncStatus('offline');
+      return true; // have cache, continue into app
+    }
     if(!hadCache){
       // No cache AND no cloud — show an error in the loading screen
       showLoadingError('Could not load your projects. Check your connection and reload.');
@@ -2621,10 +2637,14 @@ async function manualSync(){
   if(!DB.cur) return;
   setSyncStatus('syncing');
   try{
+    var _mc = typeof AbortController!=='undefined' ? new AbortController() : null;
+    var _mt = _mc ? setTimeout(function(){ _mc.abort(); }, 10000) : null;
+    var _mo = { headers: supaHeaders() }; if(_mc) _mo.signal=_mc.signal;
     var res = await fetch(
       SUPA_URL+'/rest/v1/projects?user_id=eq.'+encodeURIComponent(DB.cur)+'&select=id,data,updated_at',
-      { headers: supaHeaders() }
+      _mo
     );
+    if(_mt) clearTimeout(_mt);
     if(!res.ok) throw new Error('HTTP '+res.status);
     var rows = await res.json();
     // Only replace local state if cloud actually has data.
@@ -2811,7 +2831,7 @@ function createSampleProject(email){
     id:'sample_'+Date.now(), name:'Summer Gala 2026', clientName:'Sample Client',
     description:'A stunning summer gala event', date:'2026-06-15', location:'The Grand Garden Hall',
     budget:25000, type:'social', status:'planning',
-    vendors:defaultVendors(),
+    vendors:defaultVendors(), vendorsInitialized:true,
     tasks:defaultTasks(), guests:sampleGuests(), layoutItems:[],savedLayouts:[],
     moodboard:{ folders:[], uncategorized:[] },
     models3d:[],
@@ -3158,7 +3178,7 @@ function saveEvent(id){
   const p=id?uproj()[id]:null;
   const data={name,clientName:client,date,description:gv('e-desc'),type:gv('e-type'),location:gv('e-location'),budget:+gv('e-budget')||0,status:gv('e-status')};
   if(p){Object.assign(p,data);saveProj(p);if(CID===id)renderPNav();}
-  else{const np={id:'p'+Date.now(),vendors:defaultVendors(),tasks:defaultTasks(),guests:[],layoutItems:[],savedLayouts:[],moodboard:[],...data};saveProj(np);}
+  else{const np={id:'p'+Date.now(),vendors:defaultVendors(),vendorsInitialized:true,tasks:defaultTasks(),guests:[],layoutItems:[],savedLayouts:[],moodboard:[],...data};saveProj(np);}
   closeMo();renderEvents();toast(id?'Event updated':'Event created!','s');
 }
 
@@ -3248,8 +3268,9 @@ function qaction(ibg,iclr,icon,lbl,onclick){
 var bTab='comp';
 function renderBudget(){
   const p=proj();const el=document.getElementById('tab-budget');
-  // Auto-seed default vendors if project has none
-  if(!p.vendors||p.vendors.length===0){p.vendors=defaultVendors();saveProj(p);}
+  // Auto-seed default vendors only on first open, never after user clears them
+  if(!p.vendors){p.vendors=defaultVendors();p.vendorsInitialized=true;saveProj(p);}
+  else if(!p.vendorsInitialized){p.vendorsInitialized=true;if(!p.vendors.length){p.vendors=defaultVendors();}saveProj(p);}
   const hired=p.vendors.filter(v=>v.hired);
   const comp=p.vendors.filter(v=>!v.hired);
   const allVendors = p.vendors;
@@ -3268,6 +3289,10 @@ function renderBudget(){
           <button class="btn btn-ghost btn-sm" onclick="libQuickSaveVendors()" style="display:flex;align-items:center;gap:5px;font-size:11px">
       <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
       <span id="lib-save-vendor-lbl">Save to Library</span>
+    </button>
+    <button class="btn btn-ghost btn-sm" onclick="libQuickLoadVendors()" style="display:flex;align-items:center;gap:5px;font-size:11px">
+      <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><polyline points="8,10 12,14 16,10"/></svg>
+      <span id="lib-load-vendor-lbl">${t('lib_load_from')}</span>
     </button>
       <button class="btn btn-primary" onclick="openVendorModal()">
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>${t('add_vendor')}
@@ -3428,9 +3453,10 @@ function showVendorDetail(vid){
 // ══════════════════════════════════════════
 var tView='list';
 function _libUpdateSectionLabels(){
-  // Update Save to Library button labels in section headers
   var lv=document.getElementById('lib-save-vendor-lbl'); if(lv) lv.textContent=t('lib_save_to');
   var lt=document.getElementById('lib-save-task-lbl');   if(lt) lt.textContent=t('lib_save_to');
+  var lvl=document.getElementById('lib-load-vendor-lbl'); if(lvl) lvl.textContent=t('lib_load_from');
+  var ltl=document.getElementById('lib-load-task-lbl');   if(ltl) ltl.textContent=t('lib_load_from');
 }
 function renderTimeline(){
   const p=proj();const el=document.getElementById('tab-timeline');
@@ -3445,6 +3471,10 @@ function renderTimeline(){
       <button class="btn btn-ghost btn-sm" onclick="libQuickSaveTasks()" style="display:flex;align-items:center;gap:5px;font-size:11px">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
         <span id="lib-save-task-lbl">${t('lib_save_to')}</span>
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="libQuickLoadTasks()" style="display:flex;align-items:center;gap:5px;font-size:11px">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><polyline points="8,10 12,14 16,10"/></svg>
+        <span id="lib-load-task-lbl">${t('lib_load_from')}</span>
       </button>
       <button class="btn btn-primary" onclick="openTaskModal()">
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>${t('add_task')}
@@ -4308,6 +4338,8 @@ function renderLayout(){
         ${LState.sel.length?`<button class="btn btn-danger btn-sm" onclick="delSelected()">Delete (${LState.sel.length})</button>`:''}
         <button class="btn btn-ghost btn-sm" onclick="openSaveLayoutModal()" title="Save current layout as a named version">${t('save_layout')}</button>
         <button class="btn btn-ghost btn-sm" onclick="openLayoutsLibrary()" title="View saved layouts">${(p.savedLayouts||[]).length > 0 ? `📐 Layouts (${(p.savedLayouts||[]).length})` : '📐 Layouts'}</button>
+        <button class="btn btn-ghost btn-sm" onclick="libQuickSaveLayout()" title="Save layout to cross-project library">📚 ${LANG==='es'?'Guardar en Biblioteca':'Save to Library'}</button>
+        <button class="btn btn-ghost btn-sm" onclick="libQuickLoadLayout()" title="Load layout from cross-project library">📚 ${LANG==='es'?'Cargar de Biblioteca':'Load from Library'}</button>
         <button class="btn btn-ghost btn-sm" onclick="exportLayoutFull()">${t('export')}</button>
       </div>
       <!-- Canvas -->
@@ -6400,6 +6432,8 @@ function exportLayoutFull(layoutName){
     if(!counts[k]) counts[k]={
       label:LSHAPES_M[i.shape]?LSHAPES_M[i.shape].label:i.shape.replace(/-/g,' '),
       shape:i.shape.replace(/-/g,' '),
+      chairType: i.chairType||'default',
+      centerpieceKey: i.centerpiece||'none',
       chairStyle:i.chairType&&i.chairType!=='default'?(CHAIR_TYPES[i.chairType]?CHAIR_TYPES[i.chairType].label:i.chairType):'—',
       centerpiece:i.centerpiece&&i.centerpiece!=='none'?(CENTERPIECE_TYPES[i.centerpiece]?CENTERPIECE_TYPES[i.centerpiece].label:i.centerpiece):'—',
       chairs:i.chairs||0, unitCost:i.cost||0, qty:0, totalCost:0
@@ -6427,7 +6461,7 @@ function exportLayoutFull(layoutName){
     maxX = Math.max(maxX, item.x + item.w + px);
     maxY = Math.max(maxY, item.y + item.h + px);
   });
-  const MARGIN = 40;
+  const MARGIN = 80;
   const rawW = maxX - minX + MARGIN*2;
   const rawH = maxY - minY + MARGIN*2;
 
@@ -6499,13 +6533,30 @@ function exportLayoutFull(layoutName){
         for(let i=0;i<right;i++) positions.push({x:w+cs/2+gap,        y:(i+1)*h/(right+1)});
       }
 
+      const _cIsRound = !cType.startsWith('plegable') && !cType.startsWith('basket');
       positions.forEach(pos=>{
-        inner += `<rect x="${Math.round(pos.x - cs/2)}" y="${Math.round(pos.y - cs/2)}" width="${cs}" height="${cs}" rx="${Math.round(cs*0.25)}" fill="${cfill}" stroke="${cstroke}" stroke-width="0.8"/>`;
+        if(_cIsRound){
+          inner += `<ellipse cx="${Math.round(pos.x)}" cy="${Math.round(pos.y)}" rx="${Math.round(cs/2)}" ry="${Math.round(cs/2)}" fill="${cfill}" stroke="${cstroke}" stroke-width="0.8"/>`;
+        } else {
+          inner += `<rect x="${Math.round(pos.x - cs/2)}" y="${Math.round(pos.y - cs/2)}" width="${cs}" height="${cs}" rx="2" fill="${cfill}" stroke="${cstroke}" stroke-width="0.8"/>`;
+        }
       });
     }
 
-    // ── Table / element body ────────────────────────────────────────
-    const rx = isRound ? Math.min(iw,ih)/2 : 3;
+    // ── Table / element body ─ respect exact shape radius ──────────
+    let rx;
+    if(isRound){ rx = Math.min(iw,ih)/2; }
+    else {
+      // Check for explicit radius in shape definition
+      const shapeDef = LSHAPES_M[item.shape];
+      if(shapeDef && shapeDef.radius && shapeDef.radius==='0px'){ rx=0; }
+      else if(item.radius && item.radius==='0px'){ rx=0; }
+      else if(item.radius && item.radius!=='50%'){
+        // percentage or pixel radius
+        const rNum = parseFloat(item.radius);
+        rx = isNaN(rNum) ? 3 : rNum;
+      } else { rx = 3; }
+    }
     inner += `<rect x="0" y="0" width="${iw}" height="${ih}" rx="${rx}" fill="${item.bg}" stroke="${item.bdClr||'#ccc'}" stroke-width="1"/>`;
 
     // ── Centerpiece dot ─────────────────────────────────────────────
@@ -6520,7 +6571,7 @@ function exportLayoutFull(layoutName){
     // ── Label ───────────────────────────────────────────────────────
     const wM = item.w / PPM;
     const fs = Math.max(6, Math.min(13, Math.round(wM * 8 * scale)));
-    inner += `<text x="${iw/2}" y="${ih/2+fs*0.35}" text-anchor="middle" font-family="Arial,sans-serif" font-size="${fs}" fill="${item.bdClr||'#444'}" font-weight="300">${esc(item.label)}</text>`;
+    inner += `<text x="${iw/2}" y="${ih/2+fs*0.35}" text-anchor="middle" font-family="Jost,'Segoe UI',Arial,sans-serif" font-size="${fs}" fill="${item.bdClr||'#444'}" font-weight="400">${esc(item.label)}</text>`;
 
     // wrap all in a group at item position, with rotation
     svgItems += `<g transform="translate(${ix},${iy}) rotate(${rot},${iw/2},${ih/2})">${inner}</g>\n`;
@@ -6572,32 +6623,25 @@ function exportLayoutFull(layoutName){
 
 <h2>Element Summary</h2>
 <table>
-  <thead><tr><th>Type</th><th>Chair Style</th><th>Centerpiece</th><th style="text-align:center">Seats/Unit</th><th style="text-align:center">Qty</th><th style="text-align:right">Unit Cost</th><th style="text-align:right">Subtotal</th></tr></thead>
-  <tbody>${rows.map(r=>`<tr>
+  <thead><tr><th>Type</th><th>Chair Style</th><th>Centerpiece</th><th style="text-align:center">Seats/Unit</th><th style="text-align:center">Qty</th><th style="text-align:right">Element Cost</th><th style="text-align:right">Chair Cost</th><th style="text-align:right">CP Cost</th><th style="text-align:right">Row Total</th></tr></thead>
+  <tbody>${rows.map(r=>{
+    const chairCostPerUnit = r.chairs>0&&r.chairType&&r.chairType!=='default'?(CHAIR_TYPES[r.chairType]?Number(CHAIR_TYPES[r.chairType].costPerChair||0)*r.chairs:0):0;
+    const cpCostPerUnit = r.centerpieceKey&&r.centerpieceKey!=='none'?(CENTERPIECE_TYPES[r.centerpieceKey]?Number(CENTERPIECE_TYPES[r.centerpieceKey].cost||0):0):0;
+    const rowTotal = (r.unitCost + chairCostPerUnit + cpCostPerUnit) * r.qty;
+    return `<tr>
     <td><strong>${r.label}</strong></td>
     <td style="color:#666">${r.chairStyle}</td>
     <td style="color:#666">${r.centerpiece}</td>
     <td style="text-align:center">${r.chairs||'—'}</td>
     <td style="text-align:center;font-weight:700">${r.qty}</td>
     <td style="text-align:right">${r.unitCost>0?fmtMoney(r.unitCost):'—'}</td>
-    <td style="text-align:right;font-weight:700">${r.totalCost>0?fmtMoney(r.totalCost):'—'}</td>
-  </tr>`).join('')}
-  <tr class="total-row"><td colspan="6">TOTAL</td><td style="text-align:right">${fmtMoney(total)}</td></tr>
+    <td style="text-align:right">${chairCostPerUnit>0?fmtMoney(chairCostPerUnit):'—'}</td>
+    <td style="text-align:right">${cpCostPerUnit>0?fmtMoney(cpCostPerUnit):'—'}</td>
+    <td style="text-align:right;font-weight:700">${rowTotal>0?fmtMoney(rowTotal):'—'}</td>
+  </tr>`;}).join('')}
+  <tr class="total-row"><td colspan="8">TOTAL</td><td style="text-align:right">${fmtMoney(total)}</td></tr>
   </tbody>
 </table>
-
-${breakdown.length?`<h2>Budget Breakdown</h2>
-<table>
-  <thead><tr><th>Category</th><th style="text-align:center">Qty</th><th style="text-align:right">Unit Cost</th><th style="text-align:right">Subtotal</th></tr></thead>
-  <tbody>${breakdown.map(r=>`<tr>
-    <td style="text-transform:capitalize">${r.label}</td>
-    <td style="text-align:center">${r.qty}</td>
-    <td style="text-align:right">${fmtMoney(r.unitCost)}</td>
-    <td style="text-align:right;font-weight:700">${fmtMoney(r.total)}</td>
-  </tr>`).join('')}
-  <tr class="total-row"><td colspan="3">TOTAL LAYOUT BUDGET</td><td style="text-align:right">${fmtMoney(total)}</td></tr>
-  </tbody>
-</table>`:''}
 
 <div class="no-print" style="margin-top:36px;display:flex;justify-content:flex-end">
   <button onclick="window.print()" style="padding:11px 32px;background:#c9a84c;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-weight:700;letter-spacing:.02em">🖨️ Print / Save as PDF</button>
@@ -9892,6 +9936,55 @@ function libQuickSaveVendors(){ if(!proj()) return; libSaveVendorsModal(proj());
 function libQuickSaveTasks(){   if(!proj()) return; libSaveTasksModal(proj()); }
 function libQuickSaveLayout(){  if(!proj()) return; libSaveLayoutModal(proj()); }
 function libQuickSaveMoodboard(){if(!proj()) return; libSaveMoodboardModal(proj()); }
+function libQuickLoadVendors(){
+  var lib=getLib(); if(!lib.vendors.length) return toast(LANG==='es'?'No hay proveedores guardados en la biblioteca':'No vendors saved in library','e');
+  if(!proj()) return toast(LANG==='es'?'Abre un proyecto primero':'Open a project first','e');
+  if(lib.vendors.length===1){ libLoadVendors(lib.vendors[0].id); return; }
+  openMo('<div class="mo-title">'+t('lib_load_from')+' — '+t('lib_vendors')+'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;max-height:55vh;overflow-y:auto">'
+    +lib.vendors.map(function(e){
+      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px">'
+        +'<div><div style="font-weight:600;font-size:13px">'+esc(e.name)+'</div>'
+        +'<div style="font-size:11px;color:var(--muted)">'+e.vendors.length+' '+(LANG==='es'?'proveedor(es)':'vendor(s)')+' · '+e.date+'</div></div>'
+        +"<button class=\"btn btn-primary btn-sm\" onclick=\"closeMo();libLoadVendors('"+e.id+"')\">"+t('lib_load_btn')+'</button>'
+        +'</div>';
+    }).join('')
+    +'</div>'
+    +'<div class="mo-foot"><button class="btn btn-ghost" onclick="closeMo()">'+t('cancel')+'</button></div>');
+}
+function libQuickLoadTasks(){
+  var lib=getLib(); if(!lib.tasks.length) return toast(LANG==='es'?'No hay tareas guardadas en la biblioteca':'No tasks saved in library','e');
+  if(!proj()) return toast(LANG==='es'?'Abre un proyecto primero':'Open a project first','e');
+  if(lib.tasks.length===1){ libLoadTasks(lib.tasks[0].id); return; }
+  openMo('<div class="mo-title">'+t('lib_load_from')+' — '+t('lib_tasks')+'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;max-height:55vh;overflow-y:auto">'
+    +lib.tasks.map(function(e){
+      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px">'
+        +'<div><div style="font-weight:600;font-size:13px">'+esc(e.name)+'</div>'
+        +'<div style="font-size:11px;color:var(--muted)">'+e.tasks.length+' '+(LANG==='es'?'tarea(s)':'task(s)')+' · '+e.date+'</div></div>'
+        +"<button class=\"btn btn-primary btn-sm\" onclick=\"closeMo();libLoadTasks('"+e.id+"')\">"+t('lib_load_btn')+'</button>'
+        +'</div>';
+    }).join('')
+    +'</div>'
+    +'<div class="mo-foot"><button class="btn btn-ghost" onclick="closeMo()">'+t('cancel')+'</button></div>');
+}
+function libQuickLoadLayout(){
+  var lib=getLib(); if(!lib.layouts.length) return toast(LANG==='es'?'No hay planos guardados en la biblioteca':'No layouts saved in library','e');
+  if(!proj()) return toast(LANG==='es'?'Abre un proyecto primero':'Open a project first','e');
+  if(lib.layouts.length===1){ libLoadLayout(lib.layouts[0].id); return; }
+  openMo('<div class="mo-title">'+t('lib_load_from')+' — '+t('lib_layouts')+'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;max-height:55vh;overflow-y:auto">'
+    +lib.layouts.map(function(e){
+      var seats=e.items.reduce(function(s,i){return s+(i.chairs||0);},0);
+      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px">'
+        +'<div><div style="font-weight:600;font-size:13px">'+esc(e.name)+'</div>'
+        +'<div style="font-size:11px;color:var(--muted)">'+e.items.length+' elem · '+seats+' '+(LANG==='es'?'asientos':'seats')+' · '+e.date+'</div></div>'
+        +"<button class=\"btn btn-primary btn-sm\" onclick=\"closeMo();libLoadLayout('"+e.id+"')\">"+t('lib_load_btn')+'</button>'
+        +'</div>';
+    }).join('')
+    +'</div>'
+    +'<div class="mo-foot"><button class="btn btn-ghost" onclick="closeMo()">'+t('cancel')+'</button></div>');
+}
 
 // Expose
 window.openLibrary = openLibrary;
