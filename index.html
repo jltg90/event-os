@@ -892,33 +892,56 @@ tr:hover td { background: var(--bg2); }
   #share-nav-btn span { display: none; }
   #share-nav-btn { padding: 5px 9px !important; }
   .share-btn-label { display: none; }
+  /* Hide sync status on mobile - keep in drawer */
+  #sync-btn { display: none !important; }
 
-  /* ── Project nav ── */
-  .pnav { flex-direction: column; height: auto; padding: 10px 14px 6px; gap: 6px; top: 54px; }
+  /* ── Project nav — sticky tab bar ── */
+  .pnav { 
+    flex-direction: column; height: auto; 
+    padding: 6px 12px 4px; gap: 4px; top: 54px;
+    background: var(--card);
+  }
   .pnav > div:first-child { width: 100%; justify-content: space-between; }
-  #pnav-name { font-size: 13px; }
-  #pnav-type { font-size: 10px; }
-  .ptabs { overflow-x: auto; width: 100%; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+  #pnav-name { font-size: 13px; font-weight: 600; }
+  #pnav-type { font-size: 10px; color: var(--muted); }
+  /* Show tabs as horizontal scrollable pills on mobile */
+  .ptabs { 
+    display: flex !important;
+    overflow-x: auto; 
+    width: 100%; 
+    -webkit-overflow-scrolling: touch; 
+    padding-bottom: 2px;
+    gap: 4px;
+    scrollbar-width: none;
+  }
   .ptabs::-webkit-scrollbar { display: none; }
-  .ptab { padding: 6px 10px; font-size: 11px; white-space: nowrap; }
-  .ptab svg { display: none; }
-  /* Hide horizontal tabs on mobile — drawer handles tab nav */
-  .ptabs { display: none; }
-  #pnav-name, #pnav-type { display: block; }
+  .ptab { 
+    padding: 6px 12px; 
+    font-size: 11px; 
+    white-space: nowrap; 
+    flex-shrink: 0;
+    border-radius: 20px;
+  }
+  .ptab svg { width: 12px; height: 12px; }
 
   /* ── Events page ── */
   .evgrid { grid-template-columns: 1fr; gap: 14px; }
-  .pcontent { padding: 14px; }
+  .pcontent { padding: 12px; }
   .sh { flex-direction: column; gap: 10px; align-items: flex-start; }
-  #pg-events > div { padding: 20px 14px; }
+  #pg-events > div { padding: 16px 12px; }
 
-  /* ── Stat grids ── */
-  .sg { grid-template-columns: repeat(2,1fr); gap: 12px; }
-  .gs-stats { grid-template-columns: repeat(2,1fr); gap: 10px; }
-  .gs-stat { padding: 14px 12px; }
+  /* ── Stat grids — 2 columns on mobile ── */
+  .sg { grid-template-columns: repeat(2,1fr); gap: 10px; margin-bottom: 16px; }
+  .sc { padding: 14px 12px; }
+  .sc-val { font-size: 22px; }
+  .gs-stats { grid-template-columns: repeat(2,1fr); gap: 8px; }
+  .gs-stat { padding: 12px 10px; }
+  .gs-val { font-size: 20px; }
 
-  /* ── Dashboard ── */
+  /* ── Dashboard — 1 column ── */
   .dash-card { padding: 18px 14px; }
+  /* Dashboard two-col grid → single col */
+  #tab-dashboard > div:last-child { grid-template-columns: 1fr !important; }
 
   /* ── Forms ── */
   .form-grid { grid-template-columns: 1fr; }
@@ -927,12 +950,52 @@ tr:hover td { background: var(--bg2); }
   .mo-foot { flex-direction: column-reverse; gap: 8px; }
   .mo-foot .btn { width: 100%; justify-content: center; }
 
-  /* ── Layout tab ── */
-  .layout-wrap { flex-direction: column; }
-  .layout-sidebar { width: 100%; max-height: 45vh; border-right: none; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-  .layout-toolbar { padding: 8px 10px; gap: 5px; overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+  /* ── Layout tab — full canvas + floating panel ── */
+  .layout-shell { flex-direction: column; height: calc(100vh - 110px); }
+  .layout-sidebar { 
+    width: 100%; 
+    max-height: 38vh; 
+    border-right: none; 
+    border-bottom: 1px solid var(--border); 
+    flex-shrink: 0;
+    overflow-y: auto;
+  }
+  /* Collapse layout sidebar sections by default on mobile */
+  .layout-sidebar .layout-sb-section:not(:first-child) [id^="sb-"] { display: none; }
+  .layout-canvas-outer { flex: 1; min-height: 200px; }
+  .layout-toolbar { 
+    padding: 6px 10px; gap: 4px; 
+    overflow-x: auto; flex-wrap: nowrap; 
+    -webkit-overflow-scrolling: touch; 
+  }
   .layout-toolbar::-webkit-scrollbar { display: none; }
-  .layout-toolbar .btn { font-size: 11px; padding: 4px 8px; white-space: nowrap; flex-shrink: 0; }
+  .layout-toolbar .btn { font-size: 11px; padding: 5px 8px; white-space: nowrap; flex-shrink: 0; }
+  /* Props panel becomes floating bottom sheet on mobile */
+  #lsb-props { 
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--card);
+    border-top: 2px solid var(--gold);
+    border-radius: 16px 16px 0 0;
+    padding: 12px 16px 24px;
+    z-index: 300;
+    max-height: 45vh;
+    overflow-y: auto;
+    box-shadow: 0 -4px 24px rgba(28,26,21,.15);
+    transform: translateY(100%);
+    transition: transform .3s cubic-bezier(.4,0,.2,1);
+  }
+  #lsb-props.has-selection {
+    transform: translateY(0);
+  }
+  #lsb-props::before {
+    content: '';
+    display: block;
+    width: 40px; height: 4px;
+    background: var(--border-strong);
+    border-radius: 2px;
+    margin: 0 auto 12px;
+  }
 
   /* ── Budget tab ── */
   .bud-header { flex-direction: column; gap: 8px; align-items: flex-start; }
@@ -944,12 +1007,26 @@ tr:hover td { background: var(--bg2); }
   .guest-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .guest-table-wrap table { min-width: 500px; }
 
-  /* ── Timeline ── */
+  /* ── Timeline — list view default on mobile ── */
   .gantt-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .vtabs { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .vtabs::-webkit-scrollbar { display: none; }
+  .vtab { white-space: nowrap; flex-shrink: 0; padding: 7px 14px; }
 
-  /* ── Buttons in header rows ── */
-  .sh .btn span { display: none; }
-  .sh .btn svg + span { display: none; }
+  /* ── Buttons in header rows — icon only ── */
+  .sh .btn .btn-label { display: none; }
+
+  /* ── Cards in events — more compact ── */
+  .evc-body { padding: 16px 14px; }
+  .evc-foot { padding: 10px 14px; }
+  
+  /* ── Analytics — stack charts ── */
+  #analytics-content > div[style*="grid-template-columns:1fr 1fr"] { 
+    display: block !important; 
+  }
+  #analytics-content > div[style*="grid-template-columns:1fr 1fr"] > div {
+    margin-bottom: 14px;
+  }
 }
 
 /* ═══ RESPONSIVE — SMALL MOBILE (≤ 480px) ════════════════════════ */
@@ -957,11 +1034,11 @@ tr:hover td { background: var(--bg2); }
   .tnav { height: 50px; padding: 0 12px; }
   .tnav-logo { font-size: 19px; }
 
-  .pnav { top: 50px; padding: 8px 12px 4px; }
-  .ptab { padding: 5px 8px; font-size: 10.5px; }
+  .pnav { top: 50px; padding: 6px 10px 4px; }
+  .ptab { padding: 5px 9px; font-size: 10.5px; }
 
   .evgrid { gap: 10px; }
-  .evc-body { padding: 14px 12px; }
+  .evc-body { padding: 12px 10px; }
 
   .sg { grid-template-columns: repeat(2,1fr); gap: 8px; }
   .gs-stats { grid-template-columns: repeat(2,1fr); gap: 8px; }
@@ -972,12 +1049,11 @@ tr:hover td { background: var(--bg2); }
   .btn { font-size: 11.5px; }
   .btn-sm { font-size: 10.5px; padding: 4px 10px; }
 
-  .layout-sidebar { max-height: 40vh; }
-  .layout-toolbar .btn-label { display: none; }
+  .layout-sidebar { max-height: 32vh; }
 
   /* ── Stats condensed ── */
-  .sc { padding: 14px 10px; }
-  .stat-n { font-size: 20px; }
+  .sc { padding: 12px 10px; }
+  .sc-val { font-size: 20px; }
 
   /* ── Page padding ── */
   .pcontent { padding: 10px; }
@@ -985,6 +1061,11 @@ tr:hover td { background: var(--bg2); }
   /* ── Hide less important table cols on tiny screens ── */
   .guest-col-table { display: none; }
   .guest-col-dietary { display: none; }
+  
+  /* ── Tab text shortened on very small screens ── */
+  .ptab[data-tab="dashboard"]::after { content: ''; }
+  .ptab[data-tab="timeline"]::after { content: ''; }
+  .ptab[data-tab="moodboard"]::after { content: ''; }
 }
 
 /* ═══ HAMBURGER MENU (mobile nav) ════════════════════════════════ */
@@ -2562,11 +2643,14 @@ async function loadProjectsFromCloud(userId){
     // IMPORTANT: only replace local data if cloud has rows, OR if we had no
     // local cache. This prevents an empty cloud response (e.g. RLS blocking
     // saves) from wiping projects the user just created locally.
-    if(rows.length > 0 || !hadCache){
+    if(rows.length > 0){
       var projects = {};
       rows.forEach(function(row){ projects[row.id] = row.data; });
       DB.projects[userId] = projects;
       cacheDB();
+    } else if(!hadCache){
+      // No cache and no cloud rows — initialize empty so UI shows "no events"
+      if(!DB.projects[userId]) DB.projects[userId] = {};
     }
     renderEvents();
     _lastSyncTime = Date.now();
@@ -3223,7 +3307,10 @@ function saveEvent(id){
   const data={name,clientName:client,date,description:gv('e-desc'),type:gv('e-type'),location:gv('e-location'),budget:+gv('e-budget')||0,status:gv('e-status')};
   if(p){Object.assign(p,data);saveProj(p);if(CID===id)renderPNav();}
   else{const np={id:'p'+Date.now(),vendors:defaultVendors(),vendorsInitialized:true,tasks:defaultTasks(),guests:[],layoutItems:[],savedLayouts:[],moodboard:[],...data};saveProj(np);}
-  closeMo();renderEvents();toast(id?'Event updated':'Event created!','s');
+  closeMo();
+  // Small delay to let saveProj update DB.projects before rendering
+  setTimeout(function(){ renderEvents(); }, 50);
+  toast(id?'Event updated':'Event created!','s');
 }
 
 // ══════════════════════════════════════════
@@ -5017,7 +5104,14 @@ function updateSelUI(){
     el.classList.toggle('sel',LState.sel.includes(el.dataset.id));
   });
   const panel=document.getElementById('lsb-props');
-  if(panel){panel.style.display=LState.sel.length===1?'block':'none';}
+  if(panel){
+    const show=LState.sel.length===1;
+    panel.style.display=show?'block':'none';
+    // Mobile: toggle bottom sheet
+    if(window.innerWidth<=768){
+      panel.classList.toggle('has-selection', show);
+    }
+  }
   if(LState.sel.length===1){renderLPropsPanel();}
   // Update list
   document.querySelectorAll('.litem-list-row').forEach(row=>{
@@ -5105,6 +5199,8 @@ function addNewChairType(){
   var p=proj();if(!p.chairTypes)p.chairTypes={};
   p.chairTypes[key]=CHAIR_TYPES[key];saveProj(p);
   closeMo();openChairEditor();toast('Chair style added','s');
+  // Update layout sidebar if layout tab is active
+  if(CTAB==='layout') setTimeout(function(){ var pp=document.getElementById('lsb-props-inner'); if(pp&&LState.sel.length) renderLPropsPanel(); },100);
 }
 
 function saveChairEditor(){
@@ -5117,7 +5213,9 @@ function saveChairEditor(){
     if(cost) CHAIR_TYPES[k].costPerChair=+cost.value||0;
   });
   var p=proj();p.chairTypes=JSON.parse(JSON.stringify(CHAIR_TYPES));saveProj(p);
-  closeMo();renderLayout();toast('Chair styles saved','s');
+  closeMo();
+  if(CTAB==='layout') renderLayout();
+  toast('Chair styles saved','s');
 }
 
 function openCenterpieceEditor(){
@@ -5993,12 +6091,8 @@ function renderLPropsPanel(){
 
 function lPropChange(id, key, val){
   const item=LState.items.find(i=>i.id===id);if(!item)return;
-  // Cost changes propagate to all items of the same shape
-  if(key==='cost'){
-    LState.items.forEach(it=>{ if(it.shape===item.shape) it.cost=val; });
-  } else {
-    item[key]=val;
-  }
+  // All keys (including cost) apply only to this specific item
+  item[key]=val;
   const p=proj();p.layoutItems=LState.items;saveProj(p);
   // Re-render just this item in the DOM
   const el=document.getElementById('li_'+id);
@@ -6065,7 +6159,7 @@ function openLItemModal(id){
     <input class="input" id="li-cost" type="number" step="0.01" min="0" value="${item.cost||0}">
   </div>
   <div style="font-size:10.5px;color:var(--muted);margin-bottom:8px;padding:8px;background:rgba(201,168,76,.06);border-radius:6px;border:1px solid rgba(201,168,76,.15)">
-    ℹ️ ${_es?`Al guardar se aplicará tamaño, color, sillas y centro de mesa a <strong>todos los ${item.shape.replace(/-/g,' ')}s</strong> en este plano.`:`Saving will apply size, color, chairs and centerpiece to <strong>all ${item.shape.replace(/-/g,' ')}s</strong> in this layout.`}
+    ℹ️ ${_es?`<strong>Tamaño y color</strong> se aplicarán a todos los ${item.shape.replace(/-/g,' ')}s. <strong>Sillas, centro de mesa, precio y etiqueta</strong> son por este elemento individual.`:`<strong>Size & color</strong> apply to all ${item.shape.replace(/-/g,' ')}s. <strong>Chairs, centerpiece, price & label</strong> apply to this element only.`}
   </div>
   <div class="mo-foot">
     <button class="btn btn-ghost" onclick="closeMo()">${t('cancel')}</button>
@@ -6105,14 +6199,15 @@ function saveLItem(id){
     it.w=newW; it.h=newH;
     it.bg=newBg; it.bdClr=newBdClr;
     it.chairs=newChairs;
-    it.chairType=newCtype;
-    it.centerpiece=newCp;
     it.radius=newRadius;
     it.shape=newShape;
   });
 
+  // Per-element only: chair type, centerpiece, cost, label
+  item.chairType=newCtype;
+  item.centerpiece=newCp;
   const newCost=+(document.getElementById('li-cost')||{value:0}).value||0;
-  sameShape.forEach(it=>{ it.cost=newCost; });
+  item.cost=newCost;
   // Only apply label to this specific item
   item.label=newLabel;
 
