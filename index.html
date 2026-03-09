@@ -2684,13 +2684,21 @@ window.addEventListener('message', function(event){
   if(!event.data || event.data.type !== 'WIX_USER') return;
   var d = event.data;
   if(!d.userId) return;
-  WIX_USER = { userId: d.userId, email: d.email||'', displayName: d.displayName||'', token: d.token||'' };
-  DB.cur = d.userId;
-  window.addEventListener('DOMContentLoaded', function(){
-    initApp();
-  });
-  // If DOM already ready (script runs after DOMContentLoaded)
+
+  var newUserId = d.userId;
+
+  // If we already initialised with the dev fallback (dev_user_local) or a
+  // different account, reset so we can re-init with the real Wix user.
+  if(_appInitialized && DB.cur !== newUserId){
+    _appInitialized = false;
+    DB.cur = null;
+  }
+
+  WIX_USER = { userId: newUserId, email: d.email||'', displayName: d.displayName||'', token: d.token||'' };
+  DB.cur = newUserId;
+
   if(document.readyState !== 'loading') initApp();
+  else window.addEventListener('DOMContentLoaded', initApp, { once: true });
 });
 
 // Signal parent that the iframe is ready to receive user data
@@ -2699,13 +2707,19 @@ window.parent.postMessage('EVENTOS_READY', '*');
 // ── Dev/preview fallback: if no postMessage after 3s, use a test user
 // Remove or comment this out before going live on Wix.
 setTimeout(function(){
-  if(window._shareMode) return; // skip dev fallback in share mode
+  if(window._shareMode) return;
+  // Only use dev fallback if Wix never sent a real user
   if(!WIX_USER){
-    console.warn('EventOS: no WIX_USER received — using dev fallback');
+    console.warn('EventOS: no WIX_USER received after 3s — using dev fallback');
     WIX_USER = { userId: 'dev_user_local', email: 'dev@local.test', displayName: 'Dev User', token: '' };
     DB.cur = 'dev_user_local';
     if(document.readyState !== 'loading') initApp();
-    else window.addEventListener('DOMContentLoaded', initApp);
+    else window.addEventListener('DOMContentLoaded', initApp, { once: true });
+  }
+  // If real WIX_USER arrived but initApp hasn't started yet (edge case), kick it off
+  else if(!_appInitialized){
+    if(document.readyState !== 'loading') initApp();
+    else window.addEventListener('DOMContentLoaded', initApp, { once: true });
   }
 }, 3000);
 
@@ -2713,6 +2727,13 @@ var _appInitialized = false;
 async function initApp(){
   if(_appInitialized) return;
   _appInitialized = true;
+  // Make sure loading screen is visible while we fetch
+  var pgApp = document.getElementById('pg-app');
+  var pgLoad = document.getElementById('pg-loading');
+  if(pgApp) pgApp.classList.add('hidden');
+  if(pgLoad) pgLoad.style.display = 'flex';
+  var errEl = document.getElementById('pg-loading-error');
+  if(errEl) errEl.style.display = 'none';
   var ok = await loadProjectsFromCloud(DB.cur);
   if(ok !== false) enterApp();
 }
