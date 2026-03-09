@@ -1350,6 +1350,7 @@ tr:hover td { background: var(--bg2); }
           </div>
         </div>
         <div class="umenu-item" data-i18n="my_events" onclick="showPage('events');closeMenu()">📋 My Events</div>
+        <div class="umenu-item" onclick="openLibrary();closeMenu()">📚 <span id="lib-menu-label">My Library</span></div>
         <div class="umenu-item" onclick="showPage('analytics');closeMenu()">📊 <span id="analytics-menu-label">Analytics</span></div>
         <div class="umenu-item" data-i18n="sign_out" style="color:var(--danger);border-top:1px solid var(--border)" onclick="doLogout()">🚪 Sign Out</div>
       </div>
@@ -1399,6 +1400,21 @@ tr:hover td { background: var(--bg2); }
         </div>
       </div>
       <div id="evgrid"></div>
+    </div>
+  </div>
+
+  <!-- LIBRARY PAGE -->
+  <div id="pg-library" class="pg hidden">
+    <div style="max-width:1200px;margin:0 auto;padding:32px 24px;width:100%">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px">
+        <div>
+          <h1 id="lib-page-title" style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700">My Library</h1>
+          <p id="lib-page-sub" style="color:var(--muted);font-size:14px;margin-top:2px">Save and reuse vendors, tasks, layouts and more across projects</p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap" id="lib-add-btns"></div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px" id="lib-tabs"></div>
+      <div id="lib-content"></div>
     </div>
   </div>
 
@@ -1599,6 +1615,33 @@ var TRANSLATIONS = {
     'period_custom': 'Custom',
     'filter_all_dates': 'All Dates',
     'filter_date_range': 'Date Range',
+    'lib_title': 'My Library',
+    'lib_sub': 'Save and reuse vendors, tasks, layouts and more across projects',
+    'lib_vendors': 'Vendors',
+    'lib_tasks': 'Tasks',
+    'lib_layouts': 'Layouts',
+    'lib_tables': 'Tables',
+    'lib_elements': 'Elements',
+    'lib_chairs': 'Chairs',
+    'lib_centerpieces': 'Centerpieces',
+    'lib_moodboards': 'Moodboards',
+    'lib_save_to': 'Save to Library',
+    'lib_load_from': 'Load from Library',
+    'lib_empty': 'Nothing saved here yet',
+    'lib_empty_sub': 'Save items from any project to reuse them here',
+    'lib_saved': 'Saved to library',
+    'lib_loaded': 'Loaded into project',
+    'lib_delete_confirm': 'Remove from library?',
+    'lib_save_name': 'Name for this library entry',
+    'lib_save_btn': 'Save to Library',
+    'lib_load_btn': 'Load into Project',
+    'lib_add_vendor': 'Save Vendors',
+    'lib_add_task': 'Save Tasks',
+    'lib_add_layout': 'Save Layout',
+    'lib_add_moodboard': 'Save Moodboard',
+    'lib_add_types': 'Save Types',
+    'lib_select_to_save': 'Select items to save:',
+    'lib_select_all': 'Select All',
     'analytics_events': 'Events in Period',
     'analytics_avg_budget': 'Avg Budget',
     'analytics_avg_guests': 'Avg Guests',
@@ -1983,6 +2026,33 @@ var TRANSLATIONS = {
     'period_custom': 'Personalizado',
     'filter_all_dates': 'Todas las Fechas',
     'filter_date_range': 'Rango de Fechas',
+    'lib_title': 'Mi Biblioteca',
+    'lib_sub': 'Guarda y reutiliza proveedores, tareas, planos y más en diferentes proyectos',
+    'lib_vendors': 'Proveedores',
+    'lib_tasks': 'Tareas',
+    'lib_layouts': 'Planos',
+    'lib_tables': 'Mesas',
+    'lib_elements': 'Elementos',
+    'lib_chairs': 'Sillas',
+    'lib_centerpieces': 'Centros de Mesa',
+    'lib_moodboards': 'Moodboards',
+    'lib_save_to': 'Guardar en Biblioteca',
+    'lib_load_from': 'Cargar desde Biblioteca',
+    'lib_empty': 'Nada guardado aquí aún',
+    'lib_empty_sub': 'Guarda elementos de cualquier proyecto para reutilizarlos aquí',
+    'lib_saved': 'Guardado en biblioteca',
+    'lib_loaded': 'Cargado en el proyecto',
+    'lib_delete_confirm': '¿Eliminar de la biblioteca?',
+    'lib_save_name': 'Nombre para esta entrada de biblioteca',
+    'lib_save_btn': 'Guardar en Biblioteca',
+    'lib_load_btn': 'Cargar en Proyecto',
+    'lib_add_vendor': 'Guardar Proveedores',
+    'lib_add_task': 'Guardar Tareas',
+    'lib_add_layout': 'Guardar Plano',
+    'lib_add_moodboard': 'Guardar Moodboard',
+    'lib_add_types': 'Guardar Tipos',
+    'lib_select_to_save': 'Selecciona elementos a guardar:',
+    'lib_select_all': 'Seleccionar Todo',
     'analytics_events': 'Eventos en el Período',
     'analytics_avg_budget': 'Presupuesto Promedio',
     'analytics_avg_guests': 'Invitados Promedio',
@@ -2365,6 +2435,7 @@ function applyTranslations(){
     const pid = page.id;
     if(pid==='pg-events') renderEvents();
     else if(pid==='pg-analytics'){ renderAnalytics(); updateAnalyticsLabels(); }
+    else if(pid==='pg-library') renderLibrary();
     else if(pid==='pg-project'){
       renderPNav();
       const tabs = ['dashboard','budget','timeline','guests','layout','moodboard'];
@@ -2381,6 +2452,8 @@ function applyTranslations(){
   Object.entries(sortKeysAT).forEach(([k,tk])=>{const b=document.getElementById('evsort-'+k);if(b)b.textContent=t(tk);});
   updateAnalyticsLabels();
   updateEvFilterLabels();
+  updateLibraryLabels();
+  if(typeof _libUpdateSectionLabels==='function') _libUpdateSectionLabels();
   // Update tab buttons
   const tabMap = {dashboard:'tab_dashboard',budget:'tab_budget',timeline:'tab_timeline',guests:'tab_guests',layout:'tab_layout',moodboard:'tab_moodboard'};
   document.querySelectorAll('.ptab[data-tab]').forEach(btn=>{
@@ -2698,7 +2771,7 @@ document.addEventListener('click',e=>{ if(!e.target.closest('#upill')&&!e.target
 // PAGES
 // ══════════════════════════════════════════
 function showPage(p){
-  ['pg-events','pg-project','pg-analytics'].forEach(id=>{
+  ['pg-events','pg-project','pg-analytics','pg-library'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.classList.add('hidden');
   });
   const pg=document.getElementById('pg-'+p);if(pg)pg.classList.remove('hidden');
@@ -2706,6 +2779,7 @@ function showPage(p){
   if(p==='events') renderEvents();
   else if(p==='project'){ renderPNav(); switchTab('dashboard'); }
   else if(p==='analytics') renderAnalytics();
+  else if(p==='library') renderLibrary();
 }
 function openProject(id){ CID=id; showPage('project'); }
 
@@ -3190,9 +3264,15 @@ function renderBudget(){
   <div class="sh">
     <div><div class="sh-title" style="color:#f59e0b">${t('budget_management_title')}</div>
     <div class="sh-sub">${t('budget_label')}: ${fmtMoney(tb)} · ${t('paid_label')}: ${fmtMoney(paid)} · ${t('balance_label')}: ${fmtMoney(tb-paid)}</div></div>
-    <button class="btn btn-primary" onclick="openVendorModal()">
-      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>${t('add_vendor')}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button class="btn btn-ghost btn-sm" onclick="libQuickSaveVendors()" style="display:flex;align-items:center;gap:5px;font-size:11px">
+      <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      <span id="lib-save-vendor-lbl">Save to Library</span>
     </button>
+      <button class="btn btn-primary" onclick="openVendorModal()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>${t('add_vendor')}
+      </button>
+    </div>
   </div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:20px">
     <div class="card" style="padding:18px">
@@ -3347,6 +3427,11 @@ function showVendorDetail(vid){
 // TIMELINE
 // ══════════════════════════════════════════
 var tView='list';
+function _libUpdateSectionLabels(){
+  // Update Save to Library button labels in section headers
+  var lv=document.getElementById('lib-save-vendor-lbl'); if(lv) lv.textContent=t('lib_save_to');
+  var lt=document.getElementById('lib-save-task-lbl');   if(lt) lt.textContent=t('lib_save_to');
+}
 function renderTimeline(){
   const p=proj();const el=document.getElementById('tab-timeline');
   const done=p.tasks.filter(tk=>tk.done).length;
@@ -3356,9 +3441,15 @@ function renderTimeline(){
   <div class="sh">
     <div><div class="sh-title" style="color:#7c3aed">${t('timeline')}</div>
     <div class="sh-sub">${t('timeline_sub')}</div></div>
-    <button class="btn btn-primary" onclick="openTaskModal()">
-      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>${t('add_task')}
-    </button>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="libQuickSaveTasks()" style="display:flex;align-items:center;gap:5px;font-size:11px">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        <span id="lib-save-task-lbl">${t('lib_save_to')}</span>
+      </button>
+      <button class="btn btn-primary" onclick="openTaskModal()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>${t('add_task')}
+      </button>
+    </div>
   </div>
   <div class="sg" style="margin-bottom:20px">
     ${statCard(t('total_tasks'),'#f5f3ff','#7c3aed','<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',p.tasks.length,t('tasks_sub'),'0','#7c3aed')}
@@ -5833,48 +5924,49 @@ function openLItemModal(id){
     `<option value="${k}" ${(item.centerpiece||'none')===k?'selected':''}>${v.label}</option>`).join('');
 
 
-  openMo(`<div class="mo-title">Edit: ${esc(item.label)}</div>
+  const _es = LANG==='es';
+  openMo(`<div class="mo-title">${_es?'Editar':'Edit'}: ${esc(item.label)}</div>
   <div class="form-grid">
-    <div class="ig" style="grid-column:1/-1"><label>Label</label>
+    <div class="ig" style="grid-column:1/-1"><label>${_es?'Etiqueta':'Label'}</label>
       <input class="input" id="li-lbl" value="${esc(item.label)}">
     </div>
-    <div class="ig"><label>Width (m)</label>
+    <div class="ig"><label>${_es?'Ancho (m)':'Width (m)'}</label>
       <input class="input" id="li-w" type="number" step="0.05" value="${(item.w/getPPM()).toFixed(2)}">
     </div>
-    <div class="ig"><label>Height (m)</label>
+    <div class="ig"><label>${_es?'Alto (m)':'Height (m)'}</label>
       <input class="input" id="li-h" type="number" step="0.05" value="${(item.h/getPPM()).toFixed(2)}">
     </div>
-    <div class="ig"><label>Chairs / Seats</label>
+    <div class="ig"><label>${_es?'Sillas / Asientos':'Chairs / Seats'}</label>
       <input class="input" id="li-chairs" type="number" value="${item.chairs||0}" min="0" max="30">
     </div>
-    ${isTable?`<div class="ig" style="grid-column:1/-1"><label>Table Shape</label>
+    ${isTable?`<div class="ig" style="grid-column:1/-1"><label>${_es?'Forma de Mesa':'Table Shape'}</label>
       <select class="input" id="li-shape">
-        <option value="round" ${(item.radius==='50%'||(LSHAPES_M[item.shape]&&LSHAPES_M[item.shape].radius==='50%'))?'selected':''}>Round</option>
-        <option value="rect" ${!(item.radius==='50%'||(LSHAPES_M[item.shape]&&LSHAPES_M[item.shape].radius==='50%'))?'selected':''}>Rectangular / Square</option>
+        <option value="round" ${(item.radius==='50%'||(LSHAPES_M[item.shape]&&LSHAPES_M[item.shape].radius==='50%'))?'selected':''}>${_es?'Redonda':'Round'}</option>
+        <option value="rect" ${!(item.radius==='50%'||(LSHAPES_M[item.shape]&&LSHAPES_M[item.shape].radius==='50%'))?'selected':''}>${_es?'Rectangular / Cuadrada':'Rectangular / Square'}</option>
       </select>
     </div>`:''}
-    <div class="ig"><label>Fill Color</label>
+    <div class="ig"><label>${_es?'Color de Relleno':'Fill Color'}</label>
       <input class="input" id="li-bg" type="color" value="${item.bg}" style="height:38px;padding:2px">
     </div>
-    <div class="ig"><label>Label Color</label>
+    <div class="ig"><label>${_es?'Color de Etiqueta':'Label Color'}</label>
       <input class="input" id="li-bdc" type="color" value="${item.bdClr}" style="height:38px;padding:2px">
     </div>
   ${hasChairs?`
   <div class="ig" style="grid-column:1/-1">
-    <label style="font-size:10.5px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:.07em;display:block;margin-bottom:8px">Chair Style</label>
+    <label style="font-size:10.5px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:.07em;display:block;margin-bottom:8px">${_es?'Estilo de Silla':'Chair Style'}</label>
     <select class="input" id="li-ctype" style="font-size:12px">${chairOpts}</select>
   </div>
   <div class="ig" style="grid-column:1/-1">
-    <label style="font-size:10.5px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:.07em;display:block;margin-bottom:8px">Centerpiece</label>
+    <label style="font-size:10.5px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:.07em;display:block;margin-bottom:8px">${_es?'Centro de Mesa':'Centerpiece'}</label>
     <select class="input" id="li-cp" style="font-size:12px">${cpOpts}</select>
   </div>`:''}
   <div style="font-size:10.5px;color:var(--muted);margin-bottom:8px;padding:8px;background:rgba(201,168,76,.06);border-radius:6px;border:1px solid rgba(201,168,76,.15)">
-    ℹ️ Saving will apply size, color, chairs and centerpiece to <strong>all ${item.shape.replace(/-/g,' ')}s</strong> in this layout.
+    ℹ️ ${_es?`Al guardar se aplicará tamaño, color, sillas y centro de mesa a <strong>todos los ${item.shape.replace(/-/g,' ')}s</strong> en este plano.`:`Saving will apply size, color, chairs and centerpiece to <strong>all ${item.shape.replace(/-/g,' ')}s</strong> in this layout.`}
   </div>
   <div class="mo-foot">
-    <button class="btn btn-ghost" onclick="closeMo()">Cancel</button>
-    <button class="btn btn-ghost" onclick="duplicateAsCustom('${id}')" title="Create a new custom type based on this element's current settings">⊕ Create new Type</button>
-    <button class="btn btn-danger" onclick="closeMo();delLItem('${id}')">Delete</button>
+    <button class="btn btn-ghost" onclick="closeMo()">${t('cancel')}</button>
+    <button class="btn btn-ghost" onclick="duplicateAsCustom('${id}')" title="${_es?'Crear un nuevo tipo basado en este elemento':'Create a new custom type based on this element'}">⊕ ${_es?'Crear Tipo':'Create new Type'}</button>
+    <button class="btn btn-danger" onclick="closeMo();delLItem('${id}')">${t('delete')||(_es?'Eliminar':'Delete')}</button>
     <button class="btn btn-primary" onclick="saveLItem('${id}')">${t('save')}</button>
   </div>`);
 }
@@ -9135,6 +9227,690 @@ window.setEvView = setEvView;
 window.setAnalyticsPeriod = setAnalyticsPeriod;
 window.openExportPDFModal = openExportPDFModal;
 window.generateExportPDF = generateExportPDF;
+</script>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// LIBRARY SYSTEM
+// Save/load vendors, tasks, layouts, custom types, moodboards
+// across projects. Stored as a special project: id='__library__'
+// ════════════════════════════════════════════════════════════════
+
+var _libTab = 'vendors';
+
+// ── Get / initialise the library record ─────────────────────────
+function getLib(){
+  var all = uproj();
+  if(!all['__library__']){
+    all['__library__'] = {
+      id:'__library__', name:'__library__',
+      vendors:[], tasks:[], layouts:[],
+      tables:{}, elements:{}, chairs:{}, centerpieces:{},
+      moodboards:[]
+    };
+  }
+  var lib = all['__library__'];
+  if(!lib.vendors)     lib.vendors=[];
+  if(!lib.tasks)       lib.tasks=[];
+  if(!lib.layouts)     lib.layouts=[];
+  if(!lib.tables)      lib.tables={};
+  if(!lib.elements)    lib.elements={};
+  if(!lib.chairs)      lib.chairs={};
+  if(!lib.centerpieces)lib.centerpieces={};
+  if(!lib.moodboards)  lib.moodboards=[];
+  return lib;
+}
+function saveLib(lib){ saveProj(lib); }
+
+// ── Open library page ────────────────────────────────────────────
+function openLibrary(){
+  showPage('library');
+}
+
+function updateLibraryLabels(){
+  var el=document.getElementById('lib-menu-label'); if(el) el.textContent=t('lib_title');
+  var pt=document.getElementById('lib-page-title'); if(pt) pt.textContent=t('lib_title');
+  var ps=document.getElementById('lib-page-sub');   if(ps) ps.textContent=t('lib_sub');
+}
+
+// ── Render the full library page ─────────────────────────────────
+function renderLibrary(){
+  updateLibraryLabels();
+  var lib = getLib();
+
+  // Tab counts
+  var tabs = [
+    {key:'vendors',    icon:'🏢', lbl:t('lib_vendors'),     cnt: lib.vendors.length},
+    {key:'tasks',      icon:'📅', lbl:t('lib_tasks'),       cnt: lib.tasks.length},
+    {key:'layouts',    icon:'📐', lbl:t('lib_layouts'),     cnt: lib.layouts.length},
+    {key:'tables',     icon:'⬡',  lbl:t('lib_tables'),      cnt: Object.keys(lib.tables).length},
+    {key:'elements',   icon:'🪴', lbl:t('lib_elements'),    cnt: Object.keys(lib.elements).length},
+    {key:'chairs',     icon:'🪑', lbl:t('lib_chairs'),      cnt: Object.keys(lib.chairs).length},
+    {key:'centerpieces',icon:'💐',lbl:t('lib_centerpieces'),cnt: Object.keys(lib.centerpieces).length},
+    {key:'moodboards', icon:'🎨', lbl:t('lib_moodboards'),  cnt: lib.moodboards.length},
+  ];
+
+  // Tab buttons
+  var tabEl = document.getElementById('lib-tabs');
+  if(tabEl) tabEl.innerHTML = tabs.map(function(tb){
+    return '<button class="tb'+(tb.key===_libTab?' active':'')+'" onclick="setLibTab(\''+tb.key+'\')">'
+      +tb.icon+' '+tb.lbl+(tb.cnt?' <span style="background:var(--gold-l);color:var(--gold-h);border-radius:10px;padding:0 6px;font-size:10px;font-weight:700">'+tb.cnt+'</span>':'')+'</button>';
+  }).join('');
+
+  // Add-to-library buttons per tab
+  var addEl = document.getElementById('lib-add-btns');
+  var addMap = {
+    vendors:'lib_add_vendor', tasks:'lib_add_task', layouts:'lib_add_layout',
+    tables:'lib_add_types', elements:'lib_add_types', chairs:'lib_add_types',
+    centerpieces:'lib_add_types', moodboards:'lib_add_moodboard'
+  };
+  if(addEl) addEl.innerHTML =
+    '<button class="btn btn-primary" onclick="libSaveModal(\''+_libTab+'\')">'
+    +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
+    +t(addMap[_libTab]||'lib_save_to')+'</button>';
+
+  // Content area
+  var el = document.getElementById('lib-content');
+  if(!el) return;
+
+  switch(_libTab){
+    case 'vendors':     el.innerHTML = renderLibVendors(lib); break;
+    case 'tasks':       el.innerHTML = renderLibTasks(lib); break;
+    case 'layouts':     el.innerHTML = renderLibLayouts(lib); break;
+    case 'tables':      el.innerHTML = renderLibTypes(lib,'tables'); break;
+    case 'elements':    el.innerHTML = renderLibTypes(lib,'elements'); break;
+    case 'chairs':      el.innerHTML = renderLibTypes(lib,'chairs'); break;
+    case 'centerpieces':el.innerHTML = renderLibTypes(lib,'centerpieces'); break;
+    case 'moodboards':  el.innerHTML = renderLibMoodboards(lib); break;
+  }
+}
+
+function setLibTab(key){ _libTab=key; renderLibrary(); }
+
+// ── Empty state helper ───────────────────────────────────────────
+function libEmpty(){
+  return '<div style="text-align:center;padding:60px 20px;color:var(--muted)">'
+    +'<div style="font-size:48px;margin-bottom:12px">📚</div>'
+    +'<div style="font-size:15px;font-weight:600;margin-bottom:6px">'+t('lib_empty')+'</div>'
+    +'<div style="font-size:13px">'+t('lib_empty_sub')+'</div></div>';
+}
+
+// ── Card wrapper ─────────────────────────────────────────────────
+function libCard(title, subtitle, badge, loadBtn, delKey, delType){
+  return '<div style="display:flex;align-items:flex-start;justify-content:space-between;padding:16px 18px;background:#fff;border:1.5px solid var(--border);border-radius:var(--r-lg);margin-bottom:10px">'
+    +'<div style="flex:1;min-width:0">'
+    +'<div style="font-size:14px;font-weight:700;margin-bottom:4px">'+esc(title)+'</div>'
+    +(subtitle?'<div style="font-size:12px;color:var(--muted)">'+subtitle+'</div>':'')
+    +(badge?'<div style="margin-top:6px">'+badge+'</div>':'')
+    +'</div>'
+    +'<div style="display:flex;gap:6px;flex-shrink:0;align-items:center;margin-left:12px">'
+    +(loadBtn||'')
+    +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDelete(\''+delType+'\',\''+delKey+'\')">'
+    +'<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>'
+    +'</div></div>';
+}
+
+// ── VENDORS ──────────────────────────────────────────────────────
+function renderLibVendors(lib){
+  if(!lib.vendors.length) return libEmpty();
+  return lib.vendors.map(function(entry){
+    var badge = entry.vendors.map(function(v){
+      return '<span class="badge '+(v.hired?'b-green':'b-gray')+'" style="margin:1px">'+esc(v.name)+'</span>';
+    }).join('');
+    var sub = entry.vendors.length+' '+(LANG==='es'?'proveedor(es)':'vendor(s)')
+      +' · '+entry.date;
+    var loadBtn = proj()
+      ? '<button class="btn btn-primary btn-sm" onclick="libLoadVendors(\''+entry.id+'\')">'+t('lib_load_btn')+'</button>'
+      : '';
+    return libCard(entry.name, sub, badge, loadBtn, entry.id, 'vendors');
+  }).join('');
+}
+
+function renderLibTasks(lib){
+  if(!lib.tasks.length) return libEmpty();
+  return lib.tasks.map(function(entry){
+    var sub = entry.tasks.length+' '+(LANG==='es'?'tarea(s)':'task(s)')
+      +' · '+entry.date;
+    var done = entry.tasks.filter(function(tk){return tk.done;}).length;
+    var badge = '<span class="badge b-purple">'+done+'/'+entry.tasks.length+' '+(LANG==='es'?'completadas':'done')+'</span>';
+    var loadBtn = proj()
+      ? '<button class="btn btn-primary btn-sm" onclick="libLoadTasks(\''+entry.id+'\')">'+t('lib_load_btn')+'</button>'
+      : '';
+    return libCard(entry.name, sub, badge, loadBtn, entry.id, 'tasks');
+  }).join('');
+}
+
+function renderLibLayouts(lib){
+  if(!lib.layouts.length) return libEmpty();
+  return lib.layouts.map(function(entry){
+    var sub = entry.items.length+' '+(LANG==='es'?'elemento(s)':'element(s)')
+      +' · '+entry.items.filter(function(i){return i.shape.includes('table');}).length+' '+(LANG==='es'?'mesas':'tables')
+      +' · '+entry.date;
+    var seats = entry.items.reduce(function(s,i){return s+(i.chairs||0);},0);
+    var badge = '<span class="badge b-gold">'+seats+' '+(LANG==='es'?'asientos':'seats')+'</span>';
+    var loadBtn = proj()
+      ? '<button class="btn btn-primary btn-sm" onclick="libLoadLayout(\''+entry.id+'\')">'+t('lib_load_btn')+'</button>'
+      : '';
+    if(entry.notes){
+      badge += ' <span style="font-size:11px;color:var(--muted);font-style:italic">'+esc(entry.notes)+'</span>';
+    }
+    return libCard(entry.name, sub, badge, loadBtn, entry.id, 'layouts');
+  }).join('');
+}
+
+function renderLibTypes(lib, type){
+  var data = lib[type]||{};
+  var keys = Object.keys(data);
+  if(!keys.length) return libEmpty();
+  var typeLabel = {tables:t('lib_tables'),elements:t('lib_elements'),chairs:t('lib_chairs'),centerpieces:t('lib_centerpieces')}[type]||type;
+  var loadBtn_all = proj()
+    ? '<button class="btn btn-primary btn-sm" onclick="libLoadTypes(\''+type+'\')">'+t('lib_load_btn')+'</button>'
+    : '';
+  // Show as one card per saved "pack"
+  return lib[type+'_packs'] && lib[type+'_packs'].length
+    ? lib[type+'_packs'].map(function(pack){
+        var sub = Object.keys(pack.data).length+' '+typeLabel+' · '+pack.date;
+        var loadBtn = proj()
+          ? '<button class="btn btn-primary btn-sm" onclick="libLoadTypesPack(\''+type+'\',\''+pack.id+'\')">'+t('lib_load_btn')+'</button>'
+          : '';
+        return libCard(pack.name, sub, '', loadBtn, pack.id, type+'_pack');
+      }).join('')
+    : '<div style="padding:16px 18px;background:#fff;border:1.5px solid var(--border);border-radius:var(--r-lg)">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
+      +'<div style="font-weight:700;font-size:14px">'+typeLabel+' <span style="font-weight:400;color:var(--muted);font-size:12px">('+keys.length+')</span></div>'
+      +loadBtn_all+'</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:6px">'
+      +keys.map(function(k){
+        var item=data[k]; var lbl=item.label||k;
+        return '<span class="badge b-gray" style="display:inline-flex;align-items:center;gap:4px">'
+          +(item.color?'<span style="width:10px;height:10px;border-radius:2px;background:'+item.color+';display:inline-block"></span>':'')
+          +esc(lbl)+'</span>';
+      }).join('')+'</div></div>';
+}
+
+function renderLibMoodboards(lib){
+  if(!lib.moodboards.length) return libEmpty();
+  return lib.moodboards.map(function(entry){
+    var imgCnt = entry.folders
+      ? entry.folders.reduce(function(s,f){return s+f.images.length;},0) + (entry.uncategorized||[]).length
+      : (entry.images||[]).length;
+    var sub = (entry.isFolder ? (LANG==='es'?'Carpeta':'Folder')+' · ' : '')
+      + imgCnt+' '+(LANG==='es'?'imagen(es)':'image(s)')
+      +' · '+entry.date;
+    var loadBtn = proj()
+      ? '<button class="btn btn-primary btn-sm" onclick="libLoadMoodboard(\''+entry.id+'\')">'+t('lib_load_btn')+'</button>'
+      : '';
+    return libCard(entry.name, sub, '', loadBtn, entry.id, 'moodboards');
+  }).join('');
+}
+
+// ── DELETE ───────────────────────────────────────────────────────
+function libDelete(type, id){
+  if(!confirm(t('lib_delete_confirm'))) return;
+  var lib = getLib();
+  if(type==='vendors')     lib.vendors     = lib.vendors.filter(function(e){return e.id!==id;});
+  else if(type==='tasks')  lib.tasks       = lib.tasks.filter(function(e){return e.id!==id;});
+  else if(type==='layouts')lib.layouts     = lib.layouts.filter(function(e){return e.id!==id;});
+  else if(type==='moodboards')lib.moodboards = lib.moodboards.filter(function(e){return e.id!==id;});
+  else if(type.endsWith('_pack')){
+    var baseType = type.replace('_pack','');
+    if(lib[baseType+'_packs']) lib[baseType+'_packs'] = lib[baseType+'_packs'].filter(function(e){return e.id!==id;});
+  }
+  saveLib(lib);
+  renderLibrary();
+  toast(LANG==='es'?'Eliminado de biblioteca':'Removed from library');
+}
+
+// ══════════════════════════════════════════════════════════════
+// SAVE TO LIBRARY — modal dialogs
+// ══════════════════════════════════════════════════════════════
+function libSaveModal(type){
+  var p = proj();
+  switch(type){
+    case 'vendors':    libSaveVendorsModal(p); break;
+    case 'tasks':      libSaveTasksModal(p); break;
+    case 'layouts':    libSaveLayoutModal(p); break;
+    case 'tables':     libSaveTypesModal('tables'); break;
+    case 'elements':   libSaveTypesModal('elements'); break;
+    case 'chairs':     libSaveTypesModal('chairs'); break;
+    case 'centerpieces':libSaveTypesModal('centerpieces'); break;
+    case 'moodboards': libSaveMoodboardModal(p); break;
+  }
+}
+
+// Name + optional notes prompt helper
+function libNamePrompt(icon, title, bodyHtml, onSave){
+  openMo('<div class="mo-title">'+icon+' '+title+'</div>'
+    +bodyHtml
+    +'<div class="form-grid" style="margin-top:14px">'
+    +'<div class="ig" style="grid-column:1/-1"><label>'+t('lib_save_name')+'</label>'
+    +'<input class="input" id="lib-entry-name" placeholder="'+title+'..."></div>'
+    +'</div>'
+    +'<div class="mo-foot">'
+    +'<button class="btn btn-ghost" onclick="closeMo()">'+t('cancel')+'</button>'
+    +'<button class="btn btn-primary" onclick="'+onSave+'">'+t('lib_save_btn')+'</button>'
+    +'</div>');
+}
+
+// ── Save Vendors ─────────────────────────────────────────────────
+function libSaveVendorsModal(p){
+  if(!p) return toast(LANG==='es'?'Abre un proyecto primero':'Open a project first','e');
+  var vendors = p.vendors||[];
+  if(!vendors.length) return toast(LANG==='es'?'No hay proveedores':'No vendors','e');
+  var checkboxes = vendors.map(function(v){
+    return '<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;border:1px solid var(--border);cursor:pointer;margin-bottom:6px">'
+      +'<input type="checkbox" class="lib-v-chk" value="'+v.id+'" checked style="accent-color:var(--gold-h)">'
+      +'<span style="font-size:13px;font-weight:600">'+esc(v.name)+'</span>'
+      +'<span style="font-size:11px;color:var(--muted)">'+esc(v.category)+'</span>'
+      +(v.hired?'<span class="badge b-green" style="margin-left:auto">'+(LANG==='es'?'Contratado':'Hired')+'</span>':'')
+      +'</label>';
+  }).join('');
+  libNamePrompt('🏢', t('lib_add_vendor'),
+    '<div style="max-height:40vh;overflow-y:auto;margin-top:10px">'+checkboxes+'</div>',
+    'libSaveVendorsDo()'
+  );
+}
+function libSaveVendorsDo(){
+  var name = (document.getElementById('lib-entry-name')||{}).value||'';
+  if(!name) return toast(t('lib_save_name'),'e');
+  var p = proj(); if(!p) return;
+  var ids = Array.from(document.querySelectorAll('.lib-v-chk:checked')).map(function(c){return c.value;});
+  if(!ids.length) return toast(LANG==='es'?'Selecciona al menos uno':'Select at least one','e');
+  var vendorsToSave = (p.vendors||[]).filter(function(v){return ids.includes(v.id);});
+  var lib = getLib();
+  lib.vendors.push({id:'lv'+Date.now(), name:name, date:new Date().toLocaleDateString(), vendors: JSON.parse(JSON.stringify(vendorsToSave))});
+  saveLib(lib);
+  closeMo();
+  toast(t('lib_saved'),'s');
+  if(document.getElementById('pg-library')&&!document.getElementById('pg-library').classList.contains('hidden')) renderLibrary();
+}
+
+// ── Save Tasks ───────────────────────────────────────────────────
+function libSaveTasksModal(p){
+  if(!p) return toast(LANG==='es'?'Abre un proyecto primero':'Open a project first','e');
+  var tasks = p.tasks||[];
+  if(!tasks.length) return toast(LANG==='es'?'No hay tareas':'No tasks','e');
+  var checkboxes = tasks.map(function(tk){
+    return '<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;border:1px solid var(--border);cursor:pointer;margin-bottom:6px">'
+      +'<input type="checkbox" class="lib-t-chk" value="'+tk.id+'" checked style="accent-color:var(--gold-h)">'
+      +'<span style="font-size:13px;font-weight:600">'+esc(tk.title)+'</span>'
+      +(tk.done?'<span class="badge b-green" style="margin-left:auto">✓</span>':'')
+      +'</label>';
+  }).join('');
+  libNamePrompt('📅', t('lib_add_task'),
+    '<div style="max-height:40vh;overflow-y:auto;margin-top:10px">'+checkboxes+'</div>',
+    'libSaveTasksDo()'
+  );
+}
+function libSaveTasksDo(){
+  var name = (document.getElementById('lib-entry-name')||{}).value||'';
+  if(!name) return toast(t('lib_save_name'),'e');
+  var p = proj(); if(!p) return;
+  var ids = Array.from(document.querySelectorAll('.lib-t-chk:checked')).map(function(c){return c.value;});
+  if(!ids.length) return toast(LANG==='es'?'Selecciona al menos uno':'Select at least one','e');
+  var tasksToSave = (p.tasks||[]).filter(function(tk){return ids.includes(tk.id);});
+  var lib = getLib();
+  lib.tasks.push({id:'lt'+Date.now(), name:name, date:new Date().toLocaleDateString(), tasks: JSON.parse(JSON.stringify(tasksToSave))});
+  saveLib(lib);
+  closeMo();
+  toast(t('lib_saved'),'s');
+  if(document.getElementById('pg-library')&&!document.getElementById('pg-library').classList.contains('hidden')) renderLibrary();
+}
+
+// ── Save Layout ──────────────────────────────────────────────────
+function libSaveLayoutModal(p){
+  if(!p) return toast(LANG==='es'?'Abre un proyecto primero':'Open a project first','e');
+  var items = p.layoutItems||[];
+  if(!items.length) return toast(LANG==='es'?'El plano está vacío':'Layout is empty','e');
+  var info = items.length+' '+(LANG==='es'?'elementos':'elements')
+    +', '+items.filter(function(i){return i.shape.includes('table');}).length+' '+(LANG==='es'?'mesas':'tables')
+    +', '+items.reduce(function(s,i){return s+(i.chairs||0);},0)+' '+(LANG==='es'?'asientos':'seats');
+  var floorOpt = LState.floorplan&&LState.floorplan.img
+    ? '<label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px">'
+      +'<input type="checkbox" id="lib-inc-floor" checked style="accent-color:var(--gold-h)">'
+      +(LANG==='es'?'Incluir imagen de plano de piso':'Include floorplan image')+'</label>'
+    : '';
+  libNamePrompt('📐', t('lib_add_layout'),
+    '<div style="font-size:12px;color:var(--muted);margin-top:8px;padding:8px;background:var(--bg2);border-radius:6px">'+info+'</div>'
+    +'<div class="ig" style="margin-top:10px"><label>'+( LANG==='es'?'Notas (opcional)':'Notes (optional)')+'</label>'
+    +'<input class="input" id="lib-layout-notes"></div>'
+    +floorOpt,
+    'libSaveLayoutDo()'
+  );
+}
+function libSaveLayoutDo(){
+  var name = (document.getElementById('lib-entry-name')||{}).value||'';
+  if(!name) return toast(t('lib_save_name'),'e');
+  var p = proj(); if(!p) return;
+  var notes = (document.getElementById('lib-layout-notes')||{}).value||'';
+  var incFloor = document.getElementById('lib-inc-floor');
+  var floorplan = (incFloor&&incFloor.checked) ? JSON.parse(JSON.stringify(LState.floorplan)) : null;
+  var lib = getLib();
+  lib.layouts.push({
+    id:'ll'+Date.now(), name:name, notes:notes,
+    date:new Date().toLocaleDateString(),
+    items: JSON.parse(JSON.stringify(p.layoutItems||[])),
+    floorplan: floorplan
+  });
+  saveLib(lib);
+  closeMo();
+  toast(t('lib_saved'),'s');
+  if(document.getElementById('pg-library')&&!document.getElementById('pg-library').classList.contains('hidden')) renderLibrary();
+}
+
+// ── Save Custom Types (tables/elements/chairs/centerpieces) ──────
+function libSaveTypesModal(type){
+  var srcData = type==='tables'?LSHAPES_M
+    :type==='elements'?LSHAPES_M
+    :type==='chairs'?CHAIR_TYPES
+    :type==='centerpieces'?CENTERPIECE_TYPES:{};
+  // For tables: filter to custom ones (not built-in)
+  var builtinTables = ['round-table','rect-table','square-table'];
+  var builtinEls = ['chair','stage','bar','dj','plant','dance-floor','gift-table','buffet','cocktail-table'];
+  var keys = Object.keys(srcData).filter(function(k){
+    if(type==='tables') return !builtinTables.includes(k);
+    if(type==='elements') return !builtinEls.includes(k);
+    return true; // all chairs and centerpieces
+  });
+  if(!keys.length) return toast(LANG==='es'?'No hay tipos personalizados guardados':'No custom types saved yet','e');
+  var typeLabel = {tables:t('lib_tables'),elements:t('lib_elements'),chairs:t('lib_chairs'),centerpieces:t('lib_centerpieces')}[type];
+  var checkboxes = keys.map(function(k){
+    var item = srcData[k];
+    return '<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;border:1px solid var(--border);cursor:pointer;margin-bottom:6px">'
+      +'<input type="checkbox" class="lib-tp-chk" value="'+k+'" checked style="accent-color:var(--gold-h)">'
+      +(item.color?'<span style="width:12px;height:12px;border-radius:3px;background:'+item.color+';flex-shrink:0"></span>':'')
+      +'<span style="font-size:13px;font-weight:600">'+esc(item.label||k)+'</span>'
+      +'</label>';
+  }).join('');
+  libNamePrompt('🗂️', t('lib_add_types')+' · '+typeLabel,
+    '<div style="max-height:40vh;overflow-y:auto;margin-top:10px">'+checkboxes+'</div>',
+    'libSaveTypesDo("'+type+'")'
+  );
+}
+function libSaveTypesDo(type){
+  var name = (document.getElementById('lib-entry-name')||{}).value||'';
+  if(!name) return toast(t('lib_save_name'),'e');
+  var keys = Array.from(document.querySelectorAll('.lib-tp-chk:checked')).map(function(c){return c.value;});
+  if(!keys.length) return toast(LANG==='es'?'Selecciona al menos uno':'Select at least one','e');
+  var srcData = type==='tables'||type==='elements'?LSHAPES_M:type==='chairs'?CHAIR_TYPES:CENTERPIECE_TYPES;
+  var dataToSave = {};
+  keys.forEach(function(k){ if(srcData[k]) dataToSave[k]=JSON.parse(JSON.stringify(srcData[k])); });
+  var lib = getLib();
+  if(!lib[type+'_packs']) lib[type+'_packs']=[];
+  lib[type+'_packs'].push({id:'ltp'+Date.now(), name:name, date:new Date().toLocaleDateString(), data:dataToSave});
+  saveLib(lib);
+  closeMo();
+  toast(t('lib_saved'),'s');
+  if(document.getElementById('pg-library')&&!document.getElementById('pg-library').classList.contains('hidden')) renderLibrary();
+}
+
+// ── Save Moodboard ───────────────────────────────────────────────
+function libSaveMoodboardModal(p){
+  if(!p) return toast(LANG==='es'?'Abre un proyecto primero':'Open a project first','e');
+  var mb = getMB(p);
+  var folders = mb.folders||[];
+  var uncatCnt = (mb.uncategorized||[]).length;
+  if(!folders.length && !uncatCnt) return toast(LANG==='es'?'Moodboard vacío':'Moodboard is empty','e');
+  var options = '';
+  if(uncatCnt){
+    options += '<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;border:1px solid var(--border);cursor:pointer;margin-bottom:6px">'
+      +'<input type="checkbox" class="lib-mb-chk" value="__uncat__" checked style="accent-color:var(--gold-h)">'
+      +'<span style="font-size:13px;font-weight:600">'+(LANG==='es'?'Sin categoría':'Uncategorized')+'</span>'
+      +'<span style="font-size:11px;color:var(--muted);margin-left:4px">'+uncatCnt+' '+(LANG==='es'?'imgs':'imgs')+'</span>'
+      +'</label>';
+  }
+  folders.forEach(function(f){
+    options += '<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;border:1px solid var(--border);cursor:pointer;margin-bottom:6px">'
+      +'<input type="checkbox" class="lib-mb-chk" value="'+f.id+'" checked style="accent-color:var(--gold-h)">'
+      +'<span style="font-size:13px;font-weight:600">'+esc(f.name)+'</span>'
+      +'<span style="font-size:11px;color:var(--muted);margin-left:4px">'+f.images.length+' '+(LANG==='es'?'imgs':'imgs')+'</span>'
+      +'</label>';
+  });
+  libNamePrompt('🎨', t('lib_add_moodboard'),
+    '<div style="max-height:35vh;overflow-y:auto;margin-top:10px">'+options+'</div>',
+    'libSaveMoodboardDo()'
+  );
+}
+function libSaveMoodboardDo(){
+  var name = (document.getElementById('lib-entry-name')||{}).value||'';
+  if(!name) return toast(t('lib_save_name'),'e');
+  var p = proj(); if(!p) return;
+  var mb = getMB(p);
+  var ids = Array.from(document.querySelectorAll('.lib-mb-chk:checked')).map(function(c){return c.value;});
+  if(!ids.length) return toast(LANG==='es'?'Selecciona al menos uno':'Select at least one','e');
+  var savedFolders = [];
+  var savedUncat = [];
+  if(ids.includes('__uncat__')) savedUncat = JSON.parse(JSON.stringify(mb.uncategorized||[]));
+  (mb.folders||[]).forEach(function(f){ if(ids.includes(f.id)) savedFolders.push(JSON.parse(JSON.stringify(f))); });
+  var lib = getLib();
+  lib.moodboards.push({
+    id:'lm'+Date.now(), name:name,
+    date:new Date().toLocaleDateString(),
+    folders: savedFolders,
+    uncategorized: savedUncat
+  });
+  saveLib(lib);
+  closeMo();
+  toast(t('lib_saved'),'s');
+  if(document.getElementById('pg-library')&&!document.getElementById('pg-library').classList.contains('hidden')) renderLibrary();
+}
+
+// ══════════════════════════════════════════════════════════════
+// LOAD FROM LIBRARY — into current project
+// ══════════════════════════════════════════════════════════════
+
+function libLoadVendors(entryId){
+  var lib = getLib();
+  var entry = lib.vendors.find(function(e){return e.id===entryId;});
+  if(!entry) return;
+  var p = proj(); if(!p) return;
+  openMo('<div class="mo-title">'+t('lib_load_from')+': '+esc(entry.name)+'</div>'
+    +'<p style="font-size:13px;color:var(--muted);margin-bottom:16px">'
+    +(LANG==='es'
+      ? 'Se agregarán '+entry.vendors.length+' proveedor(es) al proyecto actual. Los duplicados se omitirán.'
+      : entry.vendors.length+' vendor(s) will be added to the current project. Duplicates will be skipped.')
+    +'</p>'
+    +'<div class="mo-foot">'
+    +'<button class="btn btn-ghost" onclick="closeMo()">'+t('cancel')+'</button>'
+    +'<button class="btn btn-primary" onclick="closeMo();_doLibLoadVendors(\''+entryId+'\')">'+t('lib_load_btn')+'</button>'
+    +'</div>');
+}
+function _doLibLoadVendors(entryId){
+  var lib = getLib();
+  var entry = lib.vendors.find(function(e){return e.id===entryId;});
+  if(!entry) return;
+  var p = proj(); if(!p) return;
+  var existingNames = (p.vendors||[]).map(function(v){return v.name.toLowerCase();});
+  var added = 0;
+  entry.vendors.forEach(function(v){
+    if(!existingNames.includes(v.name.toLowerCase())){
+      var nv = JSON.parse(JSON.stringify(v));
+      nv.id = 'v'+Date.now()+Math.random().toString(36).slice(2,6);
+      nv.payments = []; // reset payments for new project
+      p.vendors.push(nv);
+      added++;
+    }
+  });
+  saveProj(p);
+  toast(t('lib_loaded')+' ('+added+' '+(LANG==='es'?'agregados':'added')+')','s');
+  if(CTAB==='budget') renderBudget();
+}
+
+function libLoadTasks(entryId){
+  var lib = getLib();
+  var entry = lib.tasks.find(function(e){return e.id===entryId;});
+  if(!entry) return;
+  openMo('<div class="mo-title">'+t('lib_load_from')+': '+esc(entry.name)+'</div>'
+    +'<p style="font-size:13px;color:var(--muted);margin-bottom:16px">'
+    +(LANG==='es'
+      ? 'Se agregarán '+entry.tasks.length+' tarea(s). Las fechas serán borradas para que puedas ajustarlas al nuevo proyecto.'
+      : entry.tasks.length+' task(s) will be added. Dates will be cleared so you can set them for the new project.')
+    +'</p>'
+    +'<div class="mo-foot">'
+    +'<button class="btn btn-ghost" onclick="closeMo()">'+t('cancel')+'</button>'
+    +'<button class="btn btn-primary" onclick="closeMo();_doLibLoadTasks(\''+entryId+'\')">'+t('lib_load_btn')+'</button>'
+    +'</div>');
+}
+function _doLibLoadTasks(entryId){
+  var lib = getLib();
+  var entry = lib.tasks.find(function(e){return e.id===entryId;});
+  if(!entry) return;
+  var p = proj(); if(!p) return;
+  entry.tasks.forEach(function(tk){
+    var nt = JSON.parse(JSON.stringify(tk));
+    nt.id = 't'+Date.now()+Math.random().toString(36).slice(2,6);
+    nt.done = false; nt.dueDate = '';  // reset for new project
+    p.tasks.push(nt);
+  });
+  saveProj(p);
+  toast(t('lib_loaded'),'s');
+  if(CTAB==='timeline') renderTimeline();
+}
+
+function libLoadLayout(entryId){
+  var lib = getLib();
+  var entry = lib.layouts.find(function(e){return e.id===entryId;});
+  if(!entry) return;
+  openMo('<div class="mo-title">'+t('lib_load_from')+': '+esc(entry.name)+'</div>'
+    +'<p style="font-size:13px;color:var(--muted);margin-bottom:16px">'
+    +(LANG==='es'
+      ? 'Esto reemplazará el plano actual del proyecto. El plano existente se perderá.'
+      : 'This will replace the current project layout. The existing layout will be lost.')
+    +'</p>'
+    +(entry.floorplan&&entry.floorplan.img
+      ? '<label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:12px">'
+        +'<input type="checkbox" id="lib-load-floor" checked style="accent-color:var(--gold-h)">'
+        +(LANG==='es'?'Incluir imagen de plano de piso':'Include floorplan image')
+        +'</label>'
+      : '')
+    +'<div class="mo-foot">'
+    +'<button class="btn btn-ghost" onclick="closeMo()">'+t('cancel')+'</button>'
+    +'<button class="btn btn-primary" onclick="closeMo();_doLibLoadLayout(\''+entryId+'\')">'+t('lib_load_btn')+'</button>'
+    +'</div>');
+}
+function _doLibLoadLayout(entryId){
+  var lib = getLib();
+  var entry = lib.layouts.find(function(e){return e.id===entryId;});
+  if(!entry) return;
+  var p = proj(); if(!p) return;
+  p.layoutItems = JSON.parse(JSON.stringify(entry.items));
+  var incFloor = document.getElementById('lib-load-floor');
+  if(entry.floorplan && (!incFloor || incFloor.checked)){
+    LState.floorplan = JSON.parse(JSON.stringify(entry.floorplan));
+  }
+  saveProj(p);
+  toast(t('lib_loaded'),'s');
+  if(CTAB==='layout') renderLayout();
+}
+
+function libLoadTypes(type){
+  // Load all saved keys of this type into current project types
+  var lib = getLib();
+  var packs = lib[type+'_packs']||[];
+  if(!packs.length){ toast(LANG==='es'?'No hay packs guardados':'No packs saved','e'); return; }
+  // If only one pack, load it directly
+  if(packs.length===1){ _doLibLoadTypesPack(type, packs[0].id); return; }
+  // Otherwise show picker
+  openMo('<div class="mo-title">'+t('lib_load_from')+'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">'
+    +packs.map(function(pk){
+      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px">'
+        +'<div><div style="font-weight:600;font-size:13px">'+esc(pk.name)+'</div>'
+        +'<div style="font-size:11px;color:var(--muted)">'+Object.keys(pk.data).length+' '+(LANG==='es'?'tipos':'types')+' · '+pk.date+'</div></div>'
+        +'<button class="btn btn-primary btn-sm" onclick="closeMo();_doLibLoadTypesPack(\''+type+'\',\''+pk.id+'\')">'+t('lib_load_btn')+'</button>'
+        +'</div>';
+    }).join('')
+    +'</div>'
+    +'<div class="mo-foot"><button class="btn btn-ghost" onclick="closeMo()">'+t('cancel')+'</button></div>');
+}
+function libLoadTypesPack(type, packId){ _doLibLoadTypesPack(type, packId); }
+function _doLibLoadTypesPack(type, packId){
+  var lib = getLib();
+  var packs = lib[type+'_packs']||[];
+  var pack = packs.find(function(pk){return pk.id===packId;});
+  if(!pack) return;
+  var p = proj();
+  Object.entries(pack.data).forEach(function(kv){
+    var k=kv[0], v=kv[1];
+    if(type==='chairs')       CHAIR_TYPES[k] = v;
+    else if(type==='centerpieces') CENTERPIECE_TYPES[k] = v;
+    else LSHAPES_M[k] = v; // tables and elements share LSHAPES_M
+  });
+  // Persist in project
+  if(p){
+    if(type==='chairs')       { p.chairTypes=CHAIR_TYPES; }
+    else if(type==='centerpieces'){ p.centerpieceTypes=CENTERPIECE_TYPES; }
+    else                      { p.customShapes=LSHAPES_M; }
+    saveProj(p);
+  }
+  toast(t('lib_loaded'),'s');
+  if(CTAB==='layout') renderLayout();
+}
+
+function libLoadMoodboard(entryId){
+  var lib = getLib();
+  var entry = lib.moodboards.find(function(e){return e.id===entryId;});
+  if(!entry) return;
+  var totalImgs = (entry.uncategorized||[]).length
+    + (entry.folders||[]).reduce(function(s,f){return s+f.images.length;},0);
+  openMo('<div class="mo-title">'+t('lib_load_from')+': '+esc(entry.name)+'</div>'
+    +'<p style="font-size:13px;color:var(--muted);margin-bottom:16px">'
+    +(LANG==='es'
+      ? totalImgs+' imagen(es) y '+(entry.folders||[]).length+' carpeta(s) serán añadidas al moodboard actual.'
+      : totalImgs+' image(s) and '+(entry.folders||[]).length+' folder(s) will be merged into the current moodboard.')
+    +'</p>'
+    +'<div class="mo-foot">'
+    +'<button class="btn btn-ghost" onclick="closeMo()">'+t('cancel')+'</button>'
+    +'<button class="btn btn-primary" onclick="closeMo();_doLibLoadMoodboard(\''+entryId+'\')">'+t('lib_load_btn')+'</button>'
+    +'</div>');
+}
+function _doLibLoadMoodboard(entryId){
+  var lib = getLib();
+  var entry = lib.moodboards.find(function(e){return e.id===entryId;});
+  if(!entry) return;
+  var p = proj(); if(!p) return;
+  var mb = getMB(p);
+  // Merge uncategorized
+  (entry.uncategorized||[]).forEach(function(img){ mb.uncategorized.push(JSON.parse(JSON.stringify(img))); });
+  // Merge folders (append, don't overwrite)
+  (entry.folders||[]).forEach(function(f){
+    var newF = JSON.parse(JSON.stringify(f));
+    newF.id = 'f'+Date.now()+Math.random().toString(36).slice(2,6);
+    mb.folders.push(newF);
+  });
+  p.moodboard = mb;
+  saveProj(p);
+  toast(t('lib_loaded'),'s');
+  if(CTAB==='moodboard') renderMoodboard();
+}
+
+// ════════════════════════════════════════════════════════════════
+// QUICK SAVE-TO-LIBRARY BUTTONS IN PROJECT SECTIONS
+// These are small ⊕Library buttons appended to each section header
+// ════════════════════════════════════════════════════════════════
+function libQuickSaveVendors(){ if(!proj()) return; libSaveVendorsModal(proj()); }
+function libQuickSaveTasks(){   if(!proj()) return; libSaveTasksModal(proj()); }
+function libQuickSaveLayout(){  if(!proj()) return; libSaveLayoutModal(proj()); }
+function libQuickSaveMoodboard(){if(!proj()) return; libSaveMoodboardModal(proj()); }
+
+// Expose
+window.openLibrary = openLibrary;
+window.setLibTab = setLibTab;
+window.libDelete = libDelete;
+window.libSaveModal = libSaveModal;
+window.libSaveVendorsDo = libSaveVendorsDo;
+window.libSaveTasksDo = libSaveTasksDo;
+window.libSaveLayoutDo = libSaveLayoutDo;
+window.libSaveTypesDo = libSaveTypesDo;
+window.libSaveMoodboardDo = libSaveMoodboardDo;
+window.libLoadVendors = libLoadVendors;
+window.libLoadTasks = libLoadTasks;
+window.libLoadLayout = libLoadLayout;
+window.libLoadTypes = libLoadTypes;
+window.libLoadTypesPack = libLoadTypesPack;
+window.libLoadMoodboard = libLoadMoodboard;
+window.updateLibraryLabels = updateLibraryLabels;
+window.renderLibrary = renderLibrary;
 </script>
 </body>
 </html>
