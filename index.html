@@ -1371,7 +1371,6 @@ tr:hover td { background: var(--bg2); }
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em" id="ev-sort-label">Sort:</span>
           <div style="display:flex;gap:4px;flex-wrap:wrap" id="ev-sort-btns">
             <button class="tb active" onclick="setEvSort('date')" id="evsort-date">Date</button>
             <button class="tb" onclick="setEvSort('name')" id="evsort-name">Name</button>
@@ -1402,13 +1401,25 @@ tr:hover td { background: var(--bg2); }
           <h1 style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700" id="analytics-title">Analytics</h1>
           <p style="color:var(--muted);font-size:14px;margin-top:2px" id="analytics-sub">Insights across all your events</p>
         </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap" id="analytics-period-btns">
-          <button class="tb" onclick="setAnalyticsPeriod('1m')" id="ap-1m">1M</button>
-          <button class="tb active" onclick="setAnalyticsPeriod('3m')" id="ap-3m">3M</button>
-          <button class="tb" onclick="setAnalyticsPeriod('6m')" id="ap-6m">6M</button>
-          <button class="tb" onclick="setAnalyticsPeriod('1y')" id="ap-1y">1Y</button>
-          <button class="tb" onclick="setAnalyticsPeriod('thisyear')" id="ap-thisyear"></button>
-          <button class="tb" onclick="setAnalyticsPeriod('next1y')" id="ap-next1y"></button>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap" id="analytics-controls">
+          <!-- Quick presets -->
+          <div style="display:flex;gap:4px;flex-wrap:wrap" id="analytics-period-btns">
+            <button class="tb" onclick="setAnalyticsPeriod('1m')" id="ap-1m">1M</button>
+            <button class="tb" onclick="setAnalyticsPeriod('3m')" id="ap-3m">3M</button>
+            <button class="tb" onclick="setAnalyticsPeriod('6m')" id="ap-6m">6M</button>
+            <button class="tb" onclick="setAnalyticsPeriod('1y')" id="ap-1y">1Y</button>
+            <button class="tb" onclick="setAnalyticsPeriod('thisyear')" id="ap-thisyear"></button>
+            <button class="tb" onclick="setAnalyticsPeriod('next1y')" id="ap-next1y"></button>
+            <button class="tb active" onclick="setAnalyticsPeriod('alltime')" id="ap-alltime"></button>
+          </div>
+          <!-- Custom date range -->
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <input type="date" id="ap-from" class="input" style="font-size:12px;padding:4px 8px;height:30px;width:140px"
+              onchange="setAnalyticsCustomRange()">
+            <span style="color:var(--muted);font-size:12px">→</span>
+            <input type="date" id="ap-to" class="input" style="font-size:12px;padding:4px 8px;height:30px;width:140px"
+              onchange="setAnalyticsCustomRange()">
+          </div>
         </div>
       </div>
       <div id="analytics-content"></div>
@@ -1587,6 +1598,8 @@ var TRANSLATIONS = {
     'period_1y': '1 Year',
     'period_thisyear': 'This Year',
     'period_next1y': 'Next 12 mo',
+    'period_alltime': 'All Time',
+    'period_custom': 'Custom',
     'analytics_events': 'Events in Period',
     'analytics_avg_budget': 'Avg Budget',
     'analytics_avg_guests': 'Avg Guests',
@@ -1816,7 +1829,7 @@ var TRANSLATIONS = {
     'download_template': 'Download Template',
     'import_csv': 'Import CSV',
     'search_guests': 'Search guests...',
-    'sort_name': 'Sort: Name',
+    // (sort_name already defined above)
     'sort_rsvp': 'Sort: RSVP',
     'sort_table': 'Sort: Table',
     'sort_category': 'Sort: Category',
@@ -1967,6 +1980,8 @@ var TRANSLATIONS = {
     'period_1y': '1 Año',
     'period_thisyear': 'Este Año',
     'period_next1y': 'Próximos 12 m',
+    'period_alltime': 'Todo',
+    'period_custom': 'Personalizado',
     'analytics_events': 'Eventos en el Período',
     'analytics_avg_budget': 'Presupuesto Promedio',
     'analytics_avg_guests': 'Invitados Promedio',
@@ -2196,7 +2211,7 @@ var TRANSLATIONS = {
     'download_template': 'Descargar Plantilla',
     'import_csv': 'Importar CSV',
     'search_guests': 'Buscar invitados...',
-    'sort_name': 'Ordenar: Nombre',
+    // (sort_name already defined above)
     'sort_rsvp': 'Ordenar: RSVP',
     'sort_table': 'Ordenar: Mesa',
     'sort_category': 'Ordenar: Categoría',
@@ -2846,7 +2861,6 @@ function renderEvents(){
   // Update sort btn labels with current lang
   const sortKeys={date:'sort_date',name:'sort_name',type:'sort_type',location:'sort_location',budget:'sort_budget'};
   Object.entries(sortKeys).forEach(([k,tk])=>{const b=document.getElementById('evsort-'+k);if(b)b.textContent=t(tk);});
-  const sortLbl=document.getElementById('ev-sort-label');if(sortLbl)sortLbl.textContent=t('sort_by')+':';
 
   let list=Object.values(uproj());
   // Sort
@@ -8617,18 +8631,47 @@ window.SCI={};
 // ══════════════════════════════════════════════════════════
 // ANALYTICS
 // ══════════════════════════════════════════════════════════
-var _analyticsPeriod = '3m';
+var _analyticsPeriod = 'alltime';
+var _analyticsFrom = null;  // custom override (Date or null)
+var _analyticsTo   = null;
 
 function setAnalyticsPeriod(p){
   _analyticsPeriod = p;
+  _analyticsFrom = null;
+  _analyticsTo   = null;
+  // Sync date inputs to preset range
+  const range = getAnalyticsPeriodRange(p);
+  const fromEl = document.getElementById('ap-from');
+  const toEl   = document.getElementById('ap-to');
+  if(fromEl && range.from) fromEl.value = range.from.toISOString().slice(0,10);
+  if(toEl   && range.to)   toEl.value   = range.to.toISOString().slice(0,10);
+  // Highlight preset, clear dates for alltime
   document.querySelectorAll('[id^="ap-"]').forEach(b=>b.classList.remove('active'));
   const btn = document.getElementById('ap-'+p);
   if(btn) btn.classList.add('active');
   renderAnalytics();
 }
 
+function setAnalyticsCustomRange(){
+  const fromVal = (document.getElementById('ap-from')||{}).value;
+  const toVal   = (document.getElementById('ap-to')||{}).value;
+  if(!fromVal && !toVal) return;
+  _analyticsPeriod = 'custom';
+  _analyticsFrom = fromVal ? new Date(fromVal+'T00:00:00') : null;
+  _analyticsTo   = toVal   ? new Date(toVal  +'T23:59:59') : null;
+  // Deactivate all preset buttons
+  document.querySelectorAll('[id^="ap-"]').forEach(b=>b.classList.remove('active'));
+  renderAnalytics();
+}
+
 function getAnalyticsPeriodRange(period){
   const now = new Date(); now.setHours(0,0,0,0);
+  const farPast  = new Date('1900-01-01');
+  const farFuture= new Date('2100-12-31');
+  if(period==='custom'){
+    return { from: _analyticsFrom||farPast, to: _analyticsTo||farFuture };
+  }
+  if(period==='alltime') return { from: farPast, to: farFuture };
   let from, to;
   if(period==='1m'){ from=new Date(now); from.setMonth(from.getMonth()-1); to=new Date(now); }
   else if(period==='3m'){ from=new Date(now); from.setMonth(from.getMonth()-3); to=new Date(now); }
@@ -8636,21 +8679,34 @@ function getAnalyticsPeriodRange(period){
   else if(period==='1y'){ from=new Date(now); from.setFullYear(from.getFullYear()-1); to=new Date(now); }
   else if(period==='thisyear'){ from=new Date(now.getFullYear(),0,1); to=new Date(now.getFullYear(),11,31); }
   else if(period==='next1y'){ from=new Date(now); to=new Date(now); to.setFullYear(to.getFullYear()+1); }
+  else { from=farPast; to=farFuture; } // fallback = all time
   return { from, to };
 }
 
 function renderAnalytics(){
   const allProjects = Object.values(uproj());
   const { from, to } = getAnalyticsPeriodRange(_analyticsPeriod);
+  const isAllTime = (_analyticsPeriod==='alltime');
   const inPeriod = allProjects.filter(p=>{
-    if(!p.date) return false;
+    if(!p.date) return isAllTime; // projects without a date only included in alltime
     const d = new Date(p.date); d.setHours(0,0,0,0);
     return d >= from && d <= to;
   });
 
   // Update period button labels
-  const periodLabels = {'1m':t('period_1m'),'3m':t('period_3m'),'6m':t('period_6m'),'1y':t('period_1y'),'thisyear':t('period_thisyear'),'next1y':t('period_next1y')};
+  const periodLabels = {'1m':t('period_1m'),'3m':t('period_3m'),'6m':t('period_6m'),'1y':t('period_1y'),'thisyear':t('period_thisyear'),'next1y':t('period_next1y'),'alltime':t('period_alltime')};
   Object.entries(periodLabels).forEach(([k,v])=>{const b=document.getElementById('ap-'+k);if(b)b.textContent=v;});
+  // Sync date inputs if using a preset (not custom)
+  if(_analyticsPeriod!=='custom'){
+    const fromEl=document.getElementById('ap-from'); const toEl=document.getElementById('ap-to');
+    if(_analyticsPeriod==='alltime'){
+      if(fromEl)fromEl.value=''; if(toEl)toEl.value='';
+    } else {
+      const r=getAnalyticsPeriodRange(_analyticsPeriod);
+      if(fromEl&&r.from)fromEl.value=r.from.toISOString().slice(0,10);
+      if(toEl&&r.to)toEl.value=r.to.toISOString().slice(0,10);
+    }
+  }
 
   // Update page titles
   const title=document.getElementById('analytics-title');if(title)title.textContent=t('analytics_title');
