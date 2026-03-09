@@ -352,6 +352,15 @@ h1, h2, h3 { font-family: 'Cormorant Garamond', serif; font-weight: 600; line-he
 
 /* ─── EVENTS GRID ────────────────────────────── */
 .evgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px,1fr)); gap: 22px; }
+.evgrid.ev-list { grid-template-columns: 1fr; gap: 0; border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
+.evgrid.ev-list .evc { border-radius: 0; border: none; border-bottom: 1px solid var(--border); transform: none !important; box-shadow: none !important; }
+.evgrid.ev-list .evc:last-child { border-bottom: none; }
+.evgrid.ev-list .evc:hover { background: var(--bg2); }
+.evgrid.ev-list .evc-top { display: none; }
+.evgrid.ev-list .evc-body { padding: 12px 18px; display: flex; align-items: center; gap: 16px; }
+.evgrid.ev-list .evc-body .ev-list-main { flex: 1; min-width: 0; }
+.evgrid.ev-list .evc-body .ev-list-rows { display: flex; gap: 20px; flex-wrap: wrap; }
+.evgrid.ev-list .evc-foot { border-top: none; padding: 8px 18px 12px; }
 
 .evc {
   background: var(--card);
@@ -1341,6 +1350,7 @@ tr:hover td { background: var(--bg2); }
           </div>
         </div>
         <div class="umenu-item" data-i18n="my_events" onclick="showPage('events');closeMenu()">📋 My Events</div>
+        <div class="umenu-item" onclick="showPage('analytics');closeMenu()">📊 <span id="analytics-menu-label">Analytics</span></div>
         <div class="umenu-item" data-i18n="sign_out" style="color:var(--danger);border-top:1px solid var(--border)" onclick="doLogout()">🚪 Sign Out</div>
       </div>
     </div>
@@ -1359,7 +1369,49 @@ tr:hover td { background: var(--bg2); }
           <span data-i18n="create_event">New Event</span>
         </button>
       </div>
-      <div class="evgrid" id="evgrid"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em" id="ev-sort-label">Sort:</span>
+          <div style="display:flex;gap:4px;flex-wrap:wrap" id="ev-sort-btns">
+            <button class="tb active" onclick="setEvSort('date')" id="evsort-date">Date</button>
+            <button class="tb" onclick="setEvSort('name')" id="evsort-name">Name</button>
+            <button class="tb" onclick="setEvSort('type')" id="evsort-type">Type</button>
+            <button class="tb" onclick="setEvSort('location')" id="evsort-location">Location</button>
+            <button class="tb" onclick="setEvSort('budget')" id="evsort-budget">Budget</button>
+          </div>
+          <button class="tb" id="ev-sort-dir" onclick="toggleEvSortDir()" style="min-width:28px">↑</button>
+        </div>
+        <div style="display:flex;gap:4px">
+          <button class="tb active" id="ev-view-grid" onclick="setEvView('grid')" title="Grid view">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          </button>
+          <button class="tb" id="ev-view-list" onclick="setEvView('list')" title="List view">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+          </button>
+        </div>
+      </div>
+      <div id="evgrid"></div>
+    </div>
+  </div>
+
+  <!-- ANALYTICS PAGE -->
+  <div id="pg-analytics" class="hidden">
+    <div style="max-width:1200px;margin:0 auto;padding:32px 24px;width:100%">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px">
+        <div>
+          <h1 style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700" id="analytics-title">Analytics</h1>
+          <p style="color:var(--muted);font-size:14px;margin-top:2px" id="analytics-sub">Insights across all your events</p>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap" id="analytics-period-btns">
+          <button class="tb" onclick="setAnalyticsPeriod('1m')" id="ap-1m">1M</button>
+          <button class="tb active" onclick="setAnalyticsPeriod('3m')" id="ap-3m">3M</button>
+          <button class="tb" onclick="setAnalyticsPeriod('6m')" id="ap-6m">6M</button>
+          <button class="tb" onclick="setAnalyticsPeriod('1y')" id="ap-1y">1Y</button>
+          <button class="tb" onclick="setAnalyticsPeriod('thisyear')" id="ap-thisyear"></button>
+          <button class="tb" onclick="setAnalyticsPeriod('next1y')" id="ap-next1y"></button>
+        </div>
+      </div>
+      <div id="analytics-content"></div>
     </div>
   </div>
 
@@ -1375,6 +1427,12 @@ tr:hover td { background: var(--bg2); }
           <div style="font-weight:700;font-size:15px" id="pnav-name">Project</div>
           <div style="font-size:11px;color:var(--muted)" id="pnav-type">Type</div>
         </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-left:auto;padding-right:8px">
+        <button class="btn btn-ghost btn-sm" onclick="openExportPDFModal()" title="Export Presentation PDF" style="display:flex;align-items:center;gap:5px;font-size:11px">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+          <span id="export-pdf-btn-lbl">Export PDF</span>
+        </button>
       </div>
       <div class="ptabs" id="ptabs">
         <button class="ptab active" data-tab="dashboard" onclick="switchTab('dashboard')">
@@ -1505,6 +1563,47 @@ var TRANSLATIONS = {
     'today': 'Today!',
     'budget_progress': 'Budget Progress',
     'tasks_completed': 'Tasks Completed',
+    'event_total_budget': 'Total Event Budget',
+    'approved_budget': 'Approved budget',
+    'estimated_cost': 'Estimated Cost (All Vendors)',
+    'of_approved': 'of approved',
+    'actual_paid': 'Actual Paid',
+    'budget_variance': 'Budget Variance',
+    'under_budget': '✓ Under Budget',
+    'over_budget': '⚠ Over Budget',
+    'sort_by': 'Sort',
+    'sort_name': 'Name',
+    'sort_date': 'Date',
+    'sort_type': 'Type',
+    'sort_location': 'Location',
+    'sort_budget': 'Budget',
+    'view_grid': 'Grid',
+    'view_list': 'List',
+    'analytics_title': 'Analytics',
+    'analytics_sub': 'Insights across all your events',
+    'period_1m': '1 Month',
+    'period_3m': '3 Months',
+    'period_6m': '6 Months',
+    'period_1y': '1 Year',
+    'period_thisyear': 'This Year',
+    'period_next1y': 'Next 12 mo',
+    'analytics_events': 'Events in Period',
+    'analytics_avg_budget': 'Avg Budget',
+    'analytics_avg_guests': 'Avg Guests',
+    'analytics_top_vendors': 'Top Vendor Categories',
+    'analytics_by_type': 'Events by Type',
+    'analytics_by_status': 'Events by Status',
+    'analytics_timeline': 'Event Timeline',
+    'analytics_no_data': 'No events in this period',
+    'export_pdf_title': 'Export Presentation PDF',
+    'export_pdf_select': 'Select sections to include:',
+    'export_pdf_generate': 'Generate PDF',
+    'export_pdf_cancel': 'Cancel',
+    'section_dashboard': 'Overview & Details',
+    'section_budget': 'Budget Summary',
+    'section_timeline': 'Task Timeline',
+    'section_guests': 'Guest List',
+    'section_moodboard': 'Moodboard',
     'guests_confirmed': 'Guests Confirmed',
     'vendors_hired': 'Vendors Hired',
     'budget_label': 'Budget',
@@ -1844,6 +1943,47 @@ var TRANSLATIONS = {
     'today': '¡Hoy!',
     'budget_progress': 'Avance del Presupuesto',
     'tasks_completed': 'Tareas Completadas',
+    'event_total_budget': 'Presupuesto Total del Evento',
+    'approved_budget': 'Presupuesto aprobado',
+    'estimated_cost': 'Costo Estimado (Todos los Proveedores)',
+    'of_approved': 'del aprobado',
+    'actual_paid': 'Pagado Real',
+    'budget_variance': 'Variación de Presupuesto',
+    'under_budget': '✓ Bajo Presupuesto',
+    'over_budget': '⚠ Sobre Presupuesto',
+    'sort_by': 'Ordenar',
+    'sort_name': 'Nombre',
+    'sort_date': 'Fecha',
+    'sort_type': 'Tipo',
+    'sort_location': 'Ubicación',
+    'sort_budget': 'Presupuesto',
+    'view_grid': 'Cuadrícula',
+    'view_list': 'Lista',
+    'analytics_title': 'Analítica',
+    'analytics_sub': 'Resumen de todos tus eventos',
+    'period_1m': '1 Mes',
+    'period_3m': '3 Meses',
+    'period_6m': '6 Meses',
+    'period_1y': '1 Año',
+    'period_thisyear': 'Este Año',
+    'period_next1y': 'Próximos 12 m',
+    'analytics_events': 'Eventos en el Período',
+    'analytics_avg_budget': 'Presupuesto Promedio',
+    'analytics_avg_guests': 'Invitados Promedio',
+    'analytics_top_vendors': 'Categorías de Proveedores Más Usadas',
+    'analytics_by_type': 'Eventos por Tipo',
+    'analytics_by_status': 'Eventos por Estado',
+    'analytics_timeline': 'Línea de Tiempo de Eventos',
+    'analytics_no_data': 'Sin eventos en este período',
+    'export_pdf_title': 'Exportar Presentación PDF',
+    'export_pdf_select': 'Seleccionar secciones a incluir:',
+    'export_pdf_generate': 'Generar PDF',
+    'export_pdf_cancel': 'Cancelar',
+    'section_dashboard': 'Resumen y Detalles',
+    'section_budget': 'Resumen de Presupuesto',
+    'section_timeline': 'Cronograma de Tareas',
+    'section_guests': 'Lista de Invitados',
+    'section_moodboard': 'Tablero de Inspiración',
     'guests_confirmed': 'Invitados Confirmados',
     'vendors_hired': 'Proveedores Contratados',
     'budget_label': 'Presupuesto',
@@ -2208,6 +2348,7 @@ function applyTranslations(){
   if(page){
     const pid = page.id;
     if(pid==='pg-events') renderEvents();
+    else if(pid==='pg-analytics') renderAnalytics();
     else if(pid==='pg-project'){
       renderPNav();
       const tabs = ['dashboard','budget','timeline','guests','layout','moodboard'];
@@ -2232,7 +2373,7 @@ function applyTranslations(){
   });
   // Update Back to Events link
   const backBtn = document.querySelector('[data-i18n="back_to_events"]');
-  if(backBtn) backBtn.textContent = '← '+t('back_to_events');
+  if(backBtn) backBtn.textContent = t('back_to_events');
   // Update My Events / Sign Out in user menu
   document.querySelectorAll('.umenu-item').forEach(el=>{
     if(el.dataset.i18n) el.textContent = t(el.dataset.i18n);
@@ -2535,10 +2676,14 @@ document.addEventListener('click',e=>{ if(!e.target.closest('#upill')&&!e.target
 // PAGES
 // ══════════════════════════════════════════
 function showPage(p){
-  document.getElementById('pg-events').classList.add('hidden');
-  document.getElementById('pg-project').classList.add('hidden');
-  if(p==='events'){ document.getElementById('pg-events').classList.remove('hidden'); renderEvents(); }
-  else if(p==='project'){ document.getElementById('pg-project').classList.remove('hidden'); renderPNav(); switchTab('dashboard'); }
+  ['pg-events','pg-project','pg-analytics'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.classList.add('hidden');
+  });
+  const pg=document.getElementById('pg-'+p);if(pg)pg.classList.remove('hidden');
+  const snb=document.getElementById('share-nav-btn');if(snb)snb.style.display=p==='project'?'':'none';
+  if(p==='events') renderEvents();
+  else if(p==='project'){ renderPNav(); switchTab('dashboard'); }
+  else if(p==='analytics') renderAnalytics();
 }
 function openProject(id){ CID=id; showPage('project'); }
 
@@ -2680,58 +2825,124 @@ function defaultTasks(){
 // ══════════════════════════════════════════
 // EVENTS LIST
 // ══════════════════════════════════════════
+var _evSort='date', _evSortDir=1, _evView='grid';
+function setEvSort(s){
+  if(_evSort===s){ _evSortDir*=-1; }
+  else{ _evSort=s; _evSortDir=1; }
+  document.querySelectorAll('[id^="evsort-"]').forEach(b=>b.classList.remove('active'));
+  const sb=document.getElementById('evsort-'+s);if(sb)sb.classList.add('active');
+  const dirBtn=document.getElementById('ev-sort-dir');
+  if(dirBtn) dirBtn.textContent=_evSortDir===1?'↑':'↓';
+  renderEvents();
+}
+function toggleEvSortDir(){ _evSortDir*=-1; const b=document.getElementById('ev-sort-dir');if(b)b.textContent=_evSortDir===1?'↑':'↓'; renderEvents(); }
+function setEvView(v){
+  _evView=v;
+  document.getElementById('ev-view-grid').classList.toggle('active',v==='grid');
+  document.getElementById('ev-view-list').classList.toggle('active',v==='list');
+  renderEvents();
+}
 function renderEvents(){
-  const list=Object.values(uproj());
+  // Update sort btn labels with current lang
+  const sortKeys={date:'sort_date',name:'sort_name',type:'sort_type',location:'sort_location',budget:'sort_budget'};
+  Object.entries(sortKeys).forEach(([k,tk])=>{const b=document.getElementById('evsort-'+k);if(b)b.textContent=t(tk);});
+  const sortLbl=document.getElementById('ev-sort-label');if(sortLbl)sortLbl.textContent=t('sort_by')+':';
+
+  let list=Object.values(uproj());
+  // Sort
+  list.sort((a,b)=>{
+    let av,bv;
+    if(_evSort==='name'){ av=(a.name||'').toLowerCase(); bv=(b.name||'').toLowerCase(); }
+    else if(_evSort==='date'){ av=a.date||''; bv=b.date||''; }
+    else if(_evSort==='type'){ av=(a.type||'').toLowerCase(); bv=(b.type||'').toLowerCase(); }
+    else if(_evSort==='location'){ av=(a.location||'').toLowerCase(); bv=(b.location||'').toLowerCase(); }
+    else if(_evSort==='budget'){ av=Number(a.budget||0); bv=Number(b.budget||0); }
+    else { av=a.name||''; bv=b.name||''; }
+    if(av<bv)return -1*_evSortDir; if(av>bv)return 1*_evSortDir; return 0;
+  });
+
   const g=document.getElementById('evgrid');
+  // Toggle list/grid class
+  g.className=_evView==='list'?'evgrid ev-list':'evgrid';
+
   if(!list.length){
     g.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:60px;color:var(--muted)">
       <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 12px;display:block;color:var(--light)"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-      <p style="font-size:16px;font-weight:600;margin-bottom:6px">No events yet</p>
-      <p style="font-size:13px">Create your first event to get started</p>
+      <p style="font-size:16px;font-weight:600;margin-bottom:6px">${LANG==='es'?'Sin eventos aún':'No events yet'}</p>
+      <p style="font-size:13px">${LANG==='es'?'Crea tu primer evento para comenzar':'Create your first event to get started'}</p>
     </div>`;return;
   }
   const tc={social:'b-pink',corporate:'b-blue',community:'b-green',government:'b-orange',education:'b-purple'};
   const tl={social:t('type_social'),corporate:t('type_corporate'),community:t('type_community'),government:t('type_government'),education:t('type_education')};
-  g.innerHTML=list.map(p=>{
-    const da=daysAway(p.date); const isPast=da<0;
-    const dLabel=da===0?t('today'):da>0?`${da} ${t('days_away')}`:`${Math.abs(da)} ${t('days_away')}`;
-    return `<div class="evc fade-in" onclick="openProject('${p.id}')">
-      <div class="evc-top"></div>
-      <div class="evc-body">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px">
-          <div>
-            <div style="font-size:17px;font-weight:700">${p.name}</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:2px">${p.description||''}</div>
+  if(_evView==='list'){
+    g.innerHTML=list.map(p=>{
+      const da=daysAway(p.date); const isPast=da<0;
+      const dLabel=da===0?t('today'):da>0?`${da} ${t('days_away')}`:`${Math.abs(da)} ${t('days_ago')}`;
+      return `<div class="evc fade-in" onclick="openProject('${p.id}')">
+        <div class="evc-body">
+          <div class="ev-list-main">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+              <div style="font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px">${p.name}</div>
+              <span class="badge ${tc[p.type]||'b-gray'}">${tl[p.type]||p.type}</span>
+            </div>
+            <div style="font-size:11px;color:var(--muted)">${p.clientName}</div>
           </div>
-          <span class="badge ${tc[p.type]||'b-gray'}">${tl[p.type]||p.type}</span>
-        </div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:14px">${t('client')}: <span style="color:var(--text);font-weight:500">${p.clientName}</span></div>
-        ${evcRow('#f7f0de','#a8862e','<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',t('event_date'),fmtDate(p.date))}
-        ${evcRow('#f0fdf4','#10b981','<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7Z"/><circle cx="12" cy="9" r="2.5"/>',t('location'),p.location||'TBD')}
-        ${evcRow('#fdf4e0','#b8861a','<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',t('total_budget'),fmtMoney(p.budget))}
-      </div>
-      <div class="evc-foot">
-        <span style="font-size:12px;font-weight:600;text-transform:capitalize;color:var(--muted)">${t('status_'+p.status.replace('-','_'))||p.status}</span>
-        <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:12px;font-weight:600;color:${isPast?'var(--light)':'var(--accent)'}">${dLabel}</span>
-          <div style="display:flex;gap:6px" onclick="event.stopPropagation()">
-            <button class="btn btn-ghost btn-sm btn-icon" title="Share / Permissions" onclick="openShareForProject('${p.id}')" style="color:var(--gold-h);border-color:rgba(201,168,76,.3)">
-              <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-            </button>
-            <button class="btn btn-ghost btn-sm btn-icon" title="Duplicate" onclick="dupProj('${p.id}')">
-              <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            </button>
-            <button class="btn btn-ghost btn-sm btn-icon" title="Edit" onclick="openEventModal('${p.id}')">
-              <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg>
-            </button>
-            <button class="btn btn-danger btn-sm btn-icon" title="Delete" onclick="confirmDelProj('${p.id}')">
-              <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg>
-            </button>
+          <div class="ev-list-rows">
+            <div style="font-size:12px;white-space:nowrap"><span style="color:var(--light);font-size:10px;display:block;text-transform:uppercase;letter-spacing:.4px">${t('event_date')}</span>${fmtDate(p.date)}</div>
+            <div style="font-size:12px;white-space:nowrap"><span style="color:var(--light);font-size:10px;display:block;text-transform:uppercase;letter-spacing:.4px">${t('location')}</span>${p.location||'TBD'}</div>
+            <div style="font-size:12px;white-space:nowrap"><span style="color:var(--light);font-size:10px;display:block;text-transform:uppercase;letter-spacing:.4px">${t('total_budget')}</span>${fmtMoney(p.budget)}</div>
+            <div style="font-size:12px;white-space:nowrap"><span style="color:var(--light);font-size:10px;display:block;text-transform:uppercase;letter-spacing:.4px">${t('status')}</span>${t('status_'+p.status.replace('-','_'))||p.status}</div>
+          </div>
+          <div style="flex-shrink:0;display:flex;gap:5px;align-items:center" onclick="event.stopPropagation()">
+            <span style="font-size:11px;font-weight:600;color:${isPast?'var(--light)':'var(--accent)'};white-space:nowrap;margin-right:6px">${dLabel}</span>
+            <button class="btn btn-ghost btn-sm btn-icon" title="Edit" onclick="openEventModal('${p.id}')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>
+            <button class="btn btn-danger btn-sm btn-icon" title="Delete" onclick="confirmDelProj('${p.id}')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>
           </div>
         </div>
-      </div>
-    </div>`;
-  }).join('');
+      </div>`;
+    }).join('');
+  } else {
+    g.innerHTML=list.map(p=>{
+      const da=daysAway(p.date); const isPast=da<0;
+      const dLabel=da===0?t('today'):da>0?`${da} ${t('days_away')}`:`${Math.abs(da)} ${t('days_ago')}`;
+      return `<div class="evc fade-in" onclick="openProject('${p.id}')">
+        <div class="evc-top"></div>
+        <div class="evc-body">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px">
+            <div>
+              <div style="font-size:17px;font-weight:700">${p.name}</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px">${p.description||''}</div>
+            </div>
+            <span class="badge ${tc[p.type]||'b-gray'}">${tl[p.type]||p.type}</span>
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:14px">${t('client')}: <span style="color:var(--text);font-weight:500">${p.clientName}</span></div>
+          ${evcRow('#f7f0de','#a8862e','<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',t('event_date'),fmtDate(p.date))}
+          ${evcRow('#f0fdf4','#10b981','<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7Z"/><circle cx="12" cy="9" r="2.5"/>',t('location'),p.location||'TBD')}
+          ${evcRow('#fdf4e0','#b8861a','<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',t('total_budget'),fmtMoney(p.budget))}
+        </div>
+        <div class="evc-foot">
+          <span style="font-size:12px;font-weight:600;text-transform:capitalize;color:var(--muted)">${t('status_'+p.status.replace('-','_'))||p.status}</span>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:12px;font-weight:600;color:${isPast?'var(--light)':'var(--accent)'}">${dLabel}</span>
+            <div style="display:flex;gap:6px" onclick="event.stopPropagation()">
+              <button class="btn btn-ghost btn-sm btn-icon" title="Share" onclick="openShareForProject('${p.id}')" style="color:var(--gold-h);border-color:rgba(201,168,76,.3)">
+                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+              </button>
+              <button class="btn btn-ghost btn-sm btn-icon" title="Duplicate" onclick="dupProj('${p.id}')">
+                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+              <button class="btn btn-ghost btn-sm btn-icon" title="Edit" onclick="openEventModal('${p.id}')">
+                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg>
+              </button>
+              <button class="btn btn-danger btn-sm btn-icon" title="Delete" onclick="confirmDelProj('${p.id}')">
+                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
 }
 function evcRow(bg,clr,icon,lbl,val){return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bg)">
   <div style="width:28px;height:28px;border-radius:8px;background:${bg};display:flex;align-items:center;justify-content:center;flex-shrink:0">
@@ -2796,10 +3007,24 @@ function renderDash(){
   const dl=daysAway(p.date);
   el.innerHTML=`
   <div style="background:#fff;border-radius:var(--r-lg);padding:28px 32px;border:1px solid var(--border);margin-bottom:24px;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:14px">
-    <div>
+    <div style="flex:1;min-width:200px">
       <div style="font-family:'Cormorant Garamond',serif;font-size:32px;font-weight:700;color:var(--gold-h)">${p.name}</div>
       <div style="color:var(--muted);font-size:14px;margin-top:4px">${p.description||''}</div>
       <div style="font-size:13px;color:var(--muted);margin-top:8px">${t('client')}: <span style="color:var(--text);font-weight:600">${p.clientName}</span></div>
+      <div style="margin-top:16px;display:flex;flex-direction:column;gap:10px;max-width:380px">
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px">
+            <span>${t('tasks_completed')}</span><span style="font-weight:600;color:var(--purple)">${done}/${p.tasks.length} (${tpct}%)</span>
+          </div>
+          <div class="prog"><div class="prog-f" style="width:${tpct}%;background:#7c3aed"></div></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px">
+            <span>${t('budget_used')}</span><span style="font-weight:600;color:var(--danger)">${fmtMoney(paid)} / ${fmtMoney(tb)} (${pct}%)</span>
+          </div>
+          <div class="prog"><div class="prog-f" style="width:${pct}%;background:${pct>90?'var(--danger)':pct>70?'#f59e0b':'var(--success)'}"></div></div>
+        </div>
+      </div>
     </div>
     <button class="btn btn-primary" onclick="openEventModal('${p.id}')">
       <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg>${t('edit_event')}
@@ -2858,8 +3083,14 @@ function renderBudget(){
   if(!p.vendors||p.vendors.length===0){p.vendors=defaultVendors();saveProj(p);}
   const hired=p.vendors.filter(v=>v.hired);
   const comp=p.vendors.filter(v=>!v.hired);
+  const allVendors = p.vendors;
+  const estimatedTotal = allVendors.reduce((s,v)=>s+Number(v.budget),0);
   const tb=hired.reduce((s,v)=>s+Number(v.budget),0);
   const paid=hired.reduce((s,v)=>s+v.payments.reduce((a,pay)=>a+Number(pay.amount),0),0);
+  const projBudget = p.budget||0;
+  const diff = projBudget - estimatedTotal;
+  const diffClr = diff>=0?'var(--success)':'var(--danger)';
+  const budgetPct = projBudget>0?Math.min(100,Math.round(estimatedTotal/projBudget*100)):0;
   el.innerHTML=`
   <div class="sh">
     <div><div class="sh-title" style="color:#f59e0b">${t('budget_management_title')}</div>
@@ -2867,6 +3098,31 @@ function renderBudget(){
     <button class="btn btn-primary" onclick="openVendorModal()">
       <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>${t('add_vendor')}
     </button>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:20px">
+    <div class="card" style="padding:18px">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--light);font-weight:600;margin-bottom:6px">${t('event_total_budget')}</div>
+      <div style="font-size:22px;font-weight:700;color:var(--gold-h)">${fmtMoney(projBudget)}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">${t('approved_budget')}</div>
+    </div>
+    <div class="card" style="padding:18px">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--light);font-weight:600;margin-bottom:6px">${t('estimated_cost')}</div>
+      <div style="font-size:22px;font-weight:700;color:#f59e0b">${fmtMoney(estimatedTotal)}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">
+        <div class="prog" style="margin-bottom:2px"><div class="prog-f" style="width:${budgetPct}%;background:${budgetPct>100?'var(--danger)':'#f59e0b'}"></div></div>
+        ${budgetPct}% ${t('of_approved')}
+      </div>
+    </div>
+    <div class="card" style="padding:18px">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--light);font-weight:600;margin-bottom:6px">${t('actual_paid')}</div>
+      <div style="font-size:22px;font-weight:700;color:var(--success)">${fmtMoney(paid)}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">${t('balance_label')}: ${fmtMoney(tb-paid)}</div>
+    </div>
+    <div class="card" style="padding:18px">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--light);font-weight:600;margin-bottom:6px">${t('budget_variance')}</div>
+      <div style="font-size:22px;font-weight:700;color:${diffClr}">${diff>=0?'+':''}${fmtMoney(diff)}</div>
+      <div style="font-size:11px;color:${diffClr};margin-top:2px;font-weight:600">${diff>=0?t('under_budget'):t('over_budget')}</div>
+    </div>
   </div>
   <div class="tbar">
     <button class="tb ${bTab==='hired'?'active':''}" onclick="bTab='hired';renderBudget()">${t('hired_vendors')} (${hired.length})</button>
@@ -7732,14 +7988,42 @@ var _aiPanelOpen = false;
 var _aiCurrentAction = null; // currently running action key
 var _aiPreviewData = null;   // data pending user approval
 
-var AI_ACTIONS = [
-  { key:'dashboard',  icon:'📋', label:'Fill Event Details',     sub:'Generate description, type & key info from a brief',    section:'dashboard' },
-  { key:'budget',     icon:'💰', label:'Suggest Budget',         sub:'Estimate vendor costs for your event type & size',      section:'budget'    },
-  { key:'timeline',   icon:'📅', label:'Generate Timeline',      sub:'Build a task checklist tailored to your event',         section:'timeline'  },
-  { key:'guests',     icon:'👥', label:'Assign Seating',         sub:'Suggest table assignments from your guest list',        section:'guests'    },
-  { key:'layout',     icon:'🏛', label:'Design Room Layout',     sub:'Get a layout plan with item suggestions',               section:'layout'    },
-  { key:'moodboard',  icon:'🎨', label:'Suggest Theme & Palette',sub:'Get a color palette and mood direction for your event', section:'moodboard' },
-];
+function getAIActions(){
+  var isES = (typeof LANG!=='undefined' && LANG==='es');
+  return [
+    { key:'dashboard',  icon:'📋',
+      label: isES?'Completar Detalles':'Fill Event Details',
+      sub:   isES?'Genera descripción, tipo y datos clave con un resumen breve':'Generate description, type & key info from a brief',
+      prompt:isES?'Describe el evento brevemente y llenaré los detalles.':'Describe the event in a few words and I\'ll fill in the details.',
+      section:'dashboard' },
+    { key:'budget',     icon:'💰',
+      label: isES?'Sugerir Presupuesto':'Suggest Budget',
+      sub:   isES?'Estima costos de proveedores para tu tipo y tamaño de evento':'Estimate vendor costs for your event type & size',
+      prompt:isES?'¿Cuántos invitados se esperan? Estimaré los costos de proveedores.':'How many guests are expected? I\'ll estimate vendor costs.',
+      section:'budget' },
+    { key:'timeline',   icon:'📅',
+      label: isES?'Generar Cronograma':'Generate Timeline',
+      sub:   isES?'Construye una lista de tareas adaptada a tu evento':'Build a task checklist tailored to your event',
+      prompt:isES?'¿Cuándo es el evento? Construiré un cronograma completo de tareas.':'When is the event? I\'ll build a full task timeline.',
+      section:'timeline' },
+    { key:'guests',     icon:'👥',
+      label: isES?'Asignar Lugares':'Assign Seating',
+      sub:   isES?'Sugiere asignaciones de mesa basadas en tu lista de invitados':'Suggest table assignments from your guest list',
+      prompt:isES?'Sugeriré asignaciones de mesa basadas en tu lista de invitados actual.':'I\'ll suggest table assignments based on your current guest list.',
+      section:'guests' },
+    { key:'layout',     icon:'🏛',
+      label: isES?'Diseñar Distribución':'Design Room Layout',
+      sub:   isES?'Obtén un plano de distribución con sugerencias de elementos':'Get a layout plan with item suggestions',
+      prompt:isES?'¿Qué tipo de espacio? (salón de fiestas, exterior, oficina, etc.)':'What type of space? (ballroom, outdoor, office, etc.)',
+      section:'layout' },
+    { key:'moodboard',  icon:'🎨',
+      label: isES?'Sugerir Tema y Paleta':'Suggest Theme & Palette',
+      sub:   isES?'Obtén una paleta de colores y dirección de estilo para tu evento':'Get a color palette and mood direction for your event',
+      prompt:isES?'¿Cuál es el estilo o ambiente que buscas?':'What\'s the vibe or style you\'re going for?',
+      section:'moodboard' },
+  ];
+}
+var AI_ACTIONS = getAIActions();
 
 function toggleAIPanel(){
   if(_aiPanelOpen) closeAIPanel();
@@ -7779,7 +8063,7 @@ function renderAIHome(){
         '<span style="color:var(--gold-h);font-weight:600">'+esc(p.name)+'</span>'+
         '<span style="color:var(--muted)">· '+esc(p.type||'event')+'</span>';
     } else {
-      bar.innerHTML = '<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg> Open a project to enable AI assistance';
+      bar.innerHTML = '<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg> '+(LANG==='es'?'Abre un proyecto para habilitar la asistencia AI':'Open a project to enable AI assistance');
     }
   }
 
@@ -7789,13 +8073,14 @@ function renderAIHome(){
   if(!p){
     body.innerHTML = '<div style="padding:30px 16px;text-align:center;color:var(--muted)">'+
       '<div style="font-size:32px;margin-bottom:10px">✦</div>'+
-      '<div style="font-size:13px;font-weight:600;margin-bottom:6px">No project open</div>'+
-      '<div style="font-size:12px;line-height:1.5">Open a project first, then the AI can help fill in details, build timelines, suggest budgets, and more.</div>'+
+      '<div style="font-size:13px;font-weight:600;margin-bottom:6px">'+(LANG==='es'?'Ningún proyecto abierto':'No project open')+'</div>'+
+      '<div style="font-size:12px;line-height:1.5">'+(LANG==='es'?'Abre un proyecto primero, luego la IA puede ayudarte a llenar detalles, crear cronogramas, sugerir presupuestos y más.':'Open a project first, then the AI can help fill in details, build timelines, suggest budgets, and more.')+'</div>'+
     '</div>';
     if(inputRow) inputRow.style.display = 'none';
     return;
   }
 
+  AI_ACTIONS = getAIActions();
   body.innerHTML = AI_ACTIONS.map(function(a){
     return '<button class="ai-action-btn" onclick="startAIAction(\''+a.key+'\')">'+
       '<div class="ai-action-icon">'+a.icon+'</div>'+
@@ -7814,15 +8099,8 @@ function startAIAction(key){
   _aiCurrentAction = key;
   var p = proj(); if(!p) return;
 
-  // Build context-aware default prompts per action
-  var prompts = {
-    dashboard: 'Describe the event in a few words and I\'ll fill in the details.',
-    budget:    'How many guests are expected? I\'ll estimate vendor costs.',
-    timeline:  'When is the event? I\'ll build a full task timeline.',
-    guests:    'I\'ll suggest table assignments based on your current guest list.',
-    layout:    'What type of space? (ballroom, outdoor, office, etc.)',
-    moodboard: 'What\'s the vibe or style you\'re going for?',
-  };
+  // Prompts come from AI_ACTIONS[].prompt (bilingual)
+  var prompts = {}; getAIActions().forEach(function(a){ prompts[a.key]=a.prompt; });
 
   var body = document.getElementById('ai-panel-body');
   if(!body) return;
@@ -7832,14 +8110,14 @@ function startAIAction(key){
   body.innerHTML =
     '<div style="display:flex;align-items:center;gap:8px;padding:4px 0 12px">'+
       '<button onclick="renderAIHome()" style="background:transparent;border:none;color:var(--muted);cursor:pointer;padding:4px;border-radius:6px;display:flex;align-items:center;gap:4px;font-size:12px;font-family:Jost,sans-serif;transition:.15s" onmouseover="this.style.color=\'var(--text)\'" onmouseout="this.style.color=\'var(--muted)\'">'+
-        '<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg> Back'+
+        '<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg> '+(LANG==='es'?'Regresar':'Back')+
       '</button>'+
       '<div style="font-size:13px;font-weight:600">'+a.icon+' '+a.label+'</div>'+
     '</div>'+
     '<div style="font-size:12px;color:var(--muted);line-height:1.6;padding:10px 12px;background:var(--bg2);border-radius:var(--r-sm);border:1px solid var(--border)">'+
       prompts[key]+
     '</div>'+
-    '<div style="font-size:11px;color:var(--muted);margin-top:10px;text-align:center">Type your details below and press Send ↵</div>';
+    '<div style="font-size:11px;color:var(--muted);margin-top:10px;text-align:center">'+(LANG==='es'?'Escribe tus detalles abajo y presiona Enviar ↵':'Type your details below and press Send ↵')+'</div>';
 
   // Pre-focus the textarea
   var ta = document.getElementById('ai-prompt');
@@ -7876,7 +8154,7 @@ function showAILoading(){
   if(body) body.innerHTML =
     '<div class="ai-loading">'+
       '<div class="ai-spinner"></div>'+
-      '<div>Thinking<span id="ai-dots">.</span></div>'+
+      '<div>'+(LANG==='es'?'Pensando':'Thinking')+'<span id="ai-dots">.</span></div>'+
     '</div>';
   // Animate dots
   var dots = 0;
@@ -7896,9 +8174,9 @@ function showAIError(msg){
   if(body) body.innerHTML =
     '<div style="padding:20px 16px;text-align:center">'+
       '<div style="font-size:28px;margin-bottom:8px">⚠️</div>'+
-      '<div style="font-size:13px;color:var(--danger);font-weight:600;margin-bottom:6px">Error</div>'+
+      '<div style="font-size:13px;color:var(--danger);font-weight:600;margin-bottom:6px">'+(LANG==='es'?'Error':'Error')+'</div>'+
       '<div style="font-size:12px;color:var(--muted);line-height:1.5">'+esc(msg)+'</div>'+
-      '<button class="btn btn-ghost btn-sm" onclick="startAIAction(\''+(_aiCurrentAction||'dashboard')+'\')" style="margin-top:14px">Try again</button>'+
+      '<button class="btn btn-ghost btn-sm" onclick="startAIAction(\''+(_aiCurrentAction||'dashboard')+'\')" style="margin-top:14px">'+(LANG==='es'?'Intentar de nuevo':'Try again')+'</button>'+
     '</div>';
 }
 
@@ -7912,8 +8190,8 @@ function showAIPreview(data, key){
   if(!body) return;
 
   var html = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">'+
-    '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gold-h)">✦ Preview</div>'+
-    '<div style="font-size:11px;color:var(--muted)">Review before applying</div>'+
+    '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gold-h)">✦ '+(LANG==='es'?'Vista Previa':'Preview')+'</div>'+
+    '<div style="font-size:11px;color:var(--muted)">'+(LANG==='es'?'Revisa antes de aplicar':'Review before applying')+'</div>'+
   '</div>';
 
   html += renderAIPreviewContent(key, data);
@@ -7921,11 +8199,11 @@ function showAIPreview(data, key){
   html += '<div class="ai-preview-footer">'+
     '<button class="btn btn-ghost btn-sm" onclick="startAIAction(\''+key+'\')" style="gap:4px">'+
       '<svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>'+
-      'Regenerate'+
+      (LANG==='es'?'Regenerar':'Regenerate')+
     '</button>'+
     '<button class="btn btn-primary btn-sm" onclick="applyAIPreview()" style="flex:1;justify-content:center;gap:5px">'+
       '<svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>'+
-      'Apply to Project'+
+      (LANG==='es'?'Aplicar al Proyecto':'Apply to Project')+
     '</button>'+
   '</div>';
 
@@ -8306,7 +8584,7 @@ window.SCI={};
   <div class="ai-panel-header">
     <div style="width:34px;height:34px;border-radius:10px;background:rgba(201,168,76,.15);border:1px solid rgba(201,168,76,.3);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">✦</div>
     <div>
-      <div class="ai-panel-title">AI Assistant</div>
+      <div class="ai-panel-title" id="ai-panel-title">AI Assistant</div>
       <div class="ai-panel-sub">Powered by Claude</div>
     </div>
     <button onclick="closeAIPanel()" style="background:transparent;border:none;color:rgba(240,230,204,.4);cursor:pointer;padding:4px;border-radius:6px;transition:.15s" onmouseover="this.style.color='rgba(240,230,204,.8)'" onmouseout="this.style.color='rgba(240,230,204,.4)'">
@@ -8330,5 +8608,431 @@ window.SCI={};
   </div>
 </div>
 
+<script>
+// ══════════════════════════════════════════════════════════
+// EVENTS PAGE — sort/view controls
+// ══════════════════════════════════════════════════════════
+// (renderEvents, setEvSort, setEvView, toggleEvSortDir already defined above)
+
+// ══════════════════════════════════════════════════════════
+// ANALYTICS
+// ══════════════════════════════════════════════════════════
+var _analyticsPeriod = '3m';
+
+function setAnalyticsPeriod(p){
+  _analyticsPeriod = p;
+  document.querySelectorAll('[id^="ap-"]').forEach(b=>b.classList.remove('active'));
+  const btn = document.getElementById('ap-'+p);
+  if(btn) btn.classList.add('active');
+  renderAnalytics();
+}
+
+function getAnalyticsPeriodRange(period){
+  const now = new Date(); now.setHours(0,0,0,0);
+  let from, to;
+  if(period==='1m'){ from=new Date(now); from.setMonth(from.getMonth()-1); to=new Date(now); }
+  else if(period==='3m'){ from=new Date(now); from.setMonth(from.getMonth()-3); to=new Date(now); }
+  else if(period==='6m'){ from=new Date(now); from.setMonth(from.getMonth()-6); to=new Date(now); }
+  else if(period==='1y'){ from=new Date(now); from.setFullYear(from.getFullYear()-1); to=new Date(now); }
+  else if(period==='thisyear'){ from=new Date(now.getFullYear(),0,1); to=new Date(now.getFullYear(),11,31); }
+  else if(period==='next1y'){ from=new Date(now); to=new Date(now); to.setFullYear(to.getFullYear()+1); }
+  return { from, to };
+}
+
+function renderAnalytics(){
+  const allProjects = Object.values(uproj());
+  const { from, to } = getAnalyticsPeriodRange(_analyticsPeriod);
+  const inPeriod = allProjects.filter(p=>{
+    if(!p.date) return false;
+    const d = new Date(p.date); d.setHours(0,0,0,0);
+    return d >= from && d <= to;
+  });
+
+  // Update period button labels
+  const periodLabels = {'1m':t('period_1m'),'3m':t('period_3m'),'6m':t('period_6m'),'1y':t('period_1y'),'thisyear':t('period_thisyear'),'next1y':t('period_next1y')};
+  Object.entries(periodLabels).forEach(([k,v])=>{const b=document.getElementById('ap-'+k);if(b)b.textContent=v;});
+
+  // Update page titles
+  const title=document.getElementById('analytics-title');if(title)title.textContent=t('analytics_title');
+  const sub=document.getElementById('analytics-sub');if(sub)sub.textContent=t('analytics_sub');
+
+  const el = document.getElementById('analytics-content');
+  if(!el) return;
+
+  if(!inPeriod.length){
+    el.innerHTML = `<div style="text-align:center;padding:60px 20px;color:var(--muted)">
+      <div style="font-size:48px;margin-bottom:12px">📊</div>
+      <div style="font-size:16px;font-weight:600;margin-bottom:6px">${t('analytics_no_data')}</div>
+      <div style="font-size:13px">${LANG==='es'?'Intenta con un período de tiempo más amplio.':'Try a different time period.'}</div>
+    </div>`;
+    return;
+  }
+
+  // ── Compute stats ──
+  const totalBudget = inPeriod.reduce((s,p)=>s+Number(p.budget||0),0);
+  const avgBudget = totalBudget/inPeriod.length;
+  const totalGuests = inPeriod.reduce((s,p)=>s+p.guests.length,0);
+  const avgGuests = totalGuests/inPeriod.length;
+  const confirmedGuests = inPeriod.reduce((s,p)=>s+p.guests.filter(g=>g.rsvp==='confirmed').length,0);
+
+  // By type
+  const byType = {};
+  inPeriod.forEach(p=>{ byType[p.type]=(byType[p.type]||0)+1; });
+  // By status
+  const byStatus = {};
+  inPeriod.forEach(p=>{ byStatus[p.status]=(byStatus[p.status]||0)+1; });
+  // Top vendor categories
+  const vendorCats = {};
+  inPeriod.forEach(p=>{ p.vendors.filter(v=>v.hired).forEach(v=>{ vendorCats[v.category]=(vendorCats[v.category]||0)+1; }); });
+  const topVendors = Object.entries(vendorCats).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+  // ── Color helpers ──
+  const typeClrs = {social:'#ec4899',corporate:'#3b82f6',community:'#10b981',government:'#f59e0b',education:'#8b5cf6'};
+  const statusClrs = {planning:'#6b7280',confirmed:'#10b981','in-progress':'#f59e0b',completed:'#3b82f6',cancelled:'#ef4444'};
+  const tl={social:t('type_social'),corporate:t('type_corporate'),community:t('type_community'),government:t('type_government'),education:t('type_education')};
+  const sl={planning:t('status_planning'),confirmed:t('status_confirmed'),'in-progress':t('status_in_progress'),completed:t('status_completed'),cancelled:t('status_cancelled')};
+
+  // ── Bar chart helper ──
+  function barChart(data, colorFn, labelFn, max){
+    return data.map(([k,v])=>`
+      <div style="display:grid;grid-template-columns:110px 1fr 40px;align-items:center;gap:10px;margin-bottom:8px">
+        <div style="font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${labelFn(k)}</div>
+        <div style="background:var(--bg2);border-radius:4px;height:10px;overflow:hidden">
+          <div style="height:100%;border-radius:4px;background:${colorFn(k)};width:${Math.round(v/max*100)}%;transition:width .4s"></div>
+        </div>
+        <div style="font-size:12px;font-weight:700;color:var(--text);text-align:right">${v}</div>
+      </div>`).join('');
+  }
+
+  // ── Build timeline sparkline ──
+  const monthBuckets = {};
+  inPeriod.forEach(p=>{
+    if(!p.date) return;
+    const d=new Date(p.date);
+    const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    monthBuckets[key]=(monthBuckets[key]||0)+1;
+  });
+  const sortedMonths = Object.keys(monthBuckets).sort();
+  const maxMonthCount = Math.max(...Object.values(monthBuckets),1);
+  const timelineHtml = sortedMonths.length > 0 ? `
+    <div style="display:flex;align-items:flex-end;gap:8px;height:80px;padding:0 4px">
+      ${sortedMonths.map(m=>{
+        const cnt=monthBuckets[m];
+        const pct=Math.round(cnt/maxMonthCount*100);
+        const [yr,mo]=m.split('-');
+        const moName=new Date(+yr,+mo-1,1).toLocaleString(LANG==='es'?'es-MX':'en-US',{month:'short'});
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+          <div style="font-size:10px;font-weight:700;color:var(--gold-h)">${cnt}</div>
+          <div style="width:100%;background:linear-gradient(180deg,var(--gold),var(--gold-h));border-radius:3px 3px 0 0;height:${pct}%;min-height:4px;transition:height .4s"></div>
+          <div style="font-size:9px;color:var(--muted);white-space:nowrap">${moName} ${yr.slice(2)}</div>
+        </div>`;
+      }).join('')}
+    </div>` : '';
+
+  // ── Donut chart helper (pure CSS/SVG) ──
+  function donutSegments(data, colorFn){
+    const total = data.reduce((s,[,v])=>s+v,0);
+    if(!total) return '';
+    let offset=25; // start at top
+    const r=15.9155, circ=2*Math.PI*r;
+    return data.map(([k,v])=>{
+      const pct=v/total*100;
+      const dash=pct/100*circ;
+      const gap=circ-dash;
+      const seg=`<circle cx="21" cy="21" r="${r}" fill="none" stroke="${colorFn(k)}" stroke-width="5"
+        stroke-dasharray="${dash.toFixed(2)} ${gap.toFixed(2)}"
+        stroke-dashoffset="${(100-offset)*circ/100}"
+        transform="rotate(-90 21 21)"/>`;
+      offset+=pct;
+      return seg;
+    }).join('');
+  }
+
+  // ── Render ──
+  el.innerHTML = `
+  <!-- KPI CARDS -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px">
+    <div class="card" style="padding:18px;text-align:center">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--light);margin-bottom:8px">${t('analytics_events')}</div>
+      <div style="font-size:36px;font-weight:700;color:var(--gold-h);font-family:'Cormorant Garamond',serif">${inPeriod.length}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">${LANG==='es'?'de '+allProjects.length+' total':'of '+allProjects.length+' total'}</div>
+    </div>
+    <div class="card" style="padding:18px;text-align:center">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--light);margin-bottom:8px">${t('analytics_avg_budget')}</div>
+      <div style="font-size:28px;font-weight:700;color:#f59e0b;font-family:'Cormorant Garamond',serif">${fmtMoney(avgBudget)}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">${t('total_budget')}: ${fmtMoney(totalBudget)}</div>
+    </div>
+    <div class="card" style="padding:18px;text-align:center">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--light);margin-bottom:8px">${t('analytics_avg_guests')}</div>
+      <div style="font-size:36px;font-weight:700;color:#10b981;font-family:'Cormorant Garamond',serif">${Math.round(avgGuests)}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">${totalGuests} ${LANG==='es'?'confirmados '+confirmedGuests:'total, '+confirmedGuests+' confirmed'}</div>
+    </div>
+    <div class="card" style="padding:18px;text-align:center">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--light);margin-bottom:8px">${LANG==='es'?'Completados':'Completed'}</div>
+      <div style="font-size:36px;font-weight:700;color:#6b4fa0;font-family:'Cormorant Garamond',serif">${byStatus['completed']||0}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">${LANG==='es'?'eventos completados':'events completed'}</div>
+    </div>
+  </div>
+
+  <!-- CHARTS ROW -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+
+    <!-- Event Timeline -->
+    <div class="card" style="padding:20px;grid-column:1/-1">
+      <div style="font-weight:700;font-size:14px;margin-bottom:16px">${t('analytics_timeline')}</div>
+      ${timelineHtml||'<div style="color:var(--muted);font-size:12px;text-align:center;padding:20px">—</div>'}
+    </div>
+
+    <!-- By Type -->
+    <div class="card" style="padding:20px">
+      <div style="font-weight:700;font-size:14px;margin-bottom:14px">${t('analytics_by_type')}</div>
+      ${Object.keys(byType).length?barChart(Object.entries(byType).sort((a,b)=>b[1]-a[1]),k=>typeClrs[k]||'#9e9e9e',k=>tl[k]||k,Math.max(...Object.values(byType))):'<div style="color:var(--muted);font-size:12px">—</div>'}
+    </div>
+
+    <!-- By Status -->
+    <div class="card" style="padding:20px">
+      <div style="font-weight:700;font-size:14px;margin-bottom:14px">${t('analytics_by_status')}</div>
+      ${Object.keys(byStatus).length?barChart(Object.entries(byStatus).sort((a,b)=>b[1]-a[1]),k=>statusClrs[k]||'#9e9e9e',k=>sl[k]||k,Math.max(...Object.values(byStatus))):'<div style="color:var(--muted);font-size:12px">—</div>'}
+    </div>
+
+  </div>
+
+  <!-- TOP VENDORS + EVENT LIST -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+    <!-- Top vendor categories -->
+    <div class="card" style="padding:20px">
+      <div style="font-weight:700;font-size:14px;margin-bottom:14px">${t('analytics_top_vendors')}</div>
+      ${topVendors.length?topVendors.map(([cat,cnt])=>`
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bg)">
+          <div style="font-size:12px;font-weight:600">${cat}</div>
+          <span class="badge b-gold" style="min-width:28px;text-align:center">${cnt}</span>
+        </div>`).join(''):`<div style="color:var(--muted);font-size:12px">${LANG==='es'?'Sin proveedores contratados':'No hired vendors'}</div>`}
+    </div>
+
+    <!-- Events in period list -->
+    <div class="card" style="padding:20px">
+      <div style="font-weight:700;font-size:14px;margin-bottom:14px">${LANG==='es'?'Eventos del Período':'Events in Period'}</div>
+      ${inPeriod.sort((a,b)=>a.date<b.date?-1:1).map(p=>`
+        <div onclick="openProject('${p.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--bg);cursor:pointer;transition:.15s" onmouseover="this.style.paddingLeft='6px'" onmouseout="this.style.paddingLeft='0'">
+          <div>
+            <div style="font-size:13px;font-weight:600">${p.name}</div>
+            <div style="font-size:11px;color:var(--muted)">${fmtDate(p.date)} · ${p.guests.length} ${LANG==='es'?'inv.':'guests'}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:12px;font-weight:700;color:var(--gold-h)">${fmtMoney(p.budget)}</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px">${t('status_'+p.status.replace('-','_'))||p.status}</div>
+          </div>
+        </div>`).join('')}
+    </div>
+
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════════════
+// EXPORT PRESENTATION PDF
+// ══════════════════════════════════════════════════════════
+function openExportPDFModal(){
+  const p = proj();
+  if(!p) return toast(LANG==='es'?'Abre un proyecto primero':'Open a project first','e');
+  openMo(`<div class="mo-title">${t('export_pdf_title')}</div>
+  <div style="margin-bottom:16px;font-size:13px;color:var(--muted)">${t('export_pdf_select')}</div>
+  <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">
+    ${[['sec_dash','section_dashboard',true],['sec_budget','section_budget',true],['sec_timeline','section_timeline',true],['sec_guests','section_guests',true],['sec_moodboard','section_moodboard',false]].map(([id,key,checked])=>`
+    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;border-radius:var(--r-sm);border:1.5px solid var(--border);transition:.15s"
+      onmouseover="this.style.borderColor='var(--gold)';this.style.background='var(--gold-l)'"
+      onmouseout="this.style.borderColor='var(--border)';this.style.background=''">
+      <input type="checkbox" id="${id}" ${checked?'checked':''} style="width:16px;height:16px;accent-color:var(--gold-h)">
+      <span style="font-weight:600;font-size:13px">${t(key)}</span>
+    </label>`).join('')}
+  </div>
+  <div class="mo-foot">
+    <button class="btn btn-ghost" onclick="closeMo()">${t('export_pdf_cancel')}</button>
+    <button class="btn btn-primary" onclick="generateExportPDF()">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      ${t('export_pdf_generate')}
+    </button>
+  </div>`);
+}
+
+function generateExportPDF(){
+  const p = proj(); if(!p) return;
+  const incDash = document.getElementById('sec_dash')?.checked;
+  const incBudget = document.getElementById('sec_budget')?.checked;
+  const incTimeline = document.getElementById('sec_timeline')?.checked;
+  const incGuests = document.getElementById('sec_guests')?.checked;
+  const incMoodboard = document.getElementById('sec_moodboard')?.checked;
+  closeMo();
+
+  const hired = p.vendors.filter(v=>v.hired);
+  const paid = hired.reduce((s,v)=>s+v.payments.reduce((a,py)=>a+Number(py.amount),0),0);
+  const tb = hired.reduce((s,v)=>s+Number(v.budget),0);
+  const done = p.tasks.filter(t=>t.done).length;
+  const confirmed = p.guests.filter(g=>g.rsvp==='confirmed').length;
+  const tl={social:t('type_social'),corporate:t('type_corporate'),community:t('type_community'),government:t('type_government'),education:t('type_education')};
+
+  const sec = (title,body) => `
+    <div class="pdf-section">
+      <div class="pdf-sec-title">${title}</div>
+      ${body}
+    </div>`;
+
+  const kv = (label,val) => `<div class="pdf-kv"><span class="pdf-kl">${label}</span><span class="pdf-kv-val">${val}</span></div>`;
+
+  let html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>${esc(p.name)}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',Arial,sans-serif;color:#222;background:#fff;font-size:13px}
+    .pdf-cover{background:linear-gradient(135deg,#1a2235 0%,#2d3f5e 60%,#3a4f6e 100%);color:#fff;padding:60px 50px;min-height:220px;display:flex;flex-direction:column;justify-content:flex-end}
+    .pdf-cover-title{font-size:36px;font-weight:700;letter-spacing:-.5px;margin-bottom:8px;font-family:Georgia,serif;color:#c9a84c}
+    .pdf-cover-sub{font-size:15px;opacity:.7;margin-bottom:6px}
+    .pdf-cover-meta{font-size:12px;opacity:.5;margin-top:16px}
+    .pdf-body{padding:32px 40px}
+    .pdf-section{margin-bottom:36px;break-inside:avoid}
+    .pdf-sec-title{font-size:17px;font-weight:700;color:#1a2235;border-bottom:2px solid #c9a84c;padding-bottom:6px;margin-bottom:16px;font-family:Georgia,serif}
+    .pdf-kv{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0ece0;font-size:12px}
+    .pdf-kl{color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.4px;font-size:10px;padding-top:2px}
+    .pdf-kv-val{color:#222;font-weight:500;text-align:right;max-width:60%}
+    .pdf-stat-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+    .pdf-stat{flex:1;min-width:120px;background:#f9f6ee;border-radius:8px;padding:14px;text-align:center}
+    .pdf-stat-val{font-size:22px;font-weight:700;color:#c9a84c;font-family:Georgia,serif}
+    .pdf-stat-lbl{font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-top:4px}
+    .pdf-prog-wrap{margin:8px 0}
+    .pdf-prog-label{display:flex;justify-content:space-between;font-size:10px;color:#888;margin-bottom:3px}
+    .pdf-prog-bar{height:8px;background:#f0ece0;border-radius:4px;overflow:hidden}
+    .pdf-prog-fill{height:100%;border-radius:4px}
+    table{width:100%;border-collapse:collapse;font-size:11px}
+    th{background:#1a2235;color:#c9a84c;padding:7px 10px;text-align:left;font-weight:600;text-transform:uppercase;letter-spacing:.4px;font-size:10px}
+    td{padding:7px 10px;border-bottom:1px solid #f0ece0}
+    tr:last-child td{border-bottom:none}
+    .badge-g{background:#e8f5ef;color:#2d7a5e;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600}
+    .badge-r{background:#fbeaea;color:#b5403a;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600}
+    .badge-y{background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600}
+    .badge-b{background:#eff6ff;color:#1e40af;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600}
+    .mood-grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+    .mood-img{width:100px;height:80px;object-fit:cover;border-radius:6px}
+    @media print{body{font-size:12px}.pdf-body{padding:20px 24px}}
+  </style></head><body>
+
+  <div class="pdf-cover">
+    <div class="pdf-cover-title">${esc(p.name)}</div>
+    <div class="pdf-cover-sub">${p.clientName} · ${tl[p.type]||p.type}</div>
+    <div class="pdf-cover-sub">${p.location||'TBD'} · ${fmtDate(p.date)}</div>
+    <div class="pdf-cover-meta">${LANG==='es'?'Generado el':'Generated on'} ${new Date().toLocaleDateString(LANG==='es'?'es-MX':'en-US',{year:'numeric',month:'long',day:'numeric'})}</div>
+  </div>
+  <div class="pdf-body">`;
+
+  if(incDash){
+    const pct = tb>0?Math.min(100,Math.round(paid/tb*100)):0;
+    const tpct = p.tasks.length?Math.round(done/p.tasks.length*100):0;
+    html += sec(t('section_dashboard'),`
+      <div class="pdf-stat-row">
+        <div class="pdf-stat"><div class="pdf-stat-val">${fmtMoney(p.budget)}</div><div class="pdf-stat-lbl">${t('total_budget')}</div></div>
+        <div class="pdf-stat"><div class="pdf-stat-val">${p.guests.length}</div><div class="pdf-stat-lbl">${t('stat_guests')}</div></div>
+        <div class="pdf-stat"><div class="pdf-stat-val">${confirmed}</div><div class="pdf-stat-lbl">${t('rsvp_confirmed')}</div></div>
+        <div class="pdf-stat"><div class="pdf-stat-val">${done}/${p.tasks.length}</div><div class="pdf-stat-lbl">${t('tasks_completed')}</div></div>
+      </div>
+      ${kv(t('event_name'), p.name)}
+      ${kv(t('client_name'), p.clientName)}
+      ${kv(t('event_type'), tl[p.type]||p.type)}
+      ${kv(t('event_date'), fmtDate(p.date))}
+      ${kv(t('location'), p.location||'TBD')}
+      ${kv(t('status'), t('status_'+p.status.replace('-','_'))||p.status)}
+      ${p.description?kv(t('description'),p.description):''}
+      <div class="pdf-prog-wrap" style="margin-top:12px">
+        <div class="pdf-prog-label"><span>${t('tasks_completed')}</span><span>${tpct}%</span></div>
+        <div class="pdf-prog-bar"><div class="pdf-prog-fill" style="width:${tpct}%;background:#7c3aed"></div></div>
+      </div>
+      <div class="pdf-prog-wrap">
+        <div class="pdf-prog-label"><span>${t('budget_used')}</span><span>${pct}%</span></div>
+        <div class="pdf-prog-bar"><div class="pdf-prog-fill" style="width:${pct}%;background:${pct>90?'#ef4444':pct>70?'#f59e0b':'#10b981'}"></div></div>
+      </div>`);
+  }
+
+  if(incBudget){
+    const allEst = p.vendors.reduce((s,v)=>s+Number(v.budget),0);
+    const diff = (p.budget||0) - allEst;
+    html += sec(t('section_budget'),`
+      <div class="pdf-stat-row">
+        <div class="pdf-stat"><div class="pdf-stat-val">${fmtMoney(p.budget||0)}</div><div class="pdf-stat-lbl">${t('event_total_budget')}</div></div>
+        <div class="pdf-stat"><div class="pdf-stat-val">${fmtMoney(allEst)}</div><div class="pdf-stat-lbl">${t('estimated_cost')}</div></div>
+        <div class="pdf-stat"><div class="pdf-stat-val">${fmtMoney(paid)}</div><div class="pdf-stat-lbl">${t('actual_paid')}</div></div>
+        <div class="pdf-stat" style="background:${diff>=0?'#e8f5ef':'#fbeaea'}"><div class="pdf-stat-val" style="color:${diff>=0?'#2d7a5e':'#b5403a'}">${diff>=0?'+':''}${fmtMoney(diff)}</div><div class="pdf-stat-lbl">${t('budget_variance')}</div></div>
+      </div>
+      ${hired.length?`<table style="margin-top:12px">
+        <tr><th>${t('vendor_name_lbl')}</th><th>${t('category')}</th><th>${t('budget_label')}</th><th>${t('paid')}</th><th>%</th></tr>
+        ${hired.map(v=>{
+          const vpaid=v.payments.reduce((s,py)=>s+Number(py.amount),0);
+          const vpct=v.budget>0?Math.min(100,Math.round(vpaid/v.budget*100)):0;
+          return `<tr><td>${esc(v.name)}</td><td>${esc(v.category)}</td><td>${fmtMoney(v.budget)}</td><td>${fmtMoney(vpaid)}</td><td>${vpct}%</td></tr>`;
+        }).join('')}
+      </table>`:`<div style="color:#999;font-size:12px">${t('no_hired_vendors')}</div>`}`);
+  }
+
+  if(incTimeline){
+    const overdue = p.tasks.filter(tk=>!tk.done&&tk.dueDate&&new Date(tk.dueDate)<new Date());
+    html += sec(t('section_timeline'),`
+      <div class="pdf-stat-row" style="margin-bottom:12px">
+        <div class="pdf-stat"><div class="pdf-stat-val">${p.tasks.length}</div><div class="pdf-stat-lbl">${t('total_tasks')}</div></div>
+        <div class="pdf-stat"><div class="pdf-stat-val" style="color:#2d7a5e">${done}</div><div class="pdf-stat-lbl">${t('completed_tasks')}</div></div>
+        <div class="pdf-stat"><div class="pdf-stat-val" style="color:#b5403a">${overdue.length}</div><div class="pdf-stat-lbl">${t('overdue_tasks')}</div></div>
+      </div>
+      ${p.tasks.length?`<table>
+        <tr><th>${t('task_title_lbl')}</th><th>${t('due_date_lbl')}</th><th>${t('assigned_to')||'Assigned'}</th><th>${t('status')}</th></tr>
+        ${p.tasks.map(tk=>{
+          const isOv=!tk.done&&tk.dueDate&&new Date(tk.dueDate)<new Date();
+          return `<tr><td>${esc(tk.title)}</td><td>${tk.dueDate||'—'}</td><td>${esc(tk.assignee||'—')}</td>
+            <td>${tk.done?`<span class="badge-g">${t('completed_tasks').split(' ')[0]||'Done'}</span>`:isOv?`<span class="badge-r">${t('overdue_lbl')}</span>`:`<span class="badge-y">${t('status_in_progress')}</span>`}</td></tr>`;
+        }).join('')}
+      </table>`:`<div style="color:#999;font-size:12px">—</div>`}`);
+  }
+
+  if(incGuests){
+    html += sec(t('section_guests'),`
+      <div class="pdf-stat-row" style="margin-bottom:12px">
+        <div class="pdf-stat"><div class="pdf-stat-val">${p.guests.length}</div><div class="pdf-stat-lbl">${t('total_guests')}</div></div>
+        <div class="pdf-stat"><div class="pdf-stat-val" style="color:#2d7a5e">${confirmed}</div><div class="pdf-stat-lbl">${t('rsvp_confirmed')}</div></div>
+        <div class="pdf-stat"><div class="pdf-stat-val" style="color:#b5403a">${p.guests.filter(g=>g.rsvp==='declined').length}</div><div class="pdf-stat-lbl">${t('rsvp_declined')}</div></div>
+        <div class="pdf-stat"><div class="pdf-stat-val" style="color:#888">${p.guests.filter(g=>!g.rsvp||g.rsvp==='pending').length}</div><div class="pdf-stat-lbl">${t('pending_guests')}</div></div>
+      </div>
+      ${p.guests.length?`<table>
+        <tr><th>${t('col_name')}</th><th>${t('rsvp_status')}</th><th>${t('table_number')}</th><th>${t('meal_pref')}</th></tr>
+        ${p.guests.map(g=>{
+          const rBadge=g.rsvp==='confirmed'?'badge-g':g.rsvp==='declined'?'badge-r':'badge-y';
+          return `<tr><td>${esc(g.name)}</td><td><span class="${rBadge}">${g.rsvp||'pending'}</span></td><td>${g.table||'—'}</td><td>${esc(g.meal||'—')}</td></tr>`;
+        }).join('')}
+      </table>`:`<div style="color:#999;font-size:12px">—</div>`}`);
+  }
+
+  if(incMoodboard && p.moodboard && p.moodboard.length){
+    const imgs = p.moodboard.filter(item=>item.url||item.src).slice(0,12);
+    html += sec(t('section_moodboard'),`
+      ${p.aiTheme?kv(LANG==='es'?'Tema':'Theme', p.aiTheme):''}
+      ${p.aiPalette?kv(LANG==='es'?'Paleta':'Palette', Array.isArray(p.aiPalette)?p.aiPalette.join(', '):p.aiPalette):''}
+      ${imgs.length?`<div class="mood-grid">${imgs.map(item=>`<img src="${item.url||item.src}" class="mood-img" onerror="this.style.display='none'">`).join('')}</div>`:''}`);
+  }
+
+  html += `</div></body></html>`;
+
+  const win = window.open('','_blank','width=900,height=700');
+  if(!win){ toast(LANG==='es'?'Permite ventanas emergentes para exportar':'Allow popups to export PDF','e'); return; }
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(()=>win.print(), 800);
+}
+
+// ══════════════════════════════════════════════════════════
+// Expose functions to global scope (called from HTML attrs)
+// ══════════════════════════════════════════════════════════
+window.setEvSort = setEvSort;
+window.toggleEvSortDir = toggleEvSortDir;
+window.setEvView = setEvView;
+window.setAnalyticsPeriod = setAnalyticsPeriod;
+window.openExportPDFModal = openExportPDFModal;
+window.generateExportPDF = generateExportPDF;
+</script>
 </body>
 </html>
+
