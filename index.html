@@ -1376,6 +1376,7 @@ tr:hover td { background: var(--bg2); }
 }
 
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 <div id="toast-c"></div>
@@ -3946,33 +3947,90 @@ function importCSV(input){
 function processImportFiles(files){
   let allParsed=[];let filesProcessed=0;
   files.forEach(file=>{
+    const isExcel=/\.(xlsx|xls)$/i.test(file.name);
     const r=new FileReader();
     r.onload=e=>{
-      const parsed=parseGuestFile(e.target.result,file.name);
+      let parsed=[];
+      try{
+        if(isExcel){
+          parsed=parseGuestFileExcel(e.target.result,file.name);
+        } else {
+          parsed=parseGuestFileCSV(e.target.result,file.name);
+        }
+      }catch(err){console.error('Import parse error:',err);}
       allParsed=allParsed.concat(parsed);
       filesProcessed++;
       if(filesProcessed===files.length)showImportPreview(allParsed);
     };
-    r.readAsText(file);
+    if(isExcel) r.readAsArrayBuffer(file);
+    else r.readAsText(file);
   });
 }
 
-function parseGuestFile(text,filename){
-  const lines=text.split('\n').filter(l=>l.trim());
+function normalizeHeader(h){
+  return String(h).trim().replace(/^"|"$/g,'').toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
+}
+
+function rowToGuest(obj, filename){
+  const name=obj.name||obj.full_name||obj.guest_name||obj.nombre||obj.nombre_completo||'';
+  if(!name||String(name).trim().length<2)return null;
+  return {
+    _src:filename,
+    name:String(name).trim(),
+    email:String(obj.email||obj.correo||'').trim(),
+    phone:String(obj.phone||obj.telefono||obj.mobile||'').trim(),
+    category:String(obj.category||obj.categoria||obj.group||obj.grupo||'').trim(),
+    rsvp:String(obj.rsvp||obj.status||obj.estado||'pending').trim().toLowerCase()||'pending',
+    table:String(obj.table||obj.table_number||obj.mesa||'').trim(),
+    plusOne:['yes','1','true','sí','si'].includes(String(obj.plus_one||obj.plusone||obj.acompanante||'').toLowerCase().trim()),
+    meal:String(obj.meal||obj.meal_preference||obj.menu||obj.comida||'').trim(),
+    dietary:String(obj.dietary||obj.dietary_restrictions||obj.restricciones||'').trim(),
+    notes:String(obj.notes||obj.notas||obj.comments||'').trim()
+  };
+}
+
+function parseGuestFileExcel(arrayBuffer, filename){
+  const workbook=XLSX.read(new Uint8Array(arrayBuffer),{type:'array'});
+  const sheetName=workbook.SheetNames[0];
+  const sheet=workbook.Sheets[sheetName];
+  const rows=XLSX.utils.sheet_to_json(sheet,{defval:''});
+  const guests=[];
+  rows.forEach(row=>{
+    // normalize keys
+    const obj={};
+    Object.keys(row).forEach(k=>{obj[normalizeHeader(k)]=row[k];});
+    const g=rowToGuest(obj,filename);
+    if(g)guests.push(g);
+  });
+  return guests;
+}
+
+function parseGuestFileCSV(text, filename){
+  // Robust CSV parser that handles quoted fields containing commas
+  function parseCSVLine(line){
+    const result=[];let cur='';let inQuote=false;
+    for(let i=0;i<line.length;i++){
+      const ch=line[i];
+      if(ch==='"'){
+        if(inQuote&&line[i+1]==='"'){cur+='"';i++;}
+        else inQuote=!inQuote;
+      } else if(ch===','&&!inQuote){
+        result.push(cur.trim());cur='';
+      } else cur+=ch;
+    }
+    result.push(cur.trim());
+    return result;
+  }
+  const lines=text.split(/\r?\n/).filter(l=>l.trim());
   if(lines.length<2)return[];
-  const hdrs=lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,'').toLowerCase().replace(/\s+/g,'_').replace(/[^a-z_]/g,''));
+  const hdrs=parseCSVLine(lines[0]).map(normalizeHeader);
   const guests=[];
   for(let i=1;i<lines.length;i++){
-    const vals=lines[i].split(',').map(v=>v.trim().replace(/^"|"$/g,''));
+    if(!lines[i].trim())continue;
+    const vals=parseCSVLine(lines[i]);
     const obj={};hdrs.forEach((h,j)=>obj[h]=vals[j]||'');
-    const name=obj.name||obj.full_name||obj.guest_name||obj.nombre;
-    if(!name||name.length<2)continue;
-    guests.push({_src:filename,name,email:obj.email||'',phone:obj.phone||'',
-      category:obj.category||'',rsvp:obj.rsvp||'pending',
-      table:obj.table||obj.table_number||'',
-      plusOne:['yes','1','true'].includes((obj.plus_one||obj.plusone||'').toLowerCase()),
-      meal:obj.meal||obj.meal_preference||'',
-      dietary:obj.dietary||obj.dietary_restrictions||'',notes:obj.notes||''});
+    const g=rowToGuest(obj,filename);
+    if(g)guests.push(g);
   }
   return guests;
 }
