@@ -4374,7 +4374,7 @@ function renderLayout(){
           <div style="display:flex;flex-direction:column;gap:3px">
             ${Object.entries(CHAIR_TYPES).filter(([k])=>k!=='default').map(([k,v])=>`
             <div style="display:flex;align-items:center;gap:7px">
-              <div style="width:13px;height:13px;border-radius:50%;flex-shrink:0;background:${v.fill.startsWith('rgba')?'#e8e8e8':v.fill};border:1.5px solid ${v.stroke||'#bbb'}"></div>
+              <div style="width:13px;height:13px;border-radius:50%;flex-shrink:0;background:${v.fill.startsWith('rgba')?'#e8e8e8':v.fill};${v.stroke?'border:1.5px solid '+v.stroke:'border:none'}"></div>
               <span style="font-size:10.5px;color:var(--muted)">${v.label}${v.costPerChair>0?` <span style="color:var(--gold-h)">$${v.costPerChair}/silla</span>`:''}</span>
             </div>`).join('')}
           </div>
@@ -4485,6 +4485,7 @@ function renderLayout(){
         </div>
         <div style="width:1px;height:24px;background:var(--border)"></div>
         <button title="Zoom to fit" onclick="lZoom(0,'fit')" style="width:28px;height:28px;border:1px solid var(--border);background:transparent;border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:var(--tr)" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)';this.style.borderColor='var(--gold)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)';this.style.borderColor='var(--border)'"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3h6M3 3v6M21 3h-6M21 3v6M3 21h6M3 21v-6M21 21h-6M21 21v-6"/></svg></button>
+        <button title="Zoom to selected" onclick="lZoom(0,'sel')" style="width:28px;height:28px;border:1px solid var(--border);background:transparent;border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:var(--tr)" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)';this.style.borderColor='var(--gold)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)';this.style.borderColor='var(--border)'"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="4 2"/><path d="M8 8h8M8 12h8M8 16h5"/><circle cx="18" cy="18" r="3" fill="currentColor" stroke="none"/></svg></button>
         <button title="${LState.measureMode?'Exit measure (Esc)':'Measure distances'}" onclick="toggleMeasureMode()" style="width:28px;height:28px;border:1px solid ${LState.measureMode?'var(--gold)':'var(--border)'};background:${LState.measureMode?'var(--gold-l)':'transparent'};border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:${LState.measureMode?'var(--gold-h)':'var(--muted)'};transition:var(--tr)" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)';this.style.borderColor='var(--gold)'" onmouseout="this.style.background='${LState.measureMode?'var(--gold-l)':'transparent'}';this.style.color='${LState.measureMode?'var(--gold-h)':'var(--muted)'}';this.style.borderColor='${LState.measureMode?'var(--gold)':'var(--border)'}'"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="10" rx="1.5"/><path d="M6 7v4M9 7v3M12 7v4M15 7v3M18 7v4"/></svg></button>
         ${_measureLines.length>0?`<button title="Clear measurements" onclick="clearMeasurements()" style="width:28px;height:28px;border:1px solid rgba(239,68,68,.4);background:transparent;border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--danger);font-size:10px;font-weight:700;transition:var(--tr)" onmouseover="this.style.background='rgba(239,68,68,.1)'" onmouseout="this.style.background='transparent'">✕m</button>`:''}
         <div style="width:1px;height:24px;background:var(--border)"></div>
@@ -4717,9 +4718,10 @@ function renderChairs(item){
   const cType = item.chairType || 'default';
   const ct = CHAIR_TYPES[cType] || CHAIR_TYPES['default'];
   const fill = ct ? ct.fill : '#f5f4f0';
-  const stroke = ct ? (ct.stroke || item.bdClr) : item.bdClr;
+  const stroke = ct ? ct.stroke : item.bdClr;
   positions.forEach(pos=>{
-    html+=`<div class="chair-dot" style="width:${cs}px;height:${cs}px;left:${pos.x-cs/2}px;top:${pos.y-cs/2}px;background:${fill};border-color:${stroke}"></div>`;
+    const borderStyle = stroke ? `border-color:${stroke}` : 'border:none';
+    html+=`<div class="chair-dot" style="width:${cs}px;height:${cs}px;left:${pos.x-cs/2}px;top:${pos.y-cs/2}px;background:${fill};${borderStyle}"></div>`;
   });
   html+='</div>';
   return html;
@@ -5896,6 +5898,8 @@ function applyScaleCalibration(){
     item.y=Math.round(item.y*ratio);
     item.w=Math.round(item.w*ratio);
     item.h=Math.round(item.h*ratio);
+    // Clear stored fontSize so it re-derives from item size in meters (stays visually consistent)
+    delete item.fontSize;
   });
   // Rescale floorplan position too
   LState.floorplan.x=Math.round(LState.floorplan.x*ratio);
@@ -6371,19 +6375,22 @@ function initLayoutTouchHandlers(){
 function lZoom(delta,mode,cx,cy){
   const outer=document.getElementById('lcanvas-outer');
   const oldZoom=LState.zoom;
-  if(mode==='fit'){
+  if(mode==='fit'||mode==='sel'){
     const fp=LState.floorplan;
     const hasFp=fp&&fp.img;
-    if(!LState.items.length&&!hasFp){LState.zoom=0.6;}
+    // For 'sel', use only selected items; fall back to all if nothing selected
+    const targetItems = (mode==='sel'&&LState.sel&&LState.sel.length)
+      ? LState.items.filter(i=>LState.sel.includes(i.id))
+      : LState.items;
+    if(!targetItems.length&&!hasFp){LState.zoom=0.6;}
     else{
-      // zoom extents: fit all items + floorplan in view
       let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
-      LState.items.forEach(item=>{
+      targetItems.forEach(item=>{
         const pad=(item.chairs||0)?30:0;
         minX=Math.min(minX,item.x-pad);minY=Math.min(minY,item.y-pad);
         maxX=Math.max(maxX,item.x+item.w+pad);maxY=Math.max(maxY,item.y+item.h+pad);
       });
-      if(hasFp){
+      if(mode==='fit'&&hasFp){
         const fpW=Math.round(fp.w*fp.scale), fpH=Math.round(fp.h*fp.scale);
         minX=Math.min(minX,fp.x);minY=Math.min(minY,fp.y);
         maxX=Math.max(maxX,fp.x+fpW);maxY=Math.max(maxY,fp.y+fpH);
@@ -6827,7 +6834,7 @@ function exportLayoutFull(layoutName){
       const cType = item.chairType || 'default';
       const ct = CHAIR_TYPES[cType] || CHAIR_TYPES['default'];
       const cfill = ct ? ct.fill : '#e8e4d8';
-      const cstroke = ct ? (ct.stroke || '#aaa') : '#aaa';
+      const cstroke = ct ? (ct.stroke || 'none') : 'none';
 
       const positions = [];
       const w = sc(item.w), h = sc(item.h);
