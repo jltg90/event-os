@@ -4,6 +4,8 @@ var _libTab = 'vendors';
 function getLib(){
   var all = uproj();
   if(!all['__library__']){
+    // Only create a blank library in memory — do NOT save it yet.
+    // Saving here risks overwriting real data before Supabase has loaded.
     all['__library__'] = {
       id:'__library__', name:'__library__',
       vendors:[], tasks:[], layouts:[],
@@ -13,17 +15,18 @@ function getLib(){
   }
   var lib = all['__library__'];
   if(!lib.vendors)     lib.vendors=[];
-  // Seed default vendors if library is empty
-  if(lib.vendors.length===0 && typeof defaultVendors==='function'){
+  // Seed default vendors only if the library record already existed in Supabase
+  // (i.e. it has an updated_at flag set by loadProjectsFromCloud), to avoid
+  // seeding — and saving — before real data arrives.
+  if(lib.vendors.length===0 && lib._seeded && typeof defaultVendors==='function'){
     var dvs = defaultVendors();
     dvs.forEach(function(v){
       lib.vendors.push({id:'lv_def_'+v.id, name:v.name, date:new Date().toLocaleDateString(), vendors:[JSON.parse(JSON.stringify(v))]});
     });
     saveLib(lib);
   }
-  // Seed default tasks if library tasks are empty
   if(!lib.globalTasks) lib.globalTasks=[];
-  if(lib.globalTasks.length===0 && typeof defaultTasks==='function'){
+  if(lib.globalTasks.length===0 && lib._seeded && typeof defaultTasks==='function'){
     var dts = defaultTasks();
     dts.forEach(function(tk){
       lib.globalTasks.push({id:'gt_def_'+tk.id, title:tk.title, desc:tk.desc||'', dueDate:'', assignee:tk.assignee||'', color:tk.color||'#7c3aed', done:false});
@@ -66,7 +69,7 @@ function openLibrary(){
 
 function updateLibraryLabels(){
   var el=document.getElementById('lib-menu-label'); if(el) el.textContent=t('lib_title');
-  var titles={vendors:LANG==='es'?'Proveedores':'Vendors', tasks:LANG==='es'?'Tareas':'Tasks', layouts:LANG==='es'?'Planos':'Layouts', moodboards:'Moodboards'};
+  var titles={vendors:LANG==='es'?'Proveedores':'Vendors', tasks:LANG==='es'?'Tareas':'Tasks', layouts:LANG==='es'?'Layouts':'Layouts', moodboards:'Moodboards'};
   var pt=document.getElementById('lib-page-title'); if(pt) pt.textContent=titles[_libTab]||t('lib_title');
   var ps=document.getElementById('lib-page-sub');   if(ps) ps.style.display='none';
 }
@@ -840,11 +843,12 @@ function renderLibLayouts(lib){
     return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;text-align:center">'
       +'<div style="width:80px;height:80px;border-radius:50%;background:var(--gold-l);display:flex;align-items:center;justify-content:center;margin-bottom:24px">'
       +'<svg width="36" height="36" fill="none" stroke="var(--gold-h)" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div>'
-      +'<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:26px;font-weight:700;margin-bottom:10px">'+(isES?'Crea tu primer plano':'Create your first layout')+'</h2>'
-      +'<p style="color:var(--muted);font-size:14px;max-width:400px;margin-bottom:32px">'+(isES?'Diseña planos reutilizables con mesas, pista de baile, escenario y más. Cárgalos en cualquier evento.':'Design reusable layouts with tables, dance floor, stage and more. Load them into any event.')+'</p>'
+      +'<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:26px;font-weight:700;margin-bottom:10px">'+(isES?'Crea tu primer layout':'Create your first layout')+'</h2>'
+      +'<p style="color:var(--muted);font-size:14px;max-width:400px;margin-bottom:32px">'+(isES?'Diseña layouts reutilizables con mesas, pista de baile, escenario y más. Cárgalos en cualquier evento.':'Design reusable layouts with tables, dance floor, stage and more. Load them into any event.')+'</p>'
       +'<button class="btn btn-primary" style="padding:14px 32px;font-size:15px" onclick="libOpenLayoutWizard()">'
       +'<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="margin-right:8px"><path d="M12 5v14M5 12h14"/></svg>'
-      +(isES?'Crear Primer Plano':'Create First Layout')+'</button>'
+      +(isES?'Crear primer layout':'Create First Layout')+'</button>'
+      
       +'</div>';
   }
   var isES=LANG==='es';
@@ -1180,7 +1184,37 @@ function libSaveLayoutDo(){
   toast(t('lib_saved'),'s');
   if(document.getElementById('pg-library')&&!document.getElementById('pg-library').classList.contains('hidden')) renderLibrary();
 }
-
+function libRecoverFromEvents(){
+  var isES=LANG==='es';
+  var all=uproj();
+  var lib=getLib();
+  var recovered=0;
+  Object.keys(all).forEach(function(key){
+    if(key==='__library__'||key==='__lib_layout__') return;
+    var p=all[key];
+    if(!p||!p.layoutItems||!p.layoutItems.length) return;
+    var name=(p.name||key)+' — '+(isES?'Recuperado':'Recovered');
+    lib.layouts.push({
+      id:'ll_rec_'+Date.now()+'_'+recovered,
+      name:name,
+      notes:isES?'Recuperado automáticamente desde el evento':'Auto-recovered from event',
+      location:p.location||'',
+      guests:p.guests||'',
+      date:new Date().toLocaleDateString(),
+      items:JSON.parse(JSON.stringify(p.layoutItems)),
+      floorplan:p.floorplan?JSON.parse(JSON.stringify(p.floorplan)):null
+    });
+    recovered++;
+  });
+  if(recovered===0){
+    toast(isES?'No se encontraron layouts en tus eventos':'No layouts found in your events','e');
+    return;
+  }
+  saveLib(lib);
+  renderLibrary();
+  toast((isES?'Layouts recuperados: ':'Layouts recovered: ')+recovered,'s');
+}
+window.libRecoverFromEvents = libRecoverFromEvents;
 function libSaveTypesModal(type){
   var srcData = type==='tables'?LSHAPES_M
     :type==='elements'?LSHAPES_M
@@ -1576,10 +1610,10 @@ function _dfSuggestRound(guests){
 }
 
 function libOpenLayoutWizard(){
-  _libLayoutWiz={step:0,guests:100,dfShape:'square',dfW:4.88,dfH:4.88,dfD:3.5,bar:true,barW:0,barH:0.4,platform:true,platW:3.66,platH:2.44,dj:true,djW:3.66,djH:1.22,stage:true,stageW:3.66,stageH:2.44,tables:{}};
+  _libLayoutWiz={step:0,guests:100,dfShape:'square',dfW:4.88,dfH:4.88,dfD:3.5,bar:true,barW:0,barH:0.4,platform:true,platW:3.66,platH:2.44,dj:true,djW:3.66,djH:1.22,stage:true,stageW:3.66,stageH:2.44,tables:{},floorplan:null,wizScalePts:[],wizZoom:1};
   var sq=_dfSuggestSquare(100);
   _libLayoutWiz.dfW=sq.w; _libLayoutWiz.dfH=sq.h;
-  _libLayoutWiz.barW=sq.w;
+  _libLayoutWiz.barW=Math.min(sq.w,sq.h);
   var rd=_dfSuggestRound(100);
   _libLayoutWiz.dfD=rd.d;
   _libRenderLayoutWizard();
@@ -1594,6 +1628,7 @@ function _libRenderLayoutWizard(){
     isES?'Pista de Baile':'Dance Floor',
     isES?'Elementos':'Elements',
     isES?'Mesas':'Tables',
+    isES?'Plano de Piso':'Floorplan',
   ];
   var prog='<div style="display:flex;align-items:center;gap:0;margin-bottom:28px">';
   steps.forEach(function(lbl,i){
@@ -1638,7 +1673,7 @@ function _libRenderLayoutWizard(){
         +'<strong>'+sqRec.w+'m × '+sqRec.h+'m</strong>'
         +'</div>'
         +'<div class="form-grid">'
-        +'<div class="ig"><label>'+(isES?'Ancho (m)':'Width (m)')+'</label><input class="input" id="lwiz-df-w" type="number" step="0.1" value="'+w.dfW+'" oninput="_libLayoutWiz.dfW=parseFloat(this.value)||'+sqRec.w+';_libLayoutWiz.barW=parseFloat(this.value)||'+sqRec.w+'"></div>'
+        +'<div class="ig"><label>'+(isES?'Ancho (m)':'Width (m)')+'</label><input class="input" id="lwiz-df-w" type="number" step="0.1" value="'+w.dfW+'" oninput="_libLayoutWiz.dfW=parseFloat(this.value)||'+sqRec.w+';_libLayoutWiz.barW=Math.min(parseFloat(this.value)||'+sqRec.w+',_libLayoutWiz.dfH)"></div>'
         +'<div class="ig"><label>'+(isES?'Alto (m)':'Height (m)')+'</label><input class="input" id="lwiz-df-h" type="number" step="0.1" value="'+w.dfH+'" oninput="_libLayoutWiz.dfH=parseFloat(this.value)||'+sqRec.h+'"></div>'
         +'</div>';
     } else {
@@ -1730,8 +1765,8 @@ function _libRenderLayoutWizard(){
       var svgW=tw+padX*2; var svgH=th+padY*2+14;
       var tx=padX; var ty=padY;
       // Colors matching the reference image: warm tan table, muted blue-grey chairs
-      var tableFill=selected?'#d4a843':'#c8962e';
-      var chairFill='#b0c4d4';
+      var tableFill=selected?'#93b8d8':'#aac9e8';
+      var chairFill='#e07a52';
       var chairs='';
       var n=item.chairs;
 
@@ -1788,7 +1823,7 @@ function _libRenderLayoutWizard(){
         +items.map(function(item){
           var sel=w.tables[item.key]&&w.tables[item.key].n>0;
           var cnt=(w.tables[item.key]||{}).n||0;
-          return '<div onclick="event.preventDefault();var _sc=document.querySelector(\'.mo-body,.mo-inner,#mo-body,[id*=modal]\');var _sy=_sc?_sc.scrollTop:0;_libWizToggleTable(\''+item.key+'\');requestAnimationFrame(function(){var _sc2=document.querySelector(\'.mo-body,.mo-inner,#mo-body,[id*=modal]\');if(_sc2)_sc2.scrollTop=_sy;});" style="cursor:pointer;padding:8px 6px;border:2px solid '+(sel?'var(--gold)':'var(--border)')+';border-radius:10px;background:'+(sel?'var(--gold-l)':'var(--card)')+';text-align:center;transition:.15s;position:relative">'
+          return '<div onclick="_libWizToggleTable(\''+item.key+'\')" style="cursor:pointer;padding:8px 6px;border:2px solid '+(sel?'var(--gold)':'var(--border)')+';border-radius:10px;background:'+(sel?'var(--gold-l)':'var(--card)')+';text-align:center;transition:.15s;position:relative">'
             +drawTableSVGv2(item,sel)
             +'<div style="margin-top:4px;font-size:10px;color:var(--muted)">'+(isES?'Sillas:':'Chairs:')+' '+item.chairs+'</div>'
             +(sel
@@ -1811,6 +1846,77 @@ function _libRenderLayoutWizard(){
       +'</div>';
   }
 
+  if(s===4){
+    var wfp=_libLayoutWiz.floorplan;
+    var pts=_libLayoutWiz.wizScalePts||[];
+    if(_libLayoutWiz.floorplanLoading){
+      body='<div style="text-align:center;padding:40px 0">'
+        +'<div style="display:inline-block;width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--gold-h);border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:16px"></div>'
+        +'<div style="font-size:14px;color:var(--muted)">'+(isES?'Cargando imagen...':'Loading image...')+'</div>'
+        +'</div>'
+        +'<style>@keyframes spin{to{transform:rotate(360deg)}}</style>';
+    } else if(!wfp||!wfp.img){
+      body='<div style="text-align:center;padding:10px 0 20px">'
+        +'<div style="font-size:15px;font-weight:700;margin-bottom:6px">'+(isES?'Sube el plano de piso del venue':'Upload the venue floorplan')+'</div>'
+        +'<div style="font-size:13px;color:var(--muted);margin-bottom:20px">'+(isES?'Opcional — puedes omitir este paso y generar el layout.':'Optional — you can skip this step and generate the layout.')+'</div>'
+        +'<label style="display:inline-flex;flex-direction:column;align-items:center;gap:12px;cursor:pointer;border:2px dashed var(--border);border-radius:var(--r-lg);padding:40px 60px;background:var(--bg2)" onmouseover="this.style.borderColor=\'var(--gold)\'" onmouseout="this.style.borderColor=\'var(--border)\'">'
+        +'<svg width="40" height="40" fill="none" stroke="var(--muted)" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>'
+        +'<span style="font-size:13px;color:var(--muted)">'+(isES?'Haz clic para subir imagen':'Click to upload image')+'</span>'
+        +'<input type="file" accept="image/*" style="display:none" onchange="_libWizFloorplanUpload(this)">'
+        +'</label>'
+        +'</div>';
+    } else {
+      var PREV_MAX=460;
+      var imgW=wfp.w||1; var imgH=wfp.h||1;
+      var zoom=_libLayoutWiz.wizZoom||1;
+      var fitScale=Math.min(PREV_MAX/imgW, PREV_MAX/imgH, 1)*zoom;
+      var dispW=Math.round(imgW*fitScale); var dispH=Math.round(imgH*fitScale);
+      var svgOverlay='';
+      if(pts.length>=1){
+        svgOverlay+='<circle cx="'+pts[0].x+'" cy="'+pts[0].y+'" r="7" fill="var(--gold)" stroke="#fff" stroke-width="2"/>'
+          +'<text x="'+(pts[0].x+10)+'" y="'+(pts[0].y-8)+'" fill="var(--gold-h)" font-size="12" font-weight="700" font-family="monospace">A</text>';
+      }
+      if(pts.length>=2){
+        svgOverlay+='<line x1="'+pts[0].x+'" y1="'+pts[0].y+'" x2="'+pts[1].x+'" y2="'+pts[1].y+'" stroke="var(--gold)" stroke-width="2" stroke-dasharray="5 3"/>'
+          +'<circle cx="'+pts[1].x+'" cy="'+pts[1].y+'" r="7" fill="var(--gold)" stroke="#fff" stroke-width="2"/>'
+          +'<text x="'+(pts[1].x+10)+'" y="'+(pts[1].y-8)+'" fill="var(--gold-h)" font-size="12" font-weight="700" font-family="monospace">B</text>';
+      }
+      var hint=pts.length===0
+        ?(isES?'Haz clic en 2 puntos de tu imagen y especifica la dimensión en metros.':'Click 2 points in your image and specify the dimension in meters.')
+        :pts.length===1
+        ?(isES?'Ahora haz clic en el punto B.':'Now click point B.')
+        :(isES?'Ingresa la distancia real entre A y B y presiona Aplicar.':'Enter the real-world distance between A and B, then click Apply.');
+      var distRow=pts.length>=2
+        ?'<div style="display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap">'
+          +'<span style="font-size:13px;font-weight:600">'+(isES?'Distancia A→B en metros:':'Distance A→B in meters:')+'</span>'
+          +'<input type="number" id="lwiz-scale-dist" step="0.1" min="0.1" placeholder="ej. 5.0" style="width:90px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px">'
+          +'<button class="btn btn-primary btn-sm" onclick="_libWizApplyScale()">'+(isES?'Aplicar':'Apply')+'</button>'
+          +(wfp.pxPerMeter?'<span style="font-size:12px;color:#16a34a;font-weight:600">✓ '+(isES?'Calibrado':'Calibrated')+': '+wfp.pxPerMeter.toFixed(1)+' px/m</span>':'')
+          +'</div>'
+        :'';
+      var zoomBar='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
+        +'<span style="font-size:12px;color:var(--muted);font-weight:600">'+(isES?'Zoom:':'Zoom:')+'</span>'
+        +'<button class="btn btn-ghost btn-sm" style="padding:2px 10px;font-size:16px;line-height:1" onclick="_libWizZoom(-0.25)"  >−</button>'
+        +'<span style="font-size:12px;min-width:36px;text-align:center">'+Math.round(zoom*100)+'%</span>'
+        +'<button class="btn btn-ghost btn-sm" style="padding:2px 10px;font-size:16px;line-height:1" onclick="_libWizZoom(0.25)">+</button>'
+        +'<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_libLayoutWiz.wizZoom=1;_libLayoutWiz.wizScalePts=[];_libRenderLayoutWizard()">'+(isES?'Restablecer':'Reset')+'</button>'
+        +'</div>';
+      var resetBtn='<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">'
+        +(pts.length>0?'<button class="btn btn-ghost btn-sm" onclick="_libLayoutWiz.wizScalePts=[];_libRenderLayoutWizard()">'+(isES?'Reiniciar puntos':'Reset points')+'</button>':'')
+        +'<button class="btn btn-ghost btn-sm" onclick="_libLayoutWiz.floorplan=null;_libLayoutWiz.wizScalePts=[];_libLayoutWiz.wizZoom=1;_libRenderLayoutWizard()">'+(isES?'Cambiar imagen':'Change image')+'</button>'
+        +'</div>';
+      body='<div style="font-size:15px;font-weight:700;margin-bottom:4px">'+(isES?'Escala':'Scale')+'</div>'
+        +'<div style="font-size:13px;color:var(--muted);margin-bottom:10px">'+hint+'</div>'
+        +zoomBar
+        +'<div id="lwiz-fp-preview" onclick="_libWizPickPoint(event,this)" style="position:relative;display:inline-block;cursor:crosshair;border:1px solid var(--border);border-radius:6px;overflow:hidden;user-select:none;max-width:100%">'
+        +'<img src="'+wfp.img+'" style="display:block;width:'+dispW+'px;height:'+dispH+'px;pointer-events:none" draggable="false">'
+        +'<svg style="position:absolute;top:0;left:0;pointer-events:none" width="'+dispW+'" height="'+dispH+'">'+svgOverlay+'</svg>'
+        +'</div>'
+        +distRow
+        +resetBtn;
+    }
+  }
+
   var stickyFooter='';
   if(s===3){
     var tt2=0; var tc2=0;
@@ -1821,21 +1927,24 @@ function _libRenderLayoutWizard(){
       +'</div>';
   }
   openMo(prog
-    +'<div style="overflow-y:auto;max-height:55vh">'+body+'</div>'
+    +'<div id="lwiz-scroll" style="overflow-y:auto;max-height:55vh">'+body+'</div>'
     +stickyFooter
     +'<div class="mo-foot">'
     +'<button class="btn btn-ghost" onclick="closeMo()">'+(isES?'Cancelar':'Cancel')+'</button>'
     +(s>0?'<button class="btn btn-ghost" onclick="_libLayoutWiz.step--;_libRenderLayoutWizard()">← '+(isES?'Atrás':'Back')+'</button>':'')
-    +(s<3?'<button class="btn btn-primary" onclick="_libLayoutWizNext()">'+(isES?'Siguiente':'Next')+' →</button>'
-          :'<button class="btn btn-primary" onclick="_libLayoutWizGenerate()">⚡ '+(isES?'Generar Plano':'Generate Layout')+'</button>')
+    +(s<4?'<button class="btn btn-primary" onclick="_libLayoutWizNext()">'+(isES?'Siguiente':'Next')+' →</button>'
+          :((_libLayoutWiz.floorplan&&_libLayoutWiz.floorplan.img&&!_libLayoutWiz.floorplan.pxPerMeter&&!_libLayoutWiz.floorplanLoading)
+            ?'<button class="btn btn-ghost" onclick="_libLayoutWiz.floorplan.pxPerMeter=null;_libLayoutWizGenerate()">'+(isES?'Generar sin escalar':'Don\'t scale and generate layout')+'</button>'
+            :'')
+          +'<button class="btn btn-primary" onclick="_libLayoutWizGenerate()" '+((_libLayoutWiz.floorplanLoading)?'disabled style="opacity:.5;cursor:not-allowed"':'')+'>⚡ '+(isES?'Generar Plano':'Generate Layout')+'</button>')
     +'</div>');
 }
 window._libRenderLayoutWizard = _libRenderLayoutWizard;
 
 function _libWizToggleTable(key){
-  // Save modal scroll position before re-rendering
-  var _moScrollEl=document.getElementById('mo-body')||document.querySelector('.mo-scroll')||document.querySelector('[style*="overflow-y:auto"]');
-  var _moScrollY=_moScrollEl?_moScrollEl.scrollTop:0;
+  // Save scroll position of the inner scrollable div before re-rendering
+  var _scrollEl=document.getElementById('lwiz-scroll');
+  var _moScrollY=_scrollEl?_scrollEl.scrollTop:0;
   if(!_libLayoutWiz.tables) _libLayoutWiz.tables={};
   var catalogue=[
     {key:'rect-2x1.2',chairs:6,cols:4},{key:'rect-2.4x1.2',chairs:8,cols:4},{key:'rect-2.6x1.2',chairs:8,cols:4},{key:'rect-2.8x1.2',chairs:10,cols:4},{key:'rect-3x1.2',chairs:10,cols:3},{key:'rect-3.2x1.2',chairs:12,cols:3},{key:'rect-3.4x1.2',chairs:12,cols:3},{key:'rect-3.6x1.2',chairs:14,cols:3},{key:'rect-3.8x1.2',chairs:14,cols:3},{key:'rect-4x1.2',chairs:16,cols:3},
@@ -1852,18 +1961,89 @@ function _libWizToggleTable(key){
   _libRenderLayoutWizard();
   // Restore scroll position after re-render
   requestAnimationFrame(function(){
-    var el=document.getElementById('mo-body')||document.querySelector('.mo-scroll')||document.querySelector('[style*="overflow-y:auto"]');
+    var el=document.getElementById('lwiz-scroll');
     if(el) el.scrollTop=_moScrollY;
   });
 }
 window._libWizToggleTable = _libWizToggleTable;
+
+function _libWizFloorplanUpload(input){
+  var file=input.files&&input.files[0]; if(!file) return;
+  // Immediately show loading state and disable Generate
+  _libLayoutWiz.floorplanLoading=true;
+  _libRenderLayoutWizard();
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    var img=new Image();
+    img.onload=function(){
+      _libLayoutWiz.floorplan={img:ev.target.result,w:img.naturalWidth,h:img.naturalHeight,scale:1,opacity:0.4,x:0,y:0,pxPerMeter:null};
+      _libLayoutWiz.wizScalePts=[];
+      _libLayoutWiz.floorplanLoading=false;
+      _libRenderLayoutWizard();
+    };
+    img.onerror=function(){
+      _libLayoutWiz.floorplanLoading=false;
+      _libRenderLayoutWizard();
+      alert(LANG==='es'?'Error al cargar la imagen.':'Error loading image.');
+    };
+    img.src=ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+window._libWizFloorplanUpload = _libWizFloorplanUpload;
+
+function _libWizPickPoint(e, el){
+  var pts=_libLayoutWiz.wizScalePts;
+  if(pts.length>=2) return;
+  var rect=el.getBoundingClientRect();
+  var x=Math.round(e.clientX-rect.left);
+  var y=Math.round(e.clientY-rect.top);
+  pts.push({x:x,y:y});
+  _libLayoutWiz.wizScalePts=pts;
+  _libRenderLayoutWizard();
+  requestAnimationFrame(function(){
+    var sc=document.getElementById('lwiz-scroll');
+    if(sc) sc.scrollTop=sc.scrollHeight;
+  });
+}
+window._libWizPickPoint = _libWizPickPoint;
+
+function _libWizApplyScale(){
+  var pts=_libLayoutWiz.wizScalePts;
+  if(pts.length<2) return;
+  var distEl=document.getElementById('lwiz-scale-dist');
+  var meters=distEl?parseFloat(distEl.value):0;
+  if(!meters||meters<=0) return alert(LANG==='es'?'Ingresa una distancia válida en metros.':'Enter a valid distance in meters.');
+  var pxDist=Math.hypot(pts[1].x-pts[0].x,pts[1].y-pts[0].y);
+  if(pxDist<5) return alert(LANG==='es'?'Los puntos están muy cerca, elige puntos más separados.':'Points are too close, pick points further apart.');
+  var wfp=_libLayoutWiz.floorplan;
+  var PREV_MAX=460;
+  var zoom=_libLayoutWiz.wizZoom||1;
+  var fitScale=Math.min(PREV_MAX/wfp.w,PREV_MAX/wfp.h,1)*zoom;
+  var naturalPxDist=pxDist/fitScale;
+  wfp.pxPerMeter=naturalPxDist/meters;
+  _libLayoutWiz.wizScalePts=[];
+  _libRenderLayoutWizard();
+}
+window._libWizApplyScale = _libWizApplyScale;
+
+function _libWizZoom(delta){
+  var z=(_libLayoutWiz.wizZoom||1)+delta;
+  if(z<0.25) z=0.25;
+  if(z>5) z=5;
+  // Reset picked points when zooming — coordinates would be stale
+  _libLayoutWiz.wizZoom=z;
+  _libLayoutWiz.wizScalePts=[];
+  _libRenderLayoutWizard();
+}
+window._libWizZoom = _libWizZoom;
 
 function _libLayoutWizNext(){
   var w=_libLayoutWiz;
   if(w.step===0){
     w.guests=parseInt(document.getElementById('lwiz-guests')?.value)||100;
     var sq=_dfSuggestSquare(w.guests); var rd=_dfSuggestRound(w.guests);
-    w.dfW=sq.w; w.dfH=sq.h; w.dfD=rd.d; w.barW=sq.w;
+    w.dfW=sq.w; w.dfH=sq.h; w.dfD=rd.d; w.barW=Math.min(sq.w,sq.h);
   }
   w.step++;
   _libRenderLayoutWizard();
@@ -1927,7 +2107,7 @@ function _libLayoutWizGenerate(){
   elY+=dfH+spacing;
 
   if(w.bar){
-    var barW=Math.round((w.barW||dfW/ppm)*ppm); var barH=Math.round((w.barH||0.4)*ppm);
+    var barW=Math.round((w.barW||Math.min(dfW,dfH)/ppm)*ppm); var barH=Math.round((w.barH||0.4)*ppm);
     var barShape=typeof LSHAPES!=='undefined'&&LSHAPES['bar']?LSHAPES['bar']:{bg:'#fef3c7',bdClr:'#f59e0b'};
     items.push({id:idGen(),shape:'bar',x:elX,y:elY,w:barW,h:barH,bg:barShape.bg,bdClr:barShape.bdClr,radius:'0px',label:isES?'Barra de Shots':'Shot Bar',chairs:0,cost:0,rotation:0});
     elY+=barH+spacing;
@@ -1960,7 +2140,7 @@ function _libLayoutWizGenerate(){
     id:entryId, name:name, notes:'', location:'', guests:String(guests),
     date:new Date().toLocaleDateString(),
     items:JSON.parse(JSON.stringify(items)),
-    floorplan:null
+    floorplan:_libLayoutWiz.floorplan?JSON.parse(JSON.stringify(_libLayoutWiz.floorplan)):null
   });
   saveLib(lib);
   closeMo();

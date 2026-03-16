@@ -147,6 +147,8 @@ async function loadProjectsFromCloud(userId){
       var projects = {};
       rows.forEach(function(row){ projects[row.id] = row.data; });
       DB.projects[userId] = projects;
+      // Mark the library as loaded from cloud so getLib() knows it's safe to seed
+      if(projects['__library__']) projects['__library__']._seeded = true;
       cacheDB();
     } else if(!hadCache){
       if(!DB.projects[userId]) DB.projects[userId] = {};
