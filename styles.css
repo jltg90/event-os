@@ -1379,6 +1379,7 @@ tr:hover td { background: var(--bg2); }
   width: 52px;
 }
 .app-sidebar.collapsed .sidebar-item span,
+.app-sidebar.collapsed #sidebar-toggle-btn span,
 .app-sidebar.collapsed .sidebar-section-label,
 .app-sidebar.collapsed .sidebar-divider {
   display: none;

@@ -840,7 +840,14 @@ function doImport(){
 }
 
 var DEFAULT_PPM = 40;
-function getPPM(){ return (LState&&LState.floorplan&&LState.floorplan.pxPerMeter)||DEFAULT_PPM; }
+function getPPM(){
+  return DEFAULT_PPM;
+}
+function getFloorplanPPM(){
+  if(LState&&LState.floorplan&&LState.floorplan.pxPerMeter) return LState.floorplan.pxPerMeter;
+  return 0;
+}
+
 function mToPx(m){ return Math.round(m*getPPM()); }
 function pxToM(px){ return px/getPPM(); }
 
@@ -854,8 +861,9 @@ var LSHAPES_M={
   'dj-booth':     {wm:3.66,hm:1.22,bg:'#e8d5f0',bdClr:'#6a3d8a',radius:'0px', label:'DJ Booth',     chairs:0},
   'gift-table':   {wm:1.8, hm:0.6, bg:'#f0d8e8',bdClr:'#7a3060',radius:'0px', label:'Gift Table',   chairs:0},
   'photo-booth':  {wm:2.0, hm:2.0, bg:'#cce8f5',bdClr:'#1a5580',radius:'0px', label:'Photo Booth',  chairs:0},
+  'custom-elem':  {wm:2.0, hm:2.0, bg:'#e0e0e0',bdClr:'#888888',radius:'0px', label:'Custom',       chairs:0},
 };
-var CHAIR_SIZE_M = 0.4;
+var CHAIR_SIZE_M = 0.40;
 
 function getLSHAPES(){
   var ppm=getPPM();
@@ -953,7 +961,7 @@ function saveLayoutStyles(){
   saveProj(p);
 }
 
-function getSavedLayouts(p){ return p.savedLayouts||[]; }
+
 
 function calcLayoutBudget(items){
   let total=0, breakdown={};

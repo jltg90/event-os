@@ -52,7 +52,13 @@ function applyTranslations(){
     const pid = page.id;
     if(pid==='pg-events') renderEvents();
     else if(pid==='pg-analytics'){ renderAnalytics(); updateAnalyticsLabels(); }
-    else if(pid==='pg-library') renderLibrary();
+    else if(pid==='pg-library'){
+      renderLibrary();
+      if(typeof _libEditingLayoutId!=='undefined'&&_libEditingLayoutId&&typeof renderLayout==='function'){
+        renderLayout();
+        setTimeout(function(){ lZoom(0,'fit'); },120);
+      }
+    }
     else if(pid==='pg-project'){
       renderPNav();
       const tabs = ['dashboard','budget','timeline','guests','layout','moodboard'];
@@ -410,6 +416,7 @@ function switchTab(tab){
   });
   document.querySelectorAll('.ptab').forEach(el=>el.classList.toggle('active',el.dataset.tab===tab));
   ({dashboard:renderDash,budget:renderBudget,timeline:renderTimeline,guests:renderGuests,layout:renderLayout,moodboard:renderMoodboard})[tab]?.();
+  if(tab==='layout'){ setTimeout(function(){ lZoom(0,'fit'); },120); }
 }
 
 function uproj(){ return DB.projects[DB.cur]||{}; }
@@ -421,7 +428,7 @@ function createSampleProject(email){
     description:'A stunning summer gala event', date:'2026-06-15', location:'The Grand Garden Hall',
     budget:25000, type:'social', status:'planning',
     vendors:defaultVendors(), vendorsInitialized:true,
-    tasks:defaultTasks(), guests:sampleGuests(), layoutItems:[],savedLayouts:[],
+    tasks:defaultTasks(), guests:sampleGuests(), layoutItems:[], layoutExport:null,
     moodboard:{ folders:[], uncategorized:[] },
     models3d:[],
   };
@@ -565,6 +572,8 @@ function setEvFilter(mode){
   _efAt=true; _efFr=null; _efTo=null;
   const fromEl=document.getElementById('ef-from'); const toEl=document.getElementById('ef-to');
   if(fromEl)fromEl.value=''; if(toEl)toEl.value='';
+  const fdEl=document.getElementById('ef-from-display'); if(fdEl)fdEl.firstElementChild.textContent='DD / MM / YYYY';
+  const tdEl=document.getElementById('ef-to-display'); if(tdEl)tdEl.firstElementChild.textContent='DD / MM / YYYY';
   const btn=document.getElementById('ef-alltime'); if(btn)btn.classList.add('active');
   saveEvPrefs(); renderEvents();
 }
@@ -614,3 +623,5 @@ function setEvView(v){
   document.getElementById('ev-view-list').classList.toggle('active',v==='list');
   saveEvPrefs(); renderEvents();
 }
+
+

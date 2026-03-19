@@ -1,3 +1,382 @@
+﻿// -- IndexedDB helpers for floorplan image --
+function _fpDB(){
+  return new Promise(function(resolve,reject){
+    var req=indexedDB.open('EventOS_FP',1);
+    req.onupgradeneeded=function(e){e.target.result.createObjectStore('images');};
+    req.onsuccess=function(e){resolve(e.target.result);};
+    req.onerror=function(e){reject(e);};
+  });
+}
+function _fpSave(key,dataUrl){
+  return _fpDB().then(function(db){
+    return new Promise(function(resolve,reject){
+      var tx=db.transaction('images','readwrite');
+      tx.objectStore('images').put(dataUrl,key);
+      tx.oncomplete=function(){resolve();};
+      tx.onerror=function(e){reject(e);};
+    });
+  });
+}
+function _fpLoad(key){
+  return _fpDB().then(function(db){
+    return new Promise(function(resolve,reject){
+      var tx=db.transaction('images','readonly');
+      var req=tx.objectStore('images').get(key);
+      req.onsuccess=function(){resolve(req.result||null);};
+      req.onerror=function(e){reject(e);};
+    });
+  });
+}
+function _fpDelete(key){
+  return _fpDB().then(function(db){
+    return new Promise(function(resolve){
+      var tx=db.transaction('images','readwrite');
+      tx.objectStore('images').delete(key);
+      tx.oncomplete=function(){resolve();};
+      tx.onerror=function(){resolve();};
+    });
+  });
+}
+
+
+var _layoutMigrationPending = {};
+
+function isLibraryLayoutEditing(){
+  return typeof _libEditingLayoutId!=='undefined' && !!_libEditingLayoutId;
+}
+
+function isEventLayoutViewOnly(p){
+  return !!(p && p.id && p.id!=='__library__' && p.id!=='__lib_layout__' && !isLibraryLayoutEditing());
+}
+
+function _layoutDimLabel(item, ppm){
+  var w = ((item.w||0) / ppm).toFixed(2);
+  var h = ((item.h||0) / ppm).toFixed(2);
+  var isRound = item.shape==='round-table'||item.radius==='50%'||(typeof LSHAPES_M!=='undefined'&&LSHAPES_M[item.shape]&&LSHAPES_M[item.shape].radius==='50%');
+  if(isRound && Math.abs((item.w||0) - (item.h||0)) < 2) return 'D ' + w + 'm';
+  return w + 'm x ' + h + 'm';
+}
+
+function getLayoutSummary(items, meta, floorplan){
+  items = items || [];
+  meta = meta || {};
+  var ppm = (floorplan && floorplan.pxPerMeter) || meta.pxPerMeter || (meta.floorplan && meta.floorplan.pxPerMeter) || getPPM();
+  var groups = {};
+  items.forEach(function(item){
+    var shapeDef = (typeof LSHAPES_M!=='undefined' && LSHAPES_M) ? LSHAPES_M[item.shape] : null;
+    var typeLabel = shapeDef && shapeDef.label ? shapeDef.label : String(item.shape || 'Element').replace(/-/g,' ');
+    var dimensions = _layoutDimLabel(item, ppm);
+    var key = [typeLabel, dimensions].join('||');
+    if(!groups[key]) groups[key] = { type:typeLabel, dimensions:dimensions, qty:0, labels:[] };
+    groups[key].qty++;
+    if(item.label && groups[key].labels.indexOf(item.label) < 0) groups[key].labels.push(item.label);
+  });
+  return {
+    tables: items.filter(function(i){ return i.shape && i.shape.includes('table'); }).length,
+    guests: meta.guests || '',
+    location: meta.location || '',
+    notes: meta.notes || '',
+    elements: Object.values(groups).sort(function(a,b){
+      if(a.type===b.type) return a.dimensions.localeCompare(b.dimensions);
+      return a.type.localeCompare(b.type);
+    })
+  };
+}
+
+function _svgDataUri(svg){
+  return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+}
+
+function buildLayoutSnapshotGraphic(opts){
+  opts = opts || {};
+  var items = opts.items || [];
+  var floorplan = opts.floorplan || null;
+  if(typeof LSHAPES_M==='undefined' || !LSHAPES_M) LSHAPES_M = getLSHAPES();
+  var PPM = (floorplan && floorplan.pxPerMeter) || getPPM();
+  var CHAIR_SZ = Math.max(8, Math.round(CHAIR_SIZE_M * PPM));
+  var CHAIR_GAP = Math.max(2, Math.round(0.05 * PPM));
+  var PAD = CHAIR_SZ + CHAIR_GAP + 4;
+  var minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+
+  items.forEach(function(item){
+    var hasCh = item.chairs > 0;
+    var px = hasCh ? PAD : 0;
+    minX = Math.min(minX, item.x - px);
+    minY = Math.min(minY, item.y - px);
+    maxX = Math.max(maxX, item.x + item.w + px);
+    maxY = Math.max(maxY, item.y + item.h + px);
+  });
+
+  if(floorplan && floorplan.img && floorplan.img!=='__idb__' && floorplan.img!=='__stored__'){
+    var fpW = Math.round((floorplan.w||0) * (floorplan.scale||1));
+    var fpH = Math.round((floorplan.h||0) * (floorplan.scale||1));
+    minX = Math.min(minX, floorplan.x||0);
+    minY = Math.min(minY, floorplan.y||0);
+    maxX = Math.max(maxX, (floorplan.x||0) + fpW);
+    maxY = Math.max(maxY, (floorplan.y||0) + fpH);
+  }
+
+  if(!isFinite(minX) || !isFinite(minY) || !isFinite(maxX) || !isFinite(maxY)){
+    minX = 0; minY = 0; maxX = 900; maxY = 650;
+  }
+
+  var MARGIN = 80;
+  var rawW = Math.max(320, maxX - minX + MARGIN*2);
+  var rawH = Math.max(220, maxY - minY + MARGIN*2);
+  var MAX_W = opts.maxWidth || 1400;
+  var scale = rawW > MAX_W ? MAX_W / rawW : 1;
+  var svgW = Math.round(rawW * scale);
+  var svgH = Math.round(rawH * scale);
+  var ox = (-minX + MARGIN) * scale;
+  var oy = (-minY + MARGIN) * scale;
+
+  function sc(v){ return Math.round(v * scale); }
+  function sx(v){ return Math.round(v * scale + ox); }
+  function sy(v){ return Math.round(v * scale + oy); }
+
+  var svgItems = '';
+  if(floorplan && floorplan.img && floorplan.img!=='__idb__' && floorplan.img!=='__stored__'){
+    var fpScale = floorplan.scale || 1;
+    var fpX = sx(floorplan.x || 0);
+    var fpY = sy(floorplan.y || 0);
+    var fpW2 = sc((floorplan.w || 0) * fpScale);
+    var fpH2 = sc((floorplan.h || 0) * fpScale);
+    var fpRot = floorplan.rotation || 0;
+    svgItems += '<g transform="translate('+fpX+','+fpY+') rotate('+fpRot+','+(fpW2/2)+','+(fpH2/2)+')" opacity="'+(floorplan.opacity==null?0.35:floorplan.opacity)+'"><image href="'+floorplan.img+'" x="0" y="0" width="'+fpW2+'" height="'+fpH2+'" preserveAspectRatio="none"/></g>\n';
+  }
+
+  items.forEach(function(item){
+    var isRound = item.shape==='round-table'||item.radius==='50%'||(LSHAPES_M[item.shape]&&LSHAPES_M[item.shape].radius==='50%');
+    var rot = item.rotation || 0;
+    var iw = sc(item.w);
+    var ih = sc(item.h);
+    var ix = sx(item.x);
+    var iy = sy(item.y);
+    var inner = '';
+
+    if(item.chairs){
+      var n = item.chairs;
+      var cs = Math.max(4, Math.round(CHAIR_SZ * scale));
+      var gap = Math.max(1, Math.round(CHAIR_GAP * scale));
+      var cType = item.chairType || 'default';
+      var ct = CHAIR_TYPES[cType] || CHAIR_TYPES['default'];
+      var cfill = ct ? ct.fill : '#e8e4d8';
+      var cstroke = ct ? (ct.stroke || 'none') : 'none';
+      var positions = [];
+      var w = sc(item.w), h = sc(item.h);
+
+      if(isRound){
+        for(var i=0;i<n;i++){
+          var angle=(i/n)*2*Math.PI - Math.PI/2;
+          positions.push({
+            x: w/2 + (w/2 + cs/2 + gap)*Math.cos(angle),
+            y: h/2 + (h/2 + cs/2 + gap)*Math.sin(angle)
+          });
+        }
+      } else if(item.shape==='rect-table'){
+        var longSide=4, shortSide=Math.max(1,Math.round((n-longSide*2)/2));
+        var top=longSide, bot=longSide, left=shortSide, right=shortSide;
+        for(var j=0;j<top;j++) positions.push({x:(j+1)*w/(top+1), y:-(cs/2+gap)});
+        for(var k=0;k<bot;k++) positions.push({x:(k+1)*w/(bot+1), y:h+cs/2+gap});
+        for(var l=0;l<left;l++) positions.push({x:-(cs/2+gap), y:(l+1)*h/(left+1)});
+        for(var m=0;m<right;m++) positions.push({x:w+cs/2+gap, y:(m+1)*h/(right+1)});
+      } else {
+        var chairSlot = cs + 5;
+        var longCap = Math.max(1,Math.floor(w/chairSlot));
+        var top2=0,bot2=0,left2=0,right2=0;
+        if(n<=2*longCap){ top2=Math.ceil(n/2); bot2=Math.floor(n/2); }
+        else {
+          top2=longCap; bot2=longCap;
+          var rem=n-top2-bot2;
+          left2=Math.ceil(rem/2); right2=Math.floor(rem/2);
+        }
+        for(var n1=0;n1<top2;n1++) positions.push({x:(n1+1)*w/(top2+1), y:-(cs/2+gap)});
+        for(var n2=0;n2<bot2;n2++) positions.push({x:(n2+1)*w/(bot2+1), y:h+cs/2+gap});
+        for(var n3=0;n3<left2;n3++) positions.push({x:-(cs/2+gap), y:(n3+1)*h/(left2+1)});
+        for(var n4=0;n4<right2;n4++) positions.push({x:w+cs/2+gap, y:(n4+1)*h/(right2+1)});
+      }
+
+      var chairIsRound = !cType.startsWith('plegable') && !cType.startsWith('basket');
+      positions.forEach(function(pos){
+        if(chairIsRound){
+          inner += '<ellipse cx="'+Math.round(pos.x)+'" cy="'+Math.round(pos.y)+'" rx="'+Math.round(cs/2)+'" ry="'+Math.round(cs/2)+'" fill="'+cfill+'" stroke="'+cstroke+'" stroke-width="0.8"/>';
+        } else {
+          inner += '<rect x="'+Math.round(pos.x - cs/2)+'" y="'+Math.round(pos.y - cs/2)+'" width="'+cs+'" height="'+cs+'" rx="2" fill="'+cfill+'" stroke="'+cstroke+'" stroke-width="0.8"/>';
+        }
+      });
+    }
+
+    var rx;
+    if(isRound){ rx = Math.min(iw,ih)/2; }
+    else {
+      var shapeDef = LSHAPES_M[item.shape];
+      if(shapeDef && shapeDef.radius && shapeDef.radius==='0px'){ rx=0; }
+      else if(item.radius && item.radius==='0px'){ rx=0; }
+      else if(item.radius && item.radius!=='50%'){
+        var rNum = parseFloat(item.radius);
+        rx = isNaN(rNum) ? 3 : rNum;
+      } else { rx = 3; }
+    }
+
+    inner += '<rect x="0" y="0" width="'+iw+'" height="'+ih+'" rx="'+rx+'" fill="'+(item.bg||'#ffffff')+'" stroke="'+(item.bdClr||'#ccc')+'" stroke-width="1"/>';
+    if(item.centerpiece && item.centerpiece!=='none'){
+      var ct2 = CENTERPIECE_TYPES[item.centerpiece];
+      if(ct2 && ct2.color){
+        var cpSz = Math.round(Math.min(iw,ih)*0.55);
+        inner += '<ellipse cx="'+(iw/2)+'" cy="'+(ih/2)+'" rx="'+(cpSz/2)+'" ry="'+(cpSz/2)+'" fill="'+ct2.color+'" opacity="0.55"/>';
+      }
+    }
+
+    var wM = item.w / PPM;
+    var fs = Math.max(6, Math.min(13, Math.round(wM * 8 * scale)));
+    inner += '<text x="'+(iw/2)+'" y="'+(ih/2+fs*0.35)+'" text-anchor="middle" font-family="Jost,Segoe UI,Arial,sans-serif" font-size="'+fs+'" fill="'+(item.bdClr||'#444')+'" font-weight="400">'+esc(item.label||'')+'</text>';
+    svgItems += '<g transform="translate('+ix+','+iy+') rotate('+rot+','+(iw/2)+','+(ih/2)+')">'+inner+'</g>\n';
+  });
+
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="'+svgW+'" height="'+svgH+'" viewBox="0 0 '+svgW+' '+svgH+'"><rect width="'+svgW+'" height="'+svgH+'" fill="#ffffff"/>'+svgItems+'</svg>';
+  return { svg: svg, svgW: svgW, svgH: svgH, image: _svgDataUri(svg) };
+}
+
+function createLayoutExportPayload(entry, floorplanOverride){
+  if(!entry) return null;
+  var floorplan = floorplanOverride===undefined ? entry.floorplan : floorplanOverride;
+  var graphic = buildLayoutSnapshotGraphic({ items: entry.items || [], floorplan: floorplan, maxWidth: 1400 });
+  var exportedAt = new Date().toISOString();
+  return {
+    layoutId: entry.id,
+    layoutName: entry.name || (LANG==='es'?'Plano sin nombre':'Untitled layout'),
+    image: graphic.image,
+    exportedAt: exportedAt,
+    libraryVersion: entry.updatedAt || entry.date || exportedAt,
+    summary: getLayoutSummary(entry.items || [], entry, floorplan)
+  };
+}
+
+function openLayoutImagePreview(src, title){
+  if(!src) return;
+  openMo('<div class="mo-title">'+esc(title || (LANG==='es'?'Vista previa del plano':'Layout preview'))+'</div><div style="max-height:72vh;overflow:auto;border:1px solid var(--border);border-radius:12px;background:#fff;padding:12px"><img src="'+src+'" alt="'+esc(title || 'Layout')+'" style="display:block;width:100%;height:auto;border-radius:8px"></div><div class="mo-foot"><button class="btn btn-primary" onclick="closeMo()">'+t('close')+'</button></div>');
+}
+
+function openLayoutLibraryPicker(){
+  if(typeof openLibrary==='function'){
+    _libTab='layouts';
+    openLibrary();
+  }
+}
+
+function openEventLayoutInLibrary(){
+  var p = proj();
+  var exp = p && p.layoutExport;
+  if(!exp || !exp.layoutId) return;
+  _libTab='layouts';
+  if(typeof openLibrary==='function') openLibrary();
+  setTimeout(function(){
+    if(typeof libOpenLayoutEditor==='function') libOpenLayoutEditor(exp.layoutId);
+  }, 120);
+}
+
+function refreshEventLayoutFromLibrary(){
+  var p = proj();
+  var exp = p && p.layoutExport;
+  if(!exp || !exp.layoutId || typeof libApplyLayoutExportToEvent!=='function') return;
+  libApplyLayoutExportToEvent(exp.layoutId, p.id, {toastSuccess:true});
+}
+
+function renderEventLayoutViewer(p){
+  var el=document.getElementById('tab-layout');
+  if(!el) return;
+  var exp = p.layoutExport || null;
+  var missingSource = false;
+  if(exp && exp.layoutId && typeof getLib==='function'){
+    missingSource = !getLib().layouts.some(function(entry){ return entry.id===exp.layoutId; });
+  }
+  var summary = exp && exp.summary ? exp.summary : null;
+  var exportedAt = exp && exp.exportedAt ? new Date(exp.exportedAt) : null;
+  var dateLabel = exportedAt && !isNaN(exportedAt) ? exportedAt.toLocaleDateString(LANG==='es'?'es-MX':'en-US',{year:'numeric',month:'long',day:'numeric'}) : '';
+
+  if(window.innerWidth <= 768){
+    el.style.height = 'auto';
+    el.style.overflow = 'visible';
+  } else {
+    var tnavH = (document.querySelector('.tnav')||{}).offsetHeight || 62;
+    var pnavH = (document.querySelector('.pnav')||{}).offsetHeight || 58;
+    el.style.height = 'calc(100vh - ' + (tnavH + pnavH) + 'px)';
+    el.style.overflow = 'auto';
+  }
+
+  if(!exp){
+    el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:28px"><div style="max-width:560px;width:100%;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:34px;text-align:center;box-shadow:var(--sh-sm)"><div style="width:76px;height:76px;border-radius:50%;background:var(--gold-l);margin:0 auto 20px;display:flex;align-items:center;justify-content:center;color:var(--gold-h)"><svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div><div style="font-family:Cormorant Garamond,serif;font-size:30px;font-weight:700;margin-bottom:10px">'+(LANG==='es'?'No hay layout exportado':'No exported layout yet')+'</div><div style="color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:24px">'+(LANG==='es'?'Los layouts ahora se crean y editan en la Biblioteca. Exporta uno a este evento para verlo aqui.':'Layouts are now created and edited in the Library. Export one into this event to view it here.')+'</div><button class="btn btn-primary" onclick="openLayoutLibraryPicker()">'+(LANG==='es'?'Elegir de Biblioteca':'Choose from Library')+'</button></div></div>';
+    return;
+  }
+
+  var summaryRows = summary && summary.elements && summary.elements.length
+    ? summary.elements.map(function(row){
+        var labels = row.labels && row.labels.length ? row.labels.slice(0,3).join(', ') : '?';
+        return '<tr><td style="padding:10px 12px;font-weight:600">'+esc(row.type)+'</td><td style="padding:10px 12px;color:var(--muted)">'+esc(row.dimensions)+'</td><td style="padding:10px 12px;text-align:center">'+row.qty+'</td><td style="padding:10px 12px;color:var(--muted)">'+esc(labels)+'</td></tr>';
+      }).join('')
+    : '<tr><td colspan="4" style="padding:14px 12px;color:var(--muted);text-align:center">'+(LANG==='es'?'No hay elementos en este layout':'No elements in this layout')+'</td></tr>';
+  el.innerHTML = '<div style="max-width:1180px;margin:0 auto;padding:24px;width:100%"><div style="display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start;margin-bottom:20px"><div style="flex:1;min-width:260px"><div style="font-family:Cormorant Garamond,serif;font-size:32px;font-weight:700;margin-bottom:6px">'+esc(exp.layoutName || (LANG==='es'?'Layout exportado':'Exported layout'))+'</div><div style="font-size:13px;color:var(--muted);line-height:1.6">'+(LANG==='es'?'Vista de solo lectura del layout exportado desde la Biblioteca.':'Read-only view of the layout exported from the Library.')+(dateLabel?(' '+(LANG==='es'?'Exportado el ':'Exported on ')+dateLabel+'.'):'')+'</div>'+(missingSource?'<div style="margin-top:12px;padding:10px 12px;border:1px solid rgba(239,68,68,.25);background:rgba(239,68,68,.08);border-radius:10px;font-size:12px;color:var(--danger)">'+(LANG==='es'?'El layout fuente ya no existe en la Biblioteca. Puedes ver esta exportacion, pero no actualizarla.':'The source layout no longer exists in the Library. You can still view this export, but you cannot refresh it.')+'</div>':'')+'</div><div style="display:flex;flex-wrap:wrap;gap:8px"><button class="btn btn-ghost" onclick="openLayoutLibraryPicker()">'+(LANG==='es'?'Biblioteca':'Library')+'</button>'+(missingSource?'':'<button class="btn btn-ghost" onclick="openEventLayoutInLibrary()">'+(LANG==='es'?'Editar en Biblioteca':'Edit in Library')+'</button>')+(missingSource?'':'<button class="btn btn-primary" onclick="refreshEventLayoutFromLibrary()">'+(LANG==='es'?'Actualizar desde Biblioteca':'Refresh from Library')+'</button>')+'</div></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px"><div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">'+(LANG==='es'?'Mesas':'Tables')+'</div><div style="font-size:24px;font-weight:700">'+((summary&&summary.tables)||0)+'</div></div><div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">'+(LANG==='es'?'Invitados':'Guests')+'</div><div style="font-size:24px;font-weight:700">'+((summary&&summary.guests)||'-')+'</div></div></div><div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;box-shadow:var(--sh-sm);margin-bottom:18px">'+(exp.image?'<img src="'+exp.image+'" alt="'+esc(exp.layoutName||'Layout')+'" style="display:block;width:100%;height:auto;border-radius:14px;border:1px solid var(--border);background:#fff">':'<div style="padding:44px;text-align:center;color:var(--muted)">'+(LANG==='es'?'No se pudo generar la imagen del layout':'Could not generate the layout image')+'</div>')+'</div><div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;box-shadow:var(--sh-sm)"><div style="font-family:Cormorant Garamond,serif;font-size:24px;font-weight:700;margin-bottom:12px">'+(LANG==='es'?'Resumen de Elementos':'Element Summary')+'</div><div style="overflow:auto"><table style="width:100%;border-collapse:collapse"><thead><tr style="background:var(--bg2)"><th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--muted)">'+(LANG==='es'?'Elemento':'Element')+'</th><th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--muted)">'+(LANG==='es'?'Dimensiones':'Dimensions')+'</th><th style="padding:10px 12px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--muted)">'+(LANG==='es'?'Cantidad':'Qty')+'</th><th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--muted)">'+(LANG==='es'?'Etiquetas':'Labels')+'</th></tr></thead><tbody>'+summaryRows+'</tbody></table></div></div></div>';
+}
+
+function ensureEventLayoutExport(p){
+  if(!isEventLayoutViewOnly(p)) return Promise.resolve(p ? p.layoutExport || null : null);
+  if(p.layoutExport) return Promise.resolve(p.layoutExport);
+  if(!p.layoutItems || !p.layoutItems.length || typeof migrateLegacyEventLayoutToLibrary!=='function'){
+    return Promise.resolve(null);
+  }
+  if(_layoutMigrationPending[p.id]) return _layoutMigrationPending[p.id];
+  _layoutMigrationPending[p.id] = migrateLegacyEventLayoutToLibrary(p).then(function(exp){
+    delete _layoutMigrationPending[p.id];
+    if(typeof CID!=='undefined' && CID===p.id && typeof CTAB!=='undefined' && CTAB==='layout') renderLayout();
+    return exp || null;
+  }).catch(function(err){
+    delete _layoutMigrationPending[p.id];
+    console.error('layout migration failed', err);
+    toast(LANG==='es'?'No se pudo migrar el layout del evento':'Could not migrate the event layout','e');
+    return null;
+  });
+  return _layoutMigrationPending[p.id];
+}
+
+function getLayoutProj(){
+  if(typeof _libEditingLayoutId!=='undefined' && _libEditingLayoutId){
+    var lib=getLib();
+    var entry=lib.layouts.find(function(e){return e.id===_libEditingLayoutId;});
+    if(entry){
+      if(!entry._proxy){
+        entry._proxy={id:'__lib_entry__',name:entry.name,layoutItems:entry.items,floorplan:entry.floorplan||{img:null},vendors:[],tasks:[],guests:[],customShapes:{}};
+      } else {
+        entry._proxy.layoutItems=entry.items;
+        entry._proxy.floorplan=entry.floorplan||{img:null};
+      }
+      return entry._proxy;
+    }
+  }
+  return proj();
+}
+function saveLayoutData(){
+  if(typeof _libEditingLayoutId!=='undefined' && _libEditingLayoutId){
+    var lib=getLib();
+    var entry=lib.layouts.find(function(e){return e.id===_libEditingLayoutId;});
+    if(entry){
+      entry.items=JSON.parse(JSON.stringify(LState.items));
+      var fpCopy=JSON.parse(JSON.stringify(LState.floorplan));
+      if(fpCopy.img && fpCopy.img!=='__idb__'){
+        var fpKey=fpCopy._idb||('libfp_'+_libEditingLayoutId+'_'+Date.now());
+        if(typeof _fpSave==='function') _fpSave(fpKey,fpCopy.img).catch(function(){});
+        fpCopy.img='__idb__';
+        fpCopy._idb=fpKey;
+      }
+      entry.floorplan=fpCopy;
+      entry.updatedAt=new Date().toISOString();
+      saveLib(lib);
+      return;
+    }
+  }
+  var p=proj();
+  if(p){ p.layoutItems=LState.items; saveProj(p); }
+}
+
 var LState={
   items:[],sel:[],addMode:null,zoom:1,
   pan:{x:0,y:0},panning:false,panStart:{x:0,y:0},
@@ -14,18 +393,51 @@ function renderLayout(){
   var _outerBefore=document.getElementById('lcanvas-outer');
   if(_outerBefore){_savedScroll.x=_outerBefore.scrollLeft;_savedScroll.y=_outerBefore.scrollTop;}
   const p=proj();
+  if(!p){
+    var _noProj=document.getElementById('tab-layout');
+    if(_noProj) _noProj.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:60vh;flex-direction:column;gap:16px"><div style="font-family:Cormorant Garamond,serif;font-size:24px;font-weight:700;color:var(--muted)">'+(LANG==='es'?'Selecciona un proyecto primero':'Select a project first')+'</div></div>';
+    return;
+  }
+  if(isEventLayoutViewOnly(p)){
+    if(!p.layoutExport && p.layoutItems && p.layoutItems.length){
+      ensureEventLayoutExport(p);
+      var migratingEl=document.getElementById('tab-layout');
+      if(migratingEl){
+        migratingEl.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:60vh;flex-direction:column;gap:16px;padding:24px;text-align:center"><div style="width:56px;height:56px;border-radius:50%;border:4px solid var(--border);border-top-color:var(--gold-h);animation:spin 1s linear infinite"></div><div style="font-family:Cormorant Garamond,serif;font-size:28px;font-weight:700">'+(LANG==='es'?'Migrando layout del evento':'Migrating event layout')+'</div><div style="max-width:420px;color:var(--muted);font-size:14px;line-height:1.6">'+(LANG==='es'?'Estamos moviendo este layout a la Biblioteca y generando su vista de solo lectura para el evento.':'We are moving this layout into the Library and generating its read-only event view.')+'</div></div>';
+      }
+      return;
+    }
+    renderEventLayoutViewer(p);
+    return;
+  }
   LState.items=p.layoutItems||[];
   syncLayoutStyles(p);
   if(LHistorySaving&&LHistory.length===0) lHistorySave();
   LSHAPES=getLSHAPES();
-  if(p.floorplan&&p.floorplan.img){
-    LState.floorplan=Object.assign({opacity:0.4,scale:1,x:0,y:0,w:0,h:0,locked:false,rotation:0},p.floorplan);
-  } else {
-    LState.floorplan={img:null,opacity:0.4,scale:1,x:0,y:0,w:0,h:0,locked:false};
+  var defaultFloorplan={img:null,opacity:0.4,scale:1,x:0,y:0,w:0,h:0,locked:false,rotation:0};
+  var _hasFPInMemory=LState.floorplan&&LState.floorplan.img&&LState.floorplan.img!=='__idb__';
+
+  if(p.floorplan&&p.floorplan.img==='__idb__'&&p.floorplan._idb){
+    if(_hasFPInMemory&&LState.floorplan._idb===p.floorplan._idb){
+      LState.floorplan=Object.assign(defaultFloorplan,p.floorplan,{img:LState.floorplan.img,_idb:p.floorplan._idb});
+    } else {
+      LState.floorplan=Object.assign(defaultFloorplan,p.floorplan,{img:null});
+      _fpLoad(p.floorplan._idb).then(function(data){
+        if(data){LState.floorplan.img=data;LState.floorplan._idb=p.floorplan._idb;renderLayoutCanvas();}
+      }).catch(function(){});
+    }
+  } else if(p.floorplan&&p.floorplan.img&&p.floorplan.img!=='__idb__'){
+    LState.floorplan=Object.assign(defaultFloorplan,p.floorplan);
+  } else if(p.floorplan){
+    LState.floorplan=Object.assign(defaultFloorplan,p.floorplan);
+  } else if(!_hasFPInMemory){
+    LState.floorplan=Object.assign(defaultFloorplan,{pxPerMeter:(p.floorplan&&p.floorplan.pxPerMeter)||null});
   }
   if(typeof _measureLines==='undefined')window._measureLines=[];
   if(typeof _measurePoints==='undefined')window._measurePoints=[];
   const el=document.getElementById('tab-layout');
+  if(!el) return;
+  if(el.classList.contains('hidden')) return;
   if(window.innerWidth <= 768){
     el.style.height = 'auto';
     el.style.overflow = 'visible';
@@ -39,160 +451,16 @@ function renderLayout(){
   <div class="layout-shell">
     <!-- SIDEBAR -->
     <div class="layout-sidebar">
-      
-      <!-- Tables (collapsible) -->
-      <div class="layout-sb-section">
-        <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleSbSection('sb-tables')">
-          <div class="layout-sb-title" style="margin-bottom:0">${t('tables')}</div>
-          <div style="display:flex;gap:4px;align-items:center">
-            <button onclick="event.stopPropagation();openTableTypesEditor()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px">✏️</button>
-            <span id="sb-tables-arrow" style="font-size:11px;color:var(--muted);transition:.2s">▼</span>
+      <div class="layout-sb-section" style="padding:14px;display:flex;flex-direction:column;gap:10px">
+        <button class="btn btn-primary btn-sm" onclick="libOpenLayoutWizard()" style="padding:8px 12px;font-size:13px">+ ${LANG==='es'?'Crear layout':'Create layout'}</button>
+        <div style="position:relative">
+          <button id="add-element-trigger" class="btn btn-ghost btn-sm" onclick="toggleAddElementMenu()" style="width:100%;padding:8px 12px;font-size:13px;text-align:left">+ ${LANG==='es'?'Agregar elemento':'Add element'}</button>
+          <div id="add-element-menu" style="display:none;position:absolute;left:0;top:100%;width:calc(100% - 2px);background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px;box-shadow:0 12px 24px rgba(0,0,0,0.12);z-index:50">
+            <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start;padding:8px 10px;font-size:12px" onclick="selectAddElement('table')">${LANG==='es'?'Mesa':'Table'}</button>
+            <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start;padding:8px 10px;font-size:12px" onclick="selectAddElement('event-element')">${LANG==='es'?'Elemento de evento':'Event element'}</button>
+            <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start;padding:8px 10px;font-size:12px" onclick="selectAddElement('floorplan')">${LState.floorplan.img?(LANG==='es'?'Reemplazar plano':'Replace floorplan'):(LANG==='es'?'Plano de piso':'Floorplan image')}</button>
           </div>
-        </div>
-        <div id="sb-tables" style="margin-top:8px;display:none">
-          ${Object.keys(LSHAPES_M).filter(k=>['round-table','rect-table','square-table'].includes(k)||LSHAPES_M[k]._isCustomTable).map(k=>{
-            const s=LSHAPES_M[k];
-            return lAddBtn(k,s.label,s.radius==='50%'?'⬤':'◼',s.bg,s.bdClr);
-          }).join('')}
-        </div>
-      </div>
-      <!-- Event Elements (collapsible) -->
-      <div class="layout-sb-section">
-        <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleSbSection('sb-elements')">
-          <div class="layout-sb-title" style="margin-bottom:0">${t('event_elements')}</div>
-          <div style="display:flex;gap:4px;align-items:center">
-            <button onclick="event.stopPropagation();openElementTypesEditor()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px">✏️</button>
-            <span id="sb-elements-arrow" style="font-size:11px;color:var(--muted);transition:.2s">▼</span>
-          </div>
-        </div>
-        <div id="sb-elements" style="margin-top:8px;display:none">
-          ${Object.keys(LSHAPES_M).filter(k=>!['round-table','rect-table','square-table'].includes(k)&&!LSHAPES_M[k]._isCustomTable).map(k=>{
-            const s=LSHAPES_M[k];
-            return lAddBtn(k,s.label,'◼',s.bg,s.bdClr);
-          }).join('')}
-        </div>
-      </div>
-      <!-- Chairs (collapsible) -->
-      <div class="layout-sb-section">
-        <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleSbSection('sb-chairs')">
-          <div class="layout-sb-title" style="margin-bottom:0">${t('chairs_section')}</div>
-          <div style="display:flex;gap:4px;align-items:center">
-            <button onclick="event.stopPropagation();openChairEditor()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px">✏️</button>
-            <span id="sb-chairs-arrow" style="font-size:11px;color:var(--muted);transition:.2s">▼</span>
-          </div>
-        </div>
-        <div id="sb-chairs" style="margin-top:8px;display:none">
-          <div style="display:flex;flex-direction:column;gap:3px">
-            ${Object.entries(CHAIR_TYPES).filter(([k])=>k!=='default').map(([k,v])=>`
-            <div style="display:flex;align-items:center;gap:7px">
-              <div style="width:13px;height:13px;border-radius:50%;flex-shrink:0;background:${v.fill.startsWith('rgba')?'#e8e8e8':v.fill};${v.stroke?'border:1.5px solid '+v.stroke:'border:none'}"></div>
-              <span style="font-size:10.5px;color:var(--muted)">${v.label}${v.costPerChair>0?` <span style="color:var(--gold-h)">$${v.costPerChair}/silla</span>`:''}</span>
-            </div>`).join('')}
-          </div>
-        </div>
-      </div>
-      <!-- Centerpieces (collapsible) -->
-      <div class="layout-sb-section">
-        <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleSbSection('sb-centrepieces')">
-          <div class="layout-sb-title" style="margin-bottom:0">${t('centrepieces_section')}</div>
-          <div style="display:flex;gap:4px;align-items:center">
-            <button onclick="event.stopPropagation();openCenterpieceEditor()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px">✏️</button>
-            <span id="sb-centrepieces-arrow" style="font-size:11px;color:var(--muted);transition:.2s">▼</span>
-          </div>
-        </div>
-        <div id="sb-centrepieces" style="margin-top:8px;display:none">
-          <div style="display:flex;flex-direction:column;gap:3px">
-            ${Object.entries(CENTERPIECE_TYPES).filter(([k])=>k!=='none').map(([k,v])=>`
-            <div style="display:flex;align-items:center;gap:7px">
-              <div style="width:13px;height:13px;border-radius:50%;flex-shrink:0;background:${v.color||'#ccc'}"></div>
-              <span style="font-size:10.5px;color:var(--muted)">${v.label}${v.cost>0?` <span style="color:var(--gold-h)">$${v.cost}/pc</span>`:''}</span>
-            </div>`).join('')}
-          </div>
-        </div>
-      </div>
-      <!-- Floorplan -->
-      <div class="layout-sb-section">
-        <div class="layout-sb-title" style="display:flex;align-items:center;justify-content:space-between">
-          ${t('floorplan_lbl')}
-          ${LState.floorplan.img?`<div style="display:flex;gap:4px;align-items:center">
-            <button onclick="toggleFloorplanLock()" title="${LState.floorplan.locked?'Unlock floorplan to move/scale':'Lock floorplan to prevent accidental moves'}"
-              style="font-size:10px;font-weight:700;letter-spacing:.03em;background:${LState.floorplan.locked?'var(--gold-l)':'transparent'};border:1px solid ${LState.floorplan.locked?'var(--gold)':'var(--border)'};border-radius:5px;cursor:pointer;color:${LState.floorplan.locked?'var(--gold-h)':'var(--muted)'};padding:3px 8px;line-height:1.4;transition:var(--tr)"
-              onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold-h)'" onmouseout="this.style.borderColor='${LState.floorplan.locked?'var(--gold)':'var(--border)'}';this.style.color='${LState.floorplan.locked?'var(--gold-h)':'var(--muted)'}'">${LState.floorplan.locked?'Unlock':'Lock'}</button>
-            <button onclick="removeFloorplan()" class="btn btn-danger btn-sm" style="font-size:10px;padding:3px 8px">${LANG==='es'?'Quitar plano':'Remove plan'}</button>
-          </div>`:''} 
-        </div>
-        ${LState.floorplan.img?`
-        <div style="margin-bottom:8px">
-          <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">${t('opacity_lbl')}</label>
-          <input type="range" min="0.05" max="1" step="0.05" value="${LState.floorplan.opacity}"
-            oninput="LState.floorplan.opacity=+this.value;saveFloorplan();renderLayoutCanvas()"
-            style="width:100%;height:4px;cursor:pointer">
-        </div>
-        <div style="margin-bottom:8px">
-          <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Rotation: ${LState.floorplan.rotation||0}°</label>
-          <div style="display:flex;align-items:center;gap:6px">
-            <input type="range" min="0" max="359" step="1" value="${LState.floorplan.rotation||0}"
-              oninput="LState.floorplan.rotation=+this.value;saveFloorplan();renderLayoutCanvas()"
-              style="flex:1;height:4px;cursor:pointer">
-            <button onclick="LState.floorplan.rotation=Math.round(((LState.floorplan.rotation||0)-90+360)%360);saveFloorplan();renderLayoutCanvas()" title="Rotate -90°"
-              style="font-size:13px;background:transparent;border:1px solid var(--border);border-radius:5px;cursor:pointer;padding:3px 7px;line-height:1.4">↺</button>
-            <button onclick="LState.floorplan.rotation=Math.round(((LState.floorplan.rotation||0)+90)%360);saveFloorplan();renderLayoutCanvas()" title="Rotate +90°"
-              style="font-size:13px;background:transparent;border:1px solid var(--border);border-radius:5px;cursor:pointer;padding:3px 7px;line-height:1.4">↻</button>
-          </div>
-        </div>
-        <div style="margin-bottom:4px">
-          <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">
-            ${LState.floorplan.pxPerMeter?'Scale set (' + LState.floorplan.pxPerMeter.toFixed(1) + ' px/m)':'Not calibrated — click Scale'}
-          </label>
-          <div style="display:flex;gap:4px;flex-wrap:wrap">
-            <button class="btn btn-ghost btn-sm" style="flex:1;font-size:11px" onclick="startScaleMode()" title="Click 2 points on a known distance to calibrate scale">
-              📏 ${LState.scaleMode?`<span style=\"color:var(--gold-h)\">Picking... ('+LState.scalePoints.length+'/2)</span>`:'Scale'}
-            </button>
-            ${LState.scaleMode?`<button class="btn btn-danger btn-sm" onclick="cancelScaleMode()" style="padding:4px 8px">Cancel</button>`:''}
-          </div>
-          ${LState.scaleMode?`<div style="margin-top:6px;padding:8px;background:var(--gold-l);border-radius:6px;border:1px solid rgba(201,168,76,.3)">
-            <div style="font-size:11px;color:var(--gold-h);font-weight:600;margin-bottom:4px">
-              ${LState.scalePoints.length===0?'Click point A on canvas':'Click point B on canvas'}
-            </div>
-            <div class="s-sm">${LState.scalePoints.length===1?'Point A set ✓':''}</div>
-          </div>`:''}
-          ${LState.scaleMode&&LState.scalePoints.length===2?`
-          <div style="margin-top:6px">
-            <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Real distance (meters)</label>
-            <div style="display:flex;gap:4px">
-              <input type="number" id="scale-dist" class="input" value="5" min="0.1" step="0.1" style="flex:1;padding:4px 8px;font-size:12px">
-              <button class="btn btn-primary btn-sm" onclick="applyScaleCalibration()">Apply</button>
-            </div>
-          </div>`:''} 
-        </div>
-        `:`
-        <div style="border:2px dashed var(--border);border-radius:8px;padding:16px;text-align:center;cursor:pointer;transition:var(--tr)"
-          onclick="document.getElementById('fp-upload').click()"
-          ondragover="event.preventDefault();this.style.borderColor='var(--gold)'"
-          ondragleave="this.style.borderColor='var(--border)'"
-          ondrop="event.preventDefault();this.style.borderColor='var(--border)';handleFloorplanDrop(event)">
-          <div style="font-size:24px;margin-bottom:6px">🖼️</div>
-          <div style="font-size:12px;font-weight:600;color:var(--muted)">${t('upload_floorplan_lbl')}</div>
-          <div style="font-size:11px;color:var(--light);margin-top:2px">PNG, JPG, SVG, PDF</div>
-        </div>
-        <input type="file" id="fp-upload" accept="image/*,.pdf" style="display:none" onchange="handleFloorplanUpload(event)">
-        `}
-      </div>
-      <!-- Properties panel -->
-      <div class="layout-sb-section" id="lsb-props" style="display:${LState.sel.length===1?'block':'none'}">
-        <div class="layout-sb-title">${t('properties')}</div>
-        <div id="lsb-props-inner"></div>
-      </div>
-      <!-- Item list -->
-      <div class="layout-sb-section" style="flex:1">
-        <div class="layout-sb-title">${t('items_count')} (${LState.items.length})</div>
-        <div id="litem-list" style="max-height:200px;overflow-y:auto">
-          ${LState.items.map(item=>`
-          <div class="litem-list-row ${LState.sel.includes(item.id)?'sel-row':''}" onclick="lSelectOnly(event,'${item.id}')">
-            <div style="width:14px;height:14px;border-radius:${item.shape==='round-table'?'50%':'2px'};background:${item.bg};flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,0.15)"></div>
-            <span style="font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.label}</span>
-            <button style="width:18px;height:18px;border:none;background:transparent;cursor:pointer;color:var(--muted);font-size:12px" onclick="event.stopPropagation();delLItem('${item.id}')">✕</button>
-          </div>`).join('')}
+          <input id="layout-floorplan-input" type="file" accept="image/*" style="display:none" onchange="handleFloorplanUpload(event)">
         </div>
       </div>
     </div>
@@ -202,7 +470,7 @@ function renderLayout(){
       <!-- Toolbar -->
       <div class="layout-toolbar">
         <div class="zoom-bar">
-          <button class="zoom-btn" onclick="lZoom(-0.1)">−</button>
+          <button class="zoom-btn" onclick="lZoom(-0.1)">-</button>
           <span style="font-size:12px;font-weight:600;min-width:45px;text-align:center">${Math.round(LState.zoom*100)}%</span>
           <button class="zoom-btn" onclick="lZoom(0.1)">+</button>
         </div>
@@ -210,28 +478,43 @@ function renderLayout(){
         <button title="Zoom to fit" onclick="lZoom(0,'fit')" style="width:28px;height:28px;border:1px solid var(--border);background:transparent;border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:var(--tr)" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)';this.style.borderColor='var(--gold)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)';this.style.borderColor='var(--border)'"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3h6M3 3v6M21 3h-6M21 3v6M3 21h6M3 21v-6M21 21h-6M21 21v-6"/></svg></button>
         <button title="Zoom to selected" onclick="lZoom(0,'sel')" style="width:28px;height:28px;border:1px solid var(--border);background:transparent;border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:var(--tr)" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)';this.style.borderColor='var(--gold)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)';this.style.borderColor='var(--border)'"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="4 2"/><path d="M8 8h8M8 12h8M8 16h5"/><circle cx="18" cy="18" r="3" fill="currentColor" stroke="none"/></svg></button>
         <button title="${LState.measureMode?'Exit measure (Esc)':'Measure distances'}" onclick="toggleMeasureMode()" style="width:28px;height:28px;border:1px solid ${LState.measureMode?'var(--gold)':'var(--border)'};background:${LState.measureMode?'var(--gold-l)':'transparent'};border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:${LState.measureMode?'var(--gold-h)':'var(--muted)'};transition:var(--tr)" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)';this.style.borderColor='var(--gold)'" onmouseout="this.style.background='${LState.measureMode?'var(--gold-l)':'transparent'}';this.style.color='${LState.measureMode?'var(--gold-h)':'var(--muted)'}';this.style.borderColor='${LState.measureMode?'var(--gold)':'var(--border)'}'"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="10" rx="1.5"/><path d="M6 7v4M9 7v3M12 7v4M15 7v3M18 7v4"/></svg></button>
-        ${_measureLines.length>0?`<button title="Clear measurements" onclick="clearMeasurements()" style="width:28px;height:28px;border:1px solid rgba(239,68,68,.4);background:transparent;border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--danger);font-size:10px;font-weight:700;transition:var(--tr)" onmouseover="this.style.background='rgba(239,68,68,.1)'" onmouseout="this.style.background='transparent'">✕m</button>`:''}
+        ${_measureLines.length>0?`<button title="Clear measurements" onclick="clearMeasurements()" style="width:28px;height:28px;border:1px solid rgba(239,68,68,.4);background:transparent;border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--danger);font-size:10px;font-weight:700;transition:var(--tr)" onmouseover="this.style.background='rgba(239,68,68,.1)'" onmouseout="this.style.background='transparent'">CLR</button>`:''}
         <div style="width:1px;height:24px;background:var(--border)"></div>
         <span style="font-size:12px;color:var(--muted)">
-          ${LState.items.length} ${t('items_count')} ·
-          ${LState.items.filter(i=>i.shape.includes('table')).length} ${t('tables_lbl')} ·
+          ${LState.items.length} ${t('items_count')} |
+          ${LState.items.filter(i=>i.shape.includes('table')).length} ${t('tables_lbl')} |
           ${LState.items.reduce((s,i)=>s+(i.chairs||0),0)} ${t('chairs_lbl')}
 
-          ${LState.addMode?`<strong style="color:var(--gold-h)"> · Click canvas to place ${LState.addMode.replace('-',' ')}</strong>`:''}
+          ${LState.addMode?`<strong style="color:var(--gold-h)"> | Click canvas to place ${LState.addMode.replace('-',' ')}</strong>`:''}
         </span>
         <div style="flex:1"></div>
-        ${(()=>{const b=calcLayoutBudget(LState.items);return b.total>0?`<div style="background:var(--gold-l);border:1px solid rgba(201,168,76,.3);border-radius:20px;padding:4px 14px;font-size:12px;font-weight:600;color:var(--gold-h);cursor:pointer" onclick="showLayoutBudget()" title="View budget breakdown">💰 ${fmtMoney(b.total)}</div>`:'';})()}
+        ${(()=>{const b=calcLayoutBudget(LState.items);return b.total>0?`<div style="background:var(--gold-l);border:1px solid rgba(201,168,76,.3);border-radius:20px;padding:4px 14px;font-size:12px;font-weight:600;color:var(--gold-h);cursor:pointer" onclick="showLayoutBudget()" title="View budget breakdown">Total ${fmtMoney(b.total)}</div>`:'';})()}
         <button onclick="LState.useSnap=!LState.useSnap;renderLayoutUI()" title="Toggle snap to grid"
           style="height:28px;padding:0 10px;border:1px solid ${LState.useSnap?'var(--gold)':'var(--border)'};background:${LState.useSnap?'var(--gold-l)':'transparent'};border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;color:${LState.useSnap?'var(--gold-h)':'var(--muted)'};transition:var(--tr);white-space:nowrap"
           onmouseover="this.style.borderColor='var(--gold)'" onmouseout="if(!LState.useSnap)this.style.borderColor='var(--border)'">
-          ${LState.useSnap?'⊞ Snap ON':'⊟ Snap OFF'}
+          <span style="display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M1 3.5h10M1 6h10M1 8.5h10M3.5 1v10M6 1v10M8.5 1v10"/></svg>${LState.useSnap?'Snap ON':'Snap OFF'}</span>
         </button>
+        ${LState.floorplan.img?`
+        <div style="display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:4px 8px;flex-wrap:wrap">
+          <span style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em">${LANG==='es'?'Plano':'Floorplan'}</span>
+          ${LState.scaleMode?`
+          <span style="font-size:11px;color:var(--muted)">${LANG==='es'?'Marca A y B en el plano':'Pick A and B on the floorplan'}</span>
+          <input id="scale-dist" type="number" step="0.1" min="0.1" placeholder="m" style="width:72px;height:28px;border:1px solid var(--border);border-radius:5px;background:var(--bg2);color:var(--text);font-size:12px;text-align:center;padding:0 6px" onclick="event.stopPropagation()">
+          <button class="btn btn-primary btn-sm" onclick="applyScaleCalibration()">${LANG==='es'?'Aplicar':'Apply'}</button>
+          <button class="btn btn-ghost btn-sm" onclick="cancelScaleMode()">${LANG==='es'?'Cancelar':'Cancel'}</button>
+          `:`
+          <button class="btn btn-ghost btn-sm" onclick="triggerFloorplanUpload()">${LANG==='es'?'Cambiar imagen':'Change image'}</button>
+          <button class="btn btn-ghost btn-sm" onclick="startScaleMode()">${LANG==='es'?'Escalar':'Scale'}</button>
+          <button class="btn btn-ghost btn-sm" onclick="toggleFloorplanLock()">${LState.floorplan.locked?(LANG==='es'?'Desbloquear':'Unlock'):(LANG==='es'?'Bloquear':'Lock')}</button>
+          <button class="btn btn-ghost btn-sm" onclick="removeFloorplan()" style="color:var(--danger)">${LANG==='es'?'Quitar':'Remove'}</button>
+          ${LState.floorplan.pxPerMeter?`<span style="font-size:11px;color:#16a34a;font-weight:600">${LANG==='es'?'Calibrado':'Calibrated'}: ${LState.floorplan.pxPerMeter} px/m</span>`:''}
+          `}
+        </div>`:''}
         <div style="display:flex;align-items:center;gap:3px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:4px 8px;opacity:1;gap:5px">
           <span style="font-size:10px;color:var(--muted);margin-right:2px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Aa</span>
-          <button title="Decrease font size" onclick="changeFontSize(-1)" style="width:28px;height:28px;border:none;background:transparent;cursor:pointer;border-radius:4px;font-size:18px;color:var(--muted);line-height:1" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'">−</button>
-          <span style="font-size:11px;color:var(--muted);min-width:44px;text-align:center"><input id="toolbar-font-size" type="number" min="5" max="99" style="width:44px;font-size:12px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:2px 4px;background:var(--bg);color:var(--text)" placeholder="—" oninput="setFontSizeDirect(+this.value)" onkeydown="if(event.key==='Enter')this.blur();event.stopPropagation();" onclick="event.stopPropagation()"></span>
+          <button title="Decrease font size" onclick="changeFontSize(-1)" style="width:28px;height:28px;border:none;background:transparent;cursor:pointer;border-radius:4px;font-size:18px;color:var(--muted);line-height:1" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'">-</button>
+          <span style="font-size:11px;color:var(--muted);min-width:44px;text-align:center"><input id="toolbar-font-size" type="number" min="5" max="99" style="width:44px;font-size:12px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:2px 4px;background:var(--bg);color:var(--text)" placeholder="--" oninput="setFontSizeDirect(+this.value)" onkeydown="if(event.key==='Enter')this.blur();event.stopPropagation();" onclick="event.stopPropagation()"></span>
           <button title="Increase font size" onclick="changeFontSize(1)" style="width:28px;height:28px;border:none;background:transparent;cursor:pointer;border-radius:4px;font-size:18px;color:var(--muted);line-height:1" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'">+</button>
-          <button title="Reset font size" onclick="changeFontSize(0)" style="width:22px;height:22px;border:none;background:transparent;cursor:pointer;border-radius:4px;font-size:9px;color:var(--muted);font-weight:700" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'">↺</button>
         </div>
         <div style="display:flex;align-items:center;gap:3px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:3px 6px;opacity:1">
           <span style="font-size:10px;color:var(--muted);margin-right:3px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">${t('align')}</span>
@@ -246,39 +529,17 @@ function renderLayout(){
           <button title="Distribute Horizontally" onclick="alignSelected('dist-h')" class="s-ibtn" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="1" y="6" width="5" height="12" rx="1"/><rect x="9.5" y="8" width="5" height="8" rx="1"/><rect x="18" y="5" width="5" height="14" rx="1"/><line x1="3.5" y1="3" x2="3.5" y2="21" stroke-dasharray="2 2" stroke-width="1.2"/><line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="2 2" stroke-width="1.2"/><line x1="20.5" y1="3" x2="20.5" y2="21" stroke-dasharray="2 2" stroke-width="1.2"/></svg></button>
           <button title="Distribute Vertically" onclick="alignSelected('dist-v')" class="s-ibtn" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="6" y="1" width="12" height="5" rx="1"/><rect x="8" y="9.5" width="8" height="5" rx="1"/><rect x="5" y="18" width="14" height="5" rx="1"/><line x1="3" y1="3.5" x2="21" y2="3.5" stroke-dasharray="2 2" stroke-width="1.2"/><line x1="3" y1="12" x2="21" y2="12" stroke-dasharray="2 2" stroke-width="1.2"/><line x1="3" y1="20.5" x2="21" y2="20.5" stroke-dasharray="2 2" stroke-width="1.2"/></svg></button>
         </div>
-        <div style="display:flex;align-items:center;gap:3px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:3px 6px;opacity:1">
-          <span style="font-size:10px;color:var(--muted);margin-right:2px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">${t('rotate_lbl')}</span>
-          <button title="Rotate -90°" onclick="rotateSelected(-90)" style="width:26px;height:26px;border:none;background:transparent;cursor:pointer;border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;font-weight:700" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-          </button>
-          <button title="Rotate -90°" onclick="rotateSelected(-90)" style="width:26px;height:26px;border:none;background:transparent;cursor:pointer;border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:10px;font-weight:700" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'">−90°</button>
-          <button title="Rotate +90°" onclick="rotateSelected(90)" style="width:26px;height:26px;border:none;background:transparent;cursor:pointer;border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:10px;font-weight:700" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'">+90°</button>
-          <button title="Rotate +90°" onclick="rotateSelected(90)" class="s-ibtn" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
-          </button>
-          <div style="width:1px;height:18px;background:var(--border);margin:0 2px"></div>
-          <input id="rotate-custom-deg" type="number" value="15" min="-360" max="360" step="1"
-            style="width:44px;height:26px;border:1px solid var(--border);border-radius:5px;background:var(--bg2);color:var(--text);font-size:11px;text-align:center;padding:0 2px"
-            title="Custom degrees" onclick="event.stopPropagation()">
-          <button title="Apply custom rotation" onclick="rotateSelected(+document.getElementById('rotate-custom-deg').value)"
-            class="s-ibtn"
-            onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
-          </button>
+        <div style="display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:4px 8px;opacity:1">
+          <button title="Rotate counterclockwise" onclick="doRotate(-getRotateStep())" style="width:32px;height:32px;border:none;background:transparent;cursor:pointer;border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--muted)" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 10H4V5"/><path d="M20 11a8 8 0 1 0-2.34 5.66L20 14"/></svg></button>
+          <input id="rotate-step" type="number" value="90" min="1" step="1" style="width:54px;height:30px;border:1px solid var(--border);border-radius:5px;background:var(--bg2);color:var(--text);font-size:12px;text-align:center;padding:0 4px" title="Degrees per rotation step" onclick="event.stopPropagation()">
+          <button title="Rotate clockwise" onclick="doRotate(getRotateStep())" style="width:32px;height:32px;border:none;background:transparent;cursor:pointer;border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--muted)" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 10h5V5"/><path d="M4 11a8 8 0 1 1 2.34 5.66L4 14"/></svg></button>
         </div>
-        ${LState.sel.length?`<button class="btn btn-danger btn-sm" onclick="delSelected()">Delete (${LState.sel.length})</button>`:''}
-        <button class="btn btn-ghost btn-sm" onclick="openSaveLayoutModal()" title="Save current layout as a named version">${t('save_layout')}</button>
-        <button class="btn btn-ghost btn-sm" onclick="openLayoutsLibrary()" title="View saved layouts">${(p.savedLayouts||[]).length > 0 ? `📐 Layouts (${(p.savedLayouts||[]).length})` : '📐 Layouts'}</button>
-        <button class="btn btn-ghost btn-sm" onclick="libQuickSaveLayout()" title="Save layout to cross-project library">📚 ${LANG==='es'?'Guardar en Biblioteca':'Save to Library'}</button>
-        <button class="btn btn-ghost btn-sm" onclick="libQuickLoadLayout()" title="Load layout from cross-project library">📚 ${LANG==='es'?'Cargar de Biblioteca':'Load from Library'}</button>
         <button class="btn btn-ghost btn-sm" onclick="exportLayoutFull()">${t('export')}</button>
       </div>
       <!-- Canvas -->
       <div class="layout-canvas-outer" id="lcanvas-outer"
         onmousedown="lCanvasDown(event)"
-        onmousemove="lCanvasMove(event)"
-        onmouseup="lCanvasUp(event)"
-        onmouseleave="lCanvasUp(event)"
+        onmouseleave="lCanvasLeave(event)"
         style="position:relative;cursor:${LState.scaleMode||LState.measureMode?'crosshair':_fpDragging?'grabbing':'default'}">
         <div class="layout-canvas" id="lcanvas"
           style="width:${LState.canvasW}px;height:${LState.canvasH}px;transform:scale(${LState.zoom});transform-origin:0 0;background:#fff;position:relative">
@@ -306,10 +567,10 @@ function renderLayout(){
             </svg>`:''}
           <div style="position:relative;z-index:1">
             ${LState.items.map(item=>renderLItem(item)).join('')}
-            ${LState.items.length===0?`<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:auto">
+            ${LState.items.length===0&&(typeof _libEditingLayoutId==='undefined'||!_libEditingLayoutId)?`<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:auto">
               <div style="font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:700;color:var(--muted);margin-bottom:16px">${t('create_general_layout')||'Start your layout'}</div>
-              <button class="btn btn-primary" style="padding:14px 28px;font-size:14px;font-weight:700" onclick="openGeneralLayoutModal()">
-                ⚡ ${t('create_general_layout')||'Create General Layout'}
+              <button class="btn btn-primary" style="padding:14px 28px;font-size:14px;font-weight:700" onclick="libOpenLayoutWizard()">
+                ? ${t('create_general_layout')||'Create General Layout'}
               </button>
               <div style="font-size:12px;color:var(--light);margin-top:10px">${LANG==='es'?'O arrastra elementos desde el panel izquierdo':'Or drag elements from the left panel'}</div>
             </div>`:''}
@@ -321,7 +582,7 @@ function renderLayout(){
               <circle cx="${ln.x1}" cy="${ln.y1}" r="5" fill="#3b82f6" stroke="#fff" stroke-width="1.5"/>
               <circle cx="${ln.x2}" cy="${ln.y2}" r="5" fill="#3b82f6" stroke="#fff" stroke-width="1.5"/>
               <rect x="${(ln.x1+ln.x2)/2-28}" y="${(ln.y1+ln.y2)/2-22}" width="56" height="18" rx="4" fill="rgba(30,30,50,.82)"/>
-              <text x="${(ln.x1+ln.x2)/2}" y="${(ln.y1+ln.y2)/2-9}" fill="#fff" font-size="11" font-weight="700" text-anchor="middle" font-family="monospace">${ln.calibrated&&ln.m>0?ln.m.toFixed(2)+'m':ln.px+'px'}</text>
+              <text x="${(ln.x1+ln.x2)/2}" y="${(ln.y1+ln.y2)/2-9}" fill="#fff" font-size="11" font-weight="700" text-anchor="middle" font-family="monospace">${ln.calibrated&&ln.m>0?ln.m.toFixed(2)+'m':(ln.px/getPPM()).toFixed(2)+'m'}</text>
             `).join('')}
             ${_measurePoints.length===1?`
               <circle cx="${_measurePoints[0].x}" cy="${_measurePoints[0].y}" r="6" fill="#f59e0b" stroke="#fff" stroke-width="2"/>
@@ -335,9 +596,13 @@ function renderLayout(){
         <span>${t('scroll_zoom')}</span>
         <span>${t('space_pan')}</span>
         <span>${t('drag_select')}</span>
+        <span>${t('shift_drag_add')}</span>
+        <span>${t('ctrl_drag_remove')}</span>
+        <span>${t('shift_click_add')}</span>
+        <span>${t('ctrl_click_desel')}</span>
         <span>${t('copy_paste')}</span>
         <span>${t('del_remove')}</span>
-        ${LState.sel.length?`<span style="color:var(--gold-h);font-weight:600">${LState.sel.length} selected</span>`:''}
+        ${LState.sel.length?`<span style="color:var(--gold-h);font-weight:600">${LState.sel.length} ${LANG==='es'?'seleccionados':'selected'}</span>`:''}
       </div>
     </div>
   </div>`;
@@ -357,11 +622,24 @@ function renderLayout(){
 function renderLayoutUI(){
   renderLayout();
 }
-
+ 
+function getChairPx(item){
+  var minSide = Math.min(item.w, item.h);
+  return Math.max(8, Math.round(minSide * 0.22));
+}
+function getChairGap(item){
+  var minSide = Math.min(item.w, item.h);
+  return Math.max(1, Math.round(minSide * 0.04));
+}
+function getChairPad(item){
+  if(!item.chairs) return 0;
+  return getChairPx(item) + getChairGap(item);
+}
+ 
 function renderLItem(item){
   const isRound = item.shape==='round-table'||item.radius==='50%'||(LSHAPES_M[item.shape]&&LSHAPES_M[item.shape].radius==='50%');
   const chairsHTML = renderChairs(item);
-  const pad = item.chairs ? Math.round(CHAIR_SIZE_M*getPPM())+Math.round(0.05*getPPM()) : 0;
+  const pad = getChairPad(item);
   const cornerRadius = isRound ? '50%' : '0px';
   const textClr = item.bdClr;
   const wM = item.w / getPPM();
@@ -403,8 +681,8 @@ function renderCenterpiece(item){
 function renderChairs(item){
   if(!item.chairs) return '';
   const n=item.chairs; const w=item.w; const h=item.h;
-  const cs=Math.max(8,Math.round(CHAIR_SIZE_M*getPPM())); // 0.5m chair, min 8px
-  const gap=Math.max(2,Math.round(0.05*getPPM())); // 5cm gap
+  const cs=getChairPx(item);
+  const gap=getChairGap(item);
   let html='<div class="litem-chairs">';
   const positions=[];
   const isRound = item.shape==='round-table'||item.radius==='50%'||(LSHAPES_M[item.shape]&&LSHAPES_M[item.shape].radius==='50%');
@@ -416,12 +694,12 @@ function renderChairs(item){
       positions.push({x:w/2+(w/2+cs/2+gap)*Math.cos(angle), y:h/2+(h/2+cs/2+gap)*Math.sin(angle)});
     }
   } else if(item.shape==='rect-table'){
-    const longSide=4, shortSide=Math.max(1,Math.round((n-longSide*2)/2));
-    const top=longSide, bot=longSide, left=shortSide, right=shortSide;
-    for(let i=0;i<top;i++)    positions.push({x:(i+1)*w/(top+1),   y:-(cs/2+gap)});
-    for(let i=0;i<bot;i++)    positions.push({x:(i+1)*w/(bot+1),   y:h+cs/2+gap});
-    for(let i=0;i<left;i++)   positions.push({x:-(cs/2+gap),       y:(i+1)*h/(left+1)});
-    for(let i=0;i<right;i++)  positions.push({x:w+cs/2+gap,        y:(i+1)*h/(right+1)});
+    const sideN=2;
+    const topN=Math.ceil((n-sideN*2)/2), botN=Math.floor((n-sideN*2)/2);
+    for(let i=0;i<topN;i++)   positions.push({x:(i+1)*w/(topN+1),  y:-(cs/2+gap)});
+    for(let i=0;i<botN;i++)   positions.push({x:(i+1)*w/(botN+1),  y:h+cs/2+gap});
+    for(let i=0;i<sideN;i++)  positions.push({x:-(cs/2+gap),       y:(i+1)*h/(sideN+1)});
+    for(let i=0;i<sideN;i++)  positions.push({x:w+cs/2+gap,        y:(i+1)*h/(sideN+1)});
   } else {
     const chairSlot=cs+5;
     const longCap=Math.max(1,Math.floor(w/chairSlot));
@@ -458,20 +736,405 @@ function setAddMode(shape){
   renderLayout();
 }
 
+function toggleAddElementMenu(){
+  var menu=document.getElementById('add-element-menu');
+  if(!menu) return;
+  menu.style.display = menu.style.display==='block' ? 'none' : 'block';
+}
+
+function closeAddElementMenu(){
+  var menu=document.getElementById('add-element-menu');
+  if(menu) menu.style.display='none';
+}
+
+function selectAddElement(kind){
+  closeAddElementMenu();
+  if(kind==='table'){
+    openAddTableModal();
+    return;
+  }
+  if(kind==='event-element'){
+    openAddEventElementModal();
+    return;
+  }
+  if(kind==='floorplan'){
+    triggerFloorplanUpload();
+    return;
+  }
+}
+
+function triggerFloorplanUpload(){
+  var input=document.getElementById('layout-floorplan-input');
+  if(input) input.click();
+}
+
+/* -- Add Table Modal -- */
+var _addTableSelection={};
+function _addTableDrawSVG(item, selected){
+  var SCALE=44;
+  var CS=0.38*SCALE; var CG=0.06*SCALE;
+  var tw=item.wM*SCALE; var th=item.hM*SCALE;
+  var padX=CS+CG+2; var padY=CS+CG+2;
+  var svgW=tw+padX*2; var svgH=th+padY*2+14;
+  var tx=padX; var ty=padY;
+  var tableFill=selected?'#93b8d8':'#aac9e8';
+  var chairFill='#e07a52';
+  var chairs=''; var n=item.chairs;
+  if(item.cat==='round'){
+    var r=tw/2; var cx=tx+r; var cy=ty+r;
+    for(var ci=0;ci<n;ci++){
+      var ang=2*Math.PI*ci/n-Math.PI/2;
+      var dist=r+CG+CS/2;
+      var ccx=cx+dist*Math.cos(ang); var ccy=cy+dist*Math.sin(ang);
+      chairs+='<circle cx="'+ccx.toFixed(1)+'" cy="'+ccy.toFixed(1)+'" r="'+(CS/2).toFixed(1)+'" fill="'+chairFill+'"/>';
+    }
+    chairs+='<circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="'+r.toFixed(1)+'" fill="'+tableFill+'"/>';
+  } else {
+    var sideN=2;
+    var topN=Math.ceil((n-sideN*2)/2); var botN=Math.floor((n-sideN*2)/2);
+    for(var ci=0;ci<topN;ci++){
+      var cx2=tx+(ci+0.5)*(tw/topN); var cy2=ty-CG-CS/2;
+      chairs+='<circle cx="'+cx2.toFixed(1)+'" cy="'+cy2.toFixed(1)+'" r="'+(CS/2).toFixed(1)+'" fill="'+chairFill+'"/>';
+    }
+    for(var ci=0;ci<botN;ci++){
+      var cx2=tx+(ci+0.5)*(tw/botN); var cy2=ty+th+CG+CS/2;
+      chairs+='<circle cx="'+cx2.toFixed(1)+'" cy="'+cy2.toFixed(1)+'" r="'+(CS/2).toFixed(1)+'" fill="'+chairFill+'"/>';
+    }
+    for(var ci=0;ci<sideN;ci++){
+      var cy3=ty+(ci+0.5)*(th/sideN);
+      chairs+='<circle cx="'+(tx-CG-CS/2).toFixed(1)+'" cy="'+cy3.toFixed(1)+'" r="'+(CS/2).toFixed(1)+'" fill="'+chairFill+'"/>';
+      chairs+='<circle cx="'+(tx+tw+CG+CS/2).toFixed(1)+'" cy="'+cy3.toFixed(1)+'" r="'+(CS/2).toFixed(1)+'" fill="'+chairFill+'"/>';
+    }
+    chairs+='<rect x="'+tx.toFixed(1)+'" y="'+ty.toFixed(1)+'" width="'+tw.toFixed(1)+'" height="'+th.toFixed(1)+'" fill="'+tableFill+'"/>';
+  }
+  return '<svg viewBox="0 0 '+svgW.toFixed(0)+' '+svgH.toFixed(0)+'" width="'+svgW.toFixed(0)+'" height="'+svgH.toFixed(0)+'" style="display:block;overflow:visible">'+chairs+'<text x="'+(svgW/2).toFixed(1)+'" y="'+(svgH-1).toFixed(1)+'" text-anchor="middle" font-size="8.5" fill="#888" font-family="Jost,sans-serif">'+item.label+'</text></svg>';
+}
+
+function _addTableCatalogue(){
+  return [
+    {key:'round-0.8',cat:'round',label:'0.8m',wM:0.8,hM:0.8,chairs:4},
+    {key:'round-1.0',cat:'round',label:'1.0m',wM:1.0,hM:1.0,chairs:6},
+    {key:'round-1.2',cat:'round',label:'1.2m',wM:1.2,hM:1.2,chairs:8},
+    {key:'round-1.4',cat:'round',label:'1.4m',wM:1.4,hM:1.4,chairs:10},
+    {key:'round-1.5',cat:'round',label:'1.5m',wM:1.5,hM:1.5,chairs:10},
+    {key:'round-1.6',cat:'round',label:'1.6m',wM:1.6,hM:1.6,chairs:12},
+    {key:'round-1.7',cat:'round',label:'1.7m',wM:1.7,hM:1.7,chairs:12},
+    {key:'round-1.8',cat:'round',label:'1.8m',wM:1.8,hM:1.8,chairs:14},
+    {key:'round-1.9',cat:'round',label:'1.9m',wM:1.9,hM:1.9,chairs:14},
+    {key:'round-2.0',cat:'round',label:'2.0m',wM:2.0,hM:2.0,chairs:16},
+    {key:'rect-2x1.2',cat:'rect',label:'2×1.2m',wM:2.0,hM:1.2,chairs:10},
+    {key:'rect-2.4x1.2',cat:'rect',label:'2.4×1.2m',wM:2.4,hM:1.2,chairs:12},
+    {key:'rect-2.6x1.2',cat:'rect',label:'2.6×1.2m',wM:2.6,hM:1.2,chairs:12},
+    {key:'rect-2.8x1.2',cat:'rect',label:'2.8×1.2m',wM:2.8,hM:1.2,chairs:14},
+    {key:'rect-3x1.2',cat:'rect',label:'3×1.2m',wM:3.0,hM:1.2,chairs:14},
+    {key:'rect-3.2x1.2',cat:'rect',label:'3.2×1.2m',wM:3.2,hM:1.2,chairs:16},
+    {key:'rect-3.4x1.2',cat:'rect',label:'3.4×1.2m',wM:3.4,hM:1.2,chairs:16},
+    {key:'rect-3.6x1.2',cat:'rect',label:'3.6×1.2m',wM:3.6,hM:1.2,chairs:18},
+    {key:'rect-3.8x1.2',cat:'rect',label:'3.8×1.2m',wM:3.8,hM:1.2,chairs:18},
+    {key:'rect-4x1.2',cat:'rect',label:'4×1.2m',wM:4.0,hM:1.2,chairs:20},
+  ];
+}
+
+function _addTableToggle(key){
+  var scrollEl=document.getElementById('add-table-scroll');
+  var scrollY=scrollEl?scrollEl.scrollTop:0;
+  var catalogue=_addTableCatalogue();
+  var cat=catalogue.find(function(c){return c.key===key;});
+  if(_addTableSelection[key]){
+    delete _addTableSelection[key];
+  } else {
+    _addTableSelection[key]={n:1,chairs:cat?cat.chairs:8};
+  }
+  _renderAddTableModalBody();
+  requestAnimationFrame(function(){var el=document.getElementById('add-table-scroll');if(el)el.scrollTop=scrollY;});
+}
+
+function _renderAddTableModalBody(){
+  var isES=LANG==='es';
+  var catalogue=_addTableCatalogue();
+  var totalT=0; var totalC=0;
+  Object.keys(_addTableSelection).forEach(function(k){
+    var e=_addTableSelection[k]; if(!e||!e.n) return;
+    var cat=catalogue.find(function(c){return c.key===k;});
+    if(cat){totalT+=e.n; totalC+=e.n*cat.chairs;}
+  });
+  function catSection(catKey,titleEN,titleES){
+    var items=catalogue.filter(function(c){return c.cat===catKey;});
+    return '<div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 8px">'+(isES?titleES:titleEN)+'</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px">'
+      +items.map(function(item){
+        var sel=_addTableSelection[item.key]&&_addTableSelection[item.key].n>0;
+        var cnt=(_addTableSelection[item.key]||{}).n||0;
+        return '<div onclick="_addTableToggle(\''+item.key+'\')" style="cursor:pointer;padding:8px 6px;border:2px solid '+(sel?'var(--gold)':'var(--border)')+';border-radius:10px;background:'+(sel?'var(--gold-l)':'var(--card)')+';text-align:center;transition:.15s;position:relative">'
+          +_addTableDrawSVG(item,sel)
+          +'<div style="margin-top:4px;font-size:10px;color:var(--muted)">'+(isES?'Sillas:':'Chairs:')+' '+item.chairs+'</div>'
+          +(sel
+            ?'<div onclick="event.stopPropagation()" style="margin-top:4px"><input type="number" min="1" value="'+cnt+'" onchange="_addTableSelection[\''+item.key+'\'].n=parseInt(this.value)||1;_renderAddTableModalBody()" oninput="_addTableSelection[\''+item.key+'\'].n=parseInt(this.value)||1" style="width:52px;text-align:center;padding:3px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:700"><div style="font-size:9px;color:var(--muted);margin-top:1px">'+(isES?'cantidad':'qty')+'</div></div>'
+            :'<div style="font-size:10px;color:var(--light);margin-top:4px">'+(isES?'clic':'click')+'</div>')
+          +'</div>';
+      }).join('')
+      +'</div>';
+  }
+  var body='<div style="font-size:12px;color:var(--muted);margin-bottom:10px">'+(isES?'Haz clic en una mesa para seleccionarla, luego ingresa la cantidad.':'Click a table to select it, then enter quantity.')+'</div>'
+    +catSection('round','Round Tables','Mesas Redondas')
+    +catSection('rect','Rectangular Tables','Mesas Rectangulares')
+    +'<div style="background:var(--bg2);border-radius:var(--r);padding:10px 14px;display:flex;gap:24px;font-size:13px;margin-top:12px;flex-wrap:wrap">'
+    +'<span>? <strong>'+totalT+'</strong> '+(isES?'mesas':'tables')+'</span>'
+    +'<span>?? <strong>'+totalC+'</strong> '+(isES?'sillas':'chairs')+'</span>'
+    +'</div>';
+  var el=document.getElementById('add-table-scroll');
+  if(el) el.innerHTML=body;
+}
+
+function openAddTableModal(){
+  var isES=LANG==='es';
+  _addTableSelection={};
+  openMo('<div class="mo-title">'+(isES?'Agregar Mesas':'Add Tables')+'</div>'
+    +'<div id="add-table-scroll" style="overflow-y:auto;max-height:55vh"></div>'
+    +'<div class="mo-foot">'
+    +'<button class="btn btn-ghost" onclick="closeMo()">'+(isES?'Cancelar':'Cancel')+'</button>'
+    +'<button class="btn btn-primary" onclick="doAddTablesToLayout()">+ '+(isES?'Agregar al Layout':'Add to Layout')+'</button>'
+    +'</div>');
+  _renderAddTableModalBody();
+}
+
+function _getVisibleCanvasCenter(){
+  var outer=document.getElementById('lcanvas-outer');
+  if(!outer) return {x:400,y:400};
+  var cx=(outer.scrollLeft+outer.clientWidth/2)/LState.zoom;
+  var cy=(outer.scrollTop+outer.clientHeight/2)/LState.zoom;
+  return {x:Math.round(cx),y:Math.round(cy)};
+}
+
+function doAddTablesToLayout(){
+  var isES=LANG==='es';
+  var catalogue=_addTableCatalogue();
+  var catalogueMap={};
+  catalogue.forEach(function(c){catalogueMap[c.key]=c;});
+  var keys=Object.keys(_addTableSelection);
+  if(!keys.length) return toast(isES?'Selecciona al menos una mesa':'Select at least one table','e');
+  var ppm=(typeof DEFAULT_PPM!=='undefined')?DEFAULT_PPM:(typeof getPPM==='function'?getPPM():40);
+  var SHAPES=typeof getLSHAPES!=='undefined'?getLSHAPES():{};
+  var shapeMap={
+    'rect':'rect-table','dend':'rect-table','oval':'rect-table','round':'round-table'
+  };
+  var spacing=Math.round(1.2*ppm);
+  var p=proj();
+  var existingTableCount=LState.items.filter(function(i){return ['round-table','rect-table','square-table'].includes(i.shape)||(LSHAPES_M[i.shape]&&LSHAPES_M[i.shape]._isCustomTable);}).length;
+  var tableNum=existingTableCount;
+  var newItems=[];
+  // Place new tables centered on the visible part of the canvas
+  var vc=_getVisibleCanvasCenter();
+  var totalCells=0;
+  keys.forEach(function(key){var sel=_addTableSelection[key];if(sel&&sel.n)totalCells+=sel.n;});
+  var gridCols=Math.max(1,Math.min(4,Math.ceil(Math.sqrt(totalCells))));
+  var gridRows=Math.ceil(totalCells/gridCols);
+  var maxCellW=0; var maxCellH=0;
+  keys.forEach(function(key){
+    var sel=_addTableSelection[key];if(!sel||!sel.n)return;
+    var cat=catalogueMap[key];if(!cat)return;
+    var tw2=Math.round(cat.wM*ppm);var th2=Math.round(cat.hM*ppm);
+    var pad2=cat.chairs?Math.round(0.4*ppm)+Math.round(0.05*ppm):0;
+    var cw2=tw2+pad2*2+spacing;var ch2=th2+pad2*2+spacing;
+    if(cw2>maxCellW)maxCellW=cw2;if(ch2>maxCellH)maxCellH=ch2;
+  });
+  var startX=Math.round(vc.x-gridCols*maxCellW/2);
+  var startY=Math.round(vc.y-gridRows*maxCellH/2);
+  var curX=startX; var curY=startY; var rowMaxH=0;
+  keys.forEach(function(key){
+    var sel=_addTableSelection[key]; if(!sel||!sel.n) return;
+    var cat=catalogueMap[key]; if(!cat) return;
+    var shape=shapeMap[cat.cat]||'round-table';
+    var tw=Math.round(cat.wM*ppm); var th=Math.round(cat.hM*ppm);
+    var defShape=SHAPES[shape]||{bg:'#f0ece0',bdClr:'#c9a84c'};
+    var pad=sel.chairs||cat.chairs?Math.round(0.4*ppm)+Math.round(0.05*ppm):0;
+    var cellW=tw+pad*2+spacing; var cellH=th+pad*2+spacing;
+    for(var i=0;i<sel.n;i++){
+      tableNum++;
+      if(curX+cellW>4000){curX=startX;curY+=rowMaxH;rowMaxH=0;}
+      newItems.push({
+        id:'li'+Date.now()+Math.random().toString(36).slice(2,6),
+        shape:shape, x:Math.round(curX+pad), y:Math.round(curY+pad),
+        w:tw, h:th, bg:defShape.bg||'#f0ece0', bdClr:defShape.bdClr||'#c9a84c',
+        radius:cat.cat==='round'?'50%':'0px',
+        label:String(tableNum), chairs:cat.chairs,
+        chairType:'default', centerpiece:'none', cost:0, rotation:0,
+        _typeKey:key
+      });
+      curX+=cellW;
+      if(cellH>rowMaxH) rowMaxH=cellH;
+    }
+  });
+  if(!newItems.length) return toast(isES?'Selecciona al menos una mesa':'Select at least one table','e');
+  newItems.forEach(function(ni){LState.items.push(ni);});
+  p.layoutItems=LState.items; saveProj(p);
+  LState.sel=newItems.map(function(ni){return ni.id;});
+  lHistorySave();
+  closeMo();
+  renderLayout();
+  toast(newItems.length+(isES?' mesa(s) agregada(s)':' table(s) added'),'s');
+}
+
+/* -- Add Event Element Modal -- */
+function openAddEventElementModal(){
+  var isES=LANG==='es';
+  var elements=[
+    {key:'dance-floor', icon:'??', labelEN:'Dance Floor',       labelES:'Pista de Baile',      shape:'dance-floor'},
+    {key:'bar',         icon:'??', labelEN:'Shot Bar',           labelES:'Barra de Shots',      shape:'bar'},
+    {key:'stage',       icon:'??', labelEN:'Stage',              labelES:'Escenario',           shape:'stage'},
+    {key:'dj-booth',    icon:'??', labelEN:'DJ Booth',           labelES:'Cabina de DJ',        shape:'dj-booth'},
+    {key:'platform',    icon:'???', labelEN:'Dinner Platform',    labelES:'Plataforma de Cena',  shape:'stage'},
+    {key:'gift-table',  icon:'??', labelEN:'Gift Table',         labelES:'Mesa de Regalos',     shape:'gift-table'},
+    {key:'photo-booth', icon:'??', labelEN:'Photo Booth',        labelES:'Photo Booth',         shape:'photo-booth'},
+    {key:'custom',      icon:'??', labelEN:'Custom Element',     labelES:'Elemento Personalizado', shape:'custom'},
+  ];
+  var html='<div class="mo-title">'+(isES?'Agregar Elemento':'Add Event Element')+'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px;max-height:55vh;overflow-y:auto">'
+    +elements.map(function(el){
+      if(el.key==='custom'){
+        return '<div style="border:1.5px solid var(--border);border-radius:10px;padding:14px;background:var(--card)">'
+          +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'
+          +'<span style="font-size:20px">'+el.icon+'</span>'
+          +'<span style="font-weight:600;font-size:14px">'+(isES?el.labelES:el.labelEN)+'</span></div>'
+          +'<div class="form-grid" style="gap:8px">'
+          +'<div class="ig"><label>'+(isES?'Nombre':'Name')+'</label><input class="input" id="custom-elem-name" placeholder="'+(isES?'Nombre del elemento':'Element name')+'" value=""></div>'
+          +'<div class="ig"><label>'+(isES?'Forma':'Shape')+'</label><select class="input" id="custom-elem-shape"><option value="rect">'+(isES?'Rectangular':'Rectangular')+'</option><option value="round">'+(isES?'Redondo':'Round')+'</option></select></div>'
+          +'<div class="ig"><label>'+(isES?'Ancho (m)':'Width (m)')+'</label><input class="input" id="custom-elem-w" type="number" step="0.1" min="0.5" value="2.0"></div>'
+          +'<div class="ig"><label>'+(isES?'Alto (m)':'Height (m)')+'</label><input class="input" id="custom-elem-h" type="number" step="0.1" min="0.5" value="2.0"></div>'
+          +'</div>'
+          +'<button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="doAddCustomElement()">+ '+(isES?'Agregar':'Add')+'</button>'
+          +'</div>';
+      }
+      return '<button class="btn btn-ghost" style="width:100%;justify-content:flex-start;padding:12px 14px;font-size:14px;gap:10px;border:1.5px solid var(--border);border-radius:10px" onclick="doAddEventElement(\''+el.key+'\')">'
+        +'<span style="font-size:20px">'+el.icon+'</span> '+(isES?el.labelES:el.labelEN)
+        +'</button>';
+    }).join('')
+    +'</div>'
+    +'<div class="mo-foot"><button class="btn btn-ghost" onclick="closeMo()">'+(isES?'Cerrar':'Close')+'</button></div>';
+  openMo(html);
+}
+
+function doAddEventElement(key){
+  var isES=LANG==='es';
+  var ppm=(typeof DEFAULT_PPM!=='undefined')?DEFAULT_PPM:(typeof getPPM==='function'?getPPM():40);
+  var SHAPES=typeof getLSHAPES!=='undefined'?getLSHAPES():{};
+  var labelMap={
+    'dance-floor':{en:'Dance Floor',es:'Pista de Baile',shape:'dance-floor'},
+    'bar':{en:'Shot Bar',es:'Barra de Shots',shape:'bar'},
+    'stage':{en:'Stage',es:'Escenario',shape:'stage'},
+    'dj-booth':{en:'DJ Booth',es:'Cabina de DJ',shape:'dj-booth'},
+    'platform':{en:'Dinner Platform',es:'Plataforma de Cena',shape:'stage'},
+    'gift-table':{en:'Gift Table',es:'Mesa de Regalos',shape:'gift-table'},
+    'photo-booth':{en:'Photo Booth',es:'Photo Booth',shape:'photo-booth'},
+  };
+  var info=labelMap[key]; if(!info) return;
+  var def=SHAPES[info.shape]||{w:Math.round(3*ppm),h:Math.round(2*ppm),bg:'#ddd0f0',bdClr:'#5a3d8a'};
+  var label=isES?info.es:info.en;
+  // Place in the center of the visible canvas area
+  var vc=_getVisibleCanvasCenter();
+  var placeX=Math.round(vc.x-def.w/2);
+  var placeY=Math.round(vc.y-def.h/2);
+  var newItem={
+    id:'li'+Date.now()+Math.random().toString(36).slice(2,6),
+    shape:info.shape, x:placeX, y:placeY,
+    w:def.w, h:def.h, bg:def.bg, bdClr:def.bdClr,
+    radius:def.radius||'0px', label:label,
+    chairs:0, chairType:'default', centerpiece:'none', cost:0, rotation:0
+  };
+  var p=proj();
+  LState.items.push(newItem);
+  p.layoutItems=LState.items; saveProj(p);
+  LState.sel=[newItem.id];
+  lHistorySave();
+  closeMo();
+  renderLayout();
+  toast(label+(isES?' agregado':' added'),'s');
+}
+
+function doAddCustomElement(){
+  var isES=LANG==='es';
+  var name=document.getElementById('custom-elem-name').value.trim();
+  if(!name) return toast(isES?'Ingresa un nombre':'Enter a name','e');
+  var shapeType=document.getElementById('custom-elem-shape').value;
+  var wM=parseFloat(document.getElementById('custom-elem-w').value)||2;
+  var hM=parseFloat(document.getElementById('custom-elem-h').value)||2;
+  var ppm=(typeof DEFAULT_PPM!=='undefined')?DEFAULT_PPM:(typeof getPPM==='function'?getPPM():40);
+  var tw=Math.round(wM*ppm); var th=Math.round(hM*ppm);
+  var vc=_getVisibleCanvasCenter();
+  var placeX=Math.round(vc.x-tw/2);
+  var placeY=Math.round(vc.y-th/2);
+  var newItem={
+    id:'li'+Date.now()+Math.random().toString(36).slice(2,6),
+    shape:'custom-elem', x:placeX, y:placeY,
+    w:tw, h:th, bg:'#e0e0e0', bdClr:'#888888',
+    radius:shapeType==='round'?'50%':'0px', label:name,
+    chairs:0, chairType:'default', centerpiece:'none', cost:0, rotation:0
+  };
+  var p=proj();
+  LState.items.push(newItem);
+  p.layoutItems=LState.items; saveProj(p);
+  LState.sel=[newItem.id];
+  lHistorySave();
+  closeMo();
+  renderLayout();
+  toast(name+(isES?' agregado':' added'),'s');
+}
+
 function attachLItemEvents(){
+  // Reset pointerEvents in case a previous drag left it stuck
+  var cv=document.getElementById('lcanvas');
+  if(cv) cv.style.pointerEvents='';
+  // Reset any stale drag state
+  _lDragItem=null;_panning=false;_marquee=false;_fpDragging=false;
   document.querySelectorAll('.litem').forEach(el=>{
     el.addEventListener('mousedown',lItemDown,{passive:false});
   });
+  window.removeEventListener('mousemove',lCanvasMove);
+  window.removeEventListener('mouseup',lCanvasUp);
+  window.addEventListener('mousemove',lCanvasMove);
+  window.addEventListener('mouseup',lCanvasUp);
 }
 
 let _lDragItem=null,_lDragOffX=0,_lDragOffY=0,_lDidDrag=false;
+let _lDragStartAnchorX=0,_lDragStartAnchorY=0,_lDragAxisLock=null;
 let _lDragOffsets={};
 let _panning=false,_panStart={x:0,y:0},_panOrigin={x:0,y:0};
 let _spaceDown=false;
 let _marquee=false,_marqueeStart={x:0,y:0};
 let _fpDragging=false,_fpDragOffX=0,_fpDragOffY=0;
 let _measuring=false,_measurePoints=[],_measureLines=[];
+let _measurePreviewMouse=null;
 if(!window.LClipboard)window.LClipboard=[];
+
+function getConstrainedMeasurePoint(startPt, endPt, constrainAxis){
+  if(!constrainAxis||!startPt||!endPt) return endPt;
+  const dx=Math.abs(endPt.x-startPt.x);
+  const dy=Math.abs(endPt.y-startPt.y);
+  return dx>=dy
+    ? {x:endPt.x,y:startPt.y}
+    : {x:startPt.x,y:endPt.y};
+}
+
+function updateMeasurePreview(rawPoint, constrainAxis){
+  if(!LState.measureMode||_measurePoints.length!==1||!rawPoint) return;
+  const pt=_measurePoints[0];
+  const nextPt=getConstrainedMeasurePoint(pt,rawPoint,constrainAxis);
+  let ov=document.getElementById('measure-overlay');
+  if(!ov) return;
+  const previewLine=ov.querySelector('#measure-preview');
+  if(previewLine){
+    previewLine.setAttribute('x2',nextPt.x);
+    previewLine.setAttribute('y2',nextPt.y);
+  }
+  const previewLabel=ov.querySelector('#measure-preview-label');
+  if(previewLabel){
+    previewLabel.setAttribute('x',(pt.x+nextPt.x)/2);
+    previewLabel.setAttribute('y',(pt.y+nextPt.y)/2-10);
+    const _ppm=getFloorplanPPM()||getPPM();
+    const _rd=Math.hypot(nextPt.x-pt.x,nextPt.y-pt.y)/_ppm;
+    previewLabel.textContent=_rd.toFixed(2)+'m';
+  }
+}
 
 var LHistory=[], LHistoryPos=-1, LHistorySaving=true;
 function lHistorySave(){
@@ -480,28 +1143,31 @@ function lHistorySave(){
   if(LHistoryPos<LHistory.length-1) LHistory=LHistory.slice(0,LHistoryPos+1);
   if(LHistory.length>0&&LHistory[LHistoryPos]===snapshot)return;
   LHistory.push(snapshot);
-  if(LHistory.length>60)LHistory.shift();
+  if(LHistory.length>200){ LHistory.shift(); LHistoryPos--; }
   LHistoryPos=LHistory.length-1;
 }
 function lUndo(){
-  if(LHistoryPos<=0){toast('Nothing to undo','e');return;}
+  if(LHistoryPos<=0){toast(LANG==='es'?'Nada que deshacer':'Nothing to undo','e');return;}
   LHistoryPos--;
   LHistorySaving=false;
   LState.items=JSON.parse(LHistory[LHistoryPos]);
   LState.sel=[];
+  var _savedFP=LState.floorplan;
   var p=proj();p.layoutItems=LState.items;saveProj(p);
-  renderLayout();LHistorySaving=true;toast('Undo','s');
+  LState.floorplan=_savedFP;
+  renderLayoutCanvas();LHistorySaving=true;toast(LANG==='es'?'Deshacer':'Undo','s');
 }
 function lRedo(){
-  if(LHistoryPos>=LHistory.length-1){toast('Nothing to redo','e');return;}
+  if(LHistoryPos>=LHistory.length-1){toast(LANG==='es'?'Nada que rehacer':'Nothing to redo','e');return;}
   LHistoryPos++;
   LHistorySaving=false;
   LState.items=JSON.parse(LHistory[LHistoryPos]);
   LState.sel=[];
+  var _savedFP=LState.floorplan;
   var p=proj();p.layoutItems=LState.items;saveProj(p);
-  renderLayout();LHistorySaving=true;toast('Redo','s');
+  LState.floorplan=_savedFP;
+  renderLayoutCanvas();LHistorySaving=true;toast(LANG==='es'?'Rehacer':'Redo','s');
 }
-
 document.addEventListener('keydown',e=>{
   if(e.target.matches('input,textarea,select'))return;
   var moOpen=document.getElementById('mo')&&document.getElementById('mo').classList.contains('open');
@@ -515,12 +1181,15 @@ document.addEventListener('keydown',e=>{
   if(e.code==='Escape'){
     if(moOpen){closeMo();return;}
     if(typeof LState!=='undefined'){
-      if(LState.measureMode){LState.measureMode=false;_measurePoints=[];renderLayout();return;}
+      if(LState.measureMode){LState.measureMode=false;_measurePoints=[];_measurePreviewMouse=null;renderLayout();return;}
       if(LState.scaleMode){cancelScaleMode();return;}
       if(LState.addMode){LState.addMode=null;renderLayout();return;}
       LState.sel=[];updateSelUI();
     }
     return;
+  }
+  if(e.key==='Shift'&&_measurePreviewMouse){
+    updateMeasurePreview(_measurePreviewMouse,true);
   }
   if(typeof CTAB==='undefined'||CTAB!=='layout'||moOpen)return;
 
@@ -558,8 +1227,10 @@ document.addEventListener('keyup',e=>{
     const co=document.getElementById('lcanvas-outer');
     if(co)co.style.cursor=LState.addMode?'crosshair':'default';
   }
+  if(e.key==='Shift'&&_measurePreviewMouse){
+    updateMeasurePreview(_measurePreviewMouse,false);
+  }
 });
-
 function lPaste(){
   if(!window.LClipboard||!window.LClipboard.length)return;
   const newIds=[];
@@ -582,28 +1253,30 @@ function lPaste(){
   window.LClipboard=window.LClipboard.map(i=>({...i,x:i.x+offset,y:i.y+offset}));
   const p=proj();p.layoutItems=LState.items;saveProj(p);
   LState.sel=newIds;
+  lHistorySave();
   renderLayout();
-  lHistorySave();toast(`${newIds.length} item${newIds.length>1?'s':''} pasted`,'s');
 }
 
 function lItemDown(e){
   if(e.button!==0)return;
-  e.stopPropagation();e.preventDefault();
-  const id=e.currentTarget.dataset.id;
-  if(!e.shiftKey){
-    if(!LState.sel.includes(id)){LState.sel=[id];updateSelUI();}
-  } else {
-    if(LState.sel.includes(id))LState.sel=LState.sel.filter(s=>s!==id);
-    else LState.sel.push(id);
-    updateSelUI();
-  }
+  const id=e.currentTarget&&e.currentTarget.dataset?e.currentTarget.dataset.id:null;
+  if(!id)return;
   const canvas=document.getElementById('lcanvas');
   const cr=canvas.getBoundingClientRect();
   const mouseX=(e.clientX-cr.left)/LState.zoom;
   const mouseY=(e.clientY-cr.top)/LState.zoom;
+  if(!e.shiftKey&&!e.ctrlKey&&!e.metaKey){
+    if(!LState.sel.includes(id)) LState.sel=[id];
+  } else if(e.shiftKey){
+    if(!LState.sel.includes(id)) LState.sel.push(id);
+  }
+  updateSelUI();
   _lDragItem=id;
   const anchor=LState.items.find(i=>i.id===id);
   if(!anchor)return;
+  _lDragStartAnchorX=anchor.x;
+  _lDragStartAnchorY=anchor.y;
+  _lDragAxisLock=null;
   _lDragOffX=mouseX-anchor.x;
   _lDragOffY=mouseY-anchor.y;
   _lDragOffsets={};
@@ -612,23 +1285,34 @@ function lItemDown(e){
     if(it)_lDragOffsets[sid]={dx:it.x-anchor.x,dy:it.y-anchor.y};
   });
   _lDidDrag=false;
+  document.getElementById('lcanvas').style.pointerEvents='none';
+  e.stopPropagation();
+  e.preventDefault();
 }
 
 function lCanvasDown(e){
   if(LState.measureMode&&e.button===0){
     const canvasEl=document.getElementById('lcanvas');
     const cr=canvasEl.getBoundingClientRect();
-    const x=(e.clientX-cr.left)/LState.zoom;
-    const y=(e.clientY-cr.top)/LState.zoom;
+    const rawPoint={
+      x:(e.clientX-cr.left)/LState.zoom,
+      y:(e.clientY-cr.top)/LState.zoom
+    };
     if(_measurePoints.length===0){
-      _measurePoints=[{x,y}];
+      _measurePoints=[rawPoint];
+      _measurePreviewMouse=rawPoint;
     } else {
       const pt1=_measurePoints[_measurePoints.length-1];
+      const nextPt=getConstrainedMeasurePoint(pt1,rawPoint,e.shiftKey);
+      const x=nextPt.x;
+      const y=nextPt.y;
       const pxDist=Math.hypot(x-pt1.x,y-pt1.y);
-      const ppm=LState.floorplan.pxPerMeter||0;
-      const realDist=ppm>0?pxDist/ppm:0;
-      _measureLines.push({x1:pt1.x,y1:pt1.y,x2:x,y2:y,px:Math.round(pxDist),m:realDist,calibrated:ppm>0});
+      const fpPPM=getFloorplanPPM();
+      const usePPM=fpPPM>0?fpPPM:getPPM();
+      const realDist=pxDist/usePPM;
+      _measureLines.push({x1:pt1.x,y1:pt1.y,x2:x,y2:y,px:Math.round(pxDist),m:realDist,calibrated:true});
       _measurePoints=[{x,y}];
+      _measurePreviewMouse={x,y};
     }
     renderMeasureOverlay();
     e.stopPropagation();e.preventDefault();return;
@@ -680,15 +1364,26 @@ function lCanvasDown(e){
     const def=LSHAPES[LState.addMode]||LSHAPES['round-table'];
     const snap=n=>LState.useSnap?Math.round(n/LState.snapGrid)*LState.snapGrid:Math.round(n);
     const chairs=def.chairs||0;
-    const chairPx=Math.round(CHAIR_SIZE_M*getPPM());
-    const pad=chairs?chairPx+Math.round(0.05*getPPM()):0;
+    const _tempMinSide=Math.min(def.w,def.h);
+    const _tempChairPx=Math.max(8,Math.round(_tempMinSide*0.22));
+    const _tempGapPx=Math.max(1,Math.round(_tempMinSide*0.04));
+    const pad=chairs?_tempChairPx+_tempGapPx:0;
     const p=proj();
     const isTable=['round-table','rect-table','square-table'].includes(LState.addMode)||!!(LSHAPES_M[LState.addMode]&&LSHAPES_M[LState.addMode]._isCustomTable);
     const tableCount=LState.items.filter(i=>['round-table','rect-table','square-table'].includes(i.shape)||(LSHAPES_M[i.shape]&&LSHAPES_M[i.shape]._isCustomTable)).length+1;
     const newLabel=isTable?String(tableCount):def.label;
+    const nonTableShapes=['dance-floor','bar','stage','dj-booth','gift-table','photo-booth'];
+    const isNonTable=nonTableShapes.includes(LState.addMode)||!!(LSHAPES_M[LState.addMode]&&LSHAPES_M[LState.addMode]._isCustomElem);
+    let placeX=snap(rawX-def.w/2-pad);
+    if(isNonTable){
+      const df=LState.items.find(i=>i.shape==='dance-floor');
+      if(df){
+        placeX=snap(df.x+df.w/2-def.w/2);
+      }
+    }
     const newItem={
       id:'li'+Date.now(),shape:LState.addMode,
-      x:snap(rawX-def.w/2-pad),y:snap(rawY-def.h/2-pad),
+      x:placeX,y:snap(rawY-def.h/2-pad),
       w:def.w,h:def.h,bg:def.bg,bdClr:def.bdClr,
       radius:def.radius,label:newLabel,chairs,
       chairType:'default',centerpiece:'none',cost:0,rotation:0,
@@ -701,7 +1396,7 @@ function lCanvasDown(e){
   }
 
   if(!e.target.closest('.litem')){
-    LState.sel=[];
+    if(!e.shiftKey&&!e.ctrlKey&&!e.metaKey) LState.sel=[];
     const outer=document.getElementById('lcanvas-outer');
     const outerRect=outer.getBoundingClientRect();
     const canvas=document.getElementById('lcanvas');
@@ -720,6 +1415,11 @@ function lCanvasDown(e){
     mq.style.display='none';
     updateSelUI();
   }
+}
+
+function lCanvasLeave(e){
+  var cv=document.getElementById('lcanvas');
+  if(cv&&cv.style.pointerEvents==='none') cv.style.pointerEvents='';
 }
 
 function lCanvasMove(e){
@@ -743,26 +1443,11 @@ function lCanvasMove(e){
   if(LState.measureMode&&_measurePoints.length===1){
     const canvasEl=document.getElementById('lcanvas');
     const cr=canvasEl.getBoundingClientRect();
-    const cx=(e.clientX-cr.left)/LState.zoom;
-    const cy=(e.clientY-cr.top)/LState.zoom;
-    const pt=_measurePoints[0];
-    const pxDist=Math.hypot(cx-pt.x,cy-pt.y);
-    const realDist=(pxDist/LState.floorplan.scale)/LState.snapGrid;
-    let ov=document.getElementById('measure-overlay');
-    if(ov){
-      const previewLine=ov.querySelector('#measure-preview');
-      if(previewLine){
-        previewLine.setAttribute('x2',cx);previewLine.setAttribute('y2',cy);
-      }
-      const previewLabel=ov.querySelector('#measure-preview-label');
-      if(previewLabel){
-        previewLabel.setAttribute('x',(pt.x+cx)/2);
-        previewLabel.setAttribute('y',(pt.y+cy)/2-10);
-        const _ppm=LState.floorplan.pxPerMeter||0;
-        const _rd=_ppm>0?(Math.hypot(cx-pt.x,cy-pt.y)/_ppm):0;
-        previewLabel.textContent=_ppm>0?_rd.toFixed(2)+'m':Math.round(Math.hypot(cx-pt.x,cy-pt.y))+'px';
-      }
-    }
+    _measurePreviewMouse={
+      x:(e.clientX-cr.left)/LState.zoom,
+      y:(e.clientY-cr.top)/LState.zoom
+    };
+    updateMeasurePreview(_measurePreviewMouse,e.shiftKey);
   }
 
   if(_marquee){
@@ -780,12 +1465,19 @@ function lCanvasMove(e){
       mq.style.left=rx+'px';mq.style.top=ry+'px';
       mq.style.width=rw+'px';mq.style.height=rh+'px';
     }
-    LState.sel=LState.items.filter(item=>{
+    var _mqHits=LState.items.filter(item=>{
       const pad=(item.chairs||0)?30:0;
       const ix=item.x-pad,iy=item.y-pad;
       const iw=item.w+pad*2,ih=item.h+pad*2;
       return ix<rx+rw&&ix+iw>rx&&iy<ry+rh&&iy+ih>ry;
     }).map(i=>i.id);
+    if(e.ctrlKey||e.metaKey){
+      LState.sel=LState.sel.filter(id=>_mqHits.indexOf(id)<0);
+    } else if(e.shiftKey){
+      _mqHits.forEach(id=>{ if(LState.sel.indexOf(id)<0) LState.sel.push(id); });
+    } else {
+      LState.sel=_mqHits;
+    }
     updateSelUI();
     return;
   }
@@ -794,10 +1486,22 @@ function lCanvasMove(e){
   const canvas=document.getElementById('lcanvas');
   const cr=canvas.getBoundingClientRect();
   const snap=n=>LState.useSnap?Math.round(n/LState.snapGrid)*LState.snapGrid:Math.round(n);
-  const anchorX=snap((e.clientX-cr.left)/LState.zoom-_lDragOffX);
-  const anchorY=snap((e.clientY-cr.top)/LState.zoom-_lDragOffY);
+  let anchorX=snap((e.clientX-cr.left)/LState.zoom-_lDragOffX);
+  let anchorY=snap((e.clientY-cr.top)/LState.zoom-_lDragOffY);
   const anchor=LState.items.find(i=>i.id===_lDragItem);
   if(!anchor)return;
+
+  if(e.shiftKey){
+    if(!_lDragAxisLock){
+      const dx=anchorX-_lDragStartAnchorX;
+      const dy=anchorY-_lDragStartAnchorY;
+      _lDragAxisLock=Math.abs(dx)>=Math.abs(dy)?'x':'y';
+    }
+    if(_lDragAxisLock==='x') anchorY=_lDragStartAnchorY;
+    else anchorX=_lDragStartAnchorX;
+  } else {
+    _lDragAxisLock=null;
+  }
 
   const oldAx=anchor.x,oldAy=anchor.y;
   anchor.x=anchorX;anchor.y=anchorY;
@@ -811,16 +1515,15 @@ function lCanvasMove(e){
     if(it){it.x+=ddx;it.y+=ddy;}
   });
 
-  LState.sel.forEach(sid=>{
-    const it=LState.items.find(i=>i.id===sid);
-    const el2=document.getElementById('li_'+sid);
-    if(el2&&it){
-      el2.style.left=it.x+'px';el2.style.top=it.y+'px';
-    }
+  document.querySelectorAll('.litem').forEach(el=>{
+    const id=el.getAttribute('data-id');
+    const it=LState.items.find(i=>i.id===id);
+    if(it){el.style.left=it.x+'px';el.style.top=it.y+'px';}
   });
 }
-
 function lCanvasUp(e){
+  var cv=document.getElementById('lcanvas');
+  if(cv&&cv.style.pointerEvents==='none') cv.style.pointerEvents='';
   if(_panning){
     _panning=false;
     const co=document.getElementById('lcanvas-outer');
@@ -842,10 +1545,10 @@ function lCanvasUp(e){
   }
   if(_lDragItem!==null){
     if(_lDidDrag){
-      const p=proj();p.layoutItems=LState.items;saveProj(p);
+      saveLayoutData();
       lHistorySave();
     }
-    _lDragItem=null;_lDragOffsets={};
+    _lDragItem=null;_lDragOffsets={};_lDragAxisLock=null;
     if(_lDidDrag)updateSelUI();
   }
 }
@@ -1017,7 +1720,7 @@ function toggleSbSection(id){
   if(!el)return;
   var isHidden=el.style.display==='none'||el.style.display==='';
   el.style.display=isHidden?'block':'none';
-  if(arrow) arrow.textContent=isHidden?'▲':'▼';
+  if(arrow) arrow.textContent=isHidden?'?':'?';
 }
 
 function duplicateAsCustom(id){
@@ -1256,11 +1959,11 @@ function saveElementTypes(){
 function openGeneralLayoutModal(){
   var chairOpts=Object.entries(CHAIR_TYPES).map(([k,v])=>`<option value="${k}">${v.label}${v.costPerChair>0?' ($'+v.costPerChair+'/silla)':''}</option>`).join('');
   var cpOpts=Object.entries(CENTERPIECE_TYPES).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('');
-  openMo(`<div class="mo-title">⚡ Create General Layout</div>
+  openMo(`<div class="mo-title">? Create General Layout</div>
   <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Configure your venue layout. Default: 30 round tables (6×5), dance floor, shot bar, dinner platform and DJ booth in center.</div>
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
     <div style="border:1px solid var(--border);border-radius:10px;padding:12px">
-      <div style="font-weight:700;font-size:12px;color:var(--gold-h);margin-bottom:10px">⬤ Round Tables</div>
+      <div style="font-weight:700;font-size:12px;color:var(--gold-h);margin-bottom:10px">? Round Tables</div>
       <div class="ig"><label># Tables</label><input class="input" type="number" id="gl-round-n" value="30" min="0"></div>
       <div class="ig"><label>Chairs each</label><input class="input" type="number" id="gl-round-chairs" value="10" min="0" max="30"></div>
       <div class="ig"><label>Columns</label><input class="input" type="number" id="gl-round-cols" value="6" min="1"></div>
@@ -1268,7 +1971,7 @@ function openGeneralLayoutModal(){
       <div class="ig"><label>Centerpiece</label><select class="input" id="gl-round-cp" style="font-size:11px">${cpOpts}</select></div>
     </div>
     <div style="border:1px solid var(--border);border-radius:10px;padding:12px">
-      <div style="font-weight:700;font-size:12px;color:var(--gold-h);margin-bottom:10px">▬ Rect Tables</div>
+      <div style="font-weight:700;font-size:12px;color:var(--gold-h);margin-bottom:10px">? Rect Tables</div>
       <div class="ig"><label># Tables</label><input class="input" type="number" id="gl-rect-n" value="0" min="0"></div>
       <div class="ig"><label>Chairs each</label><input class="input" type="number" id="gl-rect-chairs" value="12" min="0" max="30"></div>
       <div class="ig"><label>Columns</label><input class="input" type="number" id="gl-rect-cols" value="4" min="1"></div>
@@ -1276,7 +1979,7 @@ function openGeneralLayoutModal(){
       <div class="ig"><label>Centerpiece</label><select class="input" id="gl-rect-cp" style="font-size:11px">${cpOpts}</select></div>
     </div>
     <div style="border:1px solid var(--border);border-radius:10px;padding:12px">
-      <div style="font-weight:700;font-size:12px;color:var(--gold-h);margin-bottom:10px">◼ Square Tables</div>
+      <div style="font-weight:700;font-size:12px;color:var(--gold-h);margin-bottom:10px">? Square Tables</div>
       <div class="ig"><label># Tables</label><input class="input" type="number" id="gl-sq-n" value="0" min="0"></div>
       <div class="ig"><label>Chairs each</label><input class="input" type="number" id="gl-sq-chairs" value="8" min="0" max="30"></div>
       <div class="ig"><label>Columns</label><input class="input" type="number" id="gl-sq-cols" value="4" min="1"></div>
@@ -1285,7 +1988,7 @@ function openGeneralLayoutModal(){
     </div>
   </div>
   <div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:16px">
-    <div style="font-weight:700;font-size:12px;color:var(--gold-h);margin-bottom:10px">🎪 Center Elements</div>
+    <div style="font-weight:700;font-size:12px;color:var(--gold-h);margin-bottom:10px">?? Center Elements</div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
       <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">Dance Floor (m)</label>
         <input class="input" type="number" step="0.1" id="gl-df-w" value="7.32" style="margin-bottom:4px" placeholder="Width">
@@ -1306,11 +2009,11 @@ function openGeneralLayoutModal(){
     </div>
   </div>
   <div style="background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.2);border-radius:8px;padding:10px;font-size:11px;color:var(--muted);margin-bottom:16px">
-    ⚠️ This will replace your current layout. Tables are arranged in a grid; center elements are placed in the middle.
+    ?? This will replace your current layout. Tables are arranged in a grid; center elements are placed in the middle.
   </div>
   <div class="mo-foot">
     <button class="btn btn-ghost" onclick="closeMo()">Cancel</button>
-    <button class="btn btn-primary" onclick="generateGeneralLayout()">⚡ Generate Layout</button>
+    <button class="btn btn-primary" onclick="generateGeneralLayout()">? Generate Layout</button>
   </div>`);
 }
 
@@ -1332,8 +2035,8 @@ function generateGeneralLayout(){
   var sqN=gn('gl-sq-n'),         sqChairs=gn('gl-sq-chairs')||8;
   var sqCtype=gs('gl-sq-ctype')||'default',      sqCp=gs('gl-sq-cp')||'none';
 
-  var dfW=Math.round((gn('gl-df-w')||7.32)*ppm),  dfH=Math.round((gn('gl-df-h')||7.32)*ppm);
-  var barW=Math.round((gn('gl-bar-w')||dfW/ppm)*ppm), barH=Math.round((gn('gl-bar-h')||0.4)*ppm);
+  var dfW=Math.round((gn('gl-df-h')||7.32)*ppm),  dfH=Math.round((gn('gl-df-w')||7.32)*ppm);
+  var barW=Math.round((gn('gl-bar-w')||7.32)*ppm), barH=Math.round((gn('gl-bar-h')||0.4)*ppm);
   var stW=Math.round((gn('gl-stage-w')||3.66)*ppm),   stH=Math.round((gn('gl-stage-h')||2.44)*ppm);
   var djW=Math.round((gn('gl-dj-w')||3.66)*ppm),      djH=Math.round((gn('gl-dj-h')||1.22)*ppm);
 
@@ -1342,28 +2045,27 @@ function generateGeneralLayout(){
   var sqDef=LSHAPES['square-table'];
 
   function makeCell(def, chairs){
-    var pad=chairs?Math.round(CHAIR_SIZE_M*ppm)+Math.round(0.05*ppm):0;
+    var _ms=Math.min(def.w,def.h);
+    var _cp=Math.max(8,Math.round(_ms*0.22));
+    var _cg=Math.max(1,Math.round(_ms*0.04));
+    var pad=chairs?_cp+_cg:0;
     return {w:def.w+pad*2+sp, h:def.h+pad*2+sp, pad:pad, def:def};
   }
   var rCell=makeCell(rDef,roundChairs);
   var rcCell=makeCell(rcDef,rectChairs);
   var sqCell=makeCell(sqDef,sqChairs);
 
-  // Interleave table types for balanced left/right distribution
-  var tableQueue=[];
-  var rI=0,rcI=0,sqI=0;
-  while(rI<roundN||rcI<rectN||sqI<sqN){
-    if(rI<roundN){  tableQueue.push({shape:'round-table', cell:rCell,  chairs:roundChairs,ctype:roundCtype,cp:roundCp, radius:'50%'}); rI++; }
-    if(rcI<rectN){  tableQueue.push({shape:'rect-table',  cell:rcCell, chairs:rectChairs, ctype:rectCtype, cp:rectCp,  radius:'0px'}); rcI++; }
-    if(sqI<sqN){    tableQueue.push({shape:'square-table',cell:sqCell, chairs:sqChairs,   ctype:sqCtype,   cp:sqCp,    radius:'0px'}); sqI++; }
-  }
-  var total=tableQueue.length;
-
-  // Split evenly left / right
+  // Distribute each table type evenly — half of each type on each side
   var leftQ=[], rightQ=[];
-  for(var i=0;i<tableQueue.length;i++){
-    if(i%2===0) leftQ.push(tableQueue[i]); else rightQ.push(tableQueue[i]);
+  function _splitType(n, maker){
+    var lCount=Math.ceil(n/2);
+    for(var i=0;i<lCount;i++) leftQ.push(maker());
+    for(var i=0;i<n-lCount;i++) rightQ.push(maker());
   }
+  _splitType(roundN, function(){ return {shape:'round-table',  cell:rCell,  chairs:roundChairs, ctype:roundCtype, cp:roundCp,  radius:'50%'}; });
+  _splitType(rectN,  function(){ return {shape:'rect-table',   cell:rcCell, chairs:rectChairs,  ctype:rectCtype,  cp:rectCp,   radius:'0px'}; });
+  _splitType(sqN,    function(){ return {shape:'square-table', cell:sqCell, chairs:sqChairs,    ctype:sqCtype,    cp:sqCp,     radius:'0px'}; });
+  var total=leftQ.length+rightQ.length;
 
   // Cell dimensions per side
   var leftCellW=0,leftCellH=0,rightCellW=0,rightCellH=0;
@@ -1372,16 +2074,7 @@ function generateGeneralLayout(){
   if(!leftCellW) leftCellW=rCell.w; if(!leftCellH) leftCellH=rCell.h;
   if(!rightCellW) rightCellW=rCell.w; if(!rightCellH) rightCellH=rCell.h;
 
-  // Central entertainment column width
-  var centerW=Math.max(dfW,barW,stW,djW)+sp*2;
-
-  // Above-dance-floor: Shot Bar → Stage → DJ Booth
-  var aboveH=barH+sp+stH+sp+djH+sp;
-  // Below: Dinner Platform
-  var belowH=stH+sp;
-  var centralColH=aboveH+dfH+sp+belowH;
-
-  // Table grid columns (aim for roughly square block)
+  // Table grid columns
   var leftCols=Math.max(1,Math.min(6,Math.round(Math.sqrt(leftQ.length))));
   var rightCols=Math.max(1,Math.min(6,Math.round(Math.sqrt(rightQ.length))));
   var leftRows=Math.ceil(leftQ.length/Math.max(1,leftCols));
@@ -1392,54 +2085,57 @@ function generateGeneralLayout(){
   var rightBlockH=rightRows*rightCellH;
   var tableBlockH=Math.max(leftBlockH,rightBlockH);
 
-  var ox=Math.round(sp*3), oy=Math.round(sp*3);
-  var centralX=ox+leftBlockW+sp*2;
+  // Central column: width = dance floor width + padding
+  var centerW=dfW;
+
+  // Central column height: dj + stage + bar + dance floor + dinner platform
+  var centralColH=djH+sp+stH+sp+barH+sp+dfH+sp+stH+sp;
+
+  var totalLayoutW=leftBlockW+sp+centerW+sp+rightBlockW;
   var tableH=Math.max(tableBlockH,centralColH);
+  var ox=Math.round(Math.max(sp*3,(LState.canvasW-totalLayoutW)/2));
+  var oy=Math.round(Math.max(sp*3,(LState.canvasH-tableH)/2));
+  var centralX=ox+leftBlockW+sp;
   var centralStartY=oy+Math.max(0,Math.round((tableH-centralColH)/2));
   var tableStartY=oy+Math.max(0,Math.round((tableH-tableBlockH)/2));
 
-  // Place LEFT tables (right-aligned against central column)
+// The dance floor center X is the reference for centering all elements
+  var dfCenterX=centralX+centerW/2;
+
+  // Tables start at the same Y as the dance floor, not above it
+  var dfY=centralStartY+djH+sp+stH+sp+barH+sp;
+  tableStartY=Math.max(tableStartY, dfY);
+
+  // Place LEFT tables
   var tCount=0;
+  var leftStartX=centralX-sp-leftBlockW;
   for(var row=0;row<leftRows;row++){
     for(var col=0;col<leftCols;col++){
       var idx=row*leftCols+col; if(idx>=leftQ.length) break;
       var t=leftQ[idx];
-      var tx=centralX-leftBlockW+col*leftCellW+t.cell.pad-sp;
+      var tx=leftStartX+col*leftCellW+t.cell.pad;
       var ty=tableStartY+row*leftCellH+t.cell.pad;
       tCount++;
       items.push({id:idGen(),shape:t.shape,x:Math.round(tx),y:Math.round(ty),w:t.cell.def.w,h:t.cell.def.h,bg:t.cell.def.bg,bdClr:t.cell.def.bdClr,radius:t.radius,label:String(tCount),chairs:t.chairs,chairType:t.ctype,centerpiece:t.cp,cost:0,rotation:0});
     }
   }
 
-  // Place RIGHT tables (left-aligned from central column right edge)
-  var rightStartX=centralX+centerW;
+  // Place RIGHT tables — columns reversed so layout mirrors the left side
+  var rightStartX=centralX+centerW+sp;
   for(var row=0;row<rightRows;row++){
     for(var col=0;col<rightCols;col++){
       var idx=row*rightCols+col; if(idx>=rightQ.length) break;
       var t=rightQ[idx];
-      var tx=rightStartX+col*rightCellW+t.cell.pad;
+      var tx=rightStartX+(rightCols-1-col)*rightCellW+t.cell.pad;
       var ty=tableStartY+row*rightCellH+t.cell.pad;
       tCount++;
       items.push({id:idGen(),shape:t.shape,x:Math.round(tx),y:Math.round(ty),w:t.cell.def.w,h:t.cell.def.h,bg:t.cell.def.bg,bdClr:t.cell.def.bdClr,radius:t.radius,label:String(tCount),chairs:t.chairs,chairType:t.ctype,centerpiece:t.cp,cost:0,rotation:0});
     }
   }
 
-  // Place central entertainment elements
-  var cy=centralStartY;
-  function ctrX(w){ return Math.round(centralX+sp+(centerW-sp*2-w)/2); }
-
-  var dfShape=LSHAPES['dance-floor']||{bg:'#e8e0f0',bdClr:'#7c3aed'};
-  var barShape=LSHAPES['bar']||{bg:'#fef3c7',bdClr:'#f59e0b'};
-  var stShape=LSHAPES['stage']||{bg:'#dbeafe',bdClr:'#3b82f6'};
-  var djShape=LSHAPES['dj-booth']||LSHAPES['dj']||{bg:'#f3e8ff',bdClr:'#9333ea'};
-
-  // Shot Bar (top)
+  // Shot Bar
   items.push({id:idGen(),shape:'bar',       x:ctrX(barW),y:Math.round(cy),w:barW,h:barH,bg:barShape.bg,bdClr:barShape.bdClr,radius:'0px',label:LANG==='es'?'Barra de Shots':'Shot Bar',        chairs:0,cost:0,rotation:0}); cy+=barH+sp;
-  // Stage
-  items.push({id:idGen(),shape:'stage',     x:ctrX(stW), y:Math.round(cy),w:stW, h:stH, bg:stShape.bg, bdClr:stShape.bdClr, radius:'0px',label:LANG==='es'?'Escenario':'Stage',                  chairs:0,cost:0,rotation:0}); cy+=stH+sp;
-  // DJ Booth (just above dance floor)
-  items.push({id:idGen(),shape:'dj-booth',  x:ctrX(djW), y:Math.round(cy),w:djW, h:djH, bg:djShape.bg, bdClr:djShape.bdClr, radius:'0px',label:'DJ Booth',                                       chairs:0,cost:0,rotation:0}); cy+=djH+sp;
-  // Dance Floor (center reference)
+  // Dance Floor
   items.push({id:idGen(),shape:'dance-floor',x:ctrX(dfW),y:Math.round(cy),w:dfW, h:dfH, bg:dfShape.bg, bdClr:dfShape.bdClr, radius:'0px',label:LANG==='es'?'Pista de Baile':'Dance Floor',        chairs:0,cost:0,rotation:0}); cy+=dfH+sp;
   // Dinner Platform (below dance floor)
   items.push({id:idGen(),shape:'stage',     x:ctrX(stW), y:Math.round(cy),w:stW, h:stH, bg:stShape.bg, bdClr:stShape.bdClr, radius:'0px',label:LANG==='es'?'Plataforma de Cena':'Dinner Platform',chairs:0,cost:0,rotation:0});
@@ -1455,23 +2151,23 @@ function generateGeneralLayout(){
 
 function toggleMeasureMode(){
   LState.measureMode=!LState.measureMode;
-  if(!LState.measureMode){ _measurePoints=[]; }
+  if(!LState.measureMode){ _measurePoints=[]; _measurePreviewMouse=null; }
   renderLayout();
-  if(LState.measureMode) toast('Click point A, then point B to measure. Continue clicking to chain. Esc to exit.','s');
+  if(LState.measureMode) toast('Click point A, then point B to measure. Hold Shift for horizontal/vertical lock. Continue clicking to chain. Esc to exit.','s');
 }
 
 function clearMeasurements(){
   _measureLines=[];
   _measurePoints=[];
+  _measurePreviewMouse=null;
   renderLayout();
   toast('Measurements cleared','s');
 }
-
 function toggleFloorplanLock(){
   LState.floorplan.locked=!LState.floorplan.locked;
   saveFloorplan();
   renderLayout();
-  toast(LState.floorplan.locked?'🔒 Floorplan locked':'🔓 Floorplan unlocked','s');
+  toast(LState.floorplan.locked?'?? Floorplan locked':'?? Floorplan unlocked','s');
 }
 
 function renderMeasureOverlay(){
@@ -1505,6 +2201,8 @@ function renderLayoutCanvas(){
     fpImg.style.width=Math.round(LState.floorplan.w*LState.floorplan.scale)+'px';
     fpImg.style.height=Math.round(LState.floorplan.h*LState.floorplan.scale)+'px';
     fpImg.style.opacity=LState.floorplan.opacity;
+    fpImg.style.transform='rotate('+(LState.floorplan.rotation||0)+'deg)';
+    fpImg.src=LState.floorplan.img;
   }
   var itemsDiv=el.querySelector('[style*="position:relative;z-index:1"]');
   if(itemsDiv){ itemsDiv.innerHTML=LState.items.map(function(item){return renderLItem(item);}).join(''); attachLItemEvents(); }
@@ -1514,27 +2212,52 @@ function renderLayoutCanvas(){
 function handleFloorplanUpload(e){
   var file=e.target.files[0];
   if(!file)return;
+  toast(LANG==='es'?'Cargando plano…':'Loading floorplan…');
   var reader=new FileReader();
   reader.onload=function(ev){
+    var origData=ev.target.result;
     var img=new Image();
     img.onload=function(){
-      LState.floorplan={
-        img:ev.target.result,
-        opacity:0.4,
-        scale:1,
-        x:0,y:0,
-        w:img.naturalWidth,
-        h:img.naturalHeight
-      };
-      var targetW=LState.canvasW*0.8;
-      if(img.naturalWidth>targetW){
-        LState.floorplan.scale=targetW/img.naturalWidth;
+      var MAX_PX=1200;
+      var cw=img.naturalWidth, ch=img.naturalHeight;
+      var finalData=origData;
+      if(cw>MAX_PX||ch>MAX_PX){
+        var r=Math.min(MAX_PX/cw, MAX_PX/ch);
+        cw=Math.round(cw*r); ch=Math.round(ch*r);
+        var cvs=document.createElement('canvas');
+        cvs.width=cw; cvs.height=ch;
+        cvs.getContext('2d').drawImage(img,0,0,cw,ch);
+        finalData=cvs.toDataURL('image/jpeg',0.6);
       }
-      saveFloorplan();
-      renderLayout();
-      toast('Floorplan loaded — '+img.naturalWidth+'×'+img.naturalHeight+'px','s');
+      var pid=proj().id;
+      var _fpKey='fp_'+Math.random().toString(36).slice(2,10)+'_'+Date.now();
+      _fpSave(_fpKey, finalData).then(function(){
+        LState.floorplan={
+          img:finalData,
+          opacity:0.4,
+          scale:1,
+          x:0,y:0,
+          w:cw,h:ch,
+          _idb:_fpKey
+        };
+        var targetW=LState.canvasW*0.8;
+        if(cw>targetW) LState.floorplan.scale=targetW/cw;
+        var p=proj();
+        p.floorplan={opacity:0.4,scale:LState.floorplan.scale,x:0,y:0,w:cw,h:ch,locked:false,rotation:0,pxPerMeter:null,img:'__idb__',_idb:_fpKey};
+        saveProj(p);
+        renderLayout();
+        toast(LANG==='es'?'Plano cargado — '+cw+'×'+ch+'px':'Floorplan loaded — '+cw+'×'+ch+'px','s');
+      }).catch(function(err){
+        console.error('IndexedDB save error:',err);
+        LState.floorplan={img:finalData,opacity:0.4,scale:1,x:0,y:0,w:cw,h:ch};
+        var targetW=LState.canvasW*0.8;
+        if(cw>targetW) LState.floorplan.scale=targetW/cw;
+        saveFloorplan();
+        renderLayout();
+        toast(LANG==='es'?'Plano cargado (sin caché persistente)':'Floorplan loaded (no persistent cache)','s');
+      });
     };
-    img.src=ev.target.result;
+    img.src=origData;
   };
   reader.readAsDataURL(file);
   e.target.value='';
@@ -1548,17 +2271,23 @@ function handleFloorplanDrop(e){
 }
 
 function removeFloorplan(){
-  if(!confirm('Remove the floorplan image?'))return;
+  if(!confirm(LANG==='es'?'¿Quitar el plano?':'Remove the floorplan image?'))return;
+  var idbKey=LState.floorplan._idb;
   LState.floorplan={img:null,opacity:0.4,scale:1,x:0,y:0,w:0,h:0};
   LState.scaleMode=false;LState.scalePoints=[];
   var p=proj();delete p.floorplan;saveProj(p);
+  if(idbKey) _fpDelete(idbKey).catch(function(){});
   renderLayout();
-  toast('Floorplan removed','s');
+  toast(LANG==='es'?'Plano eliminado':'Floorplan removed','s');
 }
 
 function saveFloorplan(){
   var p=proj();
-  p.floorplan=JSON.parse(JSON.stringify(LState.floorplan));
+  var fpCopy=JSON.parse(JSON.stringify(LState.floorplan));
+  if(fpCopy._idb){
+    fpCopy.img='__idb__';
+  }
+  p.floorplan=fpCopy;
   saveProj(p);
 }
 
@@ -1584,27 +2313,20 @@ function applyScaleCalibration(){
   var pt1=LState.scalePoints[0],pt2=LState.scalePoints[1];
   var pxDist=Math.hypot(pt2.x-pt1.x,pt2.y-pt1.y);
   if(pxDist<5)return toast('Points are too close together','e');
-  var pxPerMeter=pxDist/realMeters;
-  var oldPPM=LState.floorplan.pxPerMeter||DEFAULT_PPM;
-  LState.floorplan.pxPerMeter=pxPerMeter;
-  var ratio=pxPerMeter/oldPPM;
-  LState.items.forEach(function(item){
-    item.x=Math.round(item.x*ratio);
-    item.y=Math.round(item.y*ratio);
-    item.w=Math.round(item.w*ratio);
-    item.h=Math.round(item.h*ratio);
-    delete item.fontSize;
-  });
-  LState.floorplan.x=Math.round(LState.floorplan.x*ratio);
-  LState.floorplan.y=Math.round(LState.floorplan.y*ratio);
-  LState.canvasW=Math.max(4000,Math.round(LState.canvasW*ratio));
-  LState.canvasH=Math.max(3000,Math.round(LState.canvasH*ratio));
-  var p=proj();p.layoutItems=LState.items;saveProj(p);
+  var fpPPM=pxDist/realMeters;
+  var ratio=DEFAULT_PPM/fpPPM;
+  var midX=(pt1.x+pt2.x)/2;
+  var midY=(pt1.y+pt2.y)/2;
+  var oldScale=LState.floorplan.scale;
+  LState.floorplan.scale=oldScale*ratio;
+  LState.floorplan.x=Math.round(midX-(midX-LState.floorplan.x)*ratio);
+  LState.floorplan.y=Math.round(midY-(midY-LState.floorplan.y)*ratio);
+  LState.floorplan.pxPerMeter=DEFAULT_PPM;
   LState.scaleMode=false;
   LState.scalePoints=[];
   saveFloorplan();
   renderLayout();
-  toast('Calibrated: '+pxPerMeter.toFixed(1)+'px/m. All elements rescaled proportionally.','s');
+  toast('Floorplan scaled to match layout ('+DEFAULT_PPM+' px/m)','s');
 }
 
 function quickCreate(){
@@ -1623,8 +2345,10 @@ function quickCreate(){
   LSHAPES=getLSHAPES();
   var def=LSHAPES[shape];
   if(!def)return toast('Unknown table type','e');
-  var chairPx=Math.round(CHAIR_SIZE_M*getPPM());
-  var pad=chairs?chairPx+Math.round(0.05*getPPM()):0;
+  var _qcMinSide=Math.min(def.w,def.h);
+  var _qcChairPx=Math.max(8,Math.round(_qcMinSide*0.22));
+  var _qcGapPx=Math.max(1,Math.round(_qcMinSide*0.04));
+  var pad=chairs?_qcChairPx+_qcGapPx:0;
   var cellW=def.w+pad*2+spacing;
   var cellH=def.h+pad*2+spacing;
   var startX=120,startY=120;
@@ -1722,7 +2446,16 @@ function setFontSizeDirect(size){
   });
   updateSelUI();
   updateFontSizeUI();
-}function rotateSelected(deg){
+}
+function getRotateStep(){
+  var step=Number(document.getElementById('rotate-step')?.value);
+  if(!step||isNaN(step))step=90;
+  return step;
+}
+function doRotate(deg){
+  rotateSelected(deg);
+}
+function rotateSelected(deg){
   if(!LState.sel.length)return toast('Select items to rotate','e');
   if(!deg||isNaN(deg))return toast('Enter a valid angle','e');
   var selItems=LState.items.filter(function(i){return LState.sel.indexOf(i.id)>=0;});
@@ -1752,6 +2485,7 @@ function setFontSizeDirect(size){
     });
   }
   var p=proj();p.layoutItems=LState.items;saveProj(p);
+  lHistorySave();
   renderLayout();
   toast('Rotated '+deg+'°','s');
 }
@@ -1784,6 +2518,7 @@ function alignSelected(mode){
     });
   }
   var p=proj();p.layoutItems=LState.items;saveProj(p);
+  lHistorySave();
   renderLayout();toast('Aligned','s');
 }
 
@@ -1854,6 +2589,7 @@ function lPropChange(id, key, val){
   }
 
   const p=proj();p.layoutItems=LState.items;saveProj(p);
+  lHistorySave();
   const toUpdate=new Set();
   if(perElementOnly.includes(key)){
     toUpdate.add(id);
@@ -1899,12 +2635,17 @@ function openLItemModal(id){
     <div class="ig"><label>${_es?'Sillas / Asientos':'Chairs / Seats'}</label>
       <input class="input" id="li-chairs" type="number" value="${item.chairs||0}" min="0" max="30">
     </div>
-    ${isTable?`<div class="ig" style="grid-column:1/-1"><label>${_es?'Forma de Mesa':'Table Shape'}</label>
-      <select class="input" id="li-shape">
-        <option value="round" ${(item.radius==='50%'||(LSHAPES_M[item.shape]&&LSHAPES_M[item.shape].radius==='50%'))?'selected':''}>${_es?'Redonda':'Round'}</option>
-        <option value="rect" ${(item.shape==='rect-table'&&item.radius!=='50%')?'selected':''}>${_es?'Rectangular':'Rectangular'}</option>
-        <option value="square" ${(item.shape==='square-table'&&item.radius!=='50%')?'selected':''}>${_es?'Cuadrada':'Square'}</option>
-      </select>
+    ${isTable?`<div class="ig" style="grid-column:1/-1"><label>${_es?'Tipo de Mesa':'Table Type'}</label>
+      <input type="hidden" id="li-new-typekey" value="">
+      <input type="hidden" id="li-new-shape" value="">
+      <input type="hidden" id="li-new-w" value="">
+      <input type="hidden" id="li-new-h" value="">
+      <input type="hidden" id="li-new-chairs" value="">
+      <input type="hidden" id="li-new-radius" value="">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span id="li-type-label" style="font-size:13px;color:var(--text)">${item._typeKey?item._typeKey.replace(/-/g,' ').replace(/(\d)/,' $1'):(item.shape==='round-table'?(item.w/getPPM()).toFixed(1)+'m '+ (_es?'Redonda':'Round'):(item.w/getPPM()).toFixed(1)+'×'+(item.h/getPPM()).toFixed(1)+'m '+(_es?'Rectangular':'Rect'))}</span>
+        <button class="btn btn-ghost btn-sm" type="button" onclick="openChangeTableTypePicker('${id}')" style="white-space:nowrap">?? ${_es?'Cambiar Tipo':'Change Type'}</button>
+      </div>
     </div>`:''}
     <div class="ig"><label>${_es?'Color de Relleno':'Fill Color'}</label>
       <input class="input" id="li-bg" type="color" value="${item.bg}" style="height:38px;padding:2px">
@@ -1926,16 +2667,77 @@ function openLItemModal(id){
     <input class="input" id="li-cost" type="number" step="0.01" min="0" value="${item.cost||0}">
   </div>
   <div style="font-size:10.5px;color:var(--muted);margin-bottom:8px;padding:8px;background:rgba(201,168,76,.06);border-radius:6px;border:1px solid rgba(201,168,76,.15)">
-    ℹ️ ${_es?`Al guardar se aplicará tamaño, color, sillas y centro de mesa a <strong>todos los ${item.shape.replace(/-/g,' ')}s</strong> en este plano.`:`Saving will apply size, color, chairs and centerpiece to <strong>all ${item.shape.replace(/-/g,' ')}s</strong> in this layout.`}
+    ?? ${_es?`Al guardar se aplicará a <strong>todas las mesas del mismo tipo y tamaño</strong> en este plano.`:`Saving will apply to <strong>all tables of the same type and size</strong> in this layout.`}
   </div>
   <div class="mo-foot">
     <button class="btn btn-ghost" onclick="closeMo()">${t('cancel')}</button>
-    <button class="btn btn-ghost" onclick="duplicateAsCustom('${id}')" title="${_es?'Crear un nuevo tipo basado en este elemento':'Create a new custom type based on this element'}">⊕ ${_es?'Crear Tipo':'Create new Type'}</button>
+    <button class="btn btn-ghost" onclick="duplicateAsCustom('${id}')" title="${_es?'Crear un nuevo tipo basado en este elemento':'Create a new custom type based on this element'}">? ${_es?'Crear Tipo':'Create new Type'}</button>
     <button class="btn btn-danger" onclick="closeMo();delLItem('${id}')">${t('delete')||(_es?'Eliminar':'Delete')}</button>
     <button class="btn btn-primary" onclick="saveLItem('${id}')">${t('save')}</button>
   </div>`);
+  // If a type change was pending, populate the hidden fields
+  if(window._pendingTypeChange){
+    var ptc=window._pendingTypeChange;
+    var _ntk=document.getElementById('li-new-typekey');if(_ntk)_ntk.value=ptc.typeKey;
+    var _ns=document.getElementById('li-new-shape');if(_ns)_ns.value=ptc.shape;
+    var _nw=document.getElementById('li-new-w');if(_nw)_nw.value=ptc.w;
+    var _nh=document.getElementById('li-new-h');if(_nh)_nh.value=ptc.h;
+    var _nc=document.getElementById('li-new-chairs');if(_nc)_nc.value=ptc.chairs;
+    var _nr=document.getElementById('li-new-radius');if(_nr)_nr.value=ptc.radius;
+    var _tl=document.getElementById('li-type-label');if(_tl)_tl.textContent=ptc.label;
+    var _wInp=document.getElementById('li-w');if(_wInp)_wInp.value=(ptc.w/getPPM()).toFixed(2);
+    var _hInp=document.getElementById('li-h');if(_hInp)_hInp.value=(ptc.h/getPPM()).toFixed(2);
+    var _chInp=document.getElementById('li-chairs');if(_chInp)_chInp.value=ptc.chairs;
+    window._pendingTypeChange=null;
+  }
 }
 
+
+function openChangeTableTypePicker(itemId){
+  var isES=LANG==='es';
+  var catalogue=_addTableCatalogue();
+  var item=LState.items.find(function(i){return i.id===itemId;});
+  var currentKey=item?item._typeKey:'';
+  function catSection(catKey,titleEN,titleES){
+    var items=catalogue.filter(function(c){return c.cat===catKey;});
+    return '<div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 8px">'+(isES?titleES:titleEN)+'</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px">'
+      +items.map(function(it){
+        var sel=it.key===currentKey;
+        return '<div onclick="selectNewTableType(\''+itemId+'\',\''+it.key+'\')" style="cursor:pointer;padding:8px 6px;border:2px solid '+(sel?'var(--gold)':'var(--border)')+';border-radius:10px;background:'+(sel?'var(--gold-l)':'var(--card)')+';text-align:center;transition:.15s">'
+          +_addTableDrawSVG(it,sel)
+          +'<div style="margin-top:4px;font-size:10px;color:var(--muted)">'+(isES?'Sillas:':'Chairs:')+' '+it.chairs+'</div>'
+          +'</div>';
+      }).join('')
+      +'</div>';
+  }
+  openMo('<div class="mo-title">'+(isES?'Seleccionar Tipo de Mesa':'Select Table Type')+'</div>'
+    +'<div style="overflow-y:auto;max-height:55vh">'
+    +catSection('round','Round Tables','Mesas Redondas')
+    +catSection('rect','Rectangular Tables','Mesas Rectangulares')
+    +'</div>'
+    +'<div class="mo-foot">'
+    +'<button class="btn btn-ghost" onclick="closeMo();openLItemModal(\''+itemId+'\')">'+(isES?'Cancelar':'Cancel')+'</button>'
+    +'</div>');
+}
+
+function selectNewTableType(itemId,typeKey){
+  var catalogue=_addTableCatalogue();
+  var cat=catalogue.find(function(c){return c.key===typeKey;});
+  if(!cat) return;
+  var ppm=(typeof DEFAULT_PPM!=='undefined')?DEFAULT_PPM:(typeof getPPM==='function'?getPPM():40);
+  var shape=cat.cat==='round'?'round-table':'rect-table';
+  var tw=Math.round(cat.wM*ppm);
+  var th=Math.round(cat.hM*ppm);
+  var radius=cat.cat==='round'?'50%':'0px';
+  // Store in a temporary global so the edit modal can read it
+  window._pendingTypeChange={typeKey:typeKey,shape:shape,w:tw,h:th,chairs:cat.chairs,radius:radius,label:cat.label};
+  closeMo();
+  // Re-open the edit modal — the hidden inputs will be populated
+  setTimeout(function(){
+    openLItemModal(itemId);
+  },100);
+}
 
 function saveLItem(id){
   const item=LState.items.find(i=>i.id===id);if(!item)return;
@@ -1949,19 +2751,28 @@ function saveLItem(id){
   const newBdClr=gv('li-bdc');
   const ctEl=document.getElementById('li-ctype');
   const cpEl=document.getElementById('li-cp');
-  const shapeEl=document.getElementById('li-shape');
-  const newRadius=shapeEl?(shapeEl.value==='round'?'50%':'0px'):item.radius;
+  const _ntkEl=document.getElementById('li-new-typekey');
+  const _nsEl=document.getElementById('li-new-shape');
+  const _nrEl=document.getElementById('li-new-radius');
   let newShape=item.shape;
-  if(shapeEl){
-    if(shapeEl.value==='round') newShape='round-table';
-    else if(shapeEl.value==='square') newShape='square-table';
-    else if(shapeEl.value==='rect') newShape='rect-table';
+  let newRadius=item.radius||'0px';
+  let newTypeKey=item._typeKey||null;
+  if(_ntkEl&&_ntkEl.value){
+    newTypeKey=_ntkEl.value;
+    newShape=_nsEl?_nsEl.value:item.shape;
+    newRadius=_nrEl?_nrEl.value:item.radius;
   }
   const newCtype=ctEl?ctEl.value:(item.chairType||'default');
   const newCp=cpEl?cpEl.value:(item.centerpiece||'none');
 
-  const sameShape=LState.items.filter(i=>i.shape===item.shape);
-  sameShape.forEach(it=>{
+  const origTypeKey=item._typeKey||null;
+  const origW=item.w; const origH=item.h; const origShape=item.shape;
+  function _matchesType(i){
+    if(origTypeKey) return i._typeKey===origTypeKey;
+    return i.shape===origShape&&i.w===origW&&i.h===origH;
+  }
+  const sameType=LState.items.filter(_matchesType);
+  sameType.forEach(it=>{
     it.w=newW; it.h=newH;
     it.bg=newBg; it.bdClr=newBdClr;
     it.chairs=newChairs;
@@ -1969,14 +2780,15 @@ function saveLItem(id){
     it.centerpiece=newCp;
     it.radius=newRadius;
     it.shape=newShape;
+    if(newTypeKey) it._typeKey=newTypeKey;
   });
 
   const newCost=+(document.getElementById('li-cost')||{value:0}).value||0;
-  sameShape.forEach(it=>{ it.cost=newCost; });
+  sameType.forEach(it=>{ it.cost=newCost; });
 
   LState.sel.forEach(selId=>{
     const selItem=LState.items.find(i=>i.id===selId);
-    if(selItem && selItem.shape!==item.shape){
+    if(selItem && !_matchesType(selItem)){
       selItem.w=newW; selItem.h=newH;
       selItem.bg=newBg; selItem.bdClr=newBdClr;
       selItem.chairs=newChairs;
@@ -1991,8 +2803,8 @@ function saveLItem(id){
   const p=proj();p.layoutItems=LState.items;saveProj(p);
   lHistorySave();
   closeMo();renderLayout();
-  const selExtra=LState.sel.filter(sid=>{const si=LState.items.find(i=>i.id===sid);return si&&si.shape!==item.shape;}).length;
-  const totalUpdated=sameShape.length+selExtra;
+  const selExtra=LState.sel.filter(sid=>{const si=LState.items.find(i=>i.id===sid);return si&&!_matchesType(si);}).length;
+  const totalUpdated=sameType.length+selExtra;
   toast('Applied to '+totalUpdated+' item'+(totalUpdated!==1?'s':''),'s');
 }
 
@@ -2105,13 +2917,9 @@ function lWheel(e){
     cx=(e.clientX-outerRect.left+outer.scrollLeft)/LState.zoom;
     cy=(e.clientY-outerRect.top+outer.scrollTop)/LState.zoom;
   }
-  if(e.ctrlKey||e.metaKey){
-    const delta=e.deltaY>0?-0.08:0.08;
-    lZoom(delta,null,cx,cy);
-  } else {
-    const delta=e.deltaY>0?-0.08:0.08;
-    lZoom(delta,null,cx,cy);
-  }
+  const step=(e.ctrlKey||e.metaKey)?0.14:0.08;
+  const delta=e.deltaY>0?-step:step;
+  lZoom(delta,null,cx,cy);
 }
 
 function showLayoutBudget(){
@@ -2174,7 +2982,7 @@ function renderLayoutBudgetModal(){
   }).join('');
 
   openMo(
-    '<div class="mo-title">💰 Budget Breakdown — Edit</div>'+
+    '<div class="mo-title">?? Budget Breakdown — Edit</div>'+
     '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">'+
       '<div style="background:var(--gold-l);border-radius:10px;padding:10px;text-align:center">'+
         '<div style="font-size:18px;font-weight:700;color:var(--gold-h)" id="budget-total-display">'+formatCost(total)+'</div>'+
@@ -2278,7 +3086,7 @@ function openStylesEditor(){
       <td style="padding:6px 8px"><input type="number" min="0" step="0.01" value="${v.cost||0}" style="width:70px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px" placeholder="0" onchange="CENTERPIECE_TYPES['${k}'].cost=+this.value||0;saveLayoutStyles()"></td>
     </tr>`).join('');
 
-  openMo(`<div class="mo-title">🎨 Styles Editor</div>
+  openMo(`<div class="mo-title">?? Styles Editor</div>
   <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--light);margin-bottom:8px">Chair Styles</div>
   <div style="overflow-x:auto;margin-bottom:18px">
     <table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -2309,115 +3117,8 @@ function openStylesEditor(){
   </div>`);
 }
 
-function openSaveLayoutModal(){
-  const p=proj();
-  const saved = getSavedLayouts(p);
-  openMo(`<div class="mo-title">💾 Save Layout</div>
-  <div class="ig" style="margin-bottom:16px">
-    <label>Layout Name</label>
-    <input class="input" id="sl-name" placeholder="e.g. Option A — Round Tables" value="Layout ${saved.length+1}">
-  </div>
-  <div class="ig" style="margin-bottom:4px">
-    <label>Notes (optional)</label>
-    <textarea class="textarea" id="sl-notes" rows="2" placeholder="Notes about this layout version..."></textarea>
-  </div>
-  <div class="mo-foot">
-    <button class="btn btn-ghost" onclick="closeMo()">Cancel</button>
-    <button class="btn btn-primary" onclick="doSaveLayout()">Save Snapshot</button>
-  </div>`);
-}
-function doSaveLayout(){
-  const name = gv('sl-name'); if(!name) return toast('Enter a name','e');
-  const notes = gv('sl-notes');
-  const p = proj();
-  if(!p.savedLayouts) p.savedLayouts=[];
-  p.savedLayouts.push({
-    id:'sl'+Date.now(),
-    name, notes,
-    date: new Date().toLocaleDateString(),
-    items: JSON.parse(JSON.stringify(LState.items)),
-    budget: calcLayoutBudget(LState.items).total
-  });
-  saveProj(p);
-  // Also sync to library if currently editing a library layout
-  if(typeof _libEditingLayoutId!=='undefined'&&_libEditingLayoutId&&typeof getLib==='function'){
-    var lib2=getLib();
-    var entry2=lib2.layouts.find(function(e){return e.id===_libEditingLayoutId;});
-    if(entry2){entry2.items=JSON.parse(JSON.stringify(LState.items));if(typeof saveLib==='function')saveLib(lib2);}
-  }
-  closeMo();
-  renderLayout();
-  toast('Layout saved: '+name,'s');
-}
-function openLayoutsLibrary(){
-  const p=proj();
-  const saved=getSavedLayouts(p);
-  if(!saved.length){
-    openMo(`<div class="mo-title">📐 Saved Layouts</div>
-    <p style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">No saved layouts yet.<br>Use <strong>💾 Save Layout</strong> to snapshot the current canvas.</p>
-    <div class="mo-foot"><button class="btn btn-ghost" onclick="closeMo()">Close</button></div>`);
-    return;
-  }
-  openMo(`<div class="mo-title">📐 Saved Layouts (${saved.length})</div>
-  <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;max-height:55vh;overflow-y:auto">
-    ${saved.map(sl=>`
-    <div style="border:1.5px solid var(--border);border-radius:10px;padding:14px;background:var(--bg)">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
-        <div>
-          <div style="font-weight:700;font-size:14px">${esc(sl.name)}</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:2px">${sl.date} · ${sl.items.length} elements · ${sl.items.filter(i=>i.shape.includes('table')).length} tables · ${sl.items.reduce((s,i)=>s+(i.chairs||0),0)} seats${sl.budget>0?' · '+fmtMoney(sl.budget):''}</div>
-          ${sl.notes?`<div style="font-size:12px;color:var(--muted);margin-top:5px;font-style:italic">${esc(sl.notes)}</div>`:''}
-        </div>
-        <div style="display:flex;gap:6px;flex-shrink:0">
-          <button class="btn btn-primary btn-sm" onclick="closeMo();loadSavedLayout('${sl.id}')">Load</button>
-          <button class="btn btn-ghost btn-sm" onclick="closeMo();exportSavedLayout('${sl.id}')">Export</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteSavedLayout('${sl.id}')">✕</button>
-        </div>
-      </div>
-    </div>`).join('')}
-  </div>
-  <div class="mo-foot">
-    <button class="btn btn-ghost" onclick="closeMo()">Close</button>
-    <button class="btn btn-primary" onclick="closeMo();openSaveLayoutModal()">Save Current</button>
-  </div>`);
-}
-function loadSavedLayout(slId){
-  const p=proj();
-  const sl=getSavedLayouts(p).find(s=>s.id===slId);
-  if(!sl)return;
-  openMo(`<div class="mo-title">Load Layout</div>
-  <p style="font-size:13px;color:var(--muted);margin-bottom:20px">Load "<strong>${esc(sl.name)}</strong>"? This will replace the current canvas. Your current layout will be lost unless you saved it first.</p>
-  <div class="mo-foot">
-    <button class="btn btn-ghost" onclick="closeMo()">Cancel</button>
-    <button class="btn btn-primary" onclick="closeMo();_doLoadLayout('${slId}')">Load It</button>
-  </div>`);
-}
-function _doLoadLayout(slId){
-  const p=proj();
-  const sl=getSavedLayouts(p).find(s=>s.id===slId);
-  if(!sl)return;
-  p.layoutItems=JSON.parse(JSON.stringify(sl.items));
-  saveProj(p);
-  renderLayout();
-  toast('Loaded: '+sl.name,'s');
-}
-function deleteSavedLayout(slId){
-  const p=proj();
-  p.savedLayouts=(p.savedLayouts||[]).filter(s=>s.id!==slId);
-  saveProj(p);
-  closeMo();
-  openLayoutsLibrary();
-  toast('Layout deleted');
-}
-function exportSavedLayout(slId){
-  const p=proj();
-  const sl=getSavedLayouts(p).find(s=>s.id===slId);
-  if(!sl)return;
-  const tmpItems=LState.items;
-  LState.items=sl.items;
-  exportLayoutFull(sl.name);
-  LState.items=tmpItems;
-}
+
+
 
 function exportLayoutFull(layoutName){
   const p=proj(); const items=LState.items;
@@ -2631,7 +3332,7 @@ ${_pdfEs?'<h2>Resumen de Elementos</h2>':'<h2>Element Summary</h2>'}
 </table>
 
 <div class="no-print" style="margin-top:36px;display:flex;justify-content:flex-end">
-  <button onclick="window.print()" style="padding:11px 32px;background:#c9a84c;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-weight:700;letter-spacing:.02em">🖨️ Print / Save as PDF</button>
+  <button onclick="window.print()" style="padding:11px 32px;background:#c9a84c;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-weight:700;letter-spacing:.02em">??? Print / Save as PDF</button>
 </div>
 
 </body></html>`;
@@ -2645,4 +3346,15 @@ ${_pdfEs?'<h2>Resumen de Elementos</h2>':'<h2>Element Summary</h2>'}
 }
 
 function exportLayoutPDF(){ exportLayoutFull(); }
+
+
+
+
+
+
+
+    _lDragItem=null;_lDragOffsets={};_lDragAxisLock=null;
+
+
+
 

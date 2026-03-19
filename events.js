@@ -1,6 +1,17 @@
 // ─── WIZARD STATE ─────────────────────────────────────────────────────────
 var _wiz = null;
 
+// ─── STATUS LABEL ─────────────────────────────────────────────────────────
+var _STATUS_KEY = {'to-be-confirmed':'planning','confirmed':'confirmed','in-progress':'in_progress','completed':'completed','cancelled':'cancelled'};
+function statusLabel(s){ return s ? t('status_'+(_STATUS_KEY[s]||s.replace(/-/g,'_')))||s : ''; }
+
+// ─── EVENT SEARCH ─────────────────────────────────────────────────────────
+var _evSearch = '';
+function filterEvents(query){
+  _evSearch = query;
+  renderEvents();
+}
+
 var _WIZ_TYPES = [
   { value:'social',     icon:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
     label_en:'Social',     label_es:'Social',        desc_en:'Weddings, birthdays, private celebrations',    desc_es:'Bodas, cumpleaños, celebraciones privadas' },
@@ -47,9 +58,9 @@ function _openEditModal(id, p) {
     <div class="ig"><label>${t('client_name')} *</label><input class="input" id="e-client" value="${esc(p?.clientName||'')}"></div>
     <div class="ig"><label>${t('event_type')}</label><select class="select" id="e-type">${[['social',t('type_social')],['corporate',t('type_corporate')],['community',t('type_community')],['government',t('type_government')],['education',t('type_education')]].map(([v,l])=>`<option value="${v}"${p?.type===v?' selected':''}>${l}</option>`).join('')}</select></div>
     <div class="ig"><label>${t('event_date')} *</label>
-      <div style="position:relative;display:flex;align-items:center">
-        <input type="date" id="e-date" value="${p?.date||''}" style="position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:2" oninput="document.getElementById('e-date-display').textContent=formatDMY(this.value)">
-        <div id="e-date-display" class="input" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;pointer-events:none;z-index:1;width:100%">
+      <div style="position:relative;cursor:pointer" onclick="document.getElementById('e-date').showPicker()">
+        <input type="date" id="e-date" value="${p?.date||''}" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0" oninput="document.getElementById('e-date-display').firstElementChild.textContent=formatDMY(this.value)">
+        <div id="e-date-display" class="input" style="display:flex;align-items:center;justify-content:space-between;width:100%">
           <span>${p?.date?formatDMY(p.date):'DD / MM / YYYY'}</span>
           <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
         </div>
@@ -294,7 +305,7 @@ function _wizFinish() {
   var np = {
     id: 'p'+Date.now(),
     vendors: defaultVendors(), vendorsInitialized: true,
-    tasks: defaultTasks(), guests: [], layoutItems: [], savedLayouts: [],
+    tasks: defaultTasks(), guests: [], layoutItems: [], layoutExport: null, savedLayouts: [],
     moodboard: { folders:[], uncategorized:[] },
     name: name, clientName: client, description: _wiz.description,
     type: _wiz.type === 'other' ? ('other:' + ((_wiz.otherLabel||'').trim() || 'Other')) : _wiz.type, date: date, location: _wiz.location,
@@ -314,7 +325,7 @@ function saveEvent(id){
   const p=id?uproj()[id]:null;
   const data={name,clientName:client,date,description:gv('e-desc'),type:gv('e-type'),location:gv('e-location'),budget:+gv('e-budget')||0,status:gv('e-status')};
   if(p){Object.assign(p,data);saveProj(p);if(CID===id)renderPNav();}
-  else{const np={id:'p'+Date.now(),vendors:defaultVendors(),vendorsInitialized:true,tasks:defaultTasks(),guests:[],layoutItems:[],savedLayouts:[],moodboard:{folders:[],uncategorized:[]},...data};saveProj(np);}
+  else{const np={id:'p'+Date.now(),vendors:defaultVendors(),vendorsInitialized:true,tasks:defaultTasks(),guests:[],layoutItems:[],layoutExport:null,savedLayouts:[],moodboard:{folders:[],uncategorized:[]},...data};saveProj(np);}
   closeMo();
   setTimeout(function(){ renderEvents(); }, 50);
   toast(id?'Event updated':'Event created!','s');
@@ -323,13 +334,19 @@ function saveEvent(id){
 function renderEvents(){
   updateEvSortLabel();
   updateEvFilterLabels();
+  const esEl=document.getElementById('event-search');
+  if(esEl) esEl.placeholder=LANG==='es'?'Buscar eventos...':'Search events...';
   const efFrom=document.getElementById('ef-from'); const efTo=document.getElementById('ef-to');
-  if(efFrom&&!efFrom.value&&_efFr) efFrom.value=_efFr.toISOString().slice(0,10);
-  if(efTo&&!efTo.value&&_efTo)       efTo.value=_efTo.toISOString().slice(0,10);
+  if(efFrom&&!efFrom.value&&_efFr){ efFrom.value=_efFr.toISOString().slice(0,10); const d=document.getElementById('ef-from-display'); if(d) d.firstElementChild.textContent=formatDMY(efFrom.value); }
+  if(efTo&&!efTo.value&&_efTo){ efTo.value=_efTo.toISOString().slice(0,10); const d=document.getElementById('ef-to-display'); if(d) d.firstElementChild.textContent=formatDMY(efTo.value); }
   const efBtn=document.getElementById('ef-alltime');
   if(efBtn) efBtn.classList.toggle('active',_efAt);
 
   let list=Object.values(uproj()).filter(p=>p&&p.id&&p.id!=='__library__'&&p.id!=='__lib_layout__'&&p.status&&p.status!=='__internal__');
+  if(_evSearch.trim()){
+    const q=_evSearch.trim().toLowerCase();
+    list=list.filter(p=>[p.name,p.clientName,p.date,p.location].some(f=>f&&f.toLowerCase().includes(q)));
+  }
   if(!_efAt){
     const fp=new Date('1900-01-01'); const ff=new Date('2100-12-31');
     const fFrom=_efFr||fp; const fTo=_efTo||ff;
@@ -360,14 +377,12 @@ function renderEvents(){
     if (evHeader)  evHeader.style.display  = 'none';
     if (evToolbar) evToolbar.style.display = 'none';
     g.className = '';
-    g.innerHTML = `<div style="min-height:calc(100vh - 120px);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px 24px;">
+    g.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;text-align:center;padding:60px 24px 40px;">
       <div style="font-family:'Cormorant Garamond',serif;font-size:44px;font-weight:700;color:var(--text);letter-spacing:-.02em;margin-bottom:6px">Event<span style="color:var(--gold);font-style:italic">OS</span></div>
       <p style="font-size:15px;color:var(--muted);margin-bottom:52px;">${LANG==='es'?'Tu plataforma de gestión de eventos':'Your event management platform'}</p>
-      <button onclick="openEventModal()" style="width:190px;height:190px;border-radius:50%;background:radial-gradient(circle at 32% 32%, #f0d878 0%, #d4a832 35%, var(--gold-h) 65%, #6b4a10 100%);color:#fff;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;box-shadow:0 16px 56px rgba(201,168,76,.6),0 4px 16px rgba(201,168,76,.3),inset 0 2px 0 rgba(255,255,255,.3),inset 0 -2px 0 rgba(0,0,0,.15);transition:var(--tr);font-family:'Cormorant Garamond',serif;"
-        onmouseover="this.style.transform='scale(1.07)';this.style.boxShadow='0 24px 70px rgba(201,168,76,.75),0 6px 20px rgba(201,168,76,.4),inset 0 2px 0 rgba(255,255,255,.3)'"
-        onmouseout="this.style.transform='scale(1)';this.style.boxShadow='0 16px 56px rgba(201,168,76,.6),0 4px 16px rgba(201,168,76,.3),inset 0 2px 0 rgba(255,255,255,.3),inset 0 -2px 0 rgba(0,0,0,.15)'">
-        <svg width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-        <span style="font-size:16px;font-weight:600;letter-spacing:.01em;line-height:1.3;">${LANG==='es'?'Crea tu<br>primer evento':'Create your<br>first event'}</span>
+      <button class="btn btn-primary" onclick="openEventModal()" style="font-size:15px;padding:14px 32px;letter-spacing:.06em">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        ${LANG==='es'?'CREA TU PRIMER EVENTO':'CREATE YOUR FIRST EVENT'}
       </button>
     </div>`;
     return;
@@ -393,7 +408,7 @@ function renderEvents(){
             <div style="font-size:12px;white-space:nowrap"><span style="color:var(--light);font-size:10px;display:block;text-transform:uppercase;letter-spacing:.4px">${t('event_date')}</span>${fmtDate(p.date)}</div>
             <div style="font-size:12px;white-space:nowrap"><span style="color:var(--light);font-size:10px;display:block;text-transform:uppercase;letter-spacing:.4px">${t('location')}</span>${p.location||'TBD'}</div>
             <div style="font-size:12px;white-space:nowrap"><span style="color:var(--light);font-size:10px;display:block;text-transform:uppercase;letter-spacing:.4px">${t('total_budget')}</span>${fmtMoney(p.budget)}</div>
-            <div style="font-size:12px;white-space:nowrap"><span style="color:var(--light);font-size:10px;display:block;text-transform:uppercase;letter-spacing:.4px">${t('status')}</span>${p.status?t('status_'+p.status.replace('-','_'))||p.status:''}</div>
+            <div style="font-size:12px;white-space:nowrap"><span style="color:var(--light);font-size:10px;display:block;text-transform:uppercase;letter-spacing:.4px">${t('status')}</span>${statusLabel(p.status)}</div>
           </div>
           <div style="flex-shrink:0;display:flex;gap:5px;align-items:center" onclick="event.stopPropagation()">
             <span style="font-size:11px;font-weight:600;color:${isPast?'var(--light)':'var(--accent)'};white-space:nowrap;margin-right:6px">${dLabel}</span>
@@ -423,7 +438,7 @@ function renderEvents(){
           ${evcRow('#fdf4e0','#b8861a','<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',t('total_budget'),fmtMoney(p.budget))}
         </div>
         <div class="evc-foot">
-          <span style="font-size:12px;font-weight:600;text-transform:capitalize;color:var(--muted)">${p.status?t('status_'+p.status.replace('-','_'))||p.status:''}</span>
+          <span style="font-size:12px;font-weight:600;text-transform:capitalize;color:var(--muted)">${statusLabel(p.status)}</span>
           <div style="display:flex;align-items:center;gap:10px">
             <span style="font-size:12px;font-weight:600;color:${isPast?'var(--light)':'var(--accent)'}">${dLabel}</span>
             <div style="display:flex;gap:6px" onclick="event.stopPropagation()">
@@ -622,7 +637,7 @@ function renderAppDash(){
     const done=(p.tasks||[]).filter(tk=>tk.done).length;
     const total=(p.tasks||[]).length;
     const pct=total?Math.round(done/total*100):0;
-    const barClr=pct>75?'var(--success)':pct>40?'var(--gold)':'var(--danger)';
+    const barClr='var(--success)';
     const typeLbl=tl[p.type]||(p.type&&p.type.startsWith('other:')?p.type.slice(6):p.type)||'';
     return `<div onclick="openProject('${p.id}')" style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);padding:18px;box-shadow:var(--sh-sm);cursor:pointer;transition:var(--tr);"
       onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='var(--sh-lg)'"
@@ -652,3 +667,4 @@ function renderAppDash(){
     </div>`;
 
   }
+
