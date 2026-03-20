@@ -1,5 +1,29 @@
 ﻿
-function t(key){ return (TRANSLATIONS[LANG]||TRANSLATIONS.en)[key] || TRANSLATIONS.en[key] || key; }
+function fixMojibake(str){
+  if(typeof str !== 'string') return str;
+  var fixed = str;
+  var replacements = {
+    'Ã¡':'á','Ã©':'é','Ã­':'í','Ã³':'ó','Ãº':'ú',
+    'Ã':'Á','Ã‰':'É','Ã':'Í','Ã“':'Ó','Ãš':'Ú',
+    'Ã±':'ñ','Ã‘':'Ñ','Ã¼':'ü','Ãœ':'Ü',
+    'Â¿':'¿','Â¡':'¡',
+    'â‚¬':'€','Â£':'£','Â¥':'¥',
+    'â†‘':'↑','â†“':'↓',
+    'âœ“':'✓','âš ':'⚠',
+    'ðŸ“‹':'📋','ðŸšª':'🚪','ðŸ’±':'💱','ðŸ’¾':'💾','ðŸ“':'📐','ðŸ“„':'📄','ðŸ—ºï¸':'🗺️',
+    'SesiÃ³n':'Sesión','SÃ­':'Sí','EstÃ¡s':'Estás','EstadÃ­sticas':'Estadísticas',
+    'MÃ¡s':'Más','DiseÃ±o':'Diseño','PlanificaciÃ³n':'Planificación','dÃ­as':'días',
+    'VariaciÃ³n':'Variación','UbicaciÃ³n':'Ubicación','CuadrÃ­cula':'Cuadrícula',
+    'AnalÃ­tica':'Analítica','AÃ±o':'Año','PrÃ³ximos':'Próximos','mÃ¡s':'más',
+    'aquÃ­':'aquí','PerÃ­odo':'Período','CategorÃ­as':'Categorías','LÃ­nea':'Línea',
+    'PresentaciÃ³n':'Presentación','Sesión':'Sesión'
+  };
+  Object.keys(replacements).forEach(function(key){
+    fixed = fixed.split(key).join(replacements[key]);
+  });
+  return fixed;
+}
+function t(key){ return fixMojibake((TRANSLATIONS[LANG]||TRANSLATIONS.en)[key] || TRANSLATIONS.en[key] || key); }
 
 
 function toggleLang(){

@@ -57,15 +57,7 @@ function _openEditModal(id, p) {
     <div class="ig" style="grid-column:1/-1"><label>${t('description')}</label><input class="input" id="e-desc" value="${esc(p?.description||'')}"></div>
     <div class="ig"><label>${t('client_name')} *</label><input class="input" id="e-client" value="${esc(p?.clientName||'')}"></div>
     <div class="ig"><label>${t('event_type')}</label><select class="select" id="e-type">${[['social',t('type_social')],['corporate',t('type_corporate')],['community',t('type_community')],['government',t('type_government')],['education',t('type_education')]].map(([v,l])=>`<option value="${v}"${p?.type===v?' selected':''}>${l}</option>`).join('')}</select></div>
-    <div class="ig"><label>${t('event_date')} *</label>
-      <div style="position:relative;cursor:pointer" onclick="document.getElementById('e-date').showPicker()">
-        <input type="date" id="e-date" value="${p?.date||''}" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0" oninput="document.getElementById('e-date-display').firstElementChild.textContent=formatDMY(this.value)">
-        <div id="e-date-display" class="input" style="display:flex;align-items:center;justify-content:space-between;width:100%">
-          <span>${p?.date?formatDMY(p.date):'DD / MM / YYYY'}</span>
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-        </div>
-      </div>
-    </div>
+    <div class="ig"><label>${t('event_date')} *</label><input class="input" type="date" id="e-date" value="${p?.date||''}"></div>
     <div class="ig"><label>${t('location')}</label><input class="input" id="e-location" value="${esc(p?.location||'')}"></div>
     <div class="ig"><label>${t('total_budget')} ($)</label><input class="input" id="e-budget" type="number" value="${p?.budget||''}"></div>
     <div class="ig"><label>${t('status')}</label><select class="select" id="e-status"><option value="to-be-confirmed"${p?.status==='to-be-confirmed'?' selected':''}>${t('status_planning')}</option><option value="confirmed"${p?.status==='confirmed'?' selected':''}>${t('status_confirmed')}</option><option value="in-progress"${p?.status==='in-progress'?' selected':''}>${t('status_in_progress')}</option><option value="completed"${p?.status==='completed'?' selected':''}>${t('status_completed')}</option><option value="cancelled"${p?.status==='cancelled'?' selected':''}>${t('status_cancelled')}</option></select></div>
@@ -173,20 +165,13 @@ function _wizStep1(isES) {
 }
 
 function _wizStep2(isES) {
-  var datePlaceholder = isES ? 'DD / MM / AAAA' : 'DD / MM / YYYY';
-  var dateDisplay     = _wiz.date ? formatDMY(_wiz.date) : datePlaceholder;
-  var dateColor       = _wiz.date ? 'var(--text)' : 'var(--light)';
   return '<div>'
     +'<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:4px;">'+(isES?'Fecha y lugar':'Date and venue')+'</div>'
     +'<div style="font-size:13px;color:var(--muted);margin-bottom:20px;">'+(isES?'Define cuándo y dónde se llevará a cabo el evento.':'Set when and where the event will take place.')+'</div>'
     +'<div class="ig" style="margin-bottom:14px;">'
     +'<label style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px;">'+(isES?'Fecha del evento *':'Event date *')+'</label>'
-    +'<div style="position:relative;display:flex;align-items:center;cursor:pointer;" onclick="document.getElementById(\'wiz-date\').showPicker&&document.getElementById(\'wiz-date\').showPicker()">'
-    +'<input type="date" id="wiz-date" value="'+(_wiz.date||'')+'" style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:2;" onchange="if(_wiz){_wiz.date=this.value;var d=document.getElementById(\'wiz-date-disp\');if(d){d.textContent=this.value?formatDMY(this.value):\''+(isES?'DD / MM / AAAA':'DD / MM / YYYY')+'\';d.style.color=this.value?\'var(--text)\':\' var(--light)\';}}" oninput="if(_wiz){_wiz.date=this.value;var d=document.getElementById(\'wiz-date-disp\');if(d){d.textContent=this.value?formatDMY(this.value):\''+(isES?'DD / MM / AAAA':'DD / MM / YYYY')+'\';d.style.color=this.value?\'var(--text)\':\' var(--light)\';}}}">'
-    +'<div id="wiz-date-disp" class="input" style="pointer-events:none;z-index:1;width:100%;display:flex;align-items:center;justify-content:space-between;color:'+dateColor+';">'
-    +'<span>'+dateDisplay+'</span>'
-    +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>'
-    +'</div></div></div>'
+    +'<input class="input" type="date" id="wiz-date" value="'+(_wiz.date||'')+'" onchange="if(_wiz){_wiz.date=this.value}" oninput="if(_wiz){_wiz.date=this.value}">'
+    +'</div>'
     +_wizField('wiz-location', isES?'Sede / Lugar':'Venue / Location', isES?'Nombre o dirección del lugar':'Venue name or address', _wiz.location, 'text')
     +_wizField('wiz-budget',   isES?'Presupuesto total ('+CURRENCY.symbol+')':'Total budget ('+CURRENCY.symbol+')', '0', _wiz.budget, 'number')
     +'</div>';
@@ -379,7 +364,7 @@ function renderEvents(){
     g.className = '';
     g.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;text-align:center;padding:60px 24px 40px;">
       <div style="font-family:'Cormorant Garamond',serif;font-size:44px;font-weight:700;color:var(--text);letter-spacing:-.02em;margin-bottom:6px">Event<span style="color:var(--gold);font-style:italic">OS</span></div>
-      <p style="font-size:15px;color:var(--muted);margin-bottom:52px;">${LANG==='es'?'Tu plataforma de gesti�n de eventos':'Your event management platform'}</p>
+      <p style="font-size:15px;color:var(--muted);margin-bottom:52px;">${LANG==='es'?'Tu plataforma de gestión de eventos':'Your event management platform'}</p>
       <button class="btn btn-primary" onclick="openEventModal()" style="font-size:15px;padding:14px 32px;letter-spacing:.06em">
         <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
         ${LANG==='es'?'CREA TU PRIMER EVENTO':'CREATE YOUR FIRST EVENT'}
@@ -575,7 +560,7 @@ function renderAppDash(){
   const grandTotal = allProjects.length;
   const activeSlices = statusDef.filter(s => statusCounts[s.key] > 0);
   const legendHTML = activeSlices.length === 0
-    ? `<span style="font-size:12px;color:var(--light)">${isES?'Sin proyectos a�n':'No projects yet'}</span>`
+    ? `<span style="font-size:12px;color:var(--light)">${isES?'Sin proyectos aún':'No projects yet'}</span>`
     : activeSlices.map(s => `
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
           <div style="width:10px;height:10px;border-radius:50%;background:${s.clr};flex-shrink:0"></div>
@@ -616,7 +601,7 @@ function renderAppDash(){
       `<tr>
         <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;cursor:pointer;color:var(--gold-h)" onclick="openProject('${p.id}');setTimeout(()=>switchTab('timeline'),120)">${esc(tk.title||tk.name||'Task')}</td>
         <td><span style="font-size:11px;color:var(--gold-h);font-weight:600;cursor:pointer" onclick="openProject('${p.id}');setTimeout(()=>switchTab('timeline'),120)">${esc(p.name)}</span></td>
-        <td style="font-size:12px;color:var(--muted);white-space:nowrap">${tk.dueDate?fmtDateShort(tk.dueDate):'�'}</td>
+        <td style="font-size:12px;color:var(--muted);white-space:nowrap">${tk.dueDate?fmtDateShort(tk.dueDate):'—'}</td>
       </tr>`
     ).join('');
     return `<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm);margin-bottom:20px;">
@@ -627,7 +612,7 @@ function renderAppDash(){
       </div>
       ${items.length===0
         ?`<div style="padding:28px;text-align:center;font-size:13px;color:var(--light)">${emptyMsg}</div>`
-        :`<div style="overflow-x:auto"><table><thead><tr><th>${isES?'Tarea':'Task'}</th><th>${isES?'Evento':'Event'}</th><th>${isES?'Fecha l�mite':'Due date'}</th></tr></thead><tbody>${rows}</tbody></table></div>`
+        :`<div style="overflow-x:auto"><table><thead><tr><th>${isES?'Tarea':'Task'}</th><th>${isES?'Evento':'Event'}</th><th>${isES?'Fecha límite':'Due date'}</th></tr></thead><tbody>${rows}</tbody></table></div>`
       }
     </div>`;
   }
@@ -643,7 +628,7 @@ function renderAppDash(){
       onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='var(--sh-lg)'"
       onmouseout="this.style.transform='';this.style.boxShadow='var(--sh-sm)'">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <span style="font-size:11px;font-weight:600;color:var(--gold-h);background:var(--gold-l);padding:3px 10px;border-radius:20px">${da===0?t('today'):da+' '+(isES?'d�as':'days')}</span>
+        <span style="font-size:11px;font-weight:600;color:var(--gold-h);background:var(--gold-l);padding:3px 10px;border-radius:20px">${da===0?t('today'):da+' '+(isES?'días':'days')}</span>
         <span class="badge ${tc[p.type]||'b-gray'}">${typeLbl}</span>
       </div>
       <div style="font-size:15px;font-weight:700;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</div>
@@ -660,7 +645,7 @@ function renderAppDash(){
       <h1 style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700">${isES?'Panel General':'Dashboard'}</h1>
       <p style="color:var(--muted);font-size:14px;margin-top:2px">${isES?'Resumen de todos tus proyectos':'Overview across all your projects'}</p>
     </div>
-    ${displayEvents.length>0?`<div style="margin-bottom:20px"><div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px;color:var(--text)">${within30.length>=3?(isES?'Pr�ximos Eventos (30 d�as)':'Upcoming Events (30 days)'):(isES?'Pr�ximos 3 Eventos':'Next 3 Events')}</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px">${evCards}</div></div>`:''}
+    ${displayEvents.length>0?`<div style="margin-bottom:20px"><div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px;color:var(--text)">${within30.length>=3?(isES?'Próximos Eventos (30 días)':'Upcoming Events (30 days)'):(isES?'Próximos 3 Eventos':'Next 3 Events')}</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px">${evCards}</div></div>`:''}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
       <div>${taskTable(isES?'Tareas de Hoy':"Today's Tasks",todayTasks,isES?'Sin tareas para hoy':'No tasks due today','var(--gold)')}</div>
       <div>${taskTable(isES?'Tareas Vencidas':'Expired Tasks',expiredTasks,isES?'Sin tareas vencidas':'No overdue tasks','var(--danger)')}</div>
