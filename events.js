@@ -1,11 +1,11 @@
-// ─── WIZARD STATE ─────────────────────────────────────────────────────────
+﻿// --- WIZARD STATE ---------------------------------------------------------
 var _wiz = null;
 
-// ─── STATUS LABEL ─────────────────────────────────────────────────────────
+// --- STATUS LABEL ---------------------------------------------------------
 var _STATUS_KEY = {'to-be-confirmed':'planning','confirmed':'confirmed','in-progress':'in_progress','completed':'completed','cancelled':'cancelled'};
 function statusLabel(s){ return s ? t('status_'+(_STATUS_KEY[s]||s.replace(/-/g,'_')))||s : ''; }
 
-// ─── EVENT SEARCH ─────────────────────────────────────────────────────────
+// --- EVENT SEARCH ---------------------------------------------------------
 var _evSearch = '';
 function filterEvents(query){
   _evSearch = query;
@@ -24,7 +24,7 @@ var _WIZ_TYPES = [
   { value:'education',  icon:'<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
     label_en:'Education',  label_es:'Educación',     desc_en:'Graduations, workshops, seminars',             desc_es:'Graduaciones, talleres, seminarios' },
   { value:'other', icon:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>',
-    label_en:'Other', label_es:'Otro', desc_en:'Custom event — define your own category', desc_es:'Evento personalizado — define tu propia categoría',
+    label_en:'Other', label_es:'Otro', desc_en:'Custom event - define your own category', desc_es:'Evento personalizado - define tu propia categoría',
     isOther: true },
 ];
 
@@ -305,7 +305,7 @@ function _wizFinish() {
   var np = {
     id: 'p'+Date.now(),
     vendors: defaultVendors(), vendorsInitialized: true,
-    tasks: defaultTasks(), guests: [], layoutItems: [], layoutExport: null, savedLayouts: [],
+    tasks: defaultTasks(), guests: [], layoutItems: [], layoutQuoteExtras: [], layoutExport: null, savedLayouts: [],
     moodboard: { folders:[], uncategorized:[] },
     name: name, clientName: client, description: _wiz.description,
     type: _wiz.type === 'other' ? ('other:' + ((_wiz.otherLabel||'').trim() || 'Other')) : _wiz.type, date: date, location: _wiz.location,
@@ -325,7 +325,7 @@ function saveEvent(id){
   const p=id?uproj()[id]:null;
   const data={name,clientName:client,date,description:gv('e-desc'),type:gv('e-type'),location:gv('e-location'),budget:+gv('e-budget')||0,status:gv('e-status')};
   if(p){Object.assign(p,data);saveProj(p);if(CID===id)renderPNav();}
-  else{const np={id:'p'+Date.now(),vendors:defaultVendors(),vendorsInitialized:true,tasks:defaultTasks(),guests:[],layoutItems:[],layoutExport:null,savedLayouts:[],moodboard:{folders:[],uncategorized:[]},...data};saveProj(np);}
+  else{const np={id:'p'+Date.now(),vendors:defaultVendors(),vendorsInitialized:true,tasks:defaultTasks(),guests:[],layoutItems:[],layoutQuoteExtras:[],layoutExport:null,savedLayouts:[],moodboard:{folders:[],uncategorized:[]},...data};saveProj(np);}
   closeMo();
   setTimeout(function(){ renderEvents(); }, 50);
   toast(id?'Event updated':'Event created!','s');
@@ -379,7 +379,7 @@ function renderEvents(){
     g.className = '';
     g.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;text-align:center;padding:60px 24px 40px;">
       <div style="font-family:'Cormorant Garamond',serif;font-size:44px;font-weight:700;color:var(--text);letter-spacing:-.02em;margin-bottom:6px">Event<span style="color:var(--gold);font-style:italic">OS</span></div>
-      <p style="font-size:15px;color:var(--muted);margin-bottom:52px;">${LANG==='es'?'Tu plataforma de gestión de eventos':'Your event management platform'}</p>
+      <p style="font-size:15px;color:var(--muted);margin-bottom:52px;">${LANG==='es'?'Tu plataforma de gesti�n de eventos':'Your event management platform'}</p>
       <button class="btn btn-primary" onclick="openEventModal()" style="font-size:15px;padding:14px 32px;letter-spacing:.06em">
         <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
         ${LANG==='es'?'CREA TU PRIMER EVENTO':'CREATE YOUR FIRST EVENT'}
@@ -558,7 +558,7 @@ function renderAppDash(){
   const within30 = upcomingEvents.filter(e => e.da <= 30);
   const displayEvents = within30.length >= 3 ? within30 : upcomingEvents.slice(0, Math.max(3, within30.length));
 
-  // ── Status donut data ──
+  // -- Status donut data --
   const statusDef = [
     { key:'to-be-confirmed', clr:'#a78bfa', labelEN:'To be Confirmed', labelES:'Por Confirmar' },
     { key:'confirmed',       clr:'#34d399', labelEN:'Confirmed',        labelES:'Confirmado' },
@@ -575,7 +575,7 @@ function renderAppDash(){
   const grandTotal = allProjects.length;
   const activeSlices = statusDef.filter(s => statusCounts[s.key] > 0);
   const legendHTML = activeSlices.length === 0
-    ? `<span style="font-size:12px;color:var(--light)">${isES?'Sin proyectos aún':'No projects yet'}</span>`
+    ? `<span style="font-size:12px;color:var(--light)">${isES?'Sin proyectos a�n':'No projects yet'}</span>`
     : activeSlices.map(s => `
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
           <div style="width:10px;height:10px;border-radius:50%;background:${s.clr};flex-shrink:0"></div>
@@ -616,7 +616,7 @@ function renderAppDash(){
       `<tr>
         <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;cursor:pointer;color:var(--gold-h)" onclick="openProject('${p.id}');setTimeout(()=>switchTab('timeline'),120)">${esc(tk.title||tk.name||'Task')}</td>
         <td><span style="font-size:11px;color:var(--gold-h);font-weight:600;cursor:pointer" onclick="openProject('${p.id}');setTimeout(()=>switchTab('timeline'),120)">${esc(p.name)}</span></td>
-        <td style="font-size:12px;color:var(--muted);white-space:nowrap">${tk.dueDate?fmtDateShort(tk.dueDate):'—'}</td>
+        <td style="font-size:12px;color:var(--muted);white-space:nowrap">${tk.dueDate?fmtDateShort(tk.dueDate):'�'}</td>
       </tr>`
     ).join('');
     return `<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm);margin-bottom:20px;">
@@ -627,7 +627,7 @@ function renderAppDash(){
       </div>
       ${items.length===0
         ?`<div style="padding:28px;text-align:center;font-size:13px;color:var(--light)">${emptyMsg}</div>`
-        :`<div style="overflow-x:auto"><table><thead><tr><th>${isES?'Tarea':'Task'}</th><th>${isES?'Evento':'Event'}</th><th>${isES?'Fecha límite':'Due date'}</th></tr></thead><tbody>${rows}</tbody></table></div>`
+        :`<div style="overflow-x:auto"><table><thead><tr><th>${isES?'Tarea':'Task'}</th><th>${isES?'Evento':'Event'}</th><th>${isES?'Fecha l�mite':'Due date'}</th></tr></thead><tbody>${rows}</tbody></table></div>`
       }
     </div>`;
   }
@@ -643,7 +643,7 @@ function renderAppDash(){
       onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='var(--sh-lg)'"
       onmouseout="this.style.transform='';this.style.boxShadow='var(--sh-sm)'">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <span style="font-size:11px;font-weight:600;color:var(--gold-h);background:var(--gold-l);padding:3px 10px;border-radius:20px">${da===0?t('today'):da+' '+(isES?'días':'days')}</span>
+        <span style="font-size:11px;font-weight:600;color:var(--gold-h);background:var(--gold-l);padding:3px 10px;border-radius:20px">${da===0?t('today'):da+' '+(isES?'d�as':'days')}</span>
         <span class="badge ${tc[p.type]||'b-gray'}">${typeLbl}</span>
       </div>
       <div style="font-size:15px;font-weight:700;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</div>
@@ -660,11 +660,13 @@ function renderAppDash(){
       <h1 style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700">${isES?'Panel General':'Dashboard'}</h1>
       <p style="color:var(--muted);font-size:14px;margin-top:2px">${isES?'Resumen de todos tus proyectos':'Overview across all your projects'}</p>
     </div>
-    ${displayEvents.length>0?`<div style="margin-bottom:20px"><div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px;color:var(--text)">${within30.length>=3?(isES?'Próximos Eventos (30 días)':'Upcoming Events (30 days)'):(isES?'Próximos 3 Eventos':'Next 3 Events')}</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px">${evCards}</div></div>`:''}
+    ${displayEvents.length>0?`<div style="margin-bottom:20px"><div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px;color:var(--text)">${within30.length>=3?(isES?'Pr�ximos Eventos (30 d�as)':'Upcoming Events (30 days)'):(isES?'Pr�ximos 3 Eventos':'Next 3 Events')}</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px">${evCards}</div></div>`:''}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
       <div>${taskTable(isES?'Tareas de Hoy':"Today's Tasks",todayTasks,isES?'Sin tareas para hoy':'No tasks due today','var(--gold)')}</div>
       <div>${taskTable(isES?'Tareas Vencidas':'Expired Tasks',expiredTasks,isES?'Sin tareas vencidas':'No overdue tasks','var(--danger)')}</div>
     </div>`;
 
   }
+
+
 

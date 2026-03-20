@@ -318,19 +318,35 @@ function renderTimeline(){
       </div>
     </div>
     <div class="vtabs" style="margin-bottom:0">
-      ${[['all',LANG==='es'?'Todas':'All'],['overdue',LANG==='es'?'Vencidas':'Overdue'],['today',LANG==='es'?'Hoy':'Today'],['upcoming',LANG==='es'?'Próximas':'Upcoming']].map(([k,l])=>`<div class="vtab ${taskListFilter===k?'active':''}" onclick="taskListFilter='${k}';renderTimelineView(proj())">${l}</div>`).join('')}
+      ${[['all',LANG==='es'?'Todas':'All'],['overdue',LANG==='es'?'Vencidas':'Overdue'],['today',LANG==='es'?'Hoy':'Today'],['upcoming',LANG==='es'?'Próximas':'Upcoming']].map(([k,l])=>`<div class="vtab ${taskListFilter===k?'active':''}" data-task-filter="${k}" onclick="setTaskListFilter('${k}',this)">${l}</div>`).join('')}
     </div>
+  </div>
+  <div class="timeline-search-wrap" style="position:relative;display:flex;align-items:center;margin-bottom:4px">
+    <svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    <input id="timeline-task-search" class="input" placeholder="${t('search_tasks')}" value="${esc(taskSearchQuery)}" oninput="taskSearchQuery=this.value;renderTimelineView(proj())" style="padding-left:36px;width:100%">
   </div>
   <div id="tview-content" style="margin-top:12px"></div>`;
   renderTimelineView(p);
 }
 var taskListFilter='all';
+var taskSearchQuery='';
+function setTaskListFilter(filter,el){
+  taskListFilter=filter;
+  const scope=el&&el.parentElement?el.parentElement:document;
+  scope.querySelectorAll('[data-task-filter]').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.taskFilter===filter);
+  });
+  setTimeout(()=>renderTimelineView(proj()),0);
+}
 function filterTasks(tasks){
   const tod=today();
-  if(taskListFilter==='overdue') return tasks.filter(tk=>!tk.done&&tk.dueDate&&tk.dueDate<tod);
-  if(taskListFilter==='today')   return tasks.filter(tk=>tk.dueDate===tod);
-  if(taskListFilter==='upcoming')return tasks.filter(tk=>tk.dueDate&&tk.dueDate>tod&&!tk.done);
-  return tasks;
+  let filtered=[...tasks];
+  if(taskListFilter==='overdue') filtered=filtered.filter(tk=>!tk.done&&tk.dueDate&&tk.dueDate<tod);
+  else if(taskListFilter==='today') filtered=filtered.filter(tk=>tk.dueDate===tod);
+  else if(taskListFilter==='upcoming') filtered=filtered.filter(tk=>tk.dueDate&&tk.dueDate>tod&&!tk.done);
+  const q=taskSearchQuery.trim().toLowerCase();
+  if(q) filtered=filtered.filter(tk=>[tk.title,tk.desc,tk.assignee,tk.startDate,tk.dueDate].some(v=>String(v||'').toLowerCase().includes(q)));
+  return filtered;
 }
 function renderTimelineView(p){
   if(tView==='list')renderTaskList(p);
@@ -361,13 +377,13 @@ function renderTaskList(p){
         <button class="btn btn-danger btn-sm btn-icon" onclick="delTask('${tk.id}')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
       </div>
     </div>`;
-  }).join('')||`<div class="card" style="text-align:center;padding:40px;color:var(--muted)">${t('no_tasks_yet')}</div>`;
+  }).join('')||`<div class="card" style="text-align:center;padding:40px;color:var(--muted)">${taskSearchQuery.trim()?t('no_tasks_found'):t('no_tasks_yet')}</div>`;
 }
 var _ganttZoom=14; var _ganttOffset=0; // px per day
 function renderGantt(p){
   const el=document.getElementById('tview-content');
   const tasks=filterTasks([...p.tasks]).filter(tk=>tk.startDate||tk.dueDate).sort((a,b)=>(a.startDate||a.dueDate).localeCompare(b.startDate||b.dueDate));
-  if(!tasks.length){el.innerHTML=`<div class="card" style="text-align:center;padding:40px;color:var(--muted)">${t('no_tasks_yet')}</div>`;return;}
+  if(!tasks.length){el.innerHTML=`<div class="card" style="text-align:center;padding:40px;color:var(--muted)">${taskSearchQuery.trim()?t('no_tasks_found'):t('no_tasks_yet')}</div>`;return;}
   const isES=LANG==='es';
   const allDates=tasks.flatMap(tk=>[tk.startDate||tk.dueDate,tk.dueDate||tk.startDate].filter(Boolean).map(d=>new Date(d+'T12:00:00')));
   let minD=new Date(Math.min(...allDates)); let maxD=new Date(Math.max(...allDates));
@@ -444,11 +460,13 @@ function renderGantt(p){
 var calD=new Date();
 function renderCal(p){
   const el=document.getElementById('tview-content');
+  const tasks=filterTasks(p.tasks);
+  if(!tasks.length){el.innerHTML=`<div class="card" style="text-align:center;padding:40px;color:var(--muted)">${taskSearchQuery.trim()?t('no_tasks_found'):t('no_tasks_yet')}</div>`;return;}
   const yr=calD.getFullYear();const mo=calD.getMonth();
   const fd=new Date(yr,mo,1).getDay();const dim=new Date(yr,mo+1,0).getDate();
   const mn=calD.toLocaleString('default',{month:'long',year:'numeric'});
   const tod=today();const tbd={};
-  filterTasks(p.tasks).forEach(tk=>{if(!tbd[tk.dueDate])tbd[tk.dueDate]=[];tbd[tk.dueDate].push(tk);});
+  tasks.forEach(tk=>{if(!tbd[tk.dueDate])tbd[tk.dueDate]=[];tbd[tk.dueDate].push(tk);});
   let cells='';
   for(let i=0;i<fd;i++)cells+=`<div class="cal-cell"><div class="cal-date om"></div></div>`;
   for(let i=1;i<=dim;i++){
@@ -999,5 +1017,3 @@ function calcLayoutBudget(items){
   });
   return {total, breakdown};
 }
-
-

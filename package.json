@@ -1,0 +1,11 @@
+{
+  "name": "eventos-convex",
+  "private": true,
+  "scripts": {
+    "convex:dev": "npx convex dev",
+    "convex:deploy": "npx convex deploy"
+  },
+  "devDependencies": {
+    "convex": "1.26.2"
+  }
+}

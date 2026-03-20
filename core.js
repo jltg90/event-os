@@ -1,4 +1,4 @@
-
+﻿
 function t(key){ return (TRANSLATIONS[LANG]||TRANSLATIONS.en)[key] || TRANSLATIONS.en[key] || key; }
 
 
@@ -101,21 +101,19 @@ function applyTranslations(){
 var DB  = { cur: null, projects: {} };
 var WIX_USER = null;
 
-var AI_PROXY_URL = 'https://nameless-breeze-1837.jltg90.workers.dev';
-
-var SUPA_URL  = 'https://eocozdwfewowbfaxwabt.supabase.co';
-var SUPA_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvY296ZHdmZXdvd2JmYXh3YWJ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4MTM0MzYsImV4cCI6MjA4ODM4OTQzNn0.GPcZ7pmaYESBswMINCGaAZQ4v3puvbmI4zeFh2OFyis';
+var EVENTOS_CONFIG = window.EVENTOS_CONFIG || {};
+var AI_PROXY_URL = EVENTOS_CONFIG.aiProxyUrl || '';
+var EVENTOS_DATA = window.EVENTOS_DATA || null;
 var _saveTimer = null;
 var _lastSyncTime = null;
 
-function supaHeaders(){
-  var h = {
-    'Content-Type': 'application/json',
-    'apikey': SUPA_KEY,
-    'Authorization': 'Bearer ' + SUPA_KEY
-  };
-  if(WIX_USER && WIX_USER.userId) h['X-User-Id'] = WIX_USER.userId;
-  return h;
+function hasRequiredConfig(){
+  return !!(EVENTOS_DATA && EVENTOS_DATA.isConfigured && EVENTOS_DATA.isConfigured() && AI_PROXY_URL);
+}
+
+function getConfigErrorMessage(){
+  if(EVENTOS_DATA && EVENTOS_DATA.getConfigErrorMessage) return EVENTOS_DATA.getConfigErrorMessage();
+  return 'Missing app configuration. Check app-config.js and reload.';
 }
 
 function cacheDB(){
@@ -138,22 +136,12 @@ async function loadProjectsFromCloud(userId){
   try{
     var controller = typeof AbortController!=='undefined' ? new AbortController() : null;
     var timeoutId = controller ? setTimeout(function(){ controller.abort(); }, 12000) : null;
-    var fetchOpts = { headers: supaHeaders() };
-    if(controller) fetchOpts.signal = controller.signal;
-
-    var res = await fetch(
-      SUPA_URL+'/rest/v1/projects?user_id=eq.'+encodeURIComponent(userId)+'&select=id,data,updated_at',
-      fetchOpts
-    );
+    var projects = await EVENTOS_DATA.getProjectsByWixUserId(userId, {
+      signal: controller ? controller.signal : undefined
+    });
     if(timeoutId) clearTimeout(timeoutId);
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    var rows = await res.json();
-
-    if(rows.length > 0){
-      var projects = {};
-      rows.forEach(function(row){ projects[row.id] = row.data; });
+    if(projects && Object.keys(projects).length > 0){
       DB.projects[userId] = projects;
-      // Mark the library as loaded from cloud so getLib() knows it's safe to seed
       if(projects['__library__']) projects['__library__']._seeded = true;
       cacheDB();
     } else if(!hadCache){
@@ -198,18 +186,9 @@ async function saveProj(p){
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(async function(){
     try{
-      var res = await fetch(SUPA_URL+'/rest/v1/projects', {
-        method: 'POST',
-        headers: Object.assign({}, supaHeaders(), { 'Prefer': 'resolution=merge-duplicates' }),
-        body: JSON.stringify({
-          id: p.id,
-          user_id: DB.cur,
-          data: p,
-          updated_at: new Date().toISOString()
-        })
-      });
-      if(res.ok){ _lastSyncTime = Date.now(); setSyncStatus('ok'); }
-      else{ console.error('saveProj HTTP', res.status); setSyncStatus('offline'); }
+      await EVENTOS_DATA.upsertProject(DB.cur, p);
+      _lastSyncTime = Date.now();
+      setSyncStatus('ok');
     }catch(e){ console.error('saveProj:', e); setSyncStatus('offline'); }
   }, 1500);
 }
@@ -224,10 +203,7 @@ async function delProj(id){
   if(DB.projects[DB.cur]) delete DB.projects[DB.cur][id];
   cacheDB();
   try{
-    await fetch(
-      SUPA_URL+'/rest/v1/projects?id=eq.'+id+'&user_id=eq.'+encodeURIComponent(DB.cur),
-      { method: 'DELETE', headers: supaHeaders() }
-    );
+    await EVENTOS_DATA.deleteProject(DB.cur, id);
   }catch(e){ console.error('delProj:', e); }
 }
 
@@ -237,21 +213,19 @@ async function manualSync(){
   try{
     var _mc = typeof AbortController!=='undefined' ? new AbortController() : null;
     var _mt = _mc ? setTimeout(function(){ _mc.abort(); }, 10000) : null;
-    var _mo = { headers: supaHeaders() }; if(_mc) _mo.signal=_mc.signal;
-    var res = await fetch(
-      SUPA_URL+'/rest/v1/projects?user_id=eq.'+encodeURIComponent(DB.cur)+'&select=id,data,updated_at',
-      _mo
-    );
+    var projects = await EVENTOS_DATA.getProjectsByWixUserId(DB.cur, {
+      signal: _mc ? _mc.signal : undefined
+    });
     if(_mt) clearTimeout(_mt);
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    var rows = await res.json();
-    if(rows.length > 0){
-      var projects = {};
-      rows.forEach(function(row){ projects[row.id] = row.data; });
+    if(projects && Object.keys(projects).length > 0){
       DB.projects[DB.cur] = projects;
+      if(projects['__library__']) projects['__library__']._seeded = true;
       cacheDB();
-      renderEvents();
+    } else {
+      DB.projects[DB.cur] = {};
+      cacheDB();
     }
+    renderEvents();
     _lastSyncTime = Date.now();
     setSyncStatus('ok');
   }catch(e){
@@ -315,6 +289,10 @@ async function initApp(){
   if(pgLoad) pgLoad.style.display = 'flex';
   var errEl = document.getElementById('pg-loading-error');
   if(errEl) errEl.style.display = 'none';
+  if(!hasRequiredConfig()){
+    showLoadingError(getConfigErrorMessage());
+    return;
+  }
   var isDevMode = (DB.cur === 'dev_user_local');
   var ok = await loadProjectsFromCloud(DB.cur);
   if(ok !== false || isDevMode) enterApp();
@@ -339,15 +317,26 @@ function doLogout(){
 function enterApp(){
   loadEvPrefs();
   applyTranslations();
-  document.getElementById('pg-loading').style.display = 'none';
-  document.getElementById('pg-app').classList.remove('hidden');
+  var loadingEl = document.getElementById('pg-loading');
+  var appEl = document.getElementById('pg-app');
+  if(loadingEl) loadingEl.style.display = 'none';
+  if(appEl) appEl.classList.remove('hidden');
   setTimeout(updateAIFabVisibility, 200);
   var name    = (WIX_USER && WIX_USER.displayName) ? WIX_USER.displayName : (WIX_USER && WIX_USER.email ? WIX_USER.email : DB.cur);
   var email   = (WIX_USER && WIX_USER.email) ? WIX_USER.email : DB.cur;
   var initial = name[0].toUpperCase();
-  document.getElementById('uav').textContent   = initial;
-  document.getElementById('uname').textContent = name;
-  document.getElementById('uemail').textContent = email;
+  var uav = document.getElementById('uav');
+  var uname = document.getElementById('uname');
+  var uemail = document.getElementById('uemail');
+  var mobUav = document.getElementById('mob-uav');
+  var mobUname = document.getElementById('mob-uname');
+  var mobUemail = document.getElementById('mob-uemail');
+  if(uav) uav.textContent = initial;
+  if(uname) uname.textContent = name;
+  if(uemail) uemail.textContent = email;
+  if(mobUav) mobUav.textContent = initial;
+  if(mobUname) mobUname.textContent = name;
+  if(mobUemail) mobUemail.textContent = email;
   showPage('dashboard');
   setSyncStatus('ok');
   startSyncPoll();
@@ -428,7 +417,7 @@ function createSampleProject(email){
     description:'A stunning summer gala event', date:'2026-06-15', location:'The Grand Garden Hall',
     budget:25000, type:'social', status:'planning',
     vendors:defaultVendors(), vendorsInitialized:true,
-    tasks:defaultTasks(), guests:sampleGuests(), layoutItems:[], layoutExport:null,
+    tasks:defaultTasks(), guests:sampleGuests(), layoutItems:[], layoutQuoteExtras:[], layoutExport:null,
     moodboard:{ folders:[], uncategorized:[] },
     models3d:[],
   };
@@ -623,5 +612,6 @@ function setEvView(v){
   document.getElementById('ev-view-list').classList.toggle('active',v==='list');
   saveEvPrefs(); renderEvents();
 }
+
 
 

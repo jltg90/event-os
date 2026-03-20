@@ -229,7 +229,7 @@ function renderAnalytics(){
     <div class="card" style="padding:20px">
       <div style="font-weight:700;font-size:14px;margin-bottom:14px">${LANG==='es'?'Eventos del Período':'Events in Period'}</div>
       ${inPeriod.sort((a,b)=>a.date<b.date?-1:1).map(p=>`
-        <div onclick="openProject('${p.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--bg);cursor:pointer;transition:.15s" onmouseover="this.style.paddingLeft='6px'" onmouseout="this.style.paddingLeft='0'">
+        <div onclick="openProject('${p.id}')" class="analytics-project-row">
           <div>
             <div style="font-size:13px;font-weight:600">${p.name}</div>
             <div class="s-sm">${fmtDate(p.date)} · ${p.guests.length} ${LANG==='es'?'inv.':'guests'}</div>
@@ -251,9 +251,7 @@ function openExportPDFModal(){
   <div style="margin-bottom:16px;font-size:13px;color:var(--muted)">${t('export_pdf_select')}</div>
   <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">
     ${[['sec_dash','section_dashboard',true],['sec_budget','section_budget',true],['sec_timeline','section_timeline',true],['sec_guests','section_guests',true],['sec_moodboard','section_moodboard',false]].map(([id,key,checked])=>`
-    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;border-radius:var(--r-sm);border:1.5px solid var(--border);transition:.15s"
-      onmouseover="this.style.borderColor='var(--gold)';this.style.background='var(--gold-l)'"
-      onmouseout="this.style.borderColor='var(--border)';this.style.background=''">
+    <label class="option-check">
       <input type="checkbox" id="${id}" ${checked?'checked':''} style="width:16px;height:16px;accent-color:var(--gold-h)">
       <span style="font-weight:600;font-size:13px">${t(key)}</span>
     </label>`).join('')}

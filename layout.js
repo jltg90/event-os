@@ -1,4 +1,4 @@
-﻿// -- IndexedDB helpers for floorplan image --
+// -- IndexedDB helpers for floorplan image --
 function _fpDB(){
   return new Promise(function(resolve,reject){
     var req=indexedDB.open('EventOS_FP',1);
@@ -305,7 +305,7 @@ function renderEventLayoutViewer(p){
   }
 
   if(!exp){
-    el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:28px"><div style="max-width:560px;width:100%;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:34px;text-align:center;box-shadow:var(--sh-sm)"><div style="width:76px;height:76px;border-radius:50%;background:var(--gold-l);margin:0 auto 20px;display:flex;align-items:center;justify-content:center;color:var(--gold-h)"><svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div><div style="font-family:Cormorant Garamond,serif;font-size:30px;font-weight:700;margin-bottom:10px">'+(LANG==='es'?'No hay layout exportado':'No exported layout yet')+'</div><div style="color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:24px">'+(LANG==='es'?'Los layouts ahora se crean y editan en la Biblioteca. Exporta uno a este evento para verlo aqui.':'Layouts are now created and edited in the Library. Export one into this event to view it here.')+'</div><button class="btn btn-primary" onclick="openLayoutLibraryPicker()">'+(LANG==='es'?'Elegir de Biblioteca':'Choose from Library')+'</button></div></div>';
+    el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:28px"><div style="max-width:560px;width:100%;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:34px;text-align:center;box-shadow:var(--sh-sm)"><div style="width:76px;height:76px;border-radius:50%;background:var(--gold-l);margin:0 auto 20px;display:flex;align-items:center;justify-content:center;color:var(--gold-h)"><svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div><div style="font-family:Cormorant Garamond,serif;font-size:30px;font-weight:700;margin-bottom:10px">'+(LANG==="es"?"No hay layout exportado":"No exported layout yet")+'</div><div style="color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:24px">'+(LANG==="es"?"Los layouts ahora se crean y editan en la Biblioteca. Crea uno o importa uno a este evento para verlo aqui.":"Layouts are now created and edited in the Library. Create one or import one into this event to view it here.")+'</div><div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap"><button class="btn btn-primary" onclick="openLayoutLibraryPicker()">'+(LANG==="es"?"Importa tu layout":"Import your layout")+'</button><button class="btn btn-ghost" onclick="openLibrary();setTimeout(function(){ if(typeof libOpenLayoutWizard===\"function\") libOpenLayoutWizard(); },80)">'+(LANG==="es"?"Crear primer layout":"Create First Layout")+'</button></div></div></div>';
     return;
   }
 
@@ -364,8 +364,8 @@ function saveLayoutData(){
       if(fpCopy.img && fpCopy.img!=='__idb__'){
         var fpKey=fpCopy._idb||('libfp_'+_libEditingLayoutId+'_'+Date.now());
         if(typeof _fpSave==='function') _fpSave(fpKey,fpCopy.img).catch(function(){});
+        if(!fpCopy.thumb) fpCopy.thumb=fpCopy.img;
         fpCopy.img='__idb__';
-        fpCopy._idb=fpKey;
       }
       entry.floorplan=fpCopy;
       entry.updatedAt=new Date().toISOString();
@@ -387,6 +387,7 @@ var LState={
   measureMode:false
 };
 var LDragOffset={};
+var _layoutQuoteCollapsed=false;
 
 function renderLayout(){
   var _savedScroll={x:0,y:0};
@@ -411,6 +412,7 @@ function renderLayout(){
     return;
   }
   LState.items=p.layoutItems||[];
+  ensureLayoutQuoteState(p);
   syncLayoutStyles(p);
   if(LHistorySaving&&LHistory.length===0) lHistorySave();
   LSHAPES=getLSHAPES();
@@ -421,7 +423,7 @@ function renderLayout(){
     if(_hasFPInMemory&&LState.floorplan._idb===p.floorplan._idb){
       LState.floorplan=Object.assign(defaultFloorplan,p.floorplan,{img:LState.floorplan.img,_idb:p.floorplan._idb});
     } else {
-      LState.floorplan=Object.assign(defaultFloorplan,p.floorplan,{img:null});
+      LState.floorplan=Object.assign(defaultFloorplan,p.floorplan,{img:p.floorplan.thumb||null});
       _fpLoad(p.floorplan._idb).then(function(data){
         if(data){LState.floorplan.img=data;LState.floorplan._idb=p.floorplan._idb;renderLayoutCanvas();}
       }).catch(function(){});
@@ -430,7 +432,7 @@ function renderLayout(){
     LState.floorplan=Object.assign(defaultFloorplan,p.floorplan);
   } else if(p.floorplan){
     LState.floorplan=Object.assign(defaultFloorplan,p.floorplan);
-  } else if(!_hasFPInMemory){
+  } else {
     LState.floorplan=Object.assign(defaultFloorplan,{pxPerMeter:(p.floorplan&&p.floorplan.pxPerMeter)||null});
   }
   if(typeof _measureLines==='undefined')window._measureLines=[];
@@ -446,6 +448,11 @@ function renderLayout(){
     var pnavH = (document.querySelector('.pnav')||{}).offsetHeight || 58;
     el.style.height = 'calc(100vh - ' + (tnavH + pnavH) + 'px)';
     el.style.overflow = 'hidden';
+  }
+  var _isEmptyEventLayout = (!LState.items.length && !LState.floorplan.img && !(typeof _libEditingLayoutId!=='undefined' && _libEditingLayoutId));
+  if(_isEmptyEventLayout){
+    el.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;min-height:60vh;padding:24px"><div style="max-width:520px;width:100%;text-align:center;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:36px 28px;box-shadow:0 18px 44px rgba(0,0,0,.08)"><div style="width:76px;height:76px;border-radius:50%;background:var(--gold-l);display:flex;align-items:center;justify-content:center;margin:0 auto 22px"><svg width="34" height="34" fill="none" stroke="var(--gold-h)" stroke-width="1.7" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div><div style="font-family:Cormorant Garamond,serif;font-size:30px;font-weight:700;margin-bottom:10px">'+(LANG==='es'?'Crea tu primer layout':'Create your first layout')+'</div><div style="color:var(--muted);font-size:14px;line-height:1.6;max-width:420px;margin:0 auto 24px">'+(LANG==='es'?'Empieza desde cero o importa un layout guardado de tu biblioteca para este evento.':'Start from scratch or import a saved library layout into this event.')+'</div><div style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap"><button class="btn btn-primary" style="padding:14px 26px;font-size:14px;font-weight:700" onclick="libOpenLayoutWizard()">+ '+(LANG==='es'?'Crear primer layout':'Create First Layout')+'</button><button class="btn btn-ghost" style="padding:14px 22px;font-size:14px;font-weight:700" onclick="libQuickLoadLayout()">'+(LANG==='es'?'Importa tu layout':'Import your layout')+'</button></div></div></div>';
+    return;
   }
   el.innerHTML=`
   <div class="layout-shell">
@@ -488,7 +495,7 @@ function renderLayout(){
           ${LState.addMode?`<strong style="color:var(--gold-h)"> | Click canvas to place ${LState.addMode.replace('-',' ')}</strong>`:''}
         </span>
         <div style="flex:1"></div>
-        ${(()=>{const b=calcLayoutBudget(LState.items);return b.total>0?`<div style="background:var(--gold-l);border:1px solid rgba(201,168,76,.3);border-radius:20px;padding:4px 14px;font-size:12px;font-weight:600;color:var(--gold-h);cursor:pointer" onclick="showLayoutBudget()" title="View budget breakdown">Total ${fmtMoney(b.total)}</div>`:'';})()}
+        ${(()=>{const q=getLayoutQuoteSummary(LState.items, ensureLayoutQuoteState(p));return (q.total>0||q.extraRows.length)?`<div id="layout-quote-total-pill" style="background:var(--gold-l);border:1px solid rgba(201,168,76,.3);border-radius:20px;padding:4px 14px;font-size:12px;font-weight:600;color:var(--gold-h);cursor:pointer" onclick="showLayoutBudget()" title="${t('layout_quote_open')}">${t('layout_quote_title')}: ${formatCost(q.total)}</div>`:'';})()}
         <button onclick="LState.useSnap=!LState.useSnap;renderLayoutUI()" title="Toggle snap to grid"
           style="height:28px;padding:0 10px;border:1px solid ${LState.useSnap?'var(--gold)':'var(--border)'};background:${LState.useSnap?'var(--gold-l)':'transparent'};border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;color:${LState.useSnap?'var(--gold-h)':'var(--muted)'};transition:var(--tr);white-space:nowrap"
           onmouseover="this.style.borderColor='var(--gold)'" onmouseout="if(!LState.useSnap)this.style.borderColor='var(--border)'">
@@ -506,8 +513,12 @@ function renderLayout(){
           <button class="btn btn-ghost btn-sm" onclick="triggerFloorplanUpload()">${LANG==='es'?'Cambiar imagen':'Change image'}</button>
           <button class="btn btn-ghost btn-sm" onclick="startScaleMode()">${LANG==='es'?'Escalar':'Scale'}</button>
           <button class="btn btn-ghost btn-sm" onclick="toggleFloorplanLock()">${LState.floorplan.locked?(LANG==='es'?'Desbloquear':'Unlock'):(LANG==='es'?'Bloquear':'Lock')}</button>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);font-weight:600" onclick="event.stopPropagation()">
+            <span>${t('opacity_lbl')||'Opacity'}</span>
+            <input id="floorplan-opacity-range" type="range" min="0" max="100" step="1" value="${Math.round((LState.floorplan.opacity==null?0.4:LState.floorplan.opacity)*100)}" style="width:88px" oninput="setFloorplanOpacity(this.value,true)" onchange="setFloorplanOpacity(this.value,true)">
+            <input id="floorplan-opacity-num" type="number" min="0" max="100" step="1" value="${Math.round((LState.floorplan.opacity==null?0.4:LState.floorplan.opacity)*100)}" style="width:52px;height:28px;border:1px solid var(--border);border-radius:5px;background:var(--bg2);color:var(--text);font-size:12px;text-align:center;padding:0 6px" oninput="setFloorplanOpacity(this.value,false)" onkeydown="if(event.key==='Enter')this.blur();event.stopPropagation();" onclick="event.stopPropagation()">
+          </label>
           <button class="btn btn-ghost btn-sm" onclick="removeFloorplan()" style="color:var(--danger)">${LANG==='es'?'Quitar':'Remove'}</button>
-          ${LState.floorplan.pxPerMeter?`<span style="font-size:11px;color:#16a34a;font-weight:600">${LANG==='es'?'Calibrado':'Calibrated'}: ${LState.floorplan.pxPerMeter} px/m</span>`:''}
           `}
         </div>`:''}
         <div style="display:flex;align-items:center;gap:3px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:4px 8px;opacity:1;gap:5px">
@@ -536,6 +547,7 @@ function renderLayout(){
         </div>
         <button class="btn btn-ghost btn-sm" onclick="exportLayoutFull()">${t('export')}</button>
       </div>
+      ${renderLayoutQuoteWorkspace(p)}
       <!-- Canvas -->
       <div class="layout-canvas-outer" id="lcanvas-outer"
         onmousedown="lCanvasDown(event)"
@@ -567,12 +579,13 @@ function renderLayout(){
             </svg>`:''}
           <div style="position:relative;z-index:1">
             ${LState.items.map(item=>renderLItem(item)).join('')}
-            ${LState.items.length===0&&(typeof _libEditingLayoutId==='undefined'||!_libEditingLayoutId)?`<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:auto">
-              <div style="font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:700;color:var(--muted);margin-bottom:16px">${t('create_general_layout')||'Start your layout'}</div>
-              <button class="btn btn-primary" style="padding:14px 28px;font-size:14px;font-weight:700" onclick="libOpenLayoutWizard()">
-                ? ${t('create_general_layout')||'Create General Layout'}
-              </button>
-              <div style="font-size:12px;color:var(--light);margin-top:10px">${LANG==='es'?'O arrastra elementos desde el panel izquierdo':'Or drag elements from the left panel'}</div>
+            ${LState.items.length===0&&(typeof _libEditingLayoutId==="undefined"||!_libEditingLayoutId)?`<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:auto">
+              <div style="font-family:Cormorant Garamond,serif;font-size:22px;font-weight:700;color:var(--muted);margin-bottom:16px">${t("create_general_layout")||"Start your layout"}</div>
+              <div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap">
+                <button class="btn btn-primary" style="padding:14px 28px;font-size:14px;font-weight:700" onclick="libOpenLayoutWizard()">+ ${t("create_general_layout")||"Create General Layout"}</button>
+                <button class="btn btn-ghost" style="padding:14px 22px;font-size:14px;font-weight:700" onclick="libQuickLoadLayout()">${LANG==="es"?"Importa tu layout":"Import your layout"}</button>
+              </div>
+              <div style="font-size:12px;color:var(--light);margin-top:10px">${LANG==="es"?"O arrastra elementos desde el panel izquierdo":"Or drag elements from the left panel"}</div>
             </div>`:''}
           </div>
           <!-- Measure overlay -->
@@ -587,7 +600,7 @@ function renderLayout(){
             ${_measurePoints.length===1?`
               <circle cx="${_measurePoints[0].x}" cy="${_measurePoints[0].y}" r="6" fill="#f59e0b" stroke="#fff" stroke-width="2"/>
               <line id="measure-preview" x1="${_measurePoints[0].x}" y1="${_measurePoints[0].y}" x2="${_measurePoints[0].x}" y2="${_measurePoints[0].y}" stroke="#f59e0b" stroke-width="2" stroke-dasharray="6 3"/>
-              <text id="measure-preview-label" x="${_measurePoints[0].x}" y="${_measurePoints[0].y-10}" fill="#f59e0b" font-size="12" font-weight="700" text-anchor="middle" font-family="monospace">…</text>
+              <text id="measure-preview-label" x="${_measurePoints[0].x}" y="${_measurePoints[0].y-10}" fill="#f59e0b" font-size="12" font-weight="700" text-anchor="middle" font-family="monospace">ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦</text>
             `:''}
           </svg>
         </div>
@@ -621,6 +634,308 @@ function renderLayout(){
 
 function renderLayoutUI(){
   renderLayout();
+}
+
+function ensureLayoutQuoteState(p){
+  if(!p) return [];
+  if(!p.layoutQuoteExtras) p.layoutQuoteExtras=[];
+  return p.layoutQuoteExtras;
+}
+
+function getLayoutQuoteGroupKey(item){
+  return [item.shape||'', item.chairType||'default', item.centerpiece||'none'].join('||');
+}
+
+function getLayoutShapeLabel(shape){
+  if(typeof LSHAPES_M==='undefined' || !LSHAPES_M) LSHAPES_M=getLSHAPES();
+  return LSHAPES_M[shape] && LSHAPES_M[shape].label ? LSHAPES_M[shape].label : String(shape||'Element').replace(/-/g,' ');
+}
+
+function getLayoutQuoteSummary(items, extras){
+  items = items || [];
+  extras = extras || [];
+  if(typeof LSHAPES_M==='undefined' || !LSHAPES_M) LSHAPES_M=getLSHAPES();
+
+  var groups={};
+  items.forEach(function(item){
+    var key=getLayoutQuoteGroupKey(item);
+    var chairType=item.chairType||'default';
+    var chairDef=CHAIR_TYPES[chairType] || CHAIR_TYPES.default || {label:chairType,costPerChair:0};
+    var cpKey=item.centerpiece||'none';
+    var cpDef=CENTERPIECE_TYPES[cpKey] || {label:cpKey,cost:0};
+    var shapeDef=LSHAPES_M[item.shape] || null;
+    if(!groups[key]){
+      groups[key]={
+        key:key,
+        shape:item.shape,
+        label:getLayoutShapeLabel(item.shape),
+        chairType:chairType,
+        chairStyle:chairType!=='default' ? (chairDef.label||chairType) : (LANG==='es'?'Predeterminada':'Default'),
+        centerpieceKey:cpKey,
+        centerpiece:cpKey!=='none' ? (cpDef.label||cpKey) : (LANG==='es'?'Ninguno':'None'),
+        chairsPerUnit:Number(item.chairs||0),
+        unitElementPrice:Number(item.cost||0),
+        qty:0,
+        isTable:!!(item.shape && (item.shape.indexOf('table')>=0 || (shapeDef && shapeDef._isCustomTable)))
+      };
+    }
+    groups[key].qty++;
+  });
+
+  var autoRows=Object.keys(groups).map(function(key){
+    var row=groups[key];
+    var chairDef=CHAIR_TYPES[row.chairType] || CHAIR_TYPES.default || {costPerChair:0,label:row.chairType};
+    var cpDef=CENTERPIECE_TYPES[row.centerpieceKey] || {cost:0,label:row.centerpieceKey};
+    row.unitChairPriceTotal = Number(row.chairsPerUnit||0) * Number(chairDef.costPerChair||0);
+    row.unitCenterpiecePrice = row.centerpieceKey!=='none' ? Number(cpDef.cost||0) : 0;
+    row.unitTotal = Number(row.unitElementPrice||0) + row.unitChairPriceTotal + row.unitCenterpiecePrice;
+    row.rowTotal = row.unitTotal * Number(row.qty||0);
+    return row;
+  }).sort(function(a,b){
+    if(a.label===b.label){
+      if(a.chairStyle===b.chairStyle) return a.centerpiece.localeCompare(b.centerpiece);
+      return a.chairStyle.localeCompare(b.chairStyle);
+    }
+    return a.label.localeCompare(b.label);
+  });
+
+  var extraRows=extras.map(function(extra, index){
+    var qty=Math.max(0, parseInt(extra.quantity,10) || 0);
+    var unitPrice=Number(extra.unitPrice||0);
+    return {
+      id: extra.id || ('lqe_'+index),
+      name: String(extra.name||'').trim(),
+      category: String(extra.category||'').trim(),
+      quantity: qty,
+      unitPrice: unitPrice,
+      notes: String(extra.notes||''),
+      rowTotal: qty * unitPrice
+    };
+  });
+
+  var autoTotal=autoRows.reduce(function(sum,row){ return sum + row.rowTotal; },0);
+  var extrasTotal=extraRows.reduce(function(sum,row){ return sum + row.rowTotal; },0);
+  var totalSeats=items.reduce(function(sum,item){ return sum + Number(item.chairs||0); },0);
+  var extraQtyTotal=extraRows.reduce(function(sum,row){ return sum + row.quantity; },0);
+
+  return {
+    autoRows:autoRows,
+    extraRows:extraRows,
+    autoTotal:autoTotal,
+    extrasTotal:extrasTotal,
+    total:autoTotal + extrasTotal,
+    totalSeats:totalSeats,
+    layoutItemCount:items.length,
+    extraQtyTotal:extraQtyTotal,
+    totalElements:items.length + extraQtyTotal
+  };
+}
+
+function renderLayoutQuoteWorkspace(p){
+  if(!p) return '';
+  var extras=ensureLayoutQuoteState(p);
+  var quote=getLayoutQuoteSummary(LState.items, extras);
+  var isES=LANG==='es';
+  var hiddenBody=_layoutQuoteCollapsed ? 'display:none;' : '';
+  var empty = !quote.autoRows.length && !quote.extraRows.length;
+  return `
+    <div id="layout-quote-workspace" style="margin:0 12px 12px;background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:0 8px 24px rgba(15,23,42,.06);overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
+        <div>
+          <div style="font-size:15px;font-weight:700;color:var(--text)">${t('layout_quote_title')}</div>
+          <div style="font-size:12px;color:var(--muted)">${t('layout_quote_sub')}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="toggleLayoutQuoteWorkspace()">${_layoutQuoteCollapsed?t('layout_quote_show'):t('layout_quote_hide')}</button>
+          <button class="btn btn-primary btn-sm" onclick="lQuoteAddExtra()">${t('layout_quote_add_custom')}</button>
+        </div>
+      </div>
+      <div style="${hiddenBody}">
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:14px 16px;border-bottom:1px solid var(--border)">
+          <div style="background:var(--bg2);border-radius:10px;padding:12px 14px">
+            <div style="font-size:20px;font-weight:700;color:var(--gold-h)">${quote.totalElements}</div>
+            <div style="font-size:11px;color:var(--muted)">${isES?'Elementos cotizados':'Quoted elements'}</div>
+          </div>
+          <div style="background:var(--bg2);border-radius:10px;padding:12px 14px">
+            <div style="font-size:20px;font-weight:700">${quote.totalSeats}</div>
+            <div style="font-size:11px;color:var(--muted)">${isES?'Asientos totales':'Total seats'}</div>
+          </div>
+          <div style="background:var(--gold-l);border-radius:10px;padding:12px 14px">
+            <div style="font-size:20px;font-weight:700;color:var(--gold-h)">${formatCost(quote.total)}</div>
+            <div style="font-size:11px;color:var(--muted)">${t('layout_quote_title')}</div>
+          </div>
+        </div>
+        ${empty
+          ? `<div style="padding:28px 18px;text-align:center">
+              <div style="font-size:15px;font-weight:700;margin-bottom:6px">${t('layout_quote_empty')}</div>
+              <div style="font-size:12px;color:var(--muted)">${t('layout_quote_empty_sub')}</div>
+            </div>`
+          : `
+            ${renderLayoutQuoteAutoTable(quote)}
+            ${renderLayoutQuoteExtrasTable(quote)}
+          `}
+      </div>
+    </div>`;
+}
+
+function renderLayoutQuoteAutoTable(quote){
+  if(!quote.autoRows.length) return '';
+  var rows=quote.autoRows.map(function(row){
+    var chairOpts=Object.keys(CHAIR_TYPES).map(function(key){
+      return '<option value="'+key+'"'+(row.chairType===key?' selected':'')+'>'+esc(CHAIR_TYPES[key].label)+'</option>';
+    }).join('');
+    var cpOpts=Object.keys(CENTERPIECE_TYPES).map(function(key){
+      return '<option value="'+key+'"'+(row.centerpieceKey===key?' selected':'')+'>'+esc(CENTERPIECE_TYPES[key].label)+'</option>';
+    }).join('');
+    return '<tr style="border-bottom:1px solid var(--bg2)">'+
+      '<td style="padding:9px 10px;font-size:12px;font-weight:600">'+esc(row.label)+'</td>'+
+      '<td style="padding:9px 10px;text-align:center;font-size:12px">'+row.qty+'</td>'+
+      '<td style="padding:6px 8px">'+(row.isTable?'<select class="input" style="font-size:11px;padding:5px 6px" onchange="lQuoteUpdateGroupChairType(\''+row.key+'\',this.value)">'+chairOpts+'</select>':'<span style="font-size:11px;color:var(--muted)">-</span>')+'</td>'+
+      '<td style="padding:6px 8px">'+(row.isTable?'<select class="input" style="font-size:11px;padding:5px 6px" onchange="lQuoteUpdateGroupCenterpiece(\''+row.key+'\',this.value)">'+cpOpts+'</select>':'<span style="font-size:11px;color:var(--muted)">-</span>')+'</td>'+
+      '<td style="padding:9px 10px;text-align:center;font-size:12px">'+(row.chairsPerUnit||'-')+'</td>'+
+      '<td style="padding:6px 8px"><input class="input" type="number" min="0" step="0.01" value="'+row.unitElementPrice+'" style="font-size:11px;padding:5px 6px;min-width:90px" onchange="lQuoteUpdateGroupCost(\''+row.key+'\',this.value)"></td>'+
+      '<td style="padding:9px 10px;text-align:right;font-size:12px">'+formatCost(row.unitChairPriceTotal)+'</td>'+
+      '<td style="padding:9px 10px;text-align:right;font-size:12px">'+formatCost(row.unitCenterpiecePrice)+'</td>'+
+      '<td style="padding:9px 10px;text-align:right;font-size:12px;font-weight:600">'+formatCost(row.unitTotal)+'</td>'+
+      '<td style="padding:9px 10px;text-align:right;font-size:12px;font-weight:700;color:var(--gold-h)">'+formatCost(row.rowTotal)+'</td>'+
+    '</tr>';
+  }).join('');
+  return '<div style="padding:16px 16px 0">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;flex-wrap:wrap">'+
+      '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">'+t('layout_quote_auto')+'</div>'+
+      '<div style="font-size:12px;color:var(--muted)">'+formatCost(quote.autoTotal)+'</div>'+
+    '</div>'+
+    '<div style="overflow:auto;border:1px solid var(--border);border-radius:10px">'+
+      '<table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff">'+
+        '<thead><tr style="background:var(--bg2)">'+
+          '<th style="padding:8px 10px;text-align:left">'+t('layout_quote_item')+'</th>'+
+          '<th style="padding:8px 10px;text-align:center">'+t('layout_quote_quantity')+'</th>'+
+          '<th style="padding:8px 10px;text-align:left">'+t('chair_style')+'</th>'+
+          '<th style="padding:8px 10px;text-align:left">'+t('centerpiece')+'</th>'+
+          '<th style="padding:8px 10px;text-align:center">'+t('layout_quote_seats_unit')+'</th>'+
+          '<th style="padding:8px 10px;text-align:left">'+t('layout_quote_base')+'</th>'+
+          '<th style="padding:8px 10px;text-align:right">'+t('layout_quote_chair_cost')+'</th>'+
+          '<th style="padding:8px 10px;text-align:right">'+t('layout_quote_centerpiece_cost')+'</th>'+
+          '<th style="padding:8px 10px;text-align:right">'+t('layout_quote_unit_total')+'</th>'+
+          '<th style="padding:8px 10px;text-align:right">'+t('layout_quote_row_total')+'</th>'+
+        '</tr></thead>'+
+        '<tbody>'+rows+'</tbody>'+
+      '</table>'+
+    '</div>'+
+  '</div>';
+}
+
+function renderLayoutQuoteExtrasTable(quote){
+  var rows=quote.extraRows.map(function(row){
+    return '<tr style="border-bottom:1px solid var(--bg2)">'+
+      '<td style="padding:6px 8px"><input class="input" value="'+esc(row.name)+'" style="font-size:11px;padding:5px 6px;min-width:160px" onchange="lQuoteUpdateExtraField(\''+row.id+'\',\'name\',this.value)"></td>'+
+      '<td style="padding:6px 8px"><input class="input" value="'+esc(row.category)+'" style="font-size:11px;padding:5px 6px;min-width:120px" onchange="lQuoteUpdateExtraField(\''+row.id+'\',\'category\',this.value)"></td>'+
+      '<td style="padding:6px 8px"><input class="input" type="number" min="0" step="1" value="'+row.quantity+'" style="font-size:11px;padding:5px 6px;min-width:70px" onchange="lQuoteUpdateExtraField(\''+row.id+'\',\'quantity\',this.value)"></td>'+
+      '<td style="padding:6px 8px"><input class="input" type="number" min="0" step="0.01" value="'+row.unitPrice+'" style="font-size:11px;padding:5px 6px;min-width:90px" onchange="lQuoteUpdateExtraField(\''+row.id+'\',\'unitPrice\',this.value)"></td>'+
+      '<td style="padding:6px 8px"><input class="input" value="'+esc(row.notes)+'" style="font-size:11px;padding:5px 6px;min-width:180px" onchange="lQuoteUpdateExtraField(\''+row.id+'\',\'notes\',this.value)"></td>'+
+      '<td style="padding:9px 10px;text-align:right;font-size:12px;font-weight:700;color:var(--gold-h)">'+formatCost(row.rowTotal)+'</td>'+
+      '<td style="padding:6px 8px;text-align:center"><button class="btn btn-danger btn-sm btn-icon" onclick="lQuoteDeleteExtra(\''+row.id+'\')" title="'+t('delete')+'"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg></button></td>'+
+    '</tr>';
+  }).join('');
+  return '<div style="padding:16px">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;flex-wrap:wrap">'+
+      '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">'+t('layout_quote_custom')+'</div>'+
+      '<div style="font-size:12px;color:var(--muted)">'+formatCost(quote.extrasTotal)+'</div>'+
+    '</div>'+
+    '<div style="overflow:auto;border:1px solid var(--border);border-radius:10px">'+
+      '<table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff">'+
+        '<thead><tr style="background:var(--bg2)">'+
+          '<th style="padding:8px 10px;text-align:left">'+t('layout_quote_item')+'</th>'+
+          '<th style="padding:8px 10px;text-align:left">'+t('layout_quote_custom_category')+'</th>'+
+          '<th style="padding:8px 10px;text-align:left">'+t('layout_quote_quantity')+'</th>'+
+          '<th style="padding:8px 10px;text-align:left">'+t('layout_quote_unit_price')+'</th>'+
+          '<th style="padding:8px 10px;text-align:left">'+t('layout_quote_notes')+'</th>'+
+          '<th style="padding:8px 10px;text-align:right">'+t('layout_quote_row_total')+'</th>'+
+          '<th style="padding:8px 10px;text-align:center">'+t('layout_quote_actions')+'</th>'+
+        '</tr></thead>'+
+        '<tbody>'+(rows || '<tr><td colspan="7" style="padding:14px 12px;text-align:center;color:var(--muted);font-size:12px">'+t('layout_quote_empty_sub')+'</td></tr>')+'</tbody>'+
+      '</table>'+
+    '</div>'+
+  '</div>';
+}
+
+function toggleLayoutQuoteWorkspace(){
+  _layoutQuoteCollapsed=!_layoutQuoteCollapsed;
+  renderLayoutUI();
+}
+
+function lQuoteUpdateGroupCost(key, value){
+  var p=proj();
+  if(!p) return;
+  var cost=Math.max(0, Number(value||0));
+  p.layoutItems=(p.layoutItems||[]).map(function(item){
+    if(getLayoutQuoteGroupKey(item)===key) item.cost=cost;
+    return item;
+  });
+  saveProj(p);
+  LState.items=p.layoutItems;
+  renderLayoutUI();
+}
+
+function lQuoteUpdateGroupChairType(key, chairType){
+  var p=proj();
+  if(!p) return;
+  p.layoutItems=(p.layoutItems||[]).map(function(item){
+    if(getLayoutQuoteGroupKey(item)===key) item.chairType=chairType||'default';
+    return item;
+  });
+  saveProj(p);
+  LState.items=p.layoutItems;
+  renderLayoutUI();
+}
+
+function lQuoteUpdateGroupCenterpiece(key, centerpiece){
+  var p=proj();
+  if(!p) return;
+  p.layoutItems=(p.layoutItems||[]).map(function(item){
+    if(getLayoutQuoteGroupKey(item)===key) item.centerpiece=centerpiece||'none';
+    return item;
+  });
+  saveProj(p);
+  LState.items=p.layoutItems;
+  renderLayoutUI();
+}
+
+function lQuoteAddExtra(){
+  var p=proj();
+  if(!p) return;
+  ensureLayoutQuoteState(p).push({
+    id:'lqe'+Date.now()+Math.random().toString(36).slice(2,6),
+    name:'',
+    category:'',
+    quantity:1,
+    unitPrice:0,
+    notes:''
+  });
+  saveProj(p);
+  _layoutQuoteCollapsed=false;
+  renderLayoutUI();
+}
+
+function lQuoteUpdateExtraField(id, field, value){
+  var p=proj();
+  if(!p) return;
+  var extras=ensureLayoutQuoteState(p);
+  var extra=extras.find(function(entry){ return entry.id===id; });
+  if(!extra) return;
+  if(field==='quantity') extra[field]=Math.max(0, parseInt(value,10) || 0);
+  else if(field==='unitPrice') extra[field]=Math.max(0, Number(value||0));
+  else extra[field]=String(value||'');
+  saveProj(p);
+  renderLayoutUI();
+}
+
+function lQuoteDeleteExtra(id){
+  var p=proj();
+  if(!p) return;
+  p.layoutQuoteExtras=ensureLayoutQuoteState(p).filter(function(entry){ return entry.id!==id; });
+  saveProj(p);
+  renderLayoutUI();
 }
  
 function getChairPx(item){
@@ -822,16 +1137,16 @@ function _addTableCatalogue(){
     {key:'round-1.8',cat:'round',label:'1.8m',wM:1.8,hM:1.8,chairs:14},
     {key:'round-1.9',cat:'round',label:'1.9m',wM:1.9,hM:1.9,chairs:14},
     {key:'round-2.0',cat:'round',label:'2.0m',wM:2.0,hM:2.0,chairs:16},
-    {key:'rect-2x1.2',cat:'rect',label:'2×1.2m',wM:2.0,hM:1.2,chairs:10},
-    {key:'rect-2.4x1.2',cat:'rect',label:'2.4×1.2m',wM:2.4,hM:1.2,chairs:12},
-    {key:'rect-2.6x1.2',cat:'rect',label:'2.6×1.2m',wM:2.6,hM:1.2,chairs:12},
-    {key:'rect-2.8x1.2',cat:'rect',label:'2.8×1.2m',wM:2.8,hM:1.2,chairs:14},
-    {key:'rect-3x1.2',cat:'rect',label:'3×1.2m',wM:3.0,hM:1.2,chairs:14},
-    {key:'rect-3.2x1.2',cat:'rect',label:'3.2×1.2m',wM:3.2,hM:1.2,chairs:16},
-    {key:'rect-3.4x1.2',cat:'rect',label:'3.4×1.2m',wM:3.4,hM:1.2,chairs:16},
-    {key:'rect-3.6x1.2',cat:'rect',label:'3.6×1.2m',wM:3.6,hM:1.2,chairs:18},
-    {key:'rect-3.8x1.2',cat:'rect',label:'3.8×1.2m',wM:3.8,hM:1.2,chairs:18},
-    {key:'rect-4x1.2',cat:'rect',label:'4×1.2m',wM:4.0,hM:1.2,chairs:20},
+    {key:'rect-2x1.2',cat:'rect',label:'2ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â1.2m',wM:2.0,hM:1.2,chairs:10},
+    {key:'rect-2.4x1.2',cat:'rect',label:'2.4ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â1.2m',wM:2.4,hM:1.2,chairs:12},
+    {key:'rect-2.6x1.2',cat:'rect',label:'2.6ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â1.2m',wM:2.6,hM:1.2,chairs:12},
+    {key:'rect-2.8x1.2',cat:'rect',label:'2.8ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â1.2m',wM:2.8,hM:1.2,chairs:14},
+    {key:'rect-3x1.2',cat:'rect',label:'3ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â1.2m',wM:3.0,hM:1.2,chairs:14},
+    {key:'rect-3.2x1.2',cat:'rect',label:'3.2ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â1.2m',wM:3.2,hM:1.2,chairs:16},
+    {key:'rect-3.4x1.2',cat:'rect',label:'3.4ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â1.2m',wM:3.4,hM:1.2,chairs:16},
+    {key:'rect-3.6x1.2',cat:'rect',label:'3.6ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â1.2m',wM:3.6,hM:1.2,chairs:18},
+    {key:'rect-3.8x1.2',cat:'rect',label:'3.8ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â1.2m',wM:3.8,hM:1.2,chairs:18},
+    {key:'rect-4x1.2',cat:'rect',label:'4ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â1.2m',wM:4.0,hM:1.2,chairs:20},
   ];
 }
 
@@ -905,6 +1220,17 @@ function _getVisibleCanvasCenter(){
   var cy=(outer.scrollTop+outer.clientHeight/2)/LState.zoom;
   return {x:Math.round(cx),y:Math.round(cy)};
 }
+
+function _getCenteredFloorplanPlacement(w,h,scale){
+  var center=_getVisibleCanvasCenter();
+  var scaledW=Math.round(w*(scale||1));
+  var scaledH=Math.round(h*(scale||1));
+  return {
+    x:Math.round(center.x-scaledW/2),
+    y:Math.round(center.y-scaledH/2)
+  };
+}
+
 
 function doAddTablesToLayout(){
   var isES=LANG==='es';
@@ -1168,6 +1494,25 @@ function lRedo(){
   LState.floorplan=_savedFP;
   renderLayoutCanvas();LHistorySaving=true;toast(LANG==='es'?'Rehacer':'Redo','s');
 }
+function getLayoutInstanceKey(item){
+  if(!item) return '';
+  if(item._instanceKey) return 'inst:'+item._instanceKey;
+  if(item._typeKey) return 'type:'+item._typeKey;
+  return ['sig', item.shape||'', item.w||0, item.h||0].join('|');
+}
+function isSameLayoutInstance(a,b){
+  return !!(a&&b) && getLayoutInstanceKey(a)===getLayoutInstanceKey(b);
+}
+function detachLayoutItemInstance(item){
+  if(!item) return;
+  item._instanceKey='inst-'+Date.now()+'-'+Math.random().toString(36).slice(2,6);
+}
+function makeLayoutDuplicate(id,mode){
+  var src=LState.items.find(function(i){return i.id===id;});
+  if(!src)return;
+  window.LClipboard=[JSON.parse(JSON.stringify(src))];
+  lPaste(mode==='instance'?'instance':'copy');
+}
 document.addEventListener('keydown',e=>{
   if(e.target.matches('input,textarea,select'))return;
   var moOpen=document.getElementById('mo')&&document.getElementById('mo').classList.contains('open');
@@ -1214,7 +1559,7 @@ document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.code==='KeyD'&&LState.sel.length){
     e.preventDefault();
     window.LClipboard=LState.items.filter(i=>LState.sel.includes(i.id)).map(i=>JSON.parse(JSON.stringify(i)));
-    lPaste();return;
+    lPaste('instance');return;
   }
   if((e.code==='Delete'||e.code==='Backspace')&&LState.sel.length){
     e.preventDefault();delSelected();return;
@@ -1231,7 +1576,7 @@ document.addEventListener('keyup',e=>{
     updateMeasurePreview(_measurePreviewMouse,false);
   }
 });
-function lPaste(){
+function lPaste(mode){
   if(!window.LClipboard||!window.LClipboard.length)return;
   const newIds=[];
   const offset=20;
@@ -1247,6 +1592,7 @@ function lPaste(){
       newLabel=c?base+' (copy '+c+')':base+' (copy)';
     }
     const newItem=Object.assign({},src,{id:'li'+Date.now()+Math.random().toString(36).slice(2,6),x:src.x+offset,y:src.y+offset,label:newLabel});
+    if(mode!=='instance') detachLayoutItemInstance(newItem);
     LState.items.push(newItem);
     newIds.push(newItem.id);
   });
@@ -1723,66 +2069,6 @@ function toggleSbSection(id){
   if(arrow) arrow.textContent=isHidden?'?':'?';
 }
 
-function duplicateAsCustom(id){
-  var item=LState.items.find(function(i){return i.id===id;});
-  if(!item)return;
-  var isTable=['round-table','rect-table','square-table'].includes(item.shape)||!!(LSHAPES_M[item.shape]&&LSHAPES_M[item.shape]._isCustomTable);
-  var isCustomTable=isTable&&!['dance-floor','bar','stage','dj-booth','gift-table','photo-booth'].includes(item.shape);
-  var wEl=document.getElementById('li-w');
-  var hEl=document.getElementById('li-h');
-  var bgEl=document.getElementById('li-bg');
-  var bdEl=document.getElementById('li-bdc');
-  var chEl=document.getElementById('li-chairs');
-  var ctEl=document.getElementById('li-ctype');
-  var cpEl=document.getElementById('li-cp');
-  var wM=parseFloat(wEl?wEl.value:String(item.w/getPPM()))||item.w/getPPM();
-  var hM=parseFloat(hEl?hEl.value:String(item.h/getPPM()))||item.h/getPPM();
-  var newBg=bgEl?bgEl.value:item.bg;
-  var newBdClr=bdEl?bdEl.value:item.bdClr;
-  var newChairs=parseInt(chEl?chEl.value:String(item.chairs||0))||0;
-  var newCtype=ctEl?ctEl.value:(item.chairType||'default');
-  var newCp=cpEl?cpEl.value:(item.centerpiece||'none');
-  window._dupData={id:id,wM:wM,hM:hM,newBg:newBg,newBdClr:newBdClr,newChairs:newChairs,newCtype:newCtype,newCp:newCp,srcRadius:item.radius||'0px',isCustomTable:isCustomTable};
-  var html='<div class="mo-title">Create New Type</div>'
-    +'<p class="s-hint">A new custom type with the current settings will be created. Only this element will become that new type — all other elements stay unchanged.</p>'
-    +'<div class="ig"><label>New Type Name</label>'
-    +'<input class="input" id="dup-name" value="'+esc(item.label+' (custom)')+'">'
-    +'</div>'
-    +'<div class="mo-foot">'
-    +'<button class="btn btn-ghost" onclick="openLItemModal(\''+id+'\')">Back</button>'
-    +'<button class="btn btn-primary" onclick="confirmDupType()">Create Type</button>'
-    +'</div>';
-  openMo(html);
-  setTimeout(function(){var el=document.getElementById('dup-name');if(el){el.focus();el.select();}},80);
-}
-function confirmDupType(){
-  var el=document.getElementById('dup-name');
-  if(!el)return;
-  var lbl=el.value.trim();
-  if(!lbl){el.style.outline='2px solid var(--danger)';return;}
-  var d=window._dupData||{};
-  var key='custom-'+(d.isCustomTable?'table':'elem')+'-'+Date.now();
-  LSHAPES_M[key]={label:lbl,wm:d.wM||2,hm:d.hM||2,bg:d.newBg||'#e0d8cc',bdClr:d.newBdClr||'#999',radius:d.srcRadius||'0px',chairs:d.newChairs||0,_isCustomTable:!!d.isCustomTable,_isCustomElem:!d.isCustomTable};
-  LSHAPES=getLSHAPES();
-  var ppm=getPPM();
-  var item=LState.items.find(function(i){return i.id===d.id;});
-  if(item){
-    item.shape=key;
-    item.w=Math.round(d.wM*ppm);
-    item.h=Math.round(d.hM*ppm);
-    item.bg=d.newBg;
-    item.bdClr=d.newBdClr;
-    item.chairs=d.newChairs;
-    item.chairType=d.newCtype;
-    item.centerpiece=d.newCp;
-    item.radius=d.srcRadius||'0px';
-  }
-  var p=proj();p.layoutItems=LState.items;saveProj(p);
-  lHistorySave();
-  closeMo();
-  renderLayout();
-  toast('Type "'+lbl+'" created — this element is now that type','s');
-}
 
 function openTableTypesEditor(){
   var tableKeys=Object.keys(LSHAPES_M).filter(k=>['round-table','rect-table','square-table'].includes(k)||LSHAPES_M[k]._isCustomTable);
@@ -1960,7 +2246,7 @@ function openGeneralLayoutModal(){
   var chairOpts=Object.entries(CHAIR_TYPES).map(([k,v])=>`<option value="${k}">${v.label}${v.costPerChair>0?' ($'+v.costPerChair+'/silla)':''}</option>`).join('');
   var cpOpts=Object.entries(CENTERPIECE_TYPES).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('');
   openMo(`<div class="mo-title">? Create General Layout</div>
-  <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Configure your venue layout. Default: 30 round tables (6×5), dance floor, shot bar, dinner platform and DJ booth in center.</div>
+  <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Configure your venue layout. Default: 30 round tables (6ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â5), dance floor, shot bar, dinner platform and DJ booth in center.</div>
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
     <div style="border:1px solid var(--border);border-radius:10px;padding:12px">
       <div style="font-weight:700;font-size:12px;color:var(--gold-h);margin-bottom:10px">? Round Tables</div>
@@ -2055,7 +2341,7 @@ function generateGeneralLayout(){
   var rcCell=makeCell(rcDef,rectChairs);
   var sqCell=makeCell(sqDef,sqChairs);
 
-  // Distribute each table type evenly — half of each type on each side
+  // Distribute each table type evenly ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â half of each type on each side
   var leftQ=[], rightQ=[];
   function _splitType(n, maker){
     var lCount=Math.ceil(n/2);
@@ -2120,7 +2406,7 @@ function generateGeneralLayout(){
     }
   }
 
-  // Place RIGHT tables — columns reversed so layout mirrors the left side
+  // Place RIGHT tables ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â columns reversed so layout mirrors the left side
   var rightStartX=centralX+centerW+sp;
   for(var row=0;row<rightRows;row++){
     for(var col=0;col<rightCols;col++){
@@ -2170,6 +2456,21 @@ function toggleFloorplanLock(){
   toast(LState.floorplan.locked?'?? Floorplan locked':'?? Floorplan unlocked','s');
 }
 
+
+function setFloorplanOpacity(value, fromRange){
+  if(!LState.floorplan||!LState.floorplan.img) return;
+  var parsed=Number(value);
+  if(!isFinite(parsed)) return;
+  parsed=Math.max(0,Math.min(100,Math.round(parsed)));
+  LState.floorplan.opacity=parsed/100;
+  var range=document.getElementById('floorplan-opacity-range');
+  var num=document.getElementById('floorplan-opacity-num');
+  if(range && (!fromRange || range.value!==String(parsed))) range.value=String(parsed);
+  if(num && (fromRange || num.value!==String(parsed))) num.value=String(parsed);
+  saveFloorplan();
+  renderLayoutCanvas();
+}
+
 function renderMeasureOverlay(){
   var ov=document.getElementById('measure-overlay');
   if(!ov){renderLayout();return;}
@@ -2185,7 +2486,7 @@ function renderMeasureOverlay(){
   var preview=_measurePoints.length===1?
     '<circle cx="'+_measurePoints[0].x+'" cy="'+_measurePoints[0].y+'" r="6" fill="#f59e0b" stroke="#fff" stroke-width="2"/>'+
     '<line id="measure-preview" x1="'+_measurePoints[0].x+'" y1="'+_measurePoints[0].y+'" x2="'+_measurePoints[0].x+'" y2="'+_measurePoints[0].y+'" stroke="#f59e0b" stroke-width="2" stroke-dasharray="6 3"/>'+
-    '<text id="measure-preview-label" x="'+_measurePoints[0].x+'" y="'+(+_measurePoints[0].y-10)+'" fill="#f59e0b" font-size="12" font-weight="700" text-anchor="middle" font-family="monospace">…</text>':
+    '<text id="measure-preview-label" x="'+_measurePoints[0].x+'" y="'+(+_measurePoints[0].y-10)+'" fill="#f59e0b" font-size="12" font-weight="700" text-anchor="middle" font-family="monospace">ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦</text>':
     '';
   ov.innerHTML=lines+preview;
 }
@@ -2212,7 +2513,7 @@ function renderLayoutCanvas(){
 function handleFloorplanUpload(e){
   var file=e.target.files[0];
   if(!file)return;
-  toast(LANG==='es'?'Cargando plano…':'Loading floorplan…');
+  toast(LANG==='es'?'Cargando planoÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦':'Loading floorplanÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦');
   var reader=new FileReader();
   reader.onload=function(ev){
     var origData=ev.target.result;
@@ -2229,32 +2530,35 @@ function handleFloorplanUpload(e){
         cvs.getContext('2d').drawImage(img,0,0,cw,ch);
         finalData=cvs.toDataURL('image/jpeg',0.6);
       }
-      var pid=proj().id;
       var _fpKey='fp_'+Math.random().toString(36).slice(2,10)+'_'+Date.now();
       _fpSave(_fpKey, finalData).then(function(){
+        var targetW=LState.canvasW*0.8;
+        var fpScale=1;
+        if(cw>targetW) fpScale=targetW/cw;
+        var placement=_getCenteredFloorplanPlacement(cw,ch,fpScale);
         LState.floorplan={
           img:finalData,
+          thumb:finalData,
           opacity:0.4,
-          scale:1,
-          x:0,y:0,
+          scale:fpScale,
+          x:placement.x,y:placement.y,
           w:cw,h:ch,
           _idb:_fpKey
         };
-        var targetW=LState.canvasW*0.8;
-        if(cw>targetW) LState.floorplan.scale=targetW/cw;
         var p=proj();
-        p.floorplan={opacity:0.4,scale:LState.floorplan.scale,x:0,y:0,w:cw,h:ch,locked:false,rotation:0,pxPerMeter:null,img:'__idb__',_idb:_fpKey};
+        p.floorplan={opacity:0.4,scale:LState.floorplan.scale,x:LState.floorplan.x,y:LState.floorplan.y,w:cw,h:ch,locked:false,rotation:0,pxPerMeter:null,img:'__idb__',_idb:_fpKey,thumb:finalData};
         saveProj(p);
         renderLayout();
-        toast(LANG==='es'?'Plano cargado — '+cw+'×'+ch+'px':'Floorplan loaded — '+cw+'×'+ch+'px','s');
       }).catch(function(err){
         console.error('IndexedDB save error:',err);
-        LState.floorplan={img:finalData,opacity:0.4,scale:1,x:0,y:0,w:cw,h:ch};
         var targetW=LState.canvasW*0.8;
-        if(cw>targetW) LState.floorplan.scale=targetW/cw;
+        var fpScale=1;
+        if(cw>targetW) fpScale=targetW/cw;
+        var placement=_getCenteredFloorplanPlacement(cw,ch,fpScale);
+        LState.floorplan={img:finalData,thumb:finalData,opacity:0.4,scale:fpScale,x:placement.x,y:placement.y,w:cw,h:ch};
         saveFloorplan();
         renderLayout();
-        toast(LANG==='es'?'Plano cargado (sin caché persistente)':'Floorplan loaded (no persistent cache)','s');
+        toast(LANG==='es'?'Plano cargado (sin cach? persistente)':'Floorplan loaded (no persistent cache)','s');
       });
     };
     img.src=origData;
@@ -2271,7 +2575,7 @@ function handleFloorplanDrop(e){
 }
 
 function removeFloorplan(){
-  if(!confirm(LANG==='es'?'¿Quitar el plano?':'Remove the floorplan image?'))return;
+  if(!confirm(LANG==='es'?'ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿Quitar el plano?':'Remove the floorplan image?'))return;
   var idbKey=LState.floorplan._idb;
   LState.floorplan={img:null,opacity:0.4,scale:1,x:0,y:0,w:0,h:0};
   LState.scaleMode=false;LState.scalePoints=[];
@@ -2285,12 +2589,12 @@ function saveFloorplan(){
   var p=proj();
   var fpCopy=JSON.parse(JSON.stringify(LState.floorplan));
   if(fpCopy._idb){
+    if(!fpCopy.thumb && fpCopy.img && fpCopy.img!=='__idb__') fpCopy.thumb=fpCopy.img;
     fpCopy.img='__idb__';
   }
   p.floorplan=fpCopy;
   saveProj(p);
 }
-
 function startScaleMode(){
   if(!LState.floorplan.img)return toast('Upload a floorplan first','e');
   LState.scaleMode=true;
@@ -2389,7 +2693,7 @@ function updateFontSizeUI(){
     }
   } else {
     inp.value = '';
-    inp.placeholder = LState.sel.length > 1 ? '···' : '—';
+    inp.placeholder = LState.sel.length > 1 ? 'ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â·ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â·ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â·' : 'ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â';
     inp.disabled = LState.sel.length === 0;
     inp.style.opacity = LState.sel.length === 0 ? '0.4' : '1';
   }
@@ -2487,7 +2791,7 @@ function rotateSelected(deg){
   var p=proj();p.layoutItems=LState.items;saveProj(p);
   lHistorySave();
   renderLayout();
-  toast('Rotated '+deg+'°','s');
+  toast('Rotated '+deg+'ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°','s');
 }
 
 function alignSelected(mode){
@@ -2581,10 +2885,10 @@ function lPropChange(id, key, val){
   if(perElementOnly.includes(key)){
     item[key]=val;
   } else {
-    LState.items.forEach(it=>{ if(it.shape===item.shape) it[key]=val; });
+    LState.items.forEach(it=>{ if(isSameLayoutInstance(it,item)) it[key]=val; });
     LState.sel.forEach(selId=>{
       const selItem=LState.items.find(i=>i.id===selId);
-      if(selItem && selItem.shape!==item.shape) selItem[key]=val;
+      if(selItem && !isSameLayoutInstance(selItem,item)) selItem[key]=val;
     });
   }
 
@@ -2594,7 +2898,7 @@ function lPropChange(id, key, val){
   if(perElementOnly.includes(key)){
     toUpdate.add(id);
   } else {
-    LState.items.forEach(it=>{ if(it.shape===item.shape) toUpdate.add(it.id); });
+    LState.items.forEach(it=>{ if(isSameLayoutInstance(it,item)) toUpdate.add(it.id); });
     LState.sel.forEach(selId=>toUpdate.add(selId));
   }
   toUpdate.forEach(uid=>{
@@ -2643,7 +2947,7 @@ function openLItemModal(id){
       <input type="hidden" id="li-new-chairs" value="">
       <input type="hidden" id="li-new-radius" value="">
       <div style="display:flex;align-items:center;gap:10px">
-        <span id="li-type-label" style="font-size:13px;color:var(--text)">${item._typeKey?item._typeKey.replace(/-/g,' ').replace(/(\d)/,' $1'):(item.shape==='round-table'?(item.w/getPPM()).toFixed(1)+'m '+ (_es?'Redonda':'Round'):(item.w/getPPM()).toFixed(1)+'×'+(item.h/getPPM()).toFixed(1)+'m '+(_es?'Rectangular':'Rect'))}</span>
+        <span id="li-type-label" style="font-size:13px;color:var(--text)">${item._typeKey?item._typeKey.replace(/-/g,' ').replace(/(\d)/,' $1'):(item.shape==='round-table'?(item.w/getPPM()).toFixed(1)+'m '+ (_es?'Redonda':'Round'):(item.w/getPPM()).toFixed(1)+'ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â'+(item.h/getPPM()).toFixed(1)+'m '+(_es?'Rectangular':'Rect'))}</span>
         <button class="btn btn-ghost btn-sm" type="button" onclick="openChangeTableTypePicker('${id}')" style="white-space:nowrap">?? ${_es?'Cambiar Tipo':'Change Type'}</button>
       </div>
     </div>`:''}
@@ -2662,16 +2966,13 @@ function openLItemModal(id){
     <label style="font-size:10.5px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:.07em;display:block;margin-bottom:8px">${_es?'Centro de Mesa':'Centerpiece'}</label>
     <select class="input" id="li-cp" style="font-size:12px">${cpOpts}</select>
   </div>`:''}
-  <div class="ig" style="grid-column:1/-1">
-    <label>${_es?'Precio (por elemento)':'Price (per element)'}</label>
-    <input class="input" id="li-cost" type="number" step="0.01" min="0" value="${item.cost||0}">
-  </div>
   <div style="font-size:10.5px;color:var(--muted);margin-bottom:8px;padding:8px;background:rgba(201,168,76,.06);border-radius:6px;border:1px solid rgba(201,168,76,.15)">
-    ?? ${_es?`Al guardar se aplicará a <strong>todas las mesas del mismo tipo y tamaño</strong> en este plano.`:`Saving will apply to <strong>all tables of the same type and size</strong> in this layout.`}
+    ?? ${_es?`Las <strong>instancias</strong> comparten cambios. Las <strong>copias</strong> quedan separadas.`:`<strong>Instances</strong> share changes. <strong>Copies</strong> stay independent.`}
   </div>
   <div class="mo-foot">
     <button class="btn btn-ghost" onclick="closeMo()">${t('cancel')}</button>
-    <button class="btn btn-ghost" onclick="duplicateAsCustom('${id}')" title="${_es?'Crear un nuevo tipo basado en este elemento':'Create a new custom type based on this element'}">? ${_es?'Crear Tipo':'Create new Type'}</button>
+    <button class="btn btn-ghost" onclick="closeMo();makeLayoutDuplicate('${id}','copy')">${_es?'Copia':'Copy'}</button>
+    <button class="btn btn-ghost" onclick="closeMo();makeLayoutDuplicate('${id}','instance')">${_es?'Instancia':'Instance'}</button>
     <button class="btn btn-danger" onclick="closeMo();delLItem('${id}')">${t('delete')||(_es?'Eliminar':'Delete')}</button>
     <button class="btn btn-primary" onclick="saveLItem('${id}')">${t('save')}</button>
   </div>`);
@@ -2733,7 +3034,7 @@ function selectNewTableType(itemId,typeKey){
   // Store in a temporary global so the edit modal can read it
   window._pendingTypeChange={typeKey:typeKey,shape:shape,w:tw,h:th,chairs:cat.chairs,radius:radius,label:cat.label};
   closeMo();
-  // Re-open the edit modal — the hidden inputs will be populated
+  // Re-open the edit modal ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â the hidden inputs will be populated
   setTimeout(function(){
     openLItemModal(itemId);
   },100);
@@ -2766,10 +3067,10 @@ function saveLItem(id){
   const newCp=cpEl?cpEl.value:(item.centerpiece||'none');
 
   const origTypeKey=item._typeKey||null;
-  const origW=item.w; const origH=item.h; const origShape=item.shape;
+  const origInstanceKey=getLayoutInstanceKey(item);
   function _matchesType(i){
-    if(origTypeKey) return i._typeKey===origTypeKey;
-    return i.shape===origShape&&i.w===origW&&i.h===origH;
+    if(origTypeKey && !item._instanceKey) return i._typeKey===origTypeKey && !i._instanceKey;
+    return getLayoutInstanceKey(i)===origInstanceKey;
   }
   const sameType=LState.items.filter(_matchesType);
   sameType.forEach(it=>{
@@ -2783,9 +3084,6 @@ function saveLItem(id){
     if(newTypeKey) it._typeKey=newTypeKey;
   });
 
-  const newCost=+(document.getElementById('li-cost')||{value:0}).value||0;
-  sameType.forEach(it=>{ it.cost=newCost; });
-
   LState.sel.forEach(selId=>{
     const selItem=LState.items.find(i=>i.id===selId);
     if(selItem && !_matchesType(selItem)){
@@ -2794,10 +3092,8 @@ function saveLItem(id){
       selItem.chairs=newChairs;
       selItem.chairType=newCtype;
       selItem.centerpiece=newCp;
-      selItem.cost=newCost;
     }
   });
-
   item.label=newLabel;
 
   const p=proj();p.layoutItems=LState.items;saveProj(p);
@@ -2926,141 +3222,53 @@ function showLayoutBudget(){
   renderLayoutBudgetModal();
 }
 function renderLayoutBudgetModal(){
-  var p=proj(); var items=LState.items;
-  var total=calcLayoutBudget(items).total;
-  var totalSeats=items.reduce(function(s,i){return s+(i.chairs||0);},0);
-
-  var groups={};
-  items.forEach(function(item){
-    var ctype=item.chairType||'default';
-    var cp=item.centerpiece||'none';
-    var key=item.shape+'||'+ctype+'||'+cp;
-    if(!groups[key]){
-      groups[key]={shape:item.shape,chairType:ctype,centerpiece:cp,
-        unitCost:parseFloat(item.cost)||0,qty:0,chairs:item.chairs||0};
-    }
-    groups[key].qty++;
-
-  });
-
-  var tableShapes=Object.keys(LSHAPES_M).filter(function(k){return ['round-table','rect-table','square-table'].includes(k)||!!(LSHAPES_M[k]._isCustomTable);});
-  var elemShapes=Object.keys(LSHAPES_M).filter(function(k){return !['round-table','rect-table','square-table'].includes(k)&&!LSHAPES_M[k]._isCustomTable;});
-
-  function shapeOpts(current,list){
-    return list.map(function(k){return '<option value="'+k+'"'+(current===k?' selected':'')+'>'+LSHAPES_M[k].label+'</option>';}).join('');
-  }
-  function chairOpts(current){
-    return Object.keys(CHAIR_TYPES).map(function(k){return '<option value="'+k+'"'+(current===k?' selected':'')+'>'+CHAIR_TYPES[k].label+'</option>';}).join('');
-  }
-  function cpOpts(current){
-    return Object.keys(CENTERPIECE_TYPES).map(function(k){return '<option value="'+k+'"'+(current===k?' selected':'')+'>'+CENTERPIECE_TYPES[k].label+'</option>';}).join('');
-  }
-
-  var rows=Object.keys(groups).map(function(key){
-    var g=groups[key];
-    var isTable=['round-table','rect-table','square-table'].includes(g.shape)||!!(LSHAPES_M[g.shape]&&LSHAPES_M[g.shape]._isCustomTable);
-    var shapeList=isTable?tableShapes:elemShapes;
-    var shapeLbl=LSHAPES_M[g.shape]?LSHAPES_M[g.shape].label:g.shape;
-    var chairCost=g.chairs*(CHAIR_TYPES[g.chairType]?CHAIR_TYPES[g.chairType].costPerChair||0:0);
-    var cpCost=g.centerpiece&&g.centerpiece!=='none'&&CENTERPIECE_TYPES[g.centerpiece]?CENTERPIECE_TYPES[g.centerpiece].cost||0:0;
-    var unitTotal=g.unitCost+chairCost+cpCost;
-    var subtotal=unitTotal*g.qty;
-    var dk='data-bkey="'+key+'"';
-    return '<tr style="border-bottom:1px solid var(--bg2)">'+
-      '<td style="padding:6px 8px;font-size:12px;font-weight:600">'+esc(shapeLbl)+'</td>'+
-      '<td style="padding:6px 8px;text-align:center;font-size:13px;font-weight:700;color:var(--gold-h)">'+g.qty+'</td>'+
-      (isTable?
-        '<td style="padding:4px 6px"><select class="input" '+dk+' style="font-size:11px;padding:3px 5px" onchange="lBudgetGrpChairType(this)">'+chairOpts(g.chairType)+'</select></td>'+
-        '<td style="padding:4px 6px"><select class="input" '+dk+' style="font-size:11px;padding:3px 5px" onchange="lBudgetGrpCp(this)">'+cpOpts(g.centerpiece)+'</select></td>'
-      :
-        '<td colspan="2" style="padding:6px 8px;font-size:11px;color:var(--light);text-align:center">—</td>'
-      )+
-      '<td style="padding:4px 6px"><input type="number" class="input" '+dk+' style="font-size:11px;padding:3px 5px;width:80px" value="'+g.unitCost+'" min="0" step="50" onchange="lBudgetGrpCost(this)"></td>'+
-      '<td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--muted)">'+formatCost(unitTotal)+'</td>'+
-      '<td style="padding:6px 8px;text-align:right;font-size:12px;font-weight:600;color:var(--gold-h)">'+formatCost(subtotal)+'</td>'+
-    '</tr>';
-  }).join('');
-
+  var p=proj();
+  var items=LState.items || [];
+  var quote=getLayoutQuoteSummary(items, ensureLayoutQuoteState(p));
   openMo(
-    '<div class="mo-title">?? Budget Breakdown — Edit</div>'+
-    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">'+
-      '<div style="background:var(--gold-l);border-radius:10px;padding:10px;text-align:center">'+
-        '<div style="font-size:18px;font-weight:700;color:var(--gold-h)" id="budget-total-display">'+formatCost(total)+'</div>'+
-        '<div class="s-sm">Total Budget</div>'+
+    '<div class="mo-title">'+esc(t('layout_quote_title'))+'</div>'+
+    '<div style="font-size:12px;color:var(--muted);margin:-4px 0 12px">'+esc(t('layout_quote_sub'))+'</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px">'+
+      '<div style="background:var(--gold-l);border-radius:10px;padding:12px;text-align:center">'+
+        '<div style="font-size:18px;font-weight:700;color:var(--gold-h)">'+formatCost(quote.total)+'</div>'+
+        '<div class="s-sm">'+esc(t('layout_quote_title'))+'</div>'+
       '</div>'+
-      '<div style="background:var(--bg);border-radius:10px;padding:10px;text-align:center">'+
-        '<div style="font-size:18px;font-weight:700">'+items.length+'</div>'+
-        '<div class="s-sm">Elements</div>'+
+      '<div style="background:var(--bg);border-radius:10px;padding:12px;text-align:center">'+
+        '<div style="font-size:18px;font-weight:700">'+quote.totalElements+'</div>'+
+        '<div class="s-sm">'+esc(t('elements'))+'</div>'+
       '</div>'+
-      '<div style="background:var(--bg);border-radius:10px;padding:10px;text-align:center">'+
-        '<div style="font-size:18px;font-weight:700">'+totalSeats+'</div>'+
-        '<div class="s-sm">Total Seats</div>'+
+      '<div style="background:var(--bg);border-radius:10px;padding:12px;text-align:center">'+
+        '<div style="font-size:18px;font-weight:700">'+quote.totalSeats+'</div>'+
+        '<div class="s-sm">'+esc(t('layout_total_seats'))+'</div>'+
       '</div>'+
     '</div>'+
-    '<div style="overflow-x:auto;max-height:55vh;overflow-y:auto">'+
-    '<table style="width:100%;border-collapse:collapse;font-size:12px">'+
-      '<thead><tr style="background:var(--bg2);position:sticky;top:0">'+
-        '<th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em">Type</th>'+
-        '<th style="padding:7px 8px;text-align:center;font-size:10px;text-transform:uppercase">Qty</th>'+
-        '<th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase">Chair Style</th>'+
-        '<th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase">Centerpiece</th>'+
-        '<th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase">Unit Cost</th>'+
-        '<th style="padding:7px 8px;text-align:center;font-size:10px;text-transform:uppercase">Unit Total</th>'+
-        '<th style="padding:7px 8px;text-align:right;font-size:10px;text-transform:uppercase">Subtotal</th>'+
-      '</tr></thead>'+
-      '<tbody>'+rows+'</tbody>'+
-      '<tfoot><tr style="background:var(--gold-l)">'+
-        '<td colspan="6" style="padding:10px;font-weight:700;font-size:12px">TOTAL</td>'+
-        '<td style="padding:10px;text-align:right;font-weight:700;color:var(--gold-h);font-size:13px" id="budget-total-display2">'+formatCost(total)+'</td>'+
-      '</tr></tfoot>'+
-    '</table></div>'+
-    '<p style="font-size:11px;color:var(--muted);margin:10px 0 0">Editing Unit Cost or Chair Style updates all elements of that type in the layout.</p>'+
+    '<div style="max-height:55vh;overflow:auto;margin:0 -2px">'+
+      renderLayoutQuoteAutoTable(quote)+
+      renderLayoutQuoteExtrasTable(quote)+
+    '</div>'+
+    '<p style="font-size:11px;color:var(--muted);margin:12px 0 0">'+esc(t('layout_quote_sub'))+'</p>'+
     '<div class="mo-foot">'+
-      '<button class="btn btn-ghost" onclick="closeMo()">Close</button>'+
-      '<button class="btn btn-primary" onclick="exportLayoutFull()">Export Report</button>'+
+      '<button class="btn btn-ghost" onclick="closeMo()">'+esc(t('close'))+'</button>'+
+      '<button class="btn btn-primary" onclick="exportLayoutFull()">'+esc(t('export'))+'</button>'+
     '</div>'
   );
 }
 function lBudgetRefreshTotal(){
-  var b=calcLayoutBudget(LState.items);
-  var d1=document.getElementById('budget-total-display');
-  var d2=document.getElementById('budget-total-display2');
-  if(d1)d1.textContent=formatCost(b.total);
-  if(d2)d2.textContent=formatCost(b.total);
+  renderLayoutBudgetModal();
 }
 function lBudgetGrpCost(el){
-  var key=el.dataset.bkey; var val=+el.value;
-  var p=proj();
-  var parts=key.split('||');
-  var shape=parts[0],ctype=parts[1],cp=parts[2];
-  p.layoutItems.forEach(function(it){
-    if(it.shape===shape&&(it.chairType||'default')===ctype&&(it.centerpiece||'none')===cp){it.cost=val;}
-  });
-  saveProj(p);LState.items=p.layoutItems;
-  lBudgetRefreshTotal();
+  if(!el) return;
+  lQuoteUpdateGroupCost(el.dataset.bkey, el.value);
+  renderLayoutBudgetModal();
 }
 function lBudgetGrpChairType(el){
-  var key=el.dataset.bkey; var ctype=el.value;
-  var p=proj();
-  var parts=key.split('||');
-  var shape=parts[0],oldCtype=parts[1],cp=parts[2];
-  p.layoutItems.forEach(function(it){
-    if(it.shape===shape&&(it.chairType||'default')===oldCtype&&(it.centerpiece||'none')===cp){it.chairType=ctype;}
-  });
-  saveProj(p);LState.items=p.layoutItems;
-  renderLayoutCanvas();
+  if(!el) return;
+  lQuoteUpdateGroupChairType(el.dataset.bkey, el.value);
   renderLayoutBudgetModal();
 }
 function lBudgetGrpCp(el){
-  var key=el.dataset.bkey; var cp=el.value;
-  var p=proj();
-  var parts=key.split('||');
-  var shape=parts[0],ctype=parts[1],oldCp=parts[2];
-  p.layoutItems.forEach(function(it){
-    if(it.shape===shape&&(it.chairType||'default')===ctype&&(it.centerpiece||'none')===oldCp){it.centerpiece=cp;}
-  });
-  saveProj(p);LState.items=p.layoutItems;
-  renderLayoutCanvas();
+  if(!el) return;
+  lQuoteUpdateGroupCenterpiece(el.dataset.bkey, el.value);
   renderLayoutBudgetModal();
 }
 
@@ -3121,228 +3329,171 @@ function openStylesEditor(){
 
 
 function exportLayoutFull(layoutName){
-  const p=proj(); const items=LState.items;
-  if(!items.length)return toast('No items to export','e');
-  const {total, breakdown} = calcLayoutBudget(items);
+  const p=proj();
+  const items=LState.items || [];
+  const extras=ensureLayoutQuoteState(p);
+  const quote=getLayoutQuoteSummary(items, extras);
+  if(!quote.autoRows.length && !quote.extraRows.length) return toast(LANG==='es'?'No hay elementos para exportar':'No items to export','e');
 
-  const counts={};
-  items.forEach(i=>{
-    const k=i.shape+'_'+(i.chairType||'')+'_'+(i.centerpiece||'');
-    if(!counts[k]) counts[k]={
-      label:LSHAPES_M[i.shape]?LSHAPES_M[i.shape].label:i.shape.replace(/-/g,' '),
-      shape:i.shape.replace(/-/g,' '),
-      chairType: i.chairType||'default',
-      centerpieceKey: i.centerpiece||'none',
-      chairStyle:i.chairType&&i.chairType!=='default'?(CHAIR_TYPES[i.chairType]?CHAIR_TYPES[i.chairType].label:i.chairType):'—',
-      centerpiece:i.centerpiece&&i.centerpiece!=='none'?(CENTERPIECE_TYPES[i.centerpiece]?CENTERPIECE_TYPES[i.centerpiece].label:i.centerpiece):'—',
-      chairs:i.chairs||0, unitCost:i.cost||0, qty:0, totalCost:0
-    };
-    counts[k].qty++;
-    counts[k].totalCost += (i.cost||0);
-  });
-  const rows=Object.values(counts);
-  const totalSeats=items.reduce((s,i)=>s+(i.chairs||0),0);
-  const name = layoutName||p.name;
+  const isES = LANG==='es';
+  const floorplan = (LState.floorplan && LState.floorplan.img) ? LState.floorplan : (p.floorplan || null);
+  const graphic = items.length ? buildLayoutSnapshotGraphic({ items: items, floorplan: floorplan, maxWidth: 1200 }) : null;
+  const name = layoutName || p.name || (isES ? 'Plano' : 'Layout');
+  const exportedOn = new Date().toLocaleDateString(isES ? 'es-MX' : 'en-US', { year:'numeric', month:'short', day:'numeric' });
 
-  const PPM = getPPM();
-  const CHAIR_SZ = Math.max(8, Math.round(CHAIR_SIZE_M * PPM));
-  const CHAIR_GAP = Math.max(2, Math.round(0.05 * PPM));
-  const PAD = CHAIR_SZ + CHAIR_GAP + 4;
+  function money(v){ return fmtMoney(Number(v||0)); }
+  function text(v){ return esc(v==null ? '' : String(v)); }
 
-  let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
-  items.forEach(item=>{
-    const hasCh = item.chairs > 0;
-    const px = hasCh ? PAD : 0;
-    minX = Math.min(minX, item.x - px);
-    minY = Math.min(minY, item.y - px);
-    maxX = Math.max(maxX, item.x + item.w + px);
-    maxY = Math.max(maxY, item.y + item.h + px);
-  });
-  const MARGIN = 80;
-  const rawW = maxX - minX + MARGIN*2;
-  const rawH = maxY - minY + MARGIN*2;
+  const autoRowsHtml = quote.autoRows.map(function(row){
+    return `
+      <tr>
+        <td>${text(row.label)}</td>
+        <td class="num">${text(row.qty)}</td>
+        <td>${text(row.chairStyle || (isES ? 'Predeterminada' : 'Default'))}</td>
+        <td>${text(row.centerpiece || (isES ? 'Ninguno' : 'None'))}</td>
+        <td class="num">${text(row.chairsPerUnit)}</td>
+        <td class="num">${money(row.unitElementPrice)}</td>
+        <td class="num">${money(row.unitChairPriceTotal)}</td>
+        <td class="num">${money(row.unitCenterpiecePrice)}</td>
+        <td class="num strong">${money(row.unitTotal)}</td>
+        <td class="num strong">${money(row.rowTotal)}</td>
+      </tr>`;
+  }).join('');
 
-  const MAX_W = 900;
-  const scale = rawW > MAX_W ? MAX_W / rawW : 1;
-  const svgW = Math.round(rawW * scale);
-  const svgH = Math.round(rawH * scale);
-  const ox = (-minX + MARGIN) * scale;
-  const oy = (-minY + MARGIN) * scale;
+  const extraRowsHtml = quote.extraRows.map(function(row){
+    return `
+      <tr>
+        <td>${text(row.name || (isES ? 'Elemento personalizado' : 'Custom item'))}</td>
+        <td>${text(row.category)}</td>
+        <td>${text(row.notes)}</td>
+        <td class="num">${text(row.quantity)}</td>
+        <td class="num">${money(row.unitPrice)}</td>
+        <td class="num strong">${money(row.rowTotal)}</td>
+      </tr>`;
+  }).join('');
 
-  function sc(v){ return Math.round(v * scale); }
-  function sx(v){ return Math.round(v * scale + ox); }
-  function sy(v){ return Math.round(v * scale + oy); }
+  const previewHtml = graphic ? `
+    <section class="panel">
+      <h2>${isES?'Vista del plano':'Layout preview'}</h2>
+      <div class="preview-wrap">
+        <img src="${graphic.image}" alt="${text(name)}" class="preview-img">
+      </div>
+    </section>` : '';
 
-  let svgItems = '';
-
-  items.forEach(item=>{
-    const isRound = item.shape==='round-table'||item.radius==='50%'||(LSHAPES_M[item.shape]&&LSHAPES_M[item.shape].radius==='50%');
-    const rot = item.rotation || 0;
-    const cx = sx(item.x + item.w/2);
-    const cy = sy(item.y + item.h/2);
-    const iw = sc(item.w);
-    const ih = sc(item.h);
-    const ix = sx(item.x);
-    const iy = sy(item.y);
-
-    let inner = '';
-
-    if(item.chairs){
-      const n = item.chairs;
-      const cs = Math.max(4, Math.round(CHAIR_SZ * scale));
-      const gap = Math.max(1, Math.round(CHAIR_GAP * scale));
-      const cType = item.chairType || 'default';
-      const ct = CHAIR_TYPES[cType] || CHAIR_TYPES['default'];
-      const cfill = ct ? ct.fill : '#e8e4d8';
-      const cstroke = ct ? (ct.stroke || 'none') : 'none';
-
-      const positions = [];
-      const w = sc(item.w), h = sc(item.h);
-
-      if(isRound){
-        for(let i=0;i<n;i++){
-          const angle=(i/n)*2*Math.PI - Math.PI/2;
-          positions.push({
-            x: w/2 + (w/2 + cs/2 + gap)*Math.cos(angle),
-            y: h/2 + (h/2 + cs/2 + gap)*Math.sin(angle)
-          });
-        }
-      } else if(item.shape==='rect-table'){
-        const longSide=4, shortSide=Math.max(1,Math.round((n-longSide*2)/2));
-        const top=longSide, bot=longSide, left=shortSide, right=shortSide;
-        for(let i=0;i<top;i++)   positions.push({x:(i+1)*w/(top+1),   y:-(cs/2+gap)});
-        for(let i=0;i<bot;i++)   positions.push({x:(i+1)*w/(bot+1),   y:h+cs/2+gap});
-        for(let i=0;i<left;i++)  positions.push({x:-(cs/2+gap),       y:(i+1)*h/(left+1)});
-        for(let i=0;i<right;i++) positions.push({x:w+cs/2+gap,        y:(i+1)*h/(right+1)});
-      } else {
-        const chairSlot = cs+5;
-        const longCap = Math.max(1,Math.floor(w/chairSlot));
-        let top=0,bot=0,left=0,right=0;
-        if(n<=2*longCap){ top=Math.ceil(n/2); bot=Math.floor(n/2); }
-        else { top=longCap; bot=longCap; const rem=n-top-bot; left=Math.ceil(rem/2); right=Math.floor(rem/2); }
-        for(let i=0;i<top;i++)   positions.push({x:(i+1)*w/(top+1),   y:-(cs/2+gap)});
-        for(let i=0;i<bot;i++)   positions.push({x:(i+1)*w/(bot+1),   y:h+cs/2+gap});
-        for(let i=0;i<left;i++)  positions.push({x:-(cs/2+gap),       y:(i+1)*h/(left+1)});
-        for(let i=0;i<right;i++) positions.push({x:w+cs/2+gap,        y:(i+1)*h/(right+1)});
-      }
-
-      const _cIsRound = !cType.startsWith('plegable') && !cType.startsWith('basket');
-      positions.forEach(pos=>{
-        if(_cIsRound){
-          inner += `<ellipse cx="${Math.round(pos.x)}" cy="${Math.round(pos.y)}" rx="${Math.round(cs/2)}" ry="${Math.round(cs/2)}" fill="${cfill}" stroke="${cstroke}" stroke-width="0.8"/>`;
-        } else {
-          inner += `<rect x="${Math.round(pos.x - cs/2)}" y="${Math.round(pos.y - cs/2)}" width="${cs}" height="${cs}" rx="2" fill="${cfill}" stroke="${cstroke}" stroke-width="0.8"/>`;
-        }
-      });
-    }
-
-    let rx;
-    if(isRound){ rx = Math.min(iw,ih)/2; }
-    else {
-      const shapeDef = LSHAPES_M[item.shape];
-      if(shapeDef && shapeDef.radius && shapeDef.radius==='0px'){ rx=0; }
-      else if(item.radius && item.radius==='0px'){ rx=0; }
-      else if(item.radius && item.radius!=='50%'){
-        const rNum = parseFloat(item.radius);
-        rx = isNaN(rNum) ? 3 : rNum;
-      } else { rx = 3; }
-    }
-    inner += `<rect x="0" y="0" width="${iw}" height="${ih}" rx="${rx}" fill="${item.bg}" stroke="${item.bdClr||'#ccc'}" stroke-width="1"/>`;
-
-    if(item.centerpiece && item.centerpiece!=='none'){
-      const ct2 = CENTERPIECE_TYPES[item.centerpiece];
-      if(ct2 && ct2.color){
-        const cpSz = Math.round(Math.min(iw,ih)*0.55);
-        inner += `<ellipse cx="${iw/2}" cy="${ih/2}" rx="${cpSz/2}" ry="${cpSz/2}" fill="${ct2.color}" opacity="0.55"/>`;
-      }
-    }
-
-    const wM = item.w / PPM;
-    const fs = Math.max(6, Math.min(13, Math.round(wM * 8 * scale)));
-    inner += `<text x="${iw/2}" y="${ih/2+fs*0.35}" text-anchor="middle" font-family="Jost,'Segoe UI',Arial,sans-serif" font-size="${fs}" fill="${item.bdClr||'#444'}" font-weight="400">${esc(item.label)}</text>`;
-
-    svgItems += `<g transform="translate(${ix},${iy}) rotate(${rot},${iw/2},${ih/2})">${inner}</g>\n`;
-  });
-
-  const svgGraphic = `<svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${svgH}" style="background:#ffffff;border:1px solid #e8d9a0;border-radius:8px;display:block;max-width:100%">
-  <rect width="${svgW}" height="${svgH}" fill="#ffffff"/>
-  ${svgItems}
-</svg>`;
-
-  const _pdfEs=LANG==='es';
-  const html=`<!DOCTYPE html><html><head><meta charset="utf-8">
-<title>Layout Export — ${esc(name)}</title>
+  const html = `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>${text(name)} - ${text(t('layout_quote_title'))}</title>
 <style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Segoe UI',Arial,sans-serif;color:#1a1a1a;background:#f9f7f2;padding:40px;max-width:980px;margin:0 auto}
-  h1{font-size:26px;font-weight:700;margin-bottom:4px;letter-spacing:-.02em}
-  h2{font-size:14px;font-weight:700;margin:32px 0 12px;color:#555;text-transform:uppercase;letter-spacing:.08em;border-bottom:2px solid #c9a84c;padding-bottom:6px}
-  .meta{font-size:13px;color:#888;margin-bottom:28px}
-  .stats{display:flex;gap:12px;margin-bottom:32px;flex-wrap:wrap}
-  .stat{background:#fff;border:1px solid #e8d9a0;border-radius:10px;padding:14px 22px;text-align:center;flex:1;min-width:120px}
-  .stat-n{font-size:24px;font-weight:700;color:#a8862e}
-  .stat-l{font-size:11px;color:#888;margin-top:2px;text-transform:uppercase;letter-spacing:.04em}
-  .layout-section{margin-bottom:36px}
-  .layout-wrap{background:#fff;border-radius:12px;padding:24px;border:1px solid #e8d9a0;overflow:auto}
-  table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:4px;background:#fff;border-radius:8px;overflow:hidden}
-  th{background:#faf8f2;padding:9px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:#999;border-bottom:2px solid #e8d9a0}
-  td{padding:9px 12px;border-bottom:1px solid #f0ece0;vertical-align:middle}
-  tr:last-child td{border-bottom:none}
-  .total-row td{font-weight:700;background:#faf8f2;border-top:2px solid #c9a84c;color:#a8862e}
-  .swatch{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:middle;border:1px solid rgba(0,0,0,.1)}
+  :root{color-scheme:light}
+  *{box-sizing:border-box}
+  body{margin:0;padding:32px;font-family:Segoe UI,Arial,sans-serif;background:#f6f1e8;color:#241f17}
+  .page{max-width:1180px;margin:0 auto}
+  .hero{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:24px}
+  .hero h1{margin:0 0 6px;font-size:32px;line-height:1.1}
+  .sub{color:#6f665c;font-size:14px}
+  .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:24px}
+  .stat,.panel{background:#fff;border:1px solid #e7dccb;border-radius:16px;box-shadow:0 10px 30px rgba(36,31,23,.06)}
+  .stat{padding:16px 18px}
+  .stat .n{font-size:26px;font-weight:700;color:#8a6a1d}
+  .stat .l{font-size:12px;color:#6f665c;text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
+  .panel{padding:18px 18px 16px;margin-bottom:18px}
+  .panel h2{margin:0 0 14px;font-size:17px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:10px 8px;border-bottom:1px solid #eee6da;vertical-align:top}
+  th{text-align:left;background:#faf7f2;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#6f665c}
+  td.num, th.num{text-align:right}
+  .strong{font-weight:700;color:#8a6a1d}
+  .total-row td{background:#fbf5e7;font-weight:700}
+  .preview-wrap{border:1px solid #eee6da;border-radius:14px;background:#fff;padding:12px}
+  .preview-img{display:block;width:100%;height:auto;border-radius:10px}
+  .footer{display:flex;justify-content:flex-end;margin-top:24px}
+  .print-btn{padding:12px 26px;background:#c9a84c;border:none;border-radius:10px;color:#fff;font-weight:700;cursor:pointer}
   @media print{
-    body{background:#fff;padding:24px}
-    .no-print{display:none!important}
-    .layout-wrap{border:none;padding:0}
-    h2{margin-top:24px}
+    body{background:#fff;padding:0}
+    .page{max-width:none}
+    .footer{display:none}
+    .panel,.stat{box-shadow:none}
   }
-</style></head><body>
-<h1>Layout — ${esc(name)}</h1>
-<div class="meta">${_pdfEs?'Evento':'Event'}: ${esc(p.name)} &nbsp;·&nbsp; ${new Date().toLocaleDateString(_pdfEs?'es-MX':'en-US',{year:'numeric',month:'long',day:'numeric'})}</div>
-<div class="stats">
-  <div class="stat"><div class="stat-n">${items.length}</div><div class="stat-l">${_pdfEs?'Elementos':'Elements'}</div></div>
-  <div class="stat"><div class="stat-n">${items.filter(i=>i.shape.includes('table')||i.shape.includes('round')||i.shape.includes('rect')||i.shape.includes('square')).length}</div><div class="stat-l">${_pdfEs?'Mesas':'Tables'}</div></div>
-  <div class="stat"><div class="stat-n">${totalSeats}</div><div class="stat-l">${_pdfEs?'Asientos':'Total Seats'}</div></div>
-  <div class="stat"><div class="stat-n">${fmtMoney(total)}</div><div class="stat-l">${_pdfEs?'Presupuesto':'Budget'}</div></div>
+</style>
+</head>
+<body>
+<div class="page">
+  <section class="hero">
+    <div>
+      <h1>${text(name)}</h1>
+      <div class="sub">${text(t('layout_quote_title'))} � ${text(exportedOn)}</div>
+      <div class="sub">${text(t('layout_quote_sub'))}</div>
+    </div>
+  </section>
+
+  <section class="stats">
+    <div class="stat"><div class="n">${money(quote.total)}</div><div class="l">${text(t('layout_quote_title'))}</div></div>
+    <div class="stat"><div class="n">${text(quote.totalElements)}</div><div class="l">${text(isES?'Elementos cotizados':'Quoted elements')}</div></div>
+    <div class="stat"><div class="n">${text(quote.totalSeats)}</div><div class="l">${text(isES?'Asientos totales':'Total seats')}</div></div>
+  </section>
+
+  ${previewHtml}
+
+  <section class="panel">
+    <h2>${text(t('layout_quote_auto'))}</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>${text(t('layout_quote_item'))}</th>
+          <th class="num">${text(t('layout_quote_quantity'))}</th>
+          <th>${text(t('chair_style'))}</th>
+          <th>${text(t('centerpiece'))}</th>
+          <th class="num">${text(t('layout_quote_seats_unit'))}</th>
+          <th class="num">${text(t('layout_quote_base'))}</th>
+          <th class="num">${text(t('layout_quote_chair_cost'))}</th>
+          <th class="num">${text(t('layout_quote_centerpiece_cost'))}</th>
+          <th class="num">${text(t('layout_quote_unit_total'))}</th>
+          <th class="num">${text(t('layout_quote_row_total'))}</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${autoRowsHtml || `<tr><td colspan="10">${text(t('layout_quote_empty_sub'))}</td></tr>`}
+        <tr class="total-row"><td colspan="9">${text(isES?'Subtotal de layout':'Layout subtotal')}</td><td class="num">${money(quote.autoTotal)}</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <h2>${text(t('layout_quote_custom'))}</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>${text(t('layout_quote_item'))}</th>
+          <th>${text(t('layout_quote_custom_category'))}</th>
+          <th>${text(t('layout_quote_notes'))}</th>
+          <th class="num">${text(t('layout_quote_quantity'))}</th>
+          <th class="num">${text(t('layout_quote_unit_price'))}</th>
+          <th class="num">${text(t('layout_quote_row_total'))}</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${extraRowsHtml || `<tr><td colspan="6">${text(t('layout_quote_empty_sub'))}</td></tr>`}
+        <tr class="total-row"><td colspan="5">${text(isES?'Subtotal personalizado':'Custom subtotal')}</td><td class="num">${money(quote.extrasTotal)}</td></tr>
+        <tr class="total-row"><td colspan="5">${text(isES?'Total general':'Grand total')}</td><td class="num">${money(quote.total)}</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <div class="footer">
+    <button class="print-btn" onclick="window.print()">${text(isES?'Imprimir / Guardar PDF':'Print / Save PDF')}</button>
+  </div>
 </div>
-
-${_pdfEs?'<h2>Plano</h2>':'<h2>Floor Plan</h2>'}
-<div class="layout-wrap">${svgGraphic}</div>
-
-${_pdfEs?'<h2>Resumen de Elementos</h2>':'<h2>Element Summary</h2>'}
-<table>
-  <thead><tr><th>${_pdfEs?'Tipo':'Type'}</th><th>${_pdfEs?'Sillas':'Chair Style'}</th><th>${_pdfEs?'Centro':'Centerpiece'}</th><th style="text-align:center">${_pdfEs?'Asientos':'Seats/Unit'}</th><th style="text-align:center">${_pdfEs?'Cant.':'Qty'}</th><th style="text-align:right">${_pdfEs?'Costo Elem.':'Element Cost'}</th><th style="text-align:right">${_pdfEs?'Costo Sillas':'Chair Cost'}</th><th style="text-align:right">${_pdfEs?'Centro Mesa':'CP Cost'}</th><th style="text-align:right">${_pdfEs?'Subtotal':'Row Total'}</th></tr></thead>
-  <tbody>${rows.map(r=>{
-    const chairCostPerUnit = r.chairs>0&&r.chairType&&r.chairType!=='default'?(CHAIR_TYPES[r.chairType]?Number(CHAIR_TYPES[r.chairType].costPerChair||0)*r.chairs:0):0;
-    const cpCostPerUnit = r.centerpieceKey&&r.centerpieceKey!=='none'?(CENTERPIECE_TYPES[r.centerpieceKey]?Number(CENTERPIECE_TYPES[r.centerpieceKey].cost||0):0):0;
-    const rowTotal = (r.unitCost + chairCostPerUnit + cpCostPerUnit) * r.qty;
-    return `<tr>
-    <td><strong>${r.label}</strong></td>
-    <td style="color:#666">${r.chairStyle}</td>
-    <td style="color:#666">${r.centerpiece}</td>
-    <td style="text-align:center">${r.chairs||'—'}</td>
-    <td style="text-align:center;font-weight:700">${r.qty}</td>
-    <td style="text-align:right">${r.unitCost>0?fmtMoney(r.unitCost):'—'}</td>
-    <td style="text-align:right">${chairCostPerUnit>0?fmtMoney(chairCostPerUnit):'—'}</td>
-    <td style="text-align:right">${cpCostPerUnit>0?fmtMoney(cpCostPerUnit):'—'}</td>
-    <td style="text-align:right;font-weight:700">${rowTotal>0?fmtMoney(rowTotal):'—'}</td>
-  </tr>`;}).join('')}
-  <tr class="total-row"><td colspan="8">${_pdfEs?'TOTAL':'TOTAL'}</td><td style="text-align:right">${fmtMoney(total)}</td></tr>
-  </tbody>
-</table>
-
-<div class="no-print" style="margin-top:36px;display:flex;justify-content:flex-end">
-  <button onclick="window.print()" style="padding:11px 32px;background:#c9a84c;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-weight:700;letter-spacing:.02em">??? Print / Save as PDF</button>
-</div>
-
-</body></html>`;
+</body>
+</html>`;
 
   const blob=new Blob([html],{type:'text/html'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
   a.download=`Layout_${name.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.html`;
   a.click();
-  toast('Export downloaded','s');
+  toast(isES?'Exportaci�n descargada':'Export downloaded','s');
 }
 
 function exportLayoutPDF(){ exportLayoutFull(); }

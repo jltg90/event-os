@@ -1,4 +1,4 @@
-
+﻿
 var _libTab = 'vendors';
 var _mbOpenFolderId = null;
 
@@ -6,7 +6,7 @@ function getLib(){
   var all = uproj();
   if(!all['__library__']){
     // Only create a blank library in memory — do NOT save it yet.
-    // Saving here risks overwriting real data before Supabase has loaded.
+    // Saving here risks overwriting real data before Convex has loaded.
     all['__library__'] = {
       id:'__library__', name:'__library__',
       vendors:[], tasks:[], layouts:[],
@@ -16,7 +16,7 @@ function getLib(){
   }
   var lib = all['__library__'];
   if(!lib.vendors)     lib.vendors=[];
-  // Seed default vendors only if the library record already existed in Supabase
+  // Seed default vendors only if the library record already existed in Convex
   // (i.e. it has an updated_at flag set by loadProjectsFromCloud), to avoid
   // seeding — and saving — before real data arrives.
   if(lib.vendors.length===0 && lib._seeded && typeof defaultVendors==='function'){
@@ -51,7 +51,7 @@ function saveLib(lib){
       if(typeof _fpSave==='function'){
         _fpSave(_libFpKey, entry.floorplan.img).catch(function(){});
       }
-      entry.floorplan.img='__idb__';
+      entry.floorplan.thumb=entry.floorplan.thumb||entry.floorplan.img; entry.floorplan.img='__idb__';
       entry.floorplan._idb=_libFpKey;
     }
   });
@@ -77,17 +77,20 @@ function loadFloorplanImg(layoutId, callback){
     callback(all[fpKey]._fpImg);
     return;
   }
-  // Not in memory — fetch from Supabase
-  var url = typeof SUPA_URL!=='undefined'?SUPA_URL:'';
-  var headers = typeof supaHeaders==='function'?supaHeaders():{};
-  fetch(url+'/rest/v1/projects?id=eq.'+fpKey+'&user_id=eq.'+encodeURIComponent(typeof DB!=='undefined'?DB.cur:'')+'&select=id,data', {headers:headers})
-    .then(function(r){return r.json();})
-    .then(function(rows){
-      if(rows&&rows[0]&&rows[0].data&&rows[0].data._fpImg){
-        if(!all[fpKey]) all[fpKey]={};
-        all[fpKey]._fpImg = rows[0].data._fpImg;
-        callback(rows[0].data._fpImg);
-      } else { callback(null); }
+  if(!(typeof EVENTOS_DATA!=='undefined' && EVENTOS_DATA && typeof DB!=='undefined' && DB.cur)){
+    callback(null);
+    return;
+  }
+  EVENTOS_DATA.getProjectsByWixUserId(DB.cur)
+    .then(function(projects){
+      if(projects && typeof DB!=='undefined'){
+        DB.projects[DB.cur] = projects;
+      }
+      if(projects && projects[fpKey] && projects[fpKey]._fpImg){
+        callback(projects[fpKey]._fpImg);
+      } else {
+        callback(null);
+      }
     })
     .catch(function(){ callback(null); });
 }
@@ -129,11 +132,11 @@ function libResolveLayoutFloorplan(entry){
     var fp = JSON.parse(JSON.stringify(entry.floorplan));
     if(fp.img && fp.img!=='__idb__' && fp.img!=='__stored__'){ resolve(fp); return; }
     if(fp.img==='__idb__' && fp._idb && typeof _fpLoad==='function'){
-      _fpLoad(fp._idb).then(function(data){ fp.img = data || null; resolve(fp); }).catch(function(){ resolve(fp); });
+      _fpLoad(fp._idb).then(function(data){ fp.img = data || fp.thumb || null; resolve(fp); }).catch(function(){ fp.img = fp.thumb || null; resolve(fp); });
       return;
     }
     if(entry.id){
-      loadFloorplanImg(entry.id, function(img){ if(img) fp.img = img; resolve(fp); });
+      loadFloorplanImg(entry.id, function(img){ if(img) fp.img = img; else if(fp.thumb) fp.img = fp.thumb; resolve(fp); });
       return;
     }
     resolve(fp);
@@ -242,10 +245,12 @@ function libLayoutZoomExtents(){
 function renderLibrary(){
   updateLibraryLabels();
   var lib = getLib();
+  var vendorCount = lib.vendors.reduce(function(sum, entry){ return sum + ((entry.vendors||[]).length||0); }, 0);
+  var taskCount = (lib.globalTasks||[]).length;
 
   var tabs = [
-    {key:'vendors',    icon:'🏢', lbl:t('lib_vendors'),     cnt: lib.vendors.length},
-    {key:'tasks',      icon:'📅', lbl:t('lib_tasks'),       cnt: lib.tasks.length},
+    {key:'vendors',    icon:'🏢', lbl:t('lib_vendors'),     cnt: vendorCount},
+    {key:'tasks',      icon:'📅', lbl:t('lib_tasks'),       cnt: taskCount},
     {key:'layouts',    icon:'📐', lbl:t('lib_layouts'),     cnt: lib.layouts.length},
     {key:'tables',     icon:'⬡',  lbl:t('lib_tables'),      cnt: Object.keys(lib.tables).length},
     {key:'elements',   icon:'🪴', lbl:t('lib_elements'),    cnt: Object.keys(lib.elements).length},
@@ -347,6 +352,21 @@ function libCard(title, subtitle, badge, loadBtn, delKey, delType){
     +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDelete(\''+delType+'\',\''+delKey+'\')">'
     +'<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>'
     +'</div></div>';
+}
+
+function renderLibVendorSets(lib){
+  if(!lib.vendors.length) return libEmpty();
+  return lib.vendors.map(function(entry){
+    var sub = entry.vendors.length+' '+(LANG==='es'?'proveedor(es)':'vendor(s)')+' · '+entry.date;
+    var cats = {};
+    (entry.vendors||[]).forEach(function(v){ if(v.category) cats[v.category]=true; });
+    var catNames = Object.keys(cats);
+    var badge = catNames.length
+      ? '<span class="badge b-gold">'+esc(catNames.slice(0,2).join(' · '))+(catNames.length>2?' +'+(catNames.length-2):'')+'</span>'
+      : '';
+    var loadBtn = proj()?'<button class="btn btn-primary btn-sm" onclick="libLoadVendors(\''+entry.id+'\')">'+t('lib_load_btn')+'</button>':'';
+    return libCard(entry.name, sub, badge, loadBtn, entry.id, 'vendors');
+  }).join('');
 }
 
 function libVendorRow(item, isES){
@@ -1195,91 +1215,6 @@ function renderLibTypes(lib, type){
       }).join('')+'</div></div>';
 }
 
-function _libMbFolderCard(entry, isES){
-  var editIco='<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg>';
-  var dupIco='<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-  var delIco='<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg>';
-  var imgCnt=entry.images?entry.images.length:(entry.folders||[]).reduce(function(s,f){return s+f.images.length;},0)+(entry.uncategorized||[]).length;
-  var thumb=(entry.images&&entry.images.length)
-    ?'<div style="width:100%;aspect-ratio:4/3;background:#f3f3f3;border-radius:6px;margin-bottom:10px;overflow:hidden"><img src="'+entry.images[0]+'" style="width:100%;height:100%;object-fit:cover;display:block"></div>'
-    :'<div style="width:100%;aspect-ratio:4/3;background:var(--bg2);border-radius:6px;margin-bottom:10px;display:flex;align-items:center;justify-content:center"><svg width="32" height="32" fill="none" stroke="var(--muted)" stroke-width="1.5" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>';
-  return '<div style="background:#fff;border:1.5px solid var(--border);border-radius:var(--r-lg);padding:14px;cursor:pointer;transition:box-shadow .15s" '
-    +'onmouseover="this.style.boxShadow=\'var(--sh-md)\'" onmouseout="this.style.boxShadow=\'\'" '
-    +'onclick="libOpenMoodboardFolder(\''+entry.id+'\')">'
-    +thumb
-    +'<div style="font-size:13px;font-weight:700;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(entry.name)+'</div>'
-    +'<div style="font-size:11px;color:var(--muted);margin-bottom:10px">'+imgCnt+' '+(isES?'imagen(es)':'image(s)')+' · '+entry.date+'</div>'
-    +'<div style="display:flex;gap:5px" onclick="event.stopPropagation()">'
-    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar':'Edit')+'" onclick="libEditMoodboardFolder(\''+entry.id+'\')">'+editIco+'</button>'
-    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Duplicar':'Duplicate')+'" onclick="libDuplicateMoodboardFolder(\''+entry.id+'\')">'+dupIco+'</button>'
-    +'<button class="btn btn-danger btn-sm btn-icon" title="'+(isES?'Eliminar':'Delete')+'" onclick="libDelete(\'moodboards\',\''+entry.id+'\')">'+delIco+'</button>'
-    +'</div></div>';
-}
-
-function renderLibMoodboards(lib){
-  var isES=LANG==='es';
-
-  // ── Inside a folder view ──────────────────────────────────────────────
-  if(_mbOpenFolderId){
-    var entry=lib.moodboards.find(function(e){return e.id===_mbOpenFolderId;});
-    if(!entry){ _mbOpenFolderId=null; return renderLibMoodboards(lib); }
-    var images=entry.images||[];
-    var breadcrumb='<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">'
-      +'<button class="btn btn-ghost btn-sm" style="display:flex;align-items:center;gap:5px;padding:5px 10px" onclick="libMbBackToFolders()">'
-      +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>'
-      +(isES?'Moodboards':'Moodboards')+'</button>'
-      +'<svg width="12" height="12" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>'
-      +'<span style="font-size:13px;font-weight:700">'+esc(entry.name)+'</span>'
-      +'<span style="font-size:11px;color:var(--muted);margin-left:4px">'+images.length+' '+(isES?'imagen(es)':'image(s)')+'</span>'
-      +'</div>';
-    if(!images.length){
-      return breadcrumb
-        +'<div style="text-align:center;padding:60px 20px;color:var(--muted)">'
-        +'<svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24" style="margin-bottom:14px;display:block;margin-left:auto;margin-right:auto"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
-        +'<div style="font-size:15px;font-weight:600;margin-bottom:6px">'+(isES?'Sin imágenes aún':'No images yet')+'</div>'
-        +'<div style="font-size:13px;margin-bottom:24px">'+(isES?'Usa el botón "Subir Imágenes" para agregar fotos.':'Use the "Upload Images" button to add photos.')+'</div>'
-        +'</div>';
-    }
-    return breadcrumb
-      +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">'
-      +images.map(function(src,i){
-        return '<div style="position:relative;border-radius:10px;overflow:hidden;background:#f0f0f0;aspect-ratio:1;cursor:zoom-in;box-shadow:0 1px 4px rgba(0,0,0,.08);transition:transform .15s,box-shadow .15s" '
-          +'onmouseover="this.style.transform=\'scale(1.03)\';this.style.boxShadow=\'0 4px 16px rgba(0,0,0,.18)\'" '
-          +'onmouseout="this.style.transform=\'\';this.style.boxShadow=\'0 1px 4px rgba(0,0,0,.08)\'" '
-          +'onclick="libMbLightbox(\''+_mbOpenFolderId+'\','+i+')">'
-          +'<img src="'+src+'" style="width:100%;height:100%;object-fit:cover;display:block" draggable="false">'
-          +'<button onclick="event.stopPropagation();libMoodboardDeleteImage(\''+_mbOpenFolderId+'\','+i+')" '
-          +'title="'+(isES?'Eliminar':'Delete')+'" '
-          +'style="position:absolute;top:5px;right:5px;background:rgba(0,0,0,.6);border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;opacity:0;transition:opacity .15s" '
-          +'onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0">'
-          +'<svg width="10" height="10" fill="none" stroke="#fff" stroke-width="2.5" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>'
-          +'</div>';
-      }).join('')
-      +'</div>';
-  }
-
-  // ── Folder grid view ──────────────────────────────────────────────────
-  if(!lib.moodboards.length){
-    return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;text-align:center">'
-      +'<div style="width:80px;height:80px;border-radius:50%;background:var(--gold-l);display:flex;align-items:center;justify-content:center;margin-bottom:24px">'
-      +'<svg width="36" height="36" fill="none" stroke="var(--gold-h)" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg></div>'
-      +'<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:26px;font-weight:700;margin-bottom:10px">'+(isES?'Crea tu primer moodboard':'Create your first moodboard')+'</h2>'
-      +'<p style="color:var(--muted);font-size:14px;max-width:400px;margin-bottom:32px">'+(isES?'Organiza imágenes de inspiración en moodboards reutilizables para tus eventos.':'Organize inspiration images in reusable moodboards for your events.')+'</p>'
-      +'<button class="btn btn-primary" style="padding:14px 32px;font-size:15px" onclick="libCreateMoodboardFolder()">'
-      +'<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="margin-right:8px"><path d="M12 5v14M5 12h14"/></svg>'
-      +(isES?'Crear primer moodboard':'Create First Moodboard')+'</button>'
-      +'</div>';
-  }
-  var searchBar='<div style="position:relative;display:flex;align-items:center;margin-bottom:14px">'
-    +'<svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>'
-    +'<input class="input" placeholder="'+(isES?'Buscar moodboards...':'Search moodboards...')+'" oninput="libFilterMoodboards(this.value)" style="padding-left:36px;width:100%">'
-    +'</div>';
-  return searchBar
-    +'<div id="lib-moodboard-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px">'
-    +lib.moodboards.map(function(e){ return _libMbFolderCard(e,isES); }).join('')
-    +'</div>';
-}
-
 function libFilterMoodboards(q){
   var lib=getLib(); var isES=LANG==='es';
   var s=q.trim().toLowerCase();
@@ -1403,7 +1338,7 @@ function libSaveLayoutModal(p){
   var info = items.length+' '+(LANG==='es'?'elementos':'elements')
     +', '+items.filter(function(i){return i.shape.includes('table');}).length+' '+(LANG==='es'?'mesas':'tables')
     +', '+items.reduce(function(s,i){return s+(i.chairs||0);},0)+' '+(LANG==='es'?'asientos':'seats');
-  var floorOpt = LState.floorplan&&LState.floorplan.img
+  var floorOpt = LState.floorplan&&(LState.floorplan.img||LState.floorplan.thumb||LState.floorplan._idb)
     ? '<label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px">'
       +'<input type="checkbox" id="lib-inc-floor" checked style="accent-color:var(--gold-h)">'
       +(LANG==='es'?'Incluir imagen de plano de piso':'Include floorplan image')+'</label>'
@@ -1642,85 +1577,9 @@ function libDuplicateMoodboardFolder(id){
   libEditMoodboardFolder(copy.id);
 }
 
-var _mbLightboxId = null;
-var _mbLightboxIdx = 0;
-
 function libOpenMoodboardFolder(id){
   _mbOpenFolderId=id;
   renderLibrary();
-}
-
-function libMbLightbox(id, idx){
-  _mbLightboxId=id; _mbLightboxIdx=idx;
-  var lib=getLib();
-  var entry=lib.moodboards.find(function(e){return e.id===id;});
-  if(!entry||!entry.images||!entry.images.length) return;
-  var images=entry.images;
-  var total=images.length;
-
-  // Remove any existing lightbox
-  var old=document.getElementById('mb-lightbox');
-  if(old) old.remove();
-
-  var lb=document.createElement('div');
-  lb.id='mb-lightbox';
-  lb.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center';
-  lb.innerHTML=
-    // Backdrop click to close
-    '<div style="position:absolute;inset:0" onclick="libMbLightboxClose()"></div>'
-    // Counter
-    +'<div style="position:absolute;top:16px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.7);font-size:13px;pointer-events:none" id="mb-lb-counter">'+(idx+1)+' / '+total+'</div>'
-    // Close button
-    +'<button onclick="libMbLightboxClose()" style="position:absolute;top:14px;right:16px;background:rgba(255,255,255,.12);border:none;border-radius:50%;width:36px;height:36px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;line-height:1">'
-    +'<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>'
-    // Prev arrow
-    +'<button id="mb-lb-prev" onclick="libMbLightboxNav(-1)" style="position:absolute;left:16px;background:rgba(255,255,255,.12);border:none;border-radius:50%;width:44px;height:44px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;transition:background .15s" onmouseover="this.style.background=\'rgba(255,255,255,.25)\'" onmouseout="this.style.background=\'rgba(255,255,255,.12)\'">'
-    +'<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>'
-    // Image
-    +'<img id="mb-lb-img" src="'+images[idx]+'" style="max-width:90vw;max-height:85vh;object-fit:contain;border-radius:6px;box-shadow:0 8px 48px rgba(0,0,0,.6);position:relative;user-select:none" draggable="false">'
-    // Next arrow
-    +'<button id="mb-lb-next" onclick="libMbLightboxNav(1)" style="position:absolute;right:16px;background:rgba(255,255,255,.12);border:none;border-radius:50%;width:44px;height:44px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;transition:background .15s" onmouseover="this.style.background=\'rgba(255,255,255,.25)\'" onmouseout="this.style.background=\'rgba(255,255,255,.12)\'">'
-    +'<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>';
-
-  document.body.appendChild(lb);
-  _mbLightboxArrowHandler = function(e){
-    if(e.key==='ArrowRight') libMbLightboxNav(1);
-    else if(e.key==='ArrowLeft') libMbLightboxNav(-1);
-    else if(e.key==='Escape') libMbLightboxClose();
-  };
-  document.addEventListener('keydown', _mbLightboxArrowHandler);
-  _mbLightboxUpdateArrows(idx, total);
-}
-
-var _mbLightboxArrowHandler=null;
-
-function _mbLightboxUpdateArrows(idx, total){
-  var prev=document.getElementById('mb-lb-prev');
-  var next=document.getElementById('mb-lb-next');
-  if(prev) prev.style.opacity= idx===0 ? '0.25' : '1';
-  if(next) next.style.opacity= idx===total-1 ? '0.25' : '1';
-}
-
-function libMbLightboxNav(dir){
-  var lib=getLib();
-  var entry=lib.moodboards.find(function(e){return e.id===_mbLightboxId;});
-  if(!entry||!entry.images) return;
-  var total=entry.images.length;
-  _mbLightboxIdx=Math.max(0,Math.min(total-1, _mbLightboxIdx+dir));
-  var img=document.getElementById('mb-lb-img');
-  if(img) img.src=entry.images[_mbLightboxIdx];
-  var counter=document.getElementById('mb-lb-counter');
-  if(counter) counter.textContent=(_mbLightboxIdx+1)+' / '+total;
-  _mbLightboxUpdateArrows(_mbLightboxIdx, total);
-}
-
-function libMbLightboxClose(){
-  var lb=document.getElementById('mb-lightbox');
-  if(lb) lb.remove();
-  if(_mbLightboxArrowHandler){
-    document.removeEventListener('keydown', _mbLightboxArrowHandler);
-    _mbLightboxArrowHandler=null;
-  }
 }
 
 var _mbPendingFiles = [];
@@ -1787,6 +1646,116 @@ function libMoodboardDeleteImage(id, idx){
   entry.images.splice(idx,1);
   saveLib(lib);
   renderLibrary();
+}
+
+function _libMbFolderCard(entry, isES){
+  var editIco='<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg>';
+  var dupIco='<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  var delIco='<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg>';
+  var images = entry.images || [];
+  var imgCnt = images.length;
+  var preview = images.length
+    ? '<div class="lib-mb-folder-preview">'
+      +images.slice(0,4).map(function(src, idx){
+        return '<div class="lib-mb-folder-tile lib-mb-folder-tile-'+idx+'"><img src="'+src+'" alt="'+esc(entry.name)+'"></div>';
+      }).join('')
+      +(images.length===1?'<div class="lib-mb-folder-tile lib-mb-folder-tile-fill"><img src="'+images[0]+'" alt="'+esc(entry.name)+'"></div>':'')
+      +'</div>'
+    : '<div class="lib-mb-folder-preview lib-mb-folder-preview-empty"><svg width="32" height="32" fill="none" stroke="var(--muted)" stroke-width="1.5" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>';
+  return '<div class="mb-card lib-mb-folder-card" onclick="libOpenMoodboardFolder(\''+entry.id+'\')">'
+    +preview
+    +'<div style="padding:14px 14px 0">'
+    +'<div style="font-size:13px;font-weight:700;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(entry.name)+'</div>'
+    +'<div style="font-size:11px;color:var(--muted);margin-bottom:10px">'+imgCnt+' '+(isES?'imagen(es)':'image(s)')+' · '+entry.date+'</div>'
+    +'</div>'
+    +'<div style="display:flex;gap:5px;padding:0 14px 14px" onclick="event.stopPropagation()">'
+    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar':'Edit')+'" onclick="libEditMoodboardFolder(\''+entry.id+'\')">'+editIco+'</button>'
+    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Duplicar':'Duplicate')+'" onclick="libDuplicateMoodboardFolder(\''+entry.id+'\')">'+dupIco+'</button>'
+    +'<button class="btn btn-danger btn-sm btn-icon" title="'+(isES?'Eliminar':'Delete')+'" onclick="libDelete(\'moodboards\',\''+entry.id+'\')">'+delIco+'</button>'
+    +'</div></div>';
+}
+
+function renderLibMoodboards(lib){
+  var isES=LANG==='es';
+  if(_mbOpenFolderId){
+    var entry=lib.moodboards.find(function(e){return e.id===_mbOpenFolderId;});
+    if(!entry){ _mbOpenFolderId=null; return renderLibMoodboards(lib); }
+    var images=entry.images||[];
+    var breadcrumb='<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">'
+      +'<button class="btn btn-ghost btn-sm" style="display:flex;align-items:center;gap:5px;padding:5px 10px" onclick="libMbBackToFolders()">'
+      +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>'
+      +(isES?'Moodboards':'Moodboards')+'</button>'
+      +'<svg width="12" height="12" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>'
+      +'<span style="font-size:13px;font-weight:700">'+esc(entry.name)+'</span>'
+      +'<span style="font-size:11px;color:var(--muted);margin-left:4px">'+images.length+' '+(isES?'imagen(es)':'image(s)')+'</span>'
+      +'</div>';
+    if(!images.length){
+      return breadcrumb
+        +'<div style="text-align:center;padding:60px 20px;color:var(--muted)">'
+        +'<svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24" style="margin-bottom:14px;display:block;margin-left:auto;margin-right:auto"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
+        +'<div style="font-size:15px;font-weight:600;margin-bottom:6px">'+(isES?'Sin imágenes aún':'No images yet')+'</div>'
+        +'<div style="font-size:13px;margin-bottom:24px">'+(isES?'Usa el botón "Subir Imágenes" para agregar fotos.':'Use the "Upload Images" button to add photos.')+'</div>'
+        +'</div>';
+    }
+    return breadcrumb
+      +'<div class="mb-bento-grid">'
+      +images.map(function(src,i){
+        var spanClass = typeof mbSpanClass === 'function' ? mbSpanClass(i, images.length) : '';
+        return '<div class="mb-card mb-bento-item '+spanClass+'" onclick="libMbLightbox(\''+_mbOpenFolderId+'\','+i+')">'
+          +'<div class="media-zoom" style="position:relative;overflow:hidden;cursor:zoom-in;flex:1;min-height:0">'
+          +'<img src="'+src+'" class="media-zoom-img" style="width:100%;height:100%;object-fit:cover;display:block" draggable="false">'
+          +'<div class="media-zoom-overlay"></div>'
+          +'<div class="mb-meta"><div class="mb-meta-title">'+esc(entry.name)+'</div><div class="mb-meta-sub">'+(isES?'Moodboard':'Moodboard')+'</div></div>'
+          +'</div>'
+          +'<div class="mb-card-actions" style="opacity:1">'
+          +'<button class="icon-btn" onclick="event.stopPropagation();libMoodboardDeleteImage(\''+_mbOpenFolderId+'\','+i+')" title="'+(isES?'Eliminar':'Delete')+'">'
+          +'<svg width="10" height="10" fill="none" stroke="#fff" stroke-width="2.5" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>'
+          +'</div></div>';
+      }).join('')
+      +'</div>';
+  }
+
+  if(!lib.moodboards.length){
+    return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;text-align:center">'
+      +'<div style="width:80px;height:80px;border-radius:50%;background:var(--gold-l);display:flex;align-items:center;justify-content:center;margin-bottom:24px">'
+      +'<svg width="36" height="36" fill="none" stroke="var(--gold-h)" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg></div>'
+      +'<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:26px;font-weight:700;margin-bottom:10px">'+(isES?'Crea tu primer moodboard':'Create your first moodboard')+'</h2>'
+      +'<p style="color:var(--muted);font-size:14px;max-width:400px;margin-bottom:32px">'+(isES?'Organiza imágenes de inspiración en moodboards reutilizables para tus eventos.':'Organize inspiration images in reusable moodboards for your events.')+'</p>'
+      +'<button class="btn btn-primary" style="padding:14px 32px;font-size:15px" onclick="libCreateMoodboardFolder()">'
+      +'<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="margin-right:8px"><path d="M12 5v14M5 12h14"/></svg>'
+      +(isES?'Crear primer moodboard':'Create First Moodboard')+'</button>'
+      +'</div>';
+  }
+  var searchBar='<div style="position:relative;display:flex;align-items:center;margin-bottom:14px">'
+    +'<svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>'
+    +'<input class="input" placeholder="'+(isES?'Buscar moodboards...':'Search moodboards...')+'" oninput="libFilterMoodboards(this.value)" style="padding-left:36px;width:100%">'
+    +'</div>';
+  return searchBar
+    +'<div id="lib-moodboard-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px">'
+    +lib.moodboards.map(function(e){ return _libMbFolderCard(e,isES); }).join('')
+    +'</div>';
+}
+
+var _mbLightboxId = null;
+var _mbLightboxIdx = 0;
+
+function libMbLightbox(id, idx){
+  var lib=getLib();
+  var entry=lib.moodboards.find(function(e){return e.id===id;});
+  if(!entry||!entry.images||!entry.images.length) return;
+  _mbLightboxId=id; _mbLightboxIdx=idx;
+  var items = entry.images.map(function(src, imageIdx){
+    return { src: src, name: entry.name+' '+(imageIdx+1) };
+  });
+  openLightbox(items[idx].src, items[idx].name, items, idx);
+}
+
+function libMbLightboxNav(dir){
+  if(typeof lightboxGo === 'function') lightboxGo(_lightboxIndex + dir);
+}
+
+function libMbLightboxClose(){
+  if(typeof closeLightbox === 'function') closeLightbox({ target: document.getElementById('lightbox') });
 }
 
 function libLoadVendors(entryId){
@@ -1867,7 +1836,7 @@ function libLoadLayout(entryId){
       ? 'Esto reemplazará el plano actual del proyecto. El plano existente se perderá.'
       : 'This will replace the current project layout. The existing layout will be lost.')
     +'</p>'
-    +(entry.floorplan&&entry.floorplan.img
+    +(entry.floorplan&&(entry.floorplan.img||entry.floorplan.thumb||entry.floorplan._idb)
       ? '<label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:12px">'
         +'<input type="checkbox" id="lib-load-floor" checked style="accent-color:var(--gold-h)">'
         +(LANG==='es'?'Incluir imagen de plano de piso':'Include floorplan image')
@@ -1887,12 +1856,12 @@ function _doLibLoadLayout(entryId){
   var incFloor = document.getElementById('lib-load-floor');
   if(entry.floorplan && (!incFloor || incFloor.checked)){
     LState.floorplan = JSON.parse(JSON.stringify(entry.floorplan));
+    if(LState.floorplan && LState.floorplan.img==='__idb__' && LState.floorplan.thumb) LState.floorplan.img=LState.floorplan.thumb;
   }
   saveProj(p);
   toast(t('lib_loaded'),'s');
   if(CTAB==='layout') renderLayout();
 }
-
 function libLoadTypes(type){
   var lib = getLib();
   var packs = lib[type+'_packs']||[];
@@ -2752,7 +2721,7 @@ function libOpenLayoutEditor(entryId){
   lp.floorplan=entry.floorplan?JSON.parse(JSON.stringify(entry.floorplan)):{img:null,pxPerMeter:null};
   if(entry.pxPerMeter && (!lp.floorplan.pxPerMeter)) lp.floorplan.pxPerMeter=entry.pxPerMeter;
   if(lp.floorplan && lp.floorplan.img==='__idb__' && lp.floorplan._idb){
-    lp.floorplan.img=null;
+    lp.floorplan.img=lp.floorplan.thumb||null;
     if(typeof _fpLoad==='function'){
       _fpLoad(lp.floorplan._idb).then(function(data){
         if(data){ lp.floorplan.img=data; saveProj(lp); if(typeof renderLayout==='function') renderLayout(); }
@@ -2766,11 +2735,11 @@ function libOpenLayoutEditor(entryId){
 
   // If floorplan image was stripped for storage, rehydrate it before opening editor
   if(lp.floorplan && lp.floorplan.img==='__stored__'){
-    lp.floorplan.img=null;
+    lp.floorplan.img=lp.floorplan.thumb||null;
     // pxPerMeter is already on lp.floorplan — saveProj synchronously so renderLayout reads it
     saveProj(lp);
     loadFloorplanImg(entryId, function(img){
-      lp.floorplan.img=img;
+      lp.floorplan.img=img||lp.floorplan.thumb||null;
       saveProj(lp);
       if(typeof renderLayout==='function') renderLayout();
     });
@@ -2975,6 +2944,7 @@ window.libCloseLayoutEditor = libCloseLayoutEditor;
 window.updateLibraryLabels = updateLibraryLabels;
 window.renderLibrary = renderLibrary;
 // placeholder to prevent old duplicate
+
 
 
 

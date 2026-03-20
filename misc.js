@@ -1,4 +1,6 @@
-var mbOpenFolders = {};
+﻿var mbOpenFolders = {};
+var _lightboxItems = [];
+var _lightboxIndex = 0;
 
 function getMB(p){
   if(Array.isArray(p.moodboard)){
@@ -13,6 +15,37 @@ function getMB(p){
 function totalMBImages(p){
   const mb=getMB(p);
   return mb.uncategorized.length + mb.folders.reduce((s,f)=>s+f.images.length,0);
+}
+
+function mbSpanClass(index, total){
+  var pattern = total <= 2
+    ? ['mb-span-feature','mb-span-wide']
+    : ['mb-span-feature','mb-span-tall','mb-span-wide','','mb-span-tall','','mb-span-wide',''];
+  return pattern[index % pattern.length] || '';
+}
+
+function mbFolderLabel(folderId){
+  if(!folderId) return t('uncategorized');
+  var p = proj();
+  var mb = getMB(p);
+  var folder = mb.folders.find(function(f){ return f.id===folderId; });
+  return folder ? folder.name : t('uncategorized');
+}
+
+function mbCollectImages(folderId){
+  var p = proj();
+  var mb = getMB(p);
+  var source = folderId
+    ? ((mb.folders.find(function(f){ return f.id===folderId; })||{}).images||[])
+    : (mb.uncategorized||[]);
+  return source.map(function(img, idx){
+    return {
+      src: img.src,
+      name: img.name || '',
+      folderId: folderId || null,
+      idx: idx
+    };
+  });
 }
 
 function renderMoodboard(){
@@ -76,8 +109,8 @@ function renderMoodboard(){
           ${t('upload_images_btn')}<input type="file" accept="image/*" multiple class="hidden" onchange="addMBImages(this,'${folder.id}')">
         </label>
       </div>` : `
-      <div class="mb-grid">
-        ${folder.images.map((img,ii)=>mbImageCard(img,ii,folder.id)).join('')}
+      <div class="mb-bento-grid">
+        ${folder.images.map((img,ii)=>mbImageCard(img,ii,folder.id,folder.images.length)).join('')}
       </div>`}
     </div>
   </div>`).join('')}
@@ -92,26 +125,30 @@ function renderMoodboard(){
       <svg class="mb-folder-chevron ${mbOpenFolders['__root__']!==false?'open':''}" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
     </div>
     <div class="mb-folder-body" style="display:${mbOpenFolders['__root__']===false?'none':'block'}">
-      <div class="mb-grid">${mb.uncategorized.map((img,ii)=>mbImageCard(img,ii,null)).join('')}</div>
+      <div class="mb-bento-grid">${mb.uncategorized.map((img,ii)=>mbImageCard(img,ii,null,mb.uncategorized.length)).join('')}</div>
     </div>
   </div>` : ''}`;
 }
 
-function mbImageCard(img, ii, folderId){
+function mbImageCard(img, ii, folderId, total){
   const fKey = folderId || '__root__';
   const fidJs = folderId ? `'${folderId}'` : 'null';
-  return `<div class="mb-card" draggable="true"
+  const spanClass = mbSpanClass(ii, total || 0);
+  const folderLabel = mbFolderLabel(folderId);
+  return `<div class="mb-card mb-bento-item ${spanClass}" draggable="true"
       data-mbidx="${ii}" data-mbfolder="${fKey}"
       ondragstart="mbDragStart(event,'${fKey}',${ii})"
       ondragover="event.preventDefault()"
       ondrop="mbDrop(event,'${fKey}',${ii})">
-    <div style="position:relative;overflow:hidden;cursor:zoom-in"
+    <div class="media-zoom" style="position:relative;overflow:hidden;cursor:zoom-in;flex:1;min-height:0"
          onclick="mbOpenLightboxIdx(${ii},${fidJs})">
-      <img src="${img.src}" style="width:100%;aspect-ratio:4/3;object-fit:cover;transition:transform .3s ease" loading="lazy"
-           onmouseover="this.style.transform='scale(1.04)'" onmouseout="this.style.transform='scale(1)'">
-      <div style="position:absolute;inset:0;background:rgba(28,26,21,0);transition:background .2s;display:flex;align-items:center;justify-content:center;pointer-events:none"
-           onmouseover="this.style.background='rgba(28,26,21,.18)'" onmouseout="this.style.background='rgba(28,26,21,0)'">
+      <img src="${img.src}" class="media-zoom-img" style="width:100%;height:100%;object-fit:cover;display:block" loading="lazy">
+      <div class="media-zoom-overlay">
         <svg width="28" height="28" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 3.5 3.5"/><path d="M11 8v6M8 11h6"/></svg>
+      </div>
+      <div class="mb-meta">
+        <div class="mb-meta-title">${esc(img.name||'Untitled image')}</div>
+        <div class="mb-meta-sub">${esc(folderLabel)}</div>
       </div>
     </div>
     <div class="mb-card-actions">
@@ -134,11 +171,8 @@ function mbImageCard(img, ii, folderId){
 }
 
 function mbOpenLightboxIdx(idx, folderId){
-  const p=proj(); const mb=getMB(p);
-  const img = folderId
-    ? (mb.folders.find(f=>f.id===folderId)||{images:[]}).images[idx]
-    : mb.uncategorized[idx];
-  if(img) openLightbox(img.src, img.name||'');
+  var items = mbCollectImages(folderId);
+  if(items[idx]) openLightbox(items[idx].src, items[idx].name||'', items, idx);
 }
 
 function mbCardInfo(card){
@@ -249,20 +283,17 @@ async function addMBImages(input, folderId){
   const files=Array.from(input.files);
   if(!files.length)return;
   const p=proj();const mb=getMB(p);
-  toast('Uploading images…');
+  toast('Adding images…');
   let uploaded=0;
   for(const f of files){
     try{
-      const ext=f.name.split('.').pop();
-      const fileName='mi'+Date.now()+uploaded+'.'+ext;
-      const path=DB.cur+'/'+p.id+'/'+fileName;
-      const res=await fetch(
-        SUPA_URL+'/storage/v1/object/moodboard/'+path,
-        {method:'POST',headers:Object.assign({},supaHeaders(),{'Content-Type':f.type}),body:f}
-      );
-      if(!res.ok){const e=await res.text();console.error('Upload failed:',e);toast('Upload failed: '+f.name,'e');continue;}
-      const url=SUPA_URL+'/storage/v1/object/public/moodboard/'+path;
-      const img={id:'mi'+Date.now()+uploaded,src:url,name:f.name.replace(/\.[^/.]+$/,''),_path:path};
+      const src = await new Promise(function(resolve, reject){
+        const reader = new FileReader();
+        reader.onload = function(ev){ resolve(ev.target.result); };
+        reader.onerror = reject;
+        reader.readAsDataURL(f);
+      });
+      const img={id:'mi'+Date.now()+uploaded,src:src,name:f.name.replace(/\.[^/.]+$/,''),mimeType:f.type||'image/*'};
       if(folderId){const folder=mb.folders.find(fo=>fo.id===folderId);if(folder)folder.images.push(img);}
       else{mb.uncategorized.push(img);}
       uploaded++;
@@ -285,15 +316,8 @@ function delMBImg(idx, folderId){
 }
 async function _doDelMBImg(idx, folderId){
   const p=proj();const mb=getMB(p);
-  let img=null;
-  if(folderId){const f=mb.folders.find(f=>f.id===folderId);if(f){img=f.images[idx];f.images.splice(idx,1);}}
-  else{img=mb.uncategorized[idx];mb.uncategorized.splice(idx,1);}
-  if(img&&img._path){
-    try{
-      await fetch(SUPA_URL+'/storage/v1/object/moodboard/'+img._path,
-        {method:'DELETE',headers:supaHeaders()});
-    }catch(e){console.error('Storage delete error:',e);}
-  }
+  if(folderId){const f=mb.folders.find(f=>f.id===folderId);if(f){f.images.splice(idx,1);}}
+  else{mb.uncategorized.splice(idx,1);}
   saveProj(p);renderMoodboard();toast('Image deleted');
 }
 
@@ -309,12 +333,12 @@ function moveMBImageModal(idx, folderId){
   const folders=mb.folders;
   openMo(`<div class="mo-title">Move Image to Folder</div>
   <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">
-    <div onclick="doMoveMBImage(${idx},'${folderId||'__root__'}','__root__')" style="padding:12px 16px;border-radius:var(--r-sm);border:1.5px solid var(--border);cursor:pointer;transition:var(--tr);display:flex;align-items:center;gap:10px;font-size:13px" onmouseover="this.style.borderColor='var(--gold)';this.style.background='var(--gold-l)'" onmouseout="this.style.borderColor='var(--border)';this.style.background=''">
+    <div onclick="doMoveMBImage(${idx},'${folderId||'__root__'}','__root__')" class="option-card">
       <svg width="16" height="16" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
       Uncategorized
     </div>
     ${folders.map(f=>`
-    <div onclick="doMoveMBImage(${idx},'${folderId||'__root__'}','${f.id}')" style="padding:12px 16px;border-radius:var(--r-sm);border:1.5px solid var(--border);cursor:pointer;transition:var(--tr);display:flex;align-items:center;gap:10px;font-size:13px" onmouseover="this.style.borderColor='var(--gold)';this.style.background='var(--gold-l)'" onmouseout="this.style.borderColor='var(--border)';this.style.background=''">
+    <div onclick="doMoveMBImage(${idx},'${folderId||'__root__'}','${f.id}')" class="option-card">
       <svg width="16" height="16" fill="${f.color||'#f59e0b'}" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
       ${esc(f.name)} <span style="color:var(--muted);font-size:11px">(${f.images.length})</span>
     </div>`).join('')}
@@ -647,19 +671,70 @@ function downloadGuestTemplate(){
   a.click(); URL.revokeObjectURL(url);
   toast('Template downloaded!','s');
 }
-function openLightbox(src, caption){
+function renderLightboxDock(){
+  var dockWrap = document.getElementById('lightbox-dock-wrap');
+  var dock = document.getElementById('lightbox-dock');
+  if(!_lightboxItems.length){
+    dockWrap.classList.remove('show');
+    dock.innerHTML = '';
+    return;
+  }
+  dockWrap.classList.add('show');
+  dock.innerHTML = _lightboxItems.map(function(item, idx){
+    return '<button class="lightbox-thumb'+(idx===_lightboxIndex?' active':'')+'" onclick="event.stopPropagation();lightboxGo('+idx+')" aria-label="'+esc(item.name||('Image '+(idx+1)))+'">'
+      +'<img src="'+item.src+'" alt="'+esc(item.name||('Image '+(idx+1)))+'">'
+      +'</button>';
+  }).join('');
+}
+
+function syncLightbox(){
   const lb = document.getElementById('lightbox');
-  document.getElementById('lightbox-img').src = src;
-  document.getElementById('lightbox-caption').textContent = caption || '';
+  var current = _lightboxItems[_lightboxIndex] || null;
+  var prevBtn = document.querySelector('.lightbox-nav-prev');
+  var nextBtn = document.querySelector('.lightbox-nav-next');
+  if(!current) return;
+  document.getElementById('lightbox-img').src = current.src;
+  document.getElementById('lightbox-img').alt = current.name || '';
+  document.getElementById('lightbox-caption').textContent = current.name || '';
+  if(prevBtn) prevBtn.style.display = _lightboxItems.length > 1 ? 'flex' : 'none';
+  if(nextBtn) nextBtn.style.display = _lightboxItems.length > 1 ? 'flex' : 'none';
+  renderLightboxDock();
   lb.classList.add('open');
   document.body.style.overflow = 'hidden';
 }
+
+function openLightbox(src, caption, items, index){
+  _lightboxItems = Array.isArray(items) && items.length ? items : [{ src: src, name: caption || '' }];
+  _lightboxIndex = typeof index === 'number' ? index : 0;
+  syncLightbox();
+}
+
+function lightboxGo(index){
+  if(!_lightboxItems.length) return;
+  _lightboxIndex = (index + _lightboxItems.length) % _lightboxItems.length;
+  syncLightbox();
+}
+
+function lightboxPrev(){
+  if(_lightboxItems.length <= 1) return;
+  lightboxGo(_lightboxIndex - 1);
+}
+
+function lightboxNext(){
+  if(_lightboxItems.length <= 1) return;
+  lightboxGo(_lightboxIndex + 1);
+}
+
 function closeLightbox(e){
   if(e && e.target !== document.getElementById('lightbox') && !e.target.classList.contains('lightbox-close')) return;
   document.getElementById('lightbox').classList.remove('open');
   document.body.style.overflow = '';
 }
-document.addEventListener('keydown', e => { if(e.key === 'Escape') { document.getElementById('lightbox').classList.remove('open'); document.body.style.overflow=''; }});
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape') { document.getElementById('lightbox').classList.remove('open'); document.body.style.overflow=''; }
+  else if(e.key === 'ArrowLeft' && document.getElementById('lightbox').classList.contains('open')) lightboxPrev();
+  else if(e.key === 'ArrowRight' && document.getElementById('lightbox').classList.contains('open')) lightboxNext();
+});
 
 function toast(msg,type=''){
   const c=document.getElementById('toast-c');
@@ -703,7 +778,15 @@ function generateShareToken(){
   return 'sh_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,10);
 }
 
+function isLocalFileApp(){
+  return window.location.protocol === 'file:';
+}
+
 function getShareLink(token){
+  var baseHref = window.location.href.split('?')[0];
+  if(isLocalFileApp()){
+    return baseHref + '?share=' + token;
+  }
   return window.location.origin + window.location.pathname + '?share=' + token;
 }
 
@@ -715,7 +798,7 @@ function openShareFromNav(){
     if(!projects.length){ toast('No projects yet','e'); return; }
     if(projects.length === 1){ CID = projects[0].id; openShareModal(); return; }
     var opts = projects.map(function(p){
-      return '<div data-pid="'+p.id+'" onclick="openShareForProject(this.dataset.pid);closeMo()" style="padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--bg2);display:flex;align-items:center;justify-content:space-between" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'+
+      return '<div data-pid="'+p.id+'" class="modal-choice-row" onclick="openShareForProject(this.dataset.pid);closeMo()">'+
         '<div><div style="font-size:13px;font-weight:600">'+esc(p.name)+'</div><div class="s-sm">'+fmtDate(p.date)+'</div></div>'+
         '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>'+
       '</div>';
@@ -749,6 +832,9 @@ function openShareModal(){
 function renderShareModal(p){
   var s = p.share;
   var link = getShareLink(s.token);
+  var localFileNotice = isLocalFileApp()
+    ? '<div style="margin-top:10px;padding:10px 12px;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;font-size:11px;color:#9a3412;line-height:1.45">This app is currently opened from a local file on this computer. This share link is fine for previewing on this same machine, but it will not work on other devices until the app is hosted at a real web URL.</div>'
+    : '';
 
   var levels = [
     {lv:'off',  label:'Hidden', icon:'🚫', activeStyle:'background:#fef2f2;border-color:#fca5a5;color:#dc2626;font-weight:700'},
@@ -771,8 +857,7 @@ function renderShareModal(p){
     var statusColor = perm==='off'?'#ef4444': perm==='edit'?'#22c55e':'var(--gold-h)';
     var statusLabel = perm==='off'?'Hidden': perm==='edit'?'Edit':'View';
 
-    return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;transition:.2s" '+
-      'onmouseover="this.style.borderColor=\'rgba(201,168,76,.6)\'" onmouseout="this.style.borderColor=\'rgba(0,0,0,.12)\'">'+
+    return '<div class="option-card" style="background:var(--bg);flex-direction:column;align-items:stretch;padding:14px">'+
       '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px">'+
         '<div>'+
           '<div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px">'+
@@ -847,6 +932,7 @@ function renderShareModal(p){
         '<svg width="12" height="12" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>'+
         '<span class="s-sm">Anyone with this link can view shared sections. <button onclick="revokeShareLink()" style="background:none;border:none;color:var(--danger);font-size:11px;cursor:pointer;padding:0;text-decoration:underline">Revoke & regenerate</button> to invalidate it.</span>'+
       '</div>'+
+      localFileNotice+
     '</div>'+
 
     '<div class="mo-foot" style="justify-content:flex-end;gap:10px">'+
@@ -1201,16 +1287,8 @@ function _clientSave(){
   if(!p) return false;
 
   if(window._shareMode && window._clientProjectUserId){
-    fetch(SUPA_URL+'/rest/v1/projects', {
-      method: 'POST',
-      headers: Object.assign({}, supaHeaders(), {'Prefer':'resolution=merge-duplicates'}),
-      body: JSON.stringify({
-        id: p.id,
-        user_id: window._clientProjectUserId,
-        data: p,
-        updated_at: new Date().toISOString()
-      })
-    }).catch(function(e){ console.error('Client save error:', e); });
+    EVENTOS_DATA.upsertProject(window._clientProjectUserId, p)
+      .catch(function(e){ console.error('Client save error:', e); });
     return true;
   }
 
@@ -1294,43 +1372,12 @@ function exitClientPortal(){
     if(appEl) appEl.classList.add('hidden');
 
     try{
-      var res = await fetch(
-        SUPA_URL+'/rest/v1/projects?select=data&data->>share_token=eq.'+encodeURIComponent(token),
-        { headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer '+SUPA_KEY } }
-      );
-      var rows = res.ok ? await res.json() : [];
-
-      if(!rows.length){
-        var res2 = await fetch(
-          SUPA_URL+'/rest/v1/projects?select=data',
-          { headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer '+SUPA_KEY } }
-        );
-        rows = res2.ok ? await res2.json() : [];
-      }
-
-      var found = null, foundShare = null;
-      rows.forEach(function(row){
-        if(found) return;
-        var pr = row.data;
-        if(pr && pr.share && pr.share.token === token && pr.share.enabled){
-          found = pr; foundShare = pr.share;
-        }
-      });
+      var shared = await EVENTOS_DATA.getSharedProjectByToken(token);
+      var found = shared ? shared.project : null;
+      var foundShare = found && found.share ? found.share : null;
 
       if(found){
-        window._clientProjectUserId = null;
-        var res3 = await fetch(
-          SUPA_URL+'/rest/v1/projects?select=user_id,data',
-          { headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer '+SUPA_KEY } }
-        );
-        if(res3.ok){
-          var rows3 = await res3.json();
-          rows3.forEach(function(row){
-            if(row.data && row.data.share && row.data.share.token === token){
-              window._clientProjectUserId = row.user_id;
-            }
-          });
-        }
+        window._clientProjectUserId = shared.wixUserId;
         renderClientPortal(found, foundShare, false);
       } else {
         if(loadingEl){
@@ -1560,7 +1607,7 @@ function startAIAction(key){
 
   body.innerHTML =
     '<div style="display:flex;align-items:center;gap:8px;padding:4px 0 12px">'+
-      '<button onclick="renderAIHome()" style="background:transparent;border:none;color:var(--muted);cursor:pointer;padding:4px;border-radius:6px;display:flex;align-items:center;gap:4px;font-size:12px;font-family:Jost,sans-serif;transition:.15s" onmouseover="this.style.color=\'var(--text)\'" onmouseout="this.style.color=\'var(--muted)\'">'+
+      '<button onclick="renderAIHome()" class="ai-back-btn">'+
         '<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg> '+(LANG==='es'?'Regresar':'Back')+
       '</button>'+
       '<div style="font-size:13px;font-weight:600">'+a.icon+' '+a.label+'</div>'+
@@ -1934,3 +1981,5 @@ function sidebarSwitchTab(tab){
   const sid = tabMap[tab];
   if (sid) { const se = document.getElementById(sid); if (se) se.classList.add('active'); }
 }
+
+
