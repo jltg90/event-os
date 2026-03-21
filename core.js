@@ -25,9 +25,27 @@ function fixMojibake(str){
 }
 function t(key){ return fixMojibake((TRANSLATIONS[LANG]||TRANSLATIONS.en)[key] || TRANSLATIONS.en[key] || key); }
 
+function getLangPrefKey(userId){
+  return 'eventos_lang_' + (userId || 'local');
+}
+
+function saveLangPref(){
+  try{
+    localStorage.setItem(getLangPrefKey(DB.cur), LANG);
+  }catch(e){}
+}
+
+function loadLangPref(){
+  try{
+    var saved = localStorage.getItem(getLangPrefKey(DB.cur));
+    if(saved === 'en' || saved === 'es') LANG = saved;
+  }catch(e){}
+}
+
 
 function toggleLang(){
   LANG = LANG==='en' ? 'es' : 'en';
+  saveLangPref();
   const btn = document.getElementById('lang-label');
   if(btn) btn.textContent = LANG==='es' ? 'EN' : 'ES';
   refreshDefaultData();
@@ -74,7 +92,8 @@ function applyTranslations(){
   const page = document.querySelector('.pg:not(.hidden)');
   if(page){
     const pid = page.id;
-    if(pid==='pg-events') renderEvents();
+    if(pid==='pg-dashboard') renderAppDash();
+    else if(pid==='pg-events') renderEvents();
     else if(pid==='pg-analytics'){ renderAnalytics(); updateAnalyticsLabels(); }
     else if(pid==='pg-library'){
       renderLibrary();
@@ -339,6 +358,7 @@ function doLogout(){
 }
 
 function enterApp(){
+  loadLangPref();
   loadEvPrefs();
   applyTranslations();
   var loadingEl = document.getElementById('pg-loading');
@@ -404,7 +424,7 @@ function showPage(p){
     const el=document.getElementById(id);if(el)el.classList.add('hidden');
   });
   const pg=document.getElementById('pg-'+p);if(pg)pg.classList.remove('hidden');
-  const snb=document.getElementById('share-nav-btn');if(snb)snb.style.display=p==='project'?'':'none';
+  const snb=document.getElementById('share-nav-btn');if(snb)snb.style.display='none';
   document.querySelectorAll('.sidebar-item').forEach(el=>el.classList.remove('active'));
   const smap={dashboard:'snav-dashboard',events:'snav-events',analytics:'snav-analytics',library:'snav-library'};
   const sid=smap[p]||null; if(sid){const se=document.getElementById(sid);if(se)se.classList.add('active');}
@@ -551,26 +571,26 @@ function ensureDefaultVendors(p){
   if(!p) return false;
   var defaults = defaultVendors();
   var current = Array.isArray(p.vendors) ? p.vendors : [];
-  var custom = current.filter(function(v){ return !(v && /^dv\d+$/.test(v.id||'')); });
-  var changed = !Array.isArray(p.vendors) || current.length !== defaults.length + custom.length || !p.vendorsInitialized;
-  var merged = defaults.map(function(def){
-    var existing = current.find(function(v){ return v && v.id === def.id; });
-    if(!existing){
-      changed = true;
-      return def;
-    }
+  if(!Array.isArray(p.vendors) || !p.vendorsInitialized){
+    p.vendors = defaults.concat(current.filter(function(v){ return !(v && /^dv\d+$/.test(v.id||'')); }));
+    p.vendorsInitialized = true;
+    return true;
+  }
+  var changed = false;
+  p.vendors = current.map(function(v){
+    if(!(v && /^dv\d+$/.test(v.id||''))) return v;
+    var def = defaults.find(function(d){ return d.id === v.id; });
+    if(!def) return v;
     return Object.assign({}, def, {
-      contact: existing.contact || '',
-      phone: existing.phone || '',
-      budget: existing.budget || 0,
-      payments: Array.isArray(existing.payments) ? existing.payments : [],
-      hired: !!existing.hired,
-      vendorStatus: existing.vendorStatus,
-      notes: existing.notes || ''
+      contact: v.contact || '',
+      phone: v.phone || '',
+      budget: v.budget || 0,
+      payments: Array.isArray(v.payments) ? v.payments : [],
+      hired: !!v.hired,
+      vendorStatus: v.vendorStatus,
+      notes: v.notes || ''
     });
-  }).concat(custom);
-  p.vendors = merged;
-  p.vendorsInitialized = true;
+  });
   return changed;
 }
 
@@ -578,22 +598,23 @@ function ensureDefaultTasks(p){
   if(!p) return false;
   var defaults = defaultTasks();
   var current = Array.isArray(p.tasks) ? p.tasks : [];
-  var custom = current.filter(function(tk){ return !(tk && /^t\d{1,2}$/.test(tk.id||'')); });
-  var changed = !Array.isArray(p.tasks) || current.length !== defaults.length + custom.length;
-  var merged = defaults.map(function(def){
-    var existing = current.find(function(tk){ return tk && tk.id === def.id; });
-    if(!existing){
-      changed = true;
-      return def;
-    }
+  if(!Array.isArray(p.tasks) || !p.tasksInitialized){
+    p.tasks = defaults.concat(current.filter(function(tk){ return !(tk && /^t\d{1,2}$/.test(tk.id||'')); }));
+    p.tasksInitialized = true;
+    return true;
+  }
+  var changed = false;
+  p.tasks = current.map(function(tk){
+    if(!(tk && /^t\d{1,2}$/.test(tk.id||''))) return tk;
+    var def = defaults.find(function(d){ return d.id === tk.id; });
+    if(!def) return tk;
     return Object.assign({}, def, {
-      done: !!existing.done,
-      dueDate: existing.dueDate || def.dueDate,
-      startDate: existing.startDate || def.startDate || '',
-      color: existing.color || def.color
+      done: !!tk.done,
+      dueDate: tk.dueDate || def.dueDate,
+      startDate: tk.startDate || def.startDate || '',
+      color: tk.color || def.color
     });
-  }).concat(custom);
-  p.tasks = merged;
+  });
   return changed;
 }
 

@@ -24,8 +24,10 @@ function getLib(){
   if(!lib.chairs)      lib.chairs={};
   if(!lib.centerpieces)lib.centerpieces={};
   if(!lib.moodboards)  lib.moodboards=[];
+  if(typeof lib.defaultVendorsInitialized!=='boolean') lib.defaultVendorsInitialized=false;
+  if(typeof lib.defaultTasksInitialized!=='boolean') lib.defaultTasksInitialized=false;
   var changed = false;
-  if(typeof defaultVendors==='function'){
+  if(typeof defaultVendors==='function' && !lib.defaultVendorsInitialized){
     defaultVendors().forEach(function(v){
       var entryId = 'lv_def_'+v.id;
       var existing = lib.vendors.find(function(entry){ return entry.id===entryId; });
@@ -39,8 +41,10 @@ function getLib(){
         changed = true;
       }
     });
+    lib.defaultVendorsInitialized = true;
+    changed = true;
   }
-  if(typeof defaultTasks==='function'){
+  if(typeof defaultTasks==='function' && !lib.defaultTasksInitialized){
     defaultTasks().forEach(function(tk){
       var taskId = 'gt_def_'+tk.id;
       var existing = (lib.globalTasks||[]).find(function(task){ return task.id===taskId; });
@@ -54,6 +58,8 @@ function getLib(){
         changed = true;
       }
     });
+    lib.defaultTasksInitialized = true;
+    changed = true;
   }
   if(changed) saveLib(lib);
   return lib;
@@ -121,7 +127,7 @@ function openLibrary(){
       pgLib.innerHTML=
         '<div style="max-width:1200px;margin:0 auto;padding:32px 24px;width:100%">'
         +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px">'
-        +'<div><h1 id="lib-page-title" style="font-family:\'Cormorant Garamond\',serif;font-size:28px;font-weight:700">Layouts</h1>'
+        +'<div><h1 class="editorial-title" id="lib-page-title" style="font-family:\'Cormorant Garamond\',serif;font-size:28px;font-weight:700">Layouts</h1>'
         +'<p id="lib-page-sub" style="display:none"></p></div>'
         +'<div style="display:flex;gap:8px;flex-wrap:wrap" id="lib-add-btns"></div>'
         +'</div>'
@@ -136,8 +142,17 @@ function openLibrary(){
 function updateLibraryLabels(){
   var el=document.getElementById('lib-menu-label'); if(el) el.textContent=t('lib_title');
   var titles={vendors:LANG==='es'?'Proveedores':'Vendors', tasks:LANG==='es'?'Tareas':'Tasks', layouts:LANG==='es'?'Layouts':'Layouts', moodboards:'Moodboards'};
-  var pt=document.getElementById('lib-page-title'); if(pt) pt.textContent=titles[_libTab]||t('lib_title');
+  libSetPageTitle(titles[_libTab]||t('lib_title'));
   var ps=document.getElementById('lib-page-sub');   if(ps) ps.style.display='none';
+}
+
+function libSetPageTitle(title){
+  var pt=document.getElementById('lib-page-title');
+  if(!pt) return;
+  pt.textContent=title;
+  pt.classList.remove('editorial-title');
+  void pt.offsetWidth;
+  pt.classList.add('editorial-title');
 }
 
 
@@ -311,7 +326,7 @@ function renderLibrary(){
         +'<button class="btn btn-ghost btn-sm" onclick="libDownloadVendorTemplate()" style="display:flex;align-items:center;gap:5px;font-size:11px">'
         +'<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
         +(LANG==='es'?'Descargar Plantilla':'Download Template')+'</button>'
-        +'<button class="btn btn-primary" onclick="libAddGlobalVendor()">'
+        +'<button class="btn btn-primary btn-create-gradient" onclick="libAddGlobalVendor()">'
         +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
         +(LANG==='es'?'Agregar Proveedor':'Add Vendor')+'</button>';
     } else if(_libTab==='tasks'){
@@ -322,12 +337,12 @@ function renderLibrary(){
         +'<button class="btn btn-ghost btn-sm" onclick="libDownloadTaskTemplate()" style="display:flex;align-items:center;gap:5px;font-size:11px">'
         +'<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
         +(LANG==='es'?'Descargar Plantilla':'Download Template')+'</button>'
-        +'<button class="btn btn-primary" onclick="libAddGlobalTask()">'
+        +'<button class="btn btn-primary btn-create-gradient" onclick="libAddGlobalTask()">'
         +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
         +(LANG==='es'?'Agregar Tarea':'Add Task')+'</button>';
     } else if(_libTab==='layouts'){
       addEl.innerHTML = lib.layouts.length
-        ? '<button class="btn btn-primary" onclick="libOpenLayoutWizard()">'
+        ? '<button class="btn btn-primary btn-create-gradient" onclick="libOpenLayoutWizard()">'
           +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
           +(LANG==='es'?'Nuevo Plano':'New Layout')+'</button>'
         : '';
@@ -338,7 +353,7 @@ function renderLibrary(){
           +(LANG==='es'?'Subir Imágenes':'Upload Images')+'</button>';
       } else {
         addEl.innerHTML = lib.moodboards.length
-          ? '<button class="btn btn-primary" onclick="libCreateMoodboardFolder()">'
+          ? '<button class="btn btn-primary btn-create-gradient" onclick="libCreateMoodboardFolder()">'
             +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
             +(LANG==='es'?'Nuevo Moodboard':'New Moodboard')+'</button>'
           : '';
@@ -385,7 +400,7 @@ function libCard(title, subtitle, badge, loadBtn, delKey, delType){
     +'<div style="display:flex;gap:6px;flex-shrink:0;align-items:center;margin-left:12px">'
     +(loadBtn||'')
     +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDelete(\''+delType+'\',\''+delKey+'\')">'
-    +'<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>'
+    +'<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
     +'</div></div>';
 }
 function openLayoutLibraryAndCreate(){
@@ -408,7 +423,7 @@ function renderLibVendorSets(lib){
     var badge = catNames.length
       ? '<span class="badge b-gold">'+esc(catNames.slice(0,2).join(' · '))+(catNames.length>2?' +'+(catNames.length-2):'')+'</span>'
       : '';
-    var loadBtn = proj()?'<button class="btn btn-primary btn-sm" onclick="libLoadVendors(\''+entry.id+'\')">'+t('lib_load_btn')+'</button>':'';
+    var loadBtn = proj()?'<button class="btn btn-primary btn-sm" onclick="libLoadVendors(\''+entry.id+'\')">'+(LANG==='es'?'CARGAR':'LOAD')+'</button>':'';
     return libCard(entry.name, sub, badge, loadBtn, entry.id, 'vendors');
   }).join('');
 }
@@ -422,11 +437,12 @@ function libVendorRow(item, isES){
     +'<td style="padding:11px 14px;font-weight:600;font-size:13px">'+esc(v.name)+'</td>'
     +'<td style="padding:11px 14px;font-size:12px;color:var(--muted)">'+esc(v.contact||'—')+'</td>'
     +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(v.services||'—')+'</td>'
-    +'<td style="padding:11px 14px" onclick="event.stopPropagation()">'
-    +'<div style="display:flex;gap:6px;align-items:center">'
-    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadVendorToEvent(\''+item.entryId+'\',\''+v.id+'\')">'+( isES?'Cargar a Evento':'Load into Event')+'</button>'
+    +'<td style="padding:11px 14px;text-align:right" onclick="event.stopPropagation()">'
+    +'<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">'
+    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadVendorToEvent(\''+item.entryId+'\',\''+v.id+'\')">'+( isES?'CARGAR':'LOAD')+'</button>'
     +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar':'Edit')+'" onclick="libEditGlobalVendor(\''+item.entryId+'\',\''+v.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
-    +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDeleteSingleVendor(\''+item.entryId+'\',\''+v.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>'
+    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Duplicar':'Duplicate')+'" onclick="libDuplicateSingleVendor(\''+item.entryId+'\',\''+v.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>'
+    +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDeleteSingleVendor(\''+item.entryId+'\',\''+v.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
     +'</div></td>'
     +'</tr>';
 }
@@ -444,7 +460,7 @@ function renderLibVendors(lib){
     +'<input class="input" placeholder="'+(isES?'Buscar proveedores...':'Search vendors...')+'" oninput="libFilterVendors(this.value)" style="padding-left:36px;width:100%">'
     +'</div>'
     +'<button id="lib-bulk-load-btn" class="btn btn-primary btn-sm" style="display:none;white-space:nowrap" onclick="libBulkLoadToEvent()">'
-    +(isES?'Exportar Seleccionados a Evento':'Export Selected to Event')+'</button>'
+    +(isES?'CARGAR':'LOAD')+'</button>'
     +'</div>'
     +'<div id="lib-vendor-table-wrap">'
     +'<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm)">'
@@ -483,10 +499,6 @@ function libFilterVendors(q){
   libUpdateBulkBtn();
 }
 function libDeleteSingleVendor(entryId, vid){
-  if(/^lv_def_dv\d+$/.test(entryId||'') || /^dv\d+$/.test(vid||'')){
-    toast(LANG==='es'?'Los proveedores predeterminados no se pueden eliminar':'Default vendors cannot be deleted','e');
-    return;
-  }
   if(!confirm(LANG==='es'?'¿Eliminar este proveedor?':'Delete this vendor?')) return;
   var lib=getLib();
   var entry=lib.vendors.find(function(e){return e.id===entryId;});
@@ -495,6 +507,23 @@ function libDeleteSingleVendor(entryId, vid){
   if(!entry.vendors.length) lib.vendors=lib.vendors.filter(function(e){return e.id!==entryId;});
   saveLib(lib); renderLibrary();
   toast(LANG==='es'?'Proveedor eliminado':'Vendor deleted');
+}
+function libDuplicateSingleVendor(entryId, vid){
+  var lib=getLib();
+  var entry=lib.vendors.find(function(e){return e.id===entryId;});
+  if(!entry) return;
+  var v=entry.vendors.find(function(item){return item.id===vid;});
+  if(!v) return;
+  var copy=JSON.parse(JSON.stringify(v));
+  copy.id='lv'+Date.now()+Math.random().toString(36).slice(2,6);
+  copy.name=(v.name||'Vendor')+' (Copy)';
+  copy.payments=(copy.payments||[]).map(function(pay, idx){
+    pay.id='lp'+Date.now()+idx;
+    return pay;
+  });
+  entry.vendors.push(copy);
+  saveLib(lib); renderLibrary();
+  toast(LANG==='es'?'Proveedor duplicado':'Vendor duplicated','s');
 }
 function libLoadVendorToEvent(entryId, vid){
   var lib=getLib();
@@ -771,7 +800,7 @@ function renderLibTasks(lib){
     var sub = entry.tasks.length+' '+(LANG==='es'?'tarea(s)':'task(s)')+' · '+entry.date;
     var done = entry.tasks.filter(function(tk){return tk.done;}).length;
     var badge = '<span class="badge b-purple">'+done+'/'+entry.tasks.length+' '+(LANG==='es'?'completadas':'done')+'</span>';
-    var loadBtn = proj()?'<button class="btn btn-primary btn-sm" onclick="libLoadTasks(\''+entry.id+'\')">'+t('lib_load_btn')+'</button>':'';
+    var loadBtn = proj()?'<button class="btn btn-primary btn-sm" onclick="libLoadTasks(\''+entry.id+'\')">'+(LANG==='es'?'CARGAR':'LOAD')+'</button>':'';
     return libCard(entry.name, sub, badge, loadBtn, entry.id, 'tasks');
   }).join('');
 }
@@ -786,11 +815,12 @@ function libTaskRow(tk, isES){
     +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(tk.desc||'—')+'</td>'
     +'<td style="padding:11px 14px;font-size:12px;color:var(--muted)">'+(tk.durationDays?tk.durationDays+(isES?' días':' days'):'—')+'</td>'
     +'<td style="padding:11px 14px;font-size:12px;color:var(--muted)">'+esc(tk.assignee||'—')+'</td>'
-    +'<td style="padding:11px 14px" onclick="event.stopPropagation()">'
-    +'<div style="display:flex;gap:6px;align-items:center">'
-    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadTaskToEvent(\''+tk.id+'\')">'+( isES?'Cargar a Evento':'Load into Event')+'</button>'
+    +'<td style="padding:11px 14px;text-align:right" onclick="event.stopPropagation()">'
+    +'<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">'
+    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadTaskToEvent(\''+tk.id+'\')">'+( isES?'CARGAR':'LOAD')+'</button>'
     +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar':'Edit')+'" onclick="libEditGlobalTask(\''+tk.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
-    +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDeleteGlobalTask(\''+tk.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>'
+    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Duplicar':'Duplicate')+'" onclick="libDuplicateGlobalTask(\''+tk.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>'
+    +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDeleteGlobalTask(\''+tk.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
     +'</div></td>'
     +'</tr>';
 }
@@ -910,15 +940,23 @@ function libSaveEditGlobalTask(tid){
   toast(LANG==='es'?'Tarea actualizada':'Task updated','s');
 }
 function libDeleteGlobalTask(tid){
-  if(/^gt_def_t\d{1,2}$/.test(tid||'')){
-    toast(LANG==='es'?'Las tareas predeterminadas no se pueden eliminar':'Default tasks cannot be deleted','e');
-    return;
-  }
   if(!confirm(LANG==='es'?'¿Eliminar esta tarea?':'Delete this task?')) return;
   var lib=getLib();
   lib.globalTasks=(lib.globalTasks||[]).filter(function(t){return t.id!==tid;});
   saveLib(lib); renderLibrary();
   toast(LANG==='es'?'Tarea eliminada':'Task deleted');
+}
+function libDuplicateGlobalTask(tid){
+  var lib=getLib();
+  if(!lib.globalTasks) lib.globalTasks=[];
+  var tk=(lib.globalTasks||[]).find(function(item){return item.id===tid;});
+  if(!tk) return;
+  var copy=JSON.parse(JSON.stringify(tk));
+  copy.id='gt'+Date.now()+Math.random().toString(36).slice(2,6);
+  copy.title=(tk.title||'Task')+' (Copy)';
+  lib.globalTasks.push(copy);
+  saveLib(lib); renderLibrary();
+  toast(LANG==='es'?'Tarea duplicada':'Task duplicated','s');
 }
 function libLoadTaskToEvent(tid){
   var lib=getLib();
@@ -1078,12 +1116,12 @@ function libLayoutRow(entry, isES){
     +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);text-align:center">'+(entry.guests||seats||'—')+'</td>'
     +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);text-align:center">'+tables+'</td>'
     +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(entry.notes||'—')+'</td>'
-    +'<td style="padding:11px 14px" onclick="event.stopPropagation()">'
-    +'<div style="display:flex;gap:6px;align-items:center">'
-    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadLayoutToEvent(\''+entry.id+'\')">'+( isES?'Exportar a Evento':'Export to Event')+'</button>'
+    +'<td style="padding:11px 14px;text-align:right" onclick="event.stopPropagation()">'
+    +'<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">'
+    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadLayoutToEvent(\''+entry.id+'\')">'+( isES?'CARGAR':'LOAD')+'</button>'
     +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar':'Edit')+'" onclick="libOpenLayoutEditor(\''+entry.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
     +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Duplicar':'Duplicate')+'" onclick="libDuplicateLayout(\''+entry.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>'
-    +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDelete(\'layouts\',\''+entry.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>'
+    +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDelete(\'layouts\',\''+entry.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
     +'</div></td>'
     +'</tr>';
 }
@@ -1095,7 +1133,7 @@ function renderLibLayouts(lib){
       +'<svg width="36" height="36" fill="none" stroke="var(--gold-h)" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div>'
       +'<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:26px;font-weight:700;margin-bottom:10px">'+(isES?'Crea tu primer layout':'Create your first layout')+'</h2>'
       +'<p style="color:var(--muted);font-size:14px;max-width:400px;margin-bottom:32px">'+(isES?'Diseña layouts reutilizables con mesas, pista de baile, escenario y más. Cárgalos en cualquier evento.':'Design reusable layouts with tables, dance floor, stage and more. Load them into any event.')+'</p>'
-      +'<button class="btn btn-primary" style="padding:14px 32px;font-size:15px" onclick="libOpenLayoutWizard()">'
+      +'<button class="btn btn-primary btn-create-gradient" style="padding:14px 32px;font-size:15px" onclick="libOpenLayoutWizard()">'
       +'<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="margin-right:8px"><path d="M12 5v14M5 12h14"/></svg>'
       +(isES?'Crear primer layout':'Create First Layout')+'</button>'
       
@@ -1109,7 +1147,7 @@ function renderLibLayouts(lib){
     +'<input class="input" placeholder="'+(isES?'Buscar planos...':'Search layouts...')+'" oninput="libFilterLayouts(this.value)" style="padding-left:36px;width:100%">'
     +'</div>'
     +'<button id="lib-layout-bulk-btn" class="btn btn-primary btn-sm" style="display:none;white-space:nowrap" onclick="libBulkLoadLayoutsToEvent()">'
-    +(isES?'Exportar Seleccionados a Evento':'Export Selected to Event')+'</button>'
+    +(isES?'CARGAR':'LOAD')+'</button>'
     +'<button id="lib-layout-bulk-del" class="btn btn-danger btn-sm" style="display:none;white-space:nowrap;margin-left:6px" onclick="libBulkDeleteLayouts()">'
     +(isES?'Eliminar Seleccionados':'Delete Selected')+'</button>'
     +'</div>'
@@ -1181,7 +1219,7 @@ function libOpenLayoutEventPicker(entryId){
     +'<div id="ly-ev-pick-list" style="max-height:50vh;overflow-y:auto">'+eventRows+'</div>'
     +'<div class="mo-foot">'
     +'<button class="btn btn-ghost" onclick="closeMo()">'+(isES?'Cancelar':'Cancel')+'</button>'
-    +'<button class="btn btn-primary" onclick="libDoLoadLayoutToEvent()">'+(isES?'Exportar a Evento':'Export to Event')+'</button>'
+    +'<button class="btn btn-primary" onclick="libDoLoadLayoutToEvent()">'+(isES?'CARGAR':'LOAD')+'</button>'
     +'</div>');
 }
 function libFilterLayoutEventPicker(q){
@@ -1724,7 +1762,7 @@ function libMoodboardDeleteImage(id, idx){
 function _libMbFolderCard(entry, isES){
   var editIco='<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg>';
   var dupIco='<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-  var delIco='<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg>';
+  var delIco='<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg>';
   var images = entry.images || [];
   var imgCnt = images.length;
   var preview = images.length
@@ -1771,7 +1809,7 @@ function renderLibMoodboards(lib){
         +'</div>';
     }
     return breadcrumb
-      +'<div class="mb-bento-grid">'
+      +'<div class="mb-gallery">'
       +images.map(function(src,i){
         var spanClass = typeof mbSpanClass === 'function' ? mbSpanClass(i, images.length) : '';
         return '<div class="mb-card mb-bento-item '+spanClass+'" onclick="libMbLightbox(\''+_mbOpenFolderId+'\','+i+')">'
@@ -1781,7 +1819,7 @@ function renderLibMoodboards(lib){
           +'<div class="mb-meta"><div class="mb-meta-title">'+esc(entry.name)+'</div><div class="mb-meta-sub">'+(isES?'Moodboard':'Moodboard')+'</div></div>'
           +'</div>'
           +'<div class="mb-card-actions" style="opacity:1">'
-          +'<button class="icon-btn" onclick="event.stopPropagation();libMoodboardDeleteImage(\''+_mbOpenFolderId+'\','+i+')" title="'+(isES?'Eliminar':'Delete')+'">'
+          +'<button class="icon-btn icon-btn-danger" onclick="event.stopPropagation();libMoodboardDeleteImage(\''+_mbOpenFolderId+'\','+i+')" title="'+(isES?'Eliminar':'Delete')+'">'
           +'<svg width="10" height="10" fill="none" stroke="#fff" stroke-width="2.5" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>'
           +'</div></div>';
       }).join('')
@@ -1794,7 +1832,7 @@ function renderLibMoodboards(lib){
       +'<svg width="36" height="36" fill="none" stroke="var(--gold-h)" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg></div>'
       +'<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:26px;font-weight:700;margin-bottom:10px">'+(isES?'Crea tu primer moodboard':'Create your first moodboard')+'</h2>'
       +'<p style="color:var(--muted);font-size:14px;max-width:400px;margin-bottom:32px">'+(isES?'Organiza imágenes de inspiración en moodboards reutilizables para tus eventos.':'Organize inspiration images in reusable moodboards for your events.')+'</p>'
-      +'<button class="btn btn-primary" style="padding:14px 32px;font-size:15px" onclick="libCreateMoodboardFolder()">'
+      +'<button class="btn btn-primary btn-create-gradient" style="padding:14px 32px;font-size:15px" onclick="libCreateMoodboardFolder()">'
       +'<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="margin-right:8px"><path d="M12 5v14M5 12h14"/></svg>'
       +(isES?'Crear primer moodboard':'Create First Moodboard')+'</button>'
       +'</div>';
@@ -1844,7 +1882,7 @@ function libLoadVendors(entryId){
     +'</p>'
     +'<div class="mo-foot">'
     +'<button class="btn btn-ghost" onclick="closeMo()">'+t('cancel')+'</button>'
-    +'<button class="btn btn-primary" onclick="closeMo();_doLibLoadVendors(\''+entryId+'\')">'+t('lib_load_btn')+'</button>'
+    +'<button class="btn btn-primary" onclick="closeMo();_doLibLoadVendors(\''+entryId+'\')">'+(LANG==='es'?'CARGAR':'LOAD')+'</button>'
     +'</div>');
 }
 function _doLibLoadVendors(entryId){
@@ -1880,7 +1918,7 @@ function libLoadTasks(entryId){
     +'</p>'
     +'<div class="mo-foot">'
     +'<button class="btn btn-ghost" onclick="closeMo()">'+t('cancel')+'</button>'
-    +'<button class="btn btn-primary" onclick="closeMo();_doLibLoadTasks(\''+entryId+'\')">'+t('lib_load_btn')+'</button>'
+    +'<button class="btn btn-primary" onclick="closeMo();_doLibLoadTasks(\''+entryId+'\')">'+(LANG==='es'?'CARGAR':'LOAD')+'</button>'
     +'</div>');
 }
 function _doLibLoadTasks(entryId){
@@ -2024,7 +2062,7 @@ function libQuickLoadVendors(){
       return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px">'
         +'<div><div style="font-weight:600;font-size:13px">'+esc(e.name)+'</div>'
         +'<div class="s-sm">'+e.vendors.length+' '+(LANG==='es'?'proveedor(es)':'vendor(s)')+' · '+e.date+'</div></div>'
-        +"<button class=\"btn btn-primary btn-sm\" onclick=\"closeMo();libLoadVendors('"+e.id+"')\">"+t('lib_load_btn')+'</button>'
+        +"<button class=\"btn btn-primary btn-sm\" onclick=\"closeMo();libLoadVendors('"+e.id+"')\">"+(LANG==='es'?'CARGAR':'LOAD')+'</button>'
         +'</div>';
     }).join('')
     +'</div>'
@@ -2040,7 +2078,7 @@ function libQuickLoadTasks(){
       return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px">'
         +'<div><div style="font-weight:600;font-size:13px">'+esc(e.name)+'</div>'
         +'<div class="s-sm">'+e.tasks.length+' '+(LANG==='es'?'tarea(s)':'task(s)')+' · '+e.date+'</div></div>'
-        +"<button class=\"btn btn-primary btn-sm\" onclick=\"closeMo();libLoadTasks('"+e.id+"')\">"+t('lib_load_btn')+'</button>'
+        +"<button class=\"btn btn-primary btn-sm\" onclick=\"closeMo();libLoadTasks('"+e.id+"')\">"+(LANG==='es'?'CARGAR':'LOAD')+'</button>'
         +'</div>';
     }).join('')
     +'</div>'
@@ -2155,6 +2193,31 @@ function libOpenLayoutWizard(){
   _libRenderLayoutWizard();
 }
 window.libOpenLayoutWizard = libOpenLayoutWizard;
+
+document.addEventListener('keydown', function(e){
+  if(!_libLayoutWiz || e.key !== 'Enter' || e.shiftKey) return;
+  var modal = document.getElementById('mo');
+  if(!modal || !modal.classList.contains('open')) return;
+  var active = document.activeElement;
+  if(active){
+    var tag = active.tagName;
+    var type = (active.type || '').toLowerCase();
+    if(tag === 'TEXTAREA' || tag === 'BUTTON' || type === 'file') return;
+    if(_libLayoutWiz.step === 4 && active.id === 'lwiz-scale-dist'){
+      e.preventDefault();
+      _libWizApplyScale();
+      return;
+    }
+  }
+  e.preventDefault();
+  if(_libLayoutWiz.step < 4){
+    _libLayoutWizNext();
+    return;
+  }
+  if(!_libLayoutWiz.floorplanLoading){
+    _libLayoutWizGenerate();
+  }
+});
 
 function _libRenderLayoutWizard(){
   var w=_libLayoutWiz; var isES=LANG==='es';
@@ -2831,7 +2894,7 @@ function libOpenLayoutEditor(entryId){
     +'<button class="btn btn-ghost btn-sm" onclick="libCloseLayoutEditor(\''+entryId+'\',\''+(_prevCID||'')+'\')">← '+(isES?'Volver a Planos':'Back to Layouts')+'</button>'
     +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;flex:1">'
     +'<input id="lib-layout-editor-name" class="input" value="'+esc(entry.name)+'" style="max-width:320px;font-weight:700;font-size:15px;padding:7px 10px" onblur="libRenameEditingLayout(\''+entryId+'\')" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}">'
-    +'<button class="btn btn-primary btn-sm" onclick="libOpenLayoutEventPicker(\''+entryId+'\')">'+(isES?'Exportar a Evento':'Export to Event')+'</button>'
+    +'<button class="btn btn-primary btn-sm" onclick="libOpenLayoutEventPicker(\''+entryId+'\')">'+(isES?'CARGAR':'LOAD')+'</button>'
     +'</div>'
     +'<span style="font-size:12px;color:var(--muted)">'+(isES?'Los cambios se guardan automáticamente':'Changes are saved automatically')+'</span>'
     +'</div>'
@@ -2888,7 +2951,7 @@ function libCloseLayoutEditor(entryId, prevCID){
     pgLib.innerHTML=
       '<div style="max-width:1200px;margin:0 auto;padding:32px 24px;width:100%">'
       +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px">'
-      +'<div><h1 id="lib-page-title" style="font-family:\'Cormorant Garamond\',serif;font-size:28px;font-weight:700">Layouts</h1>'
+        +'<div><h1 class="editorial-title" id="lib-page-title" style="font-family:\'Cormorant Garamond\',serif;font-size:28px;font-weight:700">Layouts</h1>'
       +'<p id="lib-page-sub" style="display:none"></p></div>'
       +'<div style="display:flex;gap:8px;flex-wrap:wrap" id="lib-add-btns"></div>'
       +'</div>'
@@ -2913,6 +2976,7 @@ window.libOpenEventPickerModal = libOpenEventPickerModal;
 window.libFilterEventPicker = libFilterEventPicker;
 window.libDoAddVendorsToEvents = libDoAddVendorsToEvents;
 window.libDeleteSingleVendor = libDeleteSingleVendor;
+window.libDuplicateSingleVendor = libDuplicateSingleVendor;
 window.libLoadSingleVendor = function(){};
 window.libAddGlobalVendor = libAddGlobalVendor;
 window.libSaveGlobalVendor = libSaveGlobalVendor;
@@ -2932,6 +2996,7 @@ window.libSaveGlobalTask = libSaveGlobalTask;
 window.libEditGlobalTask = libEditGlobalTask;
 window.libSaveEditGlobalTask = libSaveEditGlobalTask;
 window.libDeleteGlobalTask = libDeleteGlobalTask;
+window.libDuplicateGlobalTask = libDuplicateGlobalTask;
 window.libLoadTaskToEvent = libLoadTaskToEvent;
 window.libBulkLoadTasksToEvent = libBulkLoadTasksToEvent;
 window.libOpenTaskEventPickerModal = libOpenTaskEventPickerModal;

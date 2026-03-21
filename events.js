@@ -16,6 +16,8 @@ function statusLabel(s){ return s ? t('status_'+(_STATUS_KEY[s]||s.replace(/-/g,
 
 // --- EVENT SEARCH ---------------------------------------------------------
 var _evSearch = '';
+var _evSelected = {};
+var _evVisibleIds = [];
 function filterEvents(query){
   _evSearch = query;
   renderEvents();
@@ -60,7 +62,8 @@ function openEventModal(id) {
 }
 
 function _openEditModal(id, p) {
-  openMo(`<div class="mo-title">${t('edit_event_title')}</div>
+  openMo(`<form onsubmit="event.preventDefault();saveEvent('${id||''}')">
+  <div class="mo-title">${t('edit_event_title')}</div>
   <div class="form-grid">
     <div class="ig" style="grid-column:1/-1"><label>${t('event_name')} *</label><input class="input" id="e-name" value="${esc(p?.name||'')}"></div>
     <div class="ig" style="grid-column:1/-1"><label>${t('description')}</label><input class="input" id="e-desc" value="${esc(p?.description||'')}"></div>
@@ -80,9 +83,9 @@ function _openEditModal(id, p) {
     <div class="ig"><label>${t('status')}</label><select class="select" id="e-status"><option value="to-be-confirmed"${p?.status==='to-be-confirmed'?' selected':''}>${t('status_planning')}</option><option value="confirmed"${p?.status==='confirmed'?' selected':''}>${t('status_confirmed')}</option><option value="in-progress"${p?.status==='in-progress'?' selected':''}>${t('status_in_progress')}</option><option value="completed"${p?.status==='completed'?' selected':''}>${t('status_completed')}</option><option value="cancelled"${p?.status==='cancelled'?' selected':''}>${t('status_cancelled')}</option></select></div>
   </div>
   <div class="mo-foot">
-    <button class="btn btn-ghost" onclick="closeMo()">${t('cancel')}</button>
-    <button class="btn btn-primary" onclick="saveEvent('${id||''}')">${t('save_event')}</button>
-  </div>`);
+    <button type="button" class="btn btn-ghost" onclick="closeMo()">${t('cancel')}</button>
+    <button type="submit" class="btn btn-primary">${t('save_event')}</button>
+  </div></form>`);
 }
 
 function _renderWizard() {
@@ -348,8 +351,13 @@ function renderEvents(){
   if(efTo&&!efTo.value&&_efTo){ efTo.value=_efTo.toISOString().slice(0,10); const d=document.getElementById('ef-to-display'); if(d) d.firstElementChild.textContent=formatDMY(efTo.value); }
   const efBtn=document.getElementById('ef-alltime');
   if(efBtn) efBtn.classList.toggle('active',_efAt);
+  const evGridBtn=document.getElementById('ev-view-grid');
+  const evListBtn=document.getElementById('ev-view-list');
+  if(evGridBtn) evGridBtn.classList.toggle('active',_evView==='grid');
+  if(evListBtn) evListBtn.classList.toggle('active',_evView==='list');
 
-  let list=Object.values(uproj()).filter(p=>p&&p.id&&p.id!=='__library__'&&p.id!=='__lib_layout__'&&p.status&&p.status!=='__internal__');
+  const allEvents=Object.values(uproj()).filter(p=>p&&p.id&&p.id!=='__library__'&&p.id!=='__lib_layout__'&&p.status&&p.status!=='__internal__');
+  let list=allEvents.slice();
   if(_evSearch.trim()){
     const q=_evSearch.trim().toLowerCase();
     list=list.filter(p=>[p.name,p.clientName,p.date,p.location].some(f=>f&&f.toLowerCase().includes(q)));
@@ -374,6 +382,10 @@ function renderEvents(){
     else { av=a.name||''; bv=b.name||''; }
     if(av<bv)return -1*_evSortDir; if(av>bv)return 1*_evSortDir; return 0;
   });
+  _evVisibleIds = list.map(function(p){ return p.id; });
+  Object.keys(_evSelected).forEach(function(id){
+    if(!uproj()[id]) delete _evSelected[id];
+  });
 
   const g=document.getElementById('evgrid');
   g.className=_evView==='list'?'evgrid ev-list':'evgrid';
@@ -384,13 +396,25 @@ function renderEvents(){
   const evSearchbar = document.getElementById('ev-searchbar');
   const evToolbar = document.getElementById('ev-toolbar');
   if (!list.length) {
-    if (evHeaderCopy) evHeaderCopy.style.display = 'none';
-    if (evCreateBtn) evCreateBtn.style.display = 'none';
-    if (evSearchbar) evSearchbar.style.display = 'none';
-    if (evToolbar) evToolbar.style.display = 'none';
-    if (evHeader) evHeader.style.marginBottom = '0';
+    if (!allEvents.length) {
+      if (evHeaderCopy) evHeaderCopy.style.display = 'none';
+      if (evCreateBtn) evCreateBtn.style.display = 'none';
+      if (evSearchbar) evSearchbar.style.display = 'none';
+      if (evToolbar) evToolbar.style.display = 'none';
+      if (evHeader) evHeader.style.marginBottom = '0';
+      g.className = 'ev-empty-host';
+      g.innerHTML = renderEventsEmptyState();
+      updateEvBulkBar();
+      return;
+    }
+    if (evHeaderCopy) evHeaderCopy.style.display = '';
+    if (evCreateBtn) evCreateBtn.style.display = 'inline-flex';
+    if (evSearchbar) evSearchbar.style.display = 'flex';
+    if (evToolbar) evToolbar.style.display = 'flex';
+    if (evHeader) evHeader.style.marginBottom = '';
     g.className = 'ev-empty-host';
-    g.innerHTML = renderEventsEmptyState();
+    g.innerHTML = renderEventsNoResultsState();
+    updateEvBulkBar();
     return;
   }
   if (evHeaderCopy) evHeaderCopy.style.display = '';
@@ -404,23 +428,27 @@ function renderEvents(){
     g.innerHTML=list.map(p=>{
       const da=daysAway(p.date); const isPast=da<0;
       const dLabel=da===0?t('today'):da>0?`${da} ${t('days_away')}`:`${Math.abs(da)} ${t('days_ago')}`;
-      return `<div class="evc fade-in" onclick="openProject('${p.id}')">
+      const checked=_evSelected[p.id] ? ' checked' : '';
+      const selCls=_evSelected[p.id] ? ' evc-selected' : '';
+      return `<div class="evc evc-type-${p.type||'default'}${selCls} fade-in" onclick="openProject('${p.id}')">
+        <label class="ev-select" onclick="event.stopPropagation()">
+          <input type="checkbox" class="ev-select-input"${checked} onchange="toggleEvSelected('${p.id}',this.checked)">
+          <span class="ev-select-box">${checkIcon()}</span>
+        </label>
         <div class="evc-body">
-          <div class="ev-list-main">
+          <div class="ev-list-main ev-list-cell">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
               <div style="font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px">${p.name}</div>
               <span class="badge ${tc[p.type]||'b-gray'}">${tl[p.type]||p.type}</span>
             </div>
-            <div class="s-sm">${p.clientName}</div>
+            <div class="s-sm ev-hover-detail ev-list-client">${p.clientName}</div>
           </div>
-          <div class="ev-list-rows">
-            <div style="font-size:12px;white-space:nowrap"><span style="color:var(--light);font-size:10px;display:block;text-transform:uppercase;letter-spacing:.4px">${t('event_date')}</span>${fmtDate(p.date)}</div>
-            <div style="font-size:12px;white-space:nowrap"><span style="color:var(--light);font-size:10px;display:block;text-transform:uppercase;letter-spacing:.4px">${t('location')}</span>${p.location||'TBD'}</div>
-            <div style="font-size:12px;white-space:nowrap"><span style="color:var(--light);font-size:10px;display:block;text-transform:uppercase;letter-spacing:.4px">${t('total_budget')}</span>${fmtMoney(p.budget)}</div>
-            <div style="font-size:12px;white-space:nowrap"><span style="color:var(--light);font-size:10px;display:block;text-transform:uppercase;letter-spacing:.4px">${t('status')}</span>${statusLabel(p.status)}</div>
-          </div>
-          <div style="flex-shrink:0;display:flex;gap:5px;align-items:center" onclick="event.stopPropagation()">
-            <span style="font-size:11px;font-weight:600;color:${isPast?'var(--light)':'var(--accent)'};white-space:nowrap;margin-right:6px">${dLabel}</span>
+          <div class="ev-list-cell ev-list-date" style="font-size:12px;white-space:nowrap"><span style="color:var(--light);font-size:10px;display:block;text-transform:uppercase;letter-spacing:.4px">${t('event_date')}</span>${fmtDate(p.date)}</div>
+          <div class="ev-list-cell ev-list-location" style="font-size:12px;white-space:nowrap"><span style="color:var(--light);font-size:10px;display:block;text-transform:uppercase;letter-spacing:.4px">${t('location')}</span>${p.location||'TBD'}</div>
+          <div class="ev-list-cell ev-hover-detail ev-list-budget" style="font-size:12px;white-space:nowrap"><span style="color:var(--light);font-size:10px;display:block;text-transform:uppercase;letter-spacing:.4px">${t('total_budget')}</span>${fmtMoney(p.budget)}</div>
+          <div class="ev-list-cell ev-list-status" style="font-size:12px;white-space:nowrap"><span style="color:var(--light);font-size:10px;display:block;text-transform:uppercase;letter-spacing:.4px">${t('status')}</span>${statusLabel(p.status)}</div>
+          <div class="ev-list-actions" onclick="event.stopPropagation()">
+            <span class="ev-list-days" style="font-size:11px;font-weight:600;color:${isPast?'var(--light)':'var(--accent)'};white-space:nowrap;margin-right:6px">${dLabel}</span>
             <button class="btn btn-ghost btn-sm btn-icon" title="Edit" onclick="openEventModal('${p.id}')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>
             <button class="btn btn-danger btn-sm btn-icon" title="Delete" onclick="confirmDelProj('${p.id}')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>
           </div>
@@ -431,7 +459,13 @@ function renderEvents(){
     g.innerHTML=list.map(p=>{
       const da=daysAway(p.date); const isPast=da<0;
       const dLabel=da===0?t('today'):da>0?`${da} ${t('days_away')}`:`${Math.abs(da)} ${t('days_ago')}`;
-      return `<div class="evc fade-in" onclick="openProject('${p.id}')">
+      const checked=_evSelected[p.id] ? ' checked' : '';
+      const selCls=_evSelected[p.id] ? ' evc-selected' : '';
+      return `<div class="evc evc-type-${p.type||'default'}${selCls} fade-in" onclick="openProject('${p.id}')">
+        <label class="ev-select" onclick="event.stopPropagation()">
+          <input type="checkbox" class="ev-select-input"${checked} onchange="toggleEvSelected('${p.id}',this.checked)">
+          <span class="ev-select-box">${checkIcon()}</span>
+        </label>
         <div class="evc-top"></div>
         <div class="evc-body">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:14px">
@@ -441,10 +475,10 @@ function renderEvents(){
             </div>
             <span class="badge ${tc[p.type]||'b-gray'}">${tl[p.type]||p.type}</span>
           </div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:14px">${t('client')}: <span style="color:var(--text);font-weight:500">${p.clientName}</span></div>
+          <div class="ev-hover-detail ev-grid-client" style="font-size:12px;color:var(--muted);margin-bottom:14px">${t('client')}: <span style="color:var(--text);font-weight:500">${p.clientName}</span></div>
           ${evcRow('#f7f0de','#a8862e','<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',t('event_date'),fmtDate(p.date))}
           ${evcRow('#f0fdf4','#10b981','<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7Z"/><circle cx="12" cy="9" r="2.5"/>',t('location'),p.location||'TBD')}
-          ${evcRow('#fdf4e0','#b8861a','<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',t('total_budget'),fmtMoney(p.budget))}
+          ${evcRow('#fdf4e0','#b8861a','<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',t('total_budget'),fmtMoney(p.budget),'ev-hover-detail ev-grid-budget')}
         </div>
         <div class="evc-foot">
           <span style="font-size:12px;font-weight:600;text-transform:capitalize;color:var(--muted)">${statusLabel(p.status)}</span>
@@ -469,6 +503,166 @@ function renderEvents(){
       </div>`;
     }).join('');
   }
+  setupEventCardHoverEffects();
+  updateEvBulkBar();
+}
+
+function setupEventCardHoverEffects(){
+  if(typeof window==='undefined') return;
+  if(window.matchMedia && window.matchMedia('(pointer: coarse)').matches) return;
+  document.querySelectorAll('.evc').forEach(function(card){
+    if(card.dataset.holoBound==='1') return;
+    card.dataset.holoBound='1';
+    card.addEventListener('mousemove', function(e){
+      const rect=card.getBoundingClientRect();
+      const x=e.clientX-rect.left;
+      const y=e.clientY-rect.top;
+      const px=(x/rect.width)*100;
+      const py=(y/rect.height)*100;
+      const rotateX=((rect.height/2)-y)/28;
+      const rotateY=(x-(rect.width/2))/34;
+      card.style.setProperty('--evc-glow-x', px+'%');
+      card.style.setProperty('--evc-glow-y', py+'%');
+      card.style.setProperty('--evc-bg-x', (35 + (px * .7)) + '%');
+      card.style.setProperty('--evc-bg-y', (35 + (py * .7)) + '%');
+      card.style.setProperty('--evc-rotate-x', rotateX.toFixed(2)+'deg');
+      card.style.setProperty('--evc-rotate-y', rotateY.toFixed(2)+'deg');
+    });
+    card.addEventListener('mouseleave', function(){
+      card.style.setProperty('--evc-glow-x', '50%');
+      card.style.setProperty('--evc-glow-y', '50%');
+      card.style.setProperty('--evc-bg-x', '50%');
+      card.style.setProperty('--evc-bg-y', '50%');
+      card.style.setProperty('--evc-rotate-x', '0deg');
+      card.style.setProperty('--evc-rotate-y', '0deg');
+    });
+  });
+}
+
+function getEvSelectedIds(){
+  return Object.keys(_evSelected).filter(function(id){ return !!_evSelected[id] && !!uproj()[id]; });
+}
+
+function toggleEvSelected(id, checked){
+  if(checked) _evSelected[id]=1;
+  else delete _evSelected[id];
+  renderEvents();
+}
+window.toggleEvSelected = toggleEvSelected;
+
+function clearEvSelection(){
+  _evSelected={};
+  renderEvents();
+}
+window.clearEvSelection = clearEvSelection;
+
+function evSelectAllVisible(){
+  var visible=(_evVisibleIds||[]).filter(function(id){ return !!uproj()[id]; });
+  var allSelected=visible.length && visible.every(function(id){ return !!_evSelected[id]; });
+  visible.forEach(function(id){
+    if(allSelected) delete _evSelected[id];
+    else _evSelected[id]=1;
+  });
+  renderEvents();
+}
+window.evSelectAllVisible = evSelectAllVisible;
+
+function updateEvBulkBar(){
+  var wrap=document.getElementById('ev-select-all-wrap');
+  if(!wrap) return;
+  var allInput=document.getElementById('ev-select-all');
+  var allLabel=document.getElementById('ev-select-all-label');
+  var editEl=document.getElementById('ev-bulk-edit');
+  var delEl=document.getElementById('ev-bulk-delete');
+  var isES=LANG==='es';
+  var selected=getEvSelectedIds();
+  var visible=(_evVisibleIds||[]).filter(function(id){ return !!uproj()[id]; });
+  var allVisibleSelected=visible.length && visible.every(function(id){ return !!_evSelected[id]; });
+  if(allLabel) allLabel.textContent = isES?'Seleccionar todo':'Select all';
+  if(allInput){
+    allInput.checked = !!allVisibleSelected;
+    allInput.indeterminate = !allVisibleSelected && selected.length > 0;
+    allInput.disabled = !visible.length;
+  }
+  if(editEl){
+    editEl.textContent = isES?'Editar varios':'Edit multiple';
+    editEl.style.display = selected.length ? 'inline-flex' : 'none';
+  }
+  if(delEl){
+    delEl.textContent = isES?'Eliminar varios':'Delete multiple';
+    delEl.style.display = selected.length ? 'inline-flex' : 'none';
+  }
+}
+
+function openBulkEditEventsModal(){
+  var ids=getEvSelectedIds();
+  if(!ids.length) return;
+  var isES=LANG==='es';
+  openMo('<div class="mo-title">'+(isES?'Editar eventos':'Edit events')+'</div>'
+    +'<div style="font-size:13px;color:var(--muted);margin-bottom:16px">'+(isES?('Aplica cambios a '+ids.length+' eventos seleccionados. Solo se actualizarán los campos que modifiques.'):'Apply changes to '+ids.length+' selected events. Only changed fields will be updated.')+'</div>'
+    +'<div class="form-grid">'
+    +'<div class="ig"><label>'+(isES?'Estado':'Status')+'</label><select class="select" id="be-status"><option value="">'+(isES?'Sin cambios':'No change')+'</option><option value="to-be-confirmed">'+t('status_planning')+'</option><option value="confirmed">'+t('status_confirmed')+'</option><option value="in-progress">'+t('status_in_progress')+'</option><option value="completed">'+t('status_completed')+'</option><option value="cancelled">'+t('status_cancelled')+'</option></select></div>'
+    +'<div class="ig"><label>'+(isES?'Tipo de evento':'Event type')+'</label><select class="select" id="be-type"><option value="">'+(isES?'Sin cambios':'No change')+'</option><option value="social">'+t('type_social')+'</option><option value="corporate">'+t('type_corporate')+'</option><option value="community">'+t('type_community')+'</option><option value="government">'+t('type_government')+'</option><option value="education">'+t('type_education')+'</option></select></div>'
+    +'<div class="ig"><label>'+t('event_date')+'</label><input class="input" id="be-date" type="date"></div>'
+    +'<div class="ig"><label>'+t('location')+'</label><input class="input" id="be-location" placeholder="'+(isES?'Vacío = sin cambios':'Blank = no change')+'"></div>'
+    +'</div>'
+    +'<div class="mo-foot">'
+    +'<button type="button" class="btn btn-ghost" onclick="closeMo()">'+(isES?'Cancelar':'Cancel')+'</button>'
+    +'<button type="button" class="btn btn-primary" onclick="saveBulkEditEvents()">'+(isES?'Guardar cambios':'Save changes')+'</button>'
+    +'</div>');
+}
+window.openBulkEditEventsModal = openBulkEditEventsModal;
+
+function saveBulkEditEvents(){
+  var ids=getEvSelectedIds();
+  if(!ids.length) return closeMo();
+  var status=(document.getElementById('be-status')||{}).value||'';
+  var type=(document.getElementById('be-type')||{}).value||'';
+  var date=(document.getElementById('be-date')||{}).value||'';
+  var locationInput=document.getElementById('be-location');
+  var locationChanged=!!locationInput && locationInput.value.trim()!=='';
+  var location=locationChanged ? locationInput.value.trim() : '';
+  ids.forEach(function(id){
+    var p=uproj()[id];
+    if(!p) return;
+    if(status) p.status=status;
+    if(type) p.type=type;
+    if(date) p.date=date;
+    if(locationChanged) p.location=location;
+    saveProj(p);
+  });
+  closeMo();
+  renderEvents();
+  toast((LANG==='es'?('Actualizados '+ids.length+' eventos'):('Updated '+ids.length+' events')),'s');
+}
+window.saveBulkEditEvents = saveBulkEditEvents;
+
+function bulkDeleteEvents(){
+  var ids=getEvSelectedIds();
+  if(!ids.length) return;
+  var isES=LANG==='es';
+  if(!confirm(isES?('¿Eliminar '+ids.length+' eventos seleccionados? Esta acción no se puede deshacer.'):('Delete '+ids.length+' selected events? This cannot be undone.'))) return;
+  ids.forEach(function(id){
+    delProj(id);
+    delete _evSelected[id];
+  });
+  renderEvents();
+  toast(isES?(ids.length+' eventos eliminados'):(ids.length+' events deleted'),'s');
+}
+window.bulkDeleteEvents = bulkDeleteEvents;
+
+function renderEventsNoResultsState(){
+  const isES = LANG === 'es';
+  const msg = isES
+    ? 'No hay eventos en este rango de fechas.'
+    : 'No events match this date range.';
+  const hint = isES
+    ? 'Ajusta las fechas o vuelve a "Todas las fechas" para ver más resultados.'
+    : 'Adjust the dates or switch back to "All Dates" to see more results.';
+  return `<section class="card fade-in" style="text-align:center;padding:44px 28px;color:var(--muted);max-width:760px;margin:0 auto">
+    <div style="font-family:'Cormorant Garamond',serif;font-size:32px;font-weight:700;color:var(--text);margin-bottom:8px">${msg}</div>
+    <div style="font-size:14px;line-height:1.7">${hint}</div>
+  </section>`;
 }
 
 function renderEventsEmptyState(){
@@ -482,42 +676,10 @@ function renderEventsEmptyState(){
           <h2 class="ev-empty-title">${isES ? 'Crea tu primer evento con una escena digna del gran dia.' : 'Create your first event with a launch scene worthy of the big day.'}</h2>
           <p class="ev-empty-subtitle">${isES ? 'Empieza con el nombre, la fecha y los detalles clave. EventOS se encarga del resto para que puedas planear con claridad desde el minuto uno.' : 'Start with the name, date, and key details. EventOS takes care of the rest so your planning begins with clarity from minute one.'}</p>
           <div class="ev-empty-actions">
-            <button class="btn btn-primary ev-empty-cta" onclick="openEventModal()">
+            <button class="btn btn-primary btn-create-gradient ev-empty-cta" onclick="openEventModal()">
               <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
               ${isES ? 'Crear mi primer evento' : 'Create my first event'}
             </button>
-          </div>
-        </div>
-        <div class="ev-empty-panel">
-          <div class="ev-empty-panel-top">
-            <div class="ev-empty-orb"></div>
-            <div>
-              <div class="ev-empty-panel-label">${isES ? 'Tu lienzo inicial' : 'Your starting canvas'}</div>
-              <div class="ev-empty-panel-title">${isES ? 'Todo listo para despegar' : 'Everything ready for liftoff'}</div>
-            </div>
-          </div>
-          <div class="ev-empty-checks">
-            <div class="ev-empty-check">
-              <span class="ev-empty-check-icon">${checkIcon()}</span>
-              <div>
-                <strong>${isES ? 'Define la base' : 'Set the foundation'}</strong>
-                <span>${isES ? 'Agrega nombre, fecha, cliente y lugar en segundos.' : 'Add the name, date, client, and venue in seconds.'}</span>
-              </div>
-            </div>
-            <div class="ev-empty-check">
-              <span class="ev-empty-check-icon">${checkIcon()}</span>
-              <div>
-                <strong>${isES ? 'Organiza desde el inicio' : 'Organize from the start'}</strong>
-                <span>${isES ? 'Activa tareas, presupuesto, invitados y layouts desde un solo proyecto.' : 'Kick off tasks, budget, guests, and layouts from a single project.'}</span>
-              </div>
-            </div>
-            <div class="ev-empty-check">
-              <span class="ev-empty-check-icon">${checkIcon()}</span>
-              <div>
-                <strong>${isES ? 'Mantente listo para compartir' : 'Stay ready to share'}</strong>
-                <span>${isES ? 'Cuando el evento exista, podras abrir dashboards y vistas para cliente al instante.' : 'Once the event exists, dashboards and client-facing views are one click away.'}</span>
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -529,7 +691,7 @@ function checkIcon(){
   return '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.3" viewBox="0 0 24 24"><path d="m5 13 4 4L19 7"/></svg>';
 }
 
-function evcRow(bg,clr,icon,lbl,val){return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bg)">
+function evcRow(bg,clr,icon,lbl,val,extraClass){return `<div class="${extraClass||''}" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bg)">
   <div style="width:28px;height:28px;border-radius:8px;background:${bg};display:flex;align-items:center;justify-content:center;flex-shrink:0">
     <svg width="14" height="14" fill="none" stroke="${clr}" stroke-width="2" viewBox="0 0 24 24">${icon}</svg>
   </div>
@@ -724,7 +886,7 @@ function renderAppDash(){
 
   el.innerHTML=`
     <div style="margin-bottom:24px">
-      <h1 style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700">${isES?'Panel General':'Dashboard'}</h1>
+      <h1 class="editorial-title" style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700">${isES?'Panel General':'Dashboard'}</h1>
       <p style="color:var(--muted);font-size:14px;margin-top:2px">${isES?'Resumen de todos tus proyectos':'Overview across all your projects'}</p>
     </div>
     ${displayEvents.length>0?`<div style="margin-bottom:20px"><div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px;color:var(--text)">${within30.length>=3?(isES?'Próximos Eventos (30 días)':'Upcoming Events (30 days)'):(isES?'Próximos 3 Eventos':'Next 3 Events')}</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px">${evCards}</div></div>`:''}

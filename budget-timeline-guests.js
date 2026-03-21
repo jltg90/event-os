@@ -1,4 +1,4 @@
-var bTab='comp';
+﻿var bTab='comp';
 function renderBudget(){
   const p=proj();const el=document.getElementById('tab-budget');
   if(ensureDefaultVendors(p)) saveProj(p);
@@ -14,10 +14,10 @@ function renderBudget(){
   const budgetPct = projBudget>0?Math.min(100,Math.round(estimatedTotal/projBudget*100)):0;
   el.innerHTML=`
   <div class="sh">
-    <div><div class="sh-title" style="color:#f59e0b">${t('budget_management_title')}</div>
-    <div class="sh-sub">${t('budget_label')}: ${fmtMoney(tb)} · ${t('paid_label')}: ${fmtMoney(paid)} · ${t('balance_label')}: ${fmtMoney(tb-paid)}</div></div>
+    <div><div class="sh-title editorial-title" style="color:#f59e0b">${t('budget_management_title')}</div>
+    <div class="sh-sub">${t('budget_label')}: ${fmtMoney(tb)} Â· ${t('paid_label')}: ${fmtMoney(paid)} Â· ${t('balance_label')}: ${fmtMoney(tb-paid)}</div></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <button class="btn btn-primary" onclick="openVendorModal()">
+      <button class="btn btn-primary btn-create-gradient" onclick="openVendorModal()">
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>${t('add_vendor')}
       </button>
     </div>
@@ -53,6 +53,44 @@ function renderBudget(){
   </div>
   <div id="vlist">${renderVendorTable(allVendors, '')}</div>`;
 }
+var vSelectedVendorIds = [];
+function vendorSelectionCount(){ return vSelectedVendorIds.length; }
+function isVendorSelected(id){ return vSelectedVendorIds.indexOf(id) > -1; }
+function toggleVendorSelection(id, checked){
+  if(checked){
+    if(!isVendorSelected(id)) vSelectedVendorIds.push(id);
+  } else {
+    vSelectedVendorIds = vSelectedVendorIds.filter(function(x){ return x !== id; });
+  }
+  updateVendorBulkBar();
+}
+function clearVendorSelection(){
+  vSelectedVendorIds = [];
+  updateVendorBulkBar();
+}
+function syncVendorSelectionToVisible(){
+  document.querySelectorAll('.vendor-sel').forEach(function(chk){
+    chk.checked = isVendorSelected(chk.dataset.vid);
+  });
+  var visible = document.querySelectorAll('.vendor-sel').length;
+  var checked = document.querySelectorAll('.vendor-sel:checked').length;
+  var all = document.getElementById('vendor-chk-all');
+  if(all) all.checked = visible > 0 && visible === checked;
+}
+function updateVendorBulkBar(){
+  var bar = document.getElementById('vendor-bulk-bar');
+  var lbl = document.getElementById('vendor-bulk-count');
+  if(bar) bar.style.display = vendorSelectionCount() ? 'flex' : 'none';
+  if(lbl) lbl.textContent = vendorSelectionCount() + ' ' + (LANG==='es' ? 'seleccionado(s)' : 'selected');
+  syncVendorSelectionToVisible();
+}
+function toggleAllVisibleVendors(checked){
+  document.querySelectorAll('.vendor-sel').forEach(function(chk){
+    if(checked && !isVendorSelected(chk.dataset.vid)) vSelectedVendorIds.push(chk.dataset.vid);
+    if(!checked) vSelectedVendorIds = vSelectedVendorIds.filter(function(x){ return x !== chk.dataset.vid; });
+  });
+  updateVendorBulkBar();
+}
 function vendorStatusInfo(v){
   const st = v.vendorStatus || (v.hired ? 'hired' : 'pending');
   const map = {
@@ -71,14 +109,16 @@ function filterVendors(query){
     return [v.name,v.category,v.subcategory,v.services,v.contact,v.notes].some(f=>f&&f.toLowerCase().includes(q));
   });
   document.getElementById('vlist').innerHTML = renderVendorTable(vendors, '');
+  syncVendorSelectionToVisible();
 }
 function renderVendorTable(vendors, tab){
-  if(!vendors.length) return `<div class="card" style="text-align:center;padding:40px;color:var(--muted)">${t(tab==='hired'?'no_hired_vendors':'no_comparison_vendors')}<br><br><button class="btn btn-primary btn-sm" onclick="openVendorModal()">Add Vendor</button></div>`;
+  if(!vendors.length) return `<div class="card" style="text-align:center;padding:40px;color:var(--muted)">${t(tab==='hired'?'no_hired_vendors':'no_comparison_vendors')}<br><br><button class="btn btn-primary btn-create-gradient btn-sm" onclick="openVendorModal()">Add Vendor</button></div>`;
   const isES = LANG==='es';
   const rows = vendors.map(v=>{
     const paid = v.payments.reduce((a,p)=>a+Number(p.amount),0);
     const si = vendorStatusInfo(v);
     return `<tr style="cursor:pointer;transition:.15s" onclick="showVendorDetail('${v.id}')" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
+      <td style="padding:12px 10px" onclick="event.stopPropagation()"><input class="vendor-sel" type="checkbox" data-vid="${v.id}" ${isVendorSelected(v.id)?'checked':''} onchange="toggleVendorSelection('${v.id}', this.checked)" style="width:14px;height:14px;accent-color:var(--gold-h);cursor:pointer"></td>
       <td style="padding:12px 16px;font-weight:600;font-size:13px">${esc(v.name)}<div style="font-size:11px;font-weight:400;color:var(--muted);margin-top:2px">${esc(v.category||'')}${v.subcategory?' · '+esc(v.subcategory):''}</div></td>
       <td style="padding:12px 16px;font-size:12px;color:var(--muted)">${esc(v.contact||'—')}</td>
       <td style="padding:12px 16px;font-size:13px;font-weight:600">${fmtMoney(v.budget)}</td>
@@ -93,6 +133,7 @@ function renderVendorTable(vendors, tab){
       </td>
       <td style="padding:12px 16px" onclick="event.stopPropagation()">
         <div style="display:flex;gap:6px">
+          <button class="btn btn-ghost btn-sm btn-icon" title="${isES?'Duplicar':'Duplicate'}" onclick="dupVendor('${v.id}')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
           <button class="btn btn-ghost btn-sm btn-icon" title="${isES?'Editar':'Edit'}" onclick="openVendorModal('${v.id}')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>
           <button class="btn btn-danger btn-sm btn-icon" title="${isES?'Eliminar':'Delete'}" onclick="delV('${v.id}')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>
         </div>
@@ -100,9 +141,16 @@ function renderVendorTable(vendors, tab){
     </tr>`;
   }).join('');
   return `<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm)">
+    <div id="vendor-bulk-bar" style="display:${vendorSelectionCount()?'flex':'none'};padding:10px 16px;border-bottom:1px solid var(--border);gap:8px;align-items:center;flex-wrap:wrap;background:var(--gold-l)">
+      <span id="vendor-bulk-count" style="font-size:12px;font-weight:600;color:var(--gold-h)">${vendorSelectionCount()} ${isES?'seleccionado(s)':'selected'}</span>
+      <button class="btn btn-ghost btn-sm" onclick="openBulkVendorEditModal()">${isES?'Editar seleccionados':'Edit selected'}</button>
+      <button class="btn btn-danger btn-sm" onclick="bulkDeleteVendors()">${isES?'Eliminar seleccionados':'Delete selected'}</button>
+      <button class="btn btn-ghost btn-sm" onclick="clearVendorSelection()">${isES?'Limpiar selección':'Clear selection'}</button>
+    </div>
     <table style="width:100%;border-collapse:collapse">
       <thead>
         <tr style="background:var(--bg2);border-bottom:1px solid var(--border)">
+          <th style="padding:10px 10px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)"><input type="checkbox" id="vendor-chk-all" onchange="toggleAllVisibleVendors(this.checked)" style="width:14px;height:14px;accent-color:var(--gold-h);cursor:pointer"></th>
           <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">${isES?'Proveedor':'Vendor'}</th>
           <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">${isES?'Contacto':'Contact'}</th>
           <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">${isES?'Presupuesto':'Budget'}</th>
@@ -125,9 +173,78 @@ function setVendorStatus(id, status){
 function hireV(id){const p=proj();const v=p.vendors.find(v=>v.id===id);if(v){v.hired=true;v.vendorStatus='hired';saveProj(p);renderBudget();toast('Vendor hired','s');}}
 function unhireV(id){const p=proj();const v=p.vendors.find(v=>v.id===id);if(v){v.hired=false;v.vendorStatus='pending';saveProj(p);renderBudget();toast('Vendor moved to comparisons');}}
 function delV(id){
-  if(/^dv\d+$/.test(id||'')){ toast(LANG==='es'?'Los proveedores predeterminados no se pueden eliminar':'Default vendors cannot be deleted','e'); return; }
   if(!confirm('Delete vendor?'))return;
-  const p=proj();p.vendors=p.vendors.filter(v=>v.id!==id);saveProj(p);renderBudget();toast('Vendor deleted');
+  const p=proj();
+  p.vendors=p.vendors.filter(v=>v.id!==id);
+  vSelectedVendorIds=vSelectedVendorIds.filter(function(x){ return x!==id; });
+  saveProj(p);renderBudget();toast('Vendor deleted');
+}
+function openBulkVendorEditModal(){
+  if(!vendorSelectionCount()) return toast(LANG==='es'?'Selecciona al menos un proveedor':'Select at least one vendor','e');
+  const isES = LANG==='es';
+  openMo(`<div class="mo-title">${isES?'Editar proveedores seleccionados':'Edit selected vendors'}</div>
+  <div class="form-grid">
+    <div class="ig"><label>${isES?'Estado':'Status'}</label>
+      <select class="select" id="bulk-vendor-status">
+        <option value="">${isES?'Sin cambios':'No change'}</option>
+        <option value="pending">${isES?'Pendiente':'Pending'}</option>
+        <option value="hired">${isES?'Contratado':'Hired'}</option>
+        <option value="in-progress">${isES?'En Progreso':'In Progress'}</option>
+        <option value="paid">${isES?'Pagado':'Paid'}</option>
+        <option value="cancelled">${isES?'Cancelado':'Cancelled'}</option>
+      </select>
+    </div>
+    <div class="ig"><label>${isES?'Presupuesto':'Budget'}</label><input class="input" id="bulk-vendor-budget" type="number" placeholder="${isES?'Sin cambios':'No change'}"></div>
+    <div class="ig" style="grid-column:1/-1"><label>${isES?'Notas':'Notes'}</label><textarea class="textarea" id="bulk-vendor-notes" rows="3" placeholder="${isES?'Dejar en blanco para no cambiar':'Leave blank to keep current notes'}"></textarea></div>
+  </div>
+  <div class="mo-foot">
+    <button class="btn btn-ghost" onclick="closeMo()">${t('cancel')}</button>
+    <button class="btn btn-primary" onclick="applyBulkVendorEdit()">${isES?'Guardar cambios':'Save changes'}</button>
+  </div>`);
+}
+function applyBulkVendorEdit(){
+  if(!vendorSelectionCount()) return closeMo();
+  const p = proj();
+  const status = gv('bulk-vendor-status');
+  const budgetEl = document.getElementById('bulk-vendor-budget');
+  const notesEl = document.getElementById('bulk-vendor-notes');
+  const budgetRaw = budgetEl ? budgetEl.value.trim() : '';
+  const notes = notesEl ? notesEl.value : '';
+  p.vendors.forEach(function(v){
+    if(vSelectedVendorIds.indexOf(v.id)===-1) return;
+    if(status){
+      v.vendorStatus = status;
+      v.hired = (status==='hired'||status==='in-progress'||status==='paid');
+    }
+    if(budgetRaw!=='') v.budget = +budgetRaw || 0;
+    if(notes.trim()!=='') v.notes = notes;
+  });
+  saveProj(p);
+  closeMo();
+  renderBudget();
+  toast(LANG==='es'?'Proveedores actualizados':'Vendors updated','s');
+}
+function bulkDeleteVendors(){
+  if(!vendorSelectionCount()) return;
+  if(!confirm(LANG==='es'?'¿Eliminar los proveedores seleccionados?':'Delete selected vendors?')) return;
+  const p = proj();
+  p.vendors = p.vendors.filter(function(v){ return vSelectedVendorIds.indexOf(v.id)===-1; });
+  vSelectedVendorIds = [];
+  saveProj(p);
+  renderBudget();
+  toast(LANG==='es'?'Proveedores eliminados':'Vendors deleted','s');
+}
+function dupVendor(id){
+  const p=proj(); const v=p.vendors.find(v=>v.id===id); if(!v) return;
+  const copy=JSON.parse(JSON.stringify(v));
+  copy.id='v'+Date.now();
+  copy.name=(v.name||'Vendor')+' (Copy)';
+  copy.payments=(copy.payments||[]).map(function(pay,idx){
+    pay.id='p'+Date.now()+idx;
+    return pay;
+  });
+  p.vendors.push(copy);
+  saveProj(p); renderBudget(); toast(LANG==='es'?'Proveedor duplicado':'Vendor duplicated','s');
 }
 function delPay(vid,pid){const p=proj();const v=p.vendors.find(v=>v.id===vid);if(v){v.payments=v.payments.filter(pay=>pay.id!==pid);saveProj(p);renderBudget();toast('Payment deleted');}}
 function viewReceipt(vid,pid){
@@ -144,7 +261,7 @@ function openVendorModal(vid){
         <div class="mo-title" style="margin:0">${t('add_vendor')}</div>
         <button class="btn btn-ghost btn-sm" onclick="libQuickLoadVendors()" style="font-size:11px;display:flex;align-items:center;gap:5px">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-          ${isES?'Cargar de Biblioteca':'Load from Library'}
+          <span id="lib-load-vendor-lbl">${isES?'CARGAR':'LOAD'}</span>
         </button>
       </div>`;
   openMo(`${titleRow}
@@ -226,7 +343,7 @@ function showVendorDetail(vid){
     <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--bg)">
       <div>
         <div style="font-size:13px;font-weight:600">${fmtMoney(pay.amount)}</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px">${pay.note||''} · ${pay.date||''}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${pay.note||''} Â· ${pay.date||''}</div>
       </div>
       <div style="display:flex;gap:6px;align-items:center">
         ${pay.receipt?`<button class="btn btn-ghost btn-sm" onclick="viewReceipt('${v.id}','${pay.id}')">${t('receipt_btn')}</button>`:''}
@@ -237,7 +354,7 @@ function showVendorDetail(vid){
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
       <div>
         <div style="font-size:20px;font-weight:700">${esc(v.name)}</div>
-        <div style="font-size:13px;color:var(--muted);margin-top:3px">${esc(v.category||'')}${v.subcategory?' · '+esc(v.subcategory):''}</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:3px">${esc(v.category||'')}${v.subcategory?' Â· '+esc(v.subcategory):''}</div>
       </div>
       <span style="font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px;background:${si.bg};color:${si.clr}">${si.label}</span>
     </div>
@@ -257,7 +374,7 @@ function showVendorDetail(vid){
     </div>`:''}
     <table style="width:100%;font-size:13px;border-collapse:collapse;margin-bottom:16px">
       ${v.contact?`<tr><td style="padding:7px 0;color:var(--muted);width:110px;font-weight:600">${isES?'Email':'Email'}</td><td style="padding:7px 0">${esc(v.contact)}</td></tr>`:''}
-      ${v.phone?`<tr><td style="padding:7px 0;color:var(--muted);font-weight:600">${isES?'Teléfono':'Phone'}</td><td style="padding:7px 0">${esc(v.phone)}</td></tr>`:''}
+      ${v.phone?`<tr><td style="padding:7px 0;color:var(--muted);font-weight:600">${isES?'TelÃ©fono':'Phone'}</td><td style="padding:7px 0">${esc(v.phone)}</td></tr>`:''}
       ${v.services?`<tr><td style="padding:7px 0;color:var(--muted);font-weight:600;vertical-align:top">${isES?'Servicios':'Services'}</td><td style="padding:7px 0">${esc(v.services)}</td></tr>`:''}
       ${v.notes?`<tr><td style="padding:7px 0;color:var(--muted);font-weight:600;vertical-align:top">${isES?'Notas':'Notes'}</td><td style="padding:7px 0;font-style:italic;color:var(--muted)">${esc(v.notes)}</td></tr>`:''}
     </table>
@@ -276,8 +393,8 @@ var tView='list';
 function _libUpdateSectionLabels(){
   var lv=document.getElementById('lib-save-vendor-lbl'); if(lv) lv.textContent=t('lib_save_to');
   var lt=document.getElementById('lib-save-task-lbl');   if(lt) lt.textContent=t('lib_save_to');
-  var lvl=document.getElementById('lib-load-vendor-lbl'); if(lvl) lvl.textContent=t('lib_load_from');
-  var ltl=document.getElementById('lib-load-task-lbl');   if(ltl) ltl.textContent=t('lib_load_from');
+  var lvl=document.getElementById('lib-load-vendor-lbl'); if(lvl) lvl.textContent=LANG==='es'?'CARGAR':'LOAD';
+  var ltl=document.getElementById('lib-load-task-lbl');   if(ltl) ltl.textContent=LANG==='es'?'CARGAR':'LOAD';
 }
 function renderTimeline(){
   const p=proj();const el=document.getElementById('tab-timeline');
@@ -287,7 +404,7 @@ function renderTimeline(){
   const pct=p.tasks.length?Math.round(done/p.tasks.length*100):0;
   el.innerHTML=`
   <div class="sh">
-    <div><div class="sh-title" style="color:#7c3aed">${t('timeline')}</div>
+    <div><div class="sh-title editorial-title" style="color:#7c3aed">${t('timeline')}</div>
     <div class="sh-sub">${t('timeline_sub')}</div></div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-ghost btn-sm" onclick="libQuickSaveTasks()" style="display:flex;align-items:center;gap:5px;font-size:11px">
@@ -296,9 +413,9 @@ function renderTimeline(){
       </button>
       <button class="btn btn-ghost btn-sm" onclick="libQuickLoadTasks()" style="display:flex;align-items:center;gap:5px;font-size:11px">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><polyline points="8,10 12,14 16,10"/></svg>
-        <span id="lib-load-task-lbl">${t('lib_load_from')}</span>
+        <span id="lib-load-task-lbl">${LANG==='es'?'CARGAR':'LOAD'}</span>
       </button>
-      <button class="btn btn-primary" onclick="openTaskModal()">
+      <button class="btn btn-primary btn-create-gradient" onclick="openTaskModal()">
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>${t('add_task')}
       </button>
     </div>
@@ -322,7 +439,7 @@ function renderTimeline(){
       </div>
     </div>
     <div class="vtabs" style="margin-bottom:0">
-      ${[['all',LANG==='es'?'Todas':'All'],['overdue',LANG==='es'?'Vencidas':'Overdue'],['today',LANG==='es'?'Hoy':'Today'],['upcoming',LANG==='es'?'Próximas':'Upcoming']].map(([k,l])=>`<div class="vtab ${taskListFilter===k?'active':''}" data-task-filter="${k}" onclick="setTaskListFilter('${k}',this)">${l}</div>`).join('')}
+      ${[['all',LANG==='es'?'Todas':'All'],['overdue',LANG==='es'?'Vencidas':'Overdue'],['today',LANG==='es'?'Hoy':'Today'],['upcoming',LANG==='es'?'PrÃ³ximas':'Upcoming']].map(([k,l])=>`<div class="vtab ${taskListFilter===k?'active':''}" data-task-filter="${k}" onclick="setTaskListFilter('${k}',this)">${l}</div>`).join('')}
     </div>
   </div>
   <div class="timeline-search-wrap" style="position:relative;display:flex;align-items:center;margin-bottom:4px">
@@ -371,12 +488,13 @@ function renderTaskList(p){
         <div class="task-title ${tk.done?'done':''}">${tk.title}</div>
         ${tk.desc?`<div style="font-size:12px;color:var(--muted);margin-top:2px">${tk.desc}</div>`:''}
         <div class="task-meta">
-          <span style="color:${ov?'var(--danger)':'var(--muted)'}">📅 ${fmtDate(tk.dueDate)}${ov?' ('+t('overdue')+')':''}</span>
-          <span>👤 ${tk.assignee||t('unassigned')}</span>
+          <span style="color:${ov?'var(--danger)':'var(--muted)'}">ðŸ“… ${fmtDate(tk.dueDate)}${ov?' ('+t('overdue')+')':''}</span>
+          <span>ðŸ‘¤ ${tk.assignee||t('unassigned')}</span>
         </div>
       </div>
       <div style="display:flex;gap:6px">
         <div style="width:12px;height:12px;border-radius:50%;background:${tk.color||'#7c3aed'};flex-shrink:0;margin-top:4px"></div>
+        <button class="btn btn-ghost btn-sm btn-icon" onclick="dupTask('${tk.id}')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
         <button class="btn btn-ghost btn-sm btn-icon" onclick="openTaskModal('${tk.id}')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>
         <button class="btn btn-danger btn-sm btn-icon" onclick="delTask('${tk.id}')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
       </div>
@@ -434,7 +552,7 @@ function renderGantt(p){
         <div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${tk.title}">${tk.title}</div>
       </div>
       <div class="g-bars" style="position:relative">
-        <div class="g-bar" style="left:${l}px;width:${w}px;background:${clr};overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px;color:#fff;font-weight:600;padding:0 8px;box-sizing:border-box;display:flex;align-items:center;min-width:4px;position:absolute" title="${tk.title} — ${tk.startDate||''}→${tk.dueDate||''}" onclick="openTaskModal('${tk.id}')">${tk.title}</div>
+        <div class="g-bar" style="left:${l}px;width:${w}px;background:${clr};overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px;color:#fff;font-weight:600;padding:0 8px;box-sizing:border-box;display:flex;align-items:center;min-width:4px;position:absolute" title="${tk.title} â€” ${tk.startDate||''}â†’${tk.dueDate||''}" onclick="openTaskModal('${tk.id}')">${tk.title}</div>
       </div>
     </div>`;
   }).join('');
@@ -445,7 +563,7 @@ function renderGantt(p){
       <button class="btn btn-ghost btn-sm" onclick="_ganttOffset++;renderGantt(proj())" title="${isES?'Siguiente':'Next'}">&#8594;</button>
       <div style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6M8 11h6"/></svg>
-        <button class="btn btn-ghost btn-sm" onclick="_ganttZoom=Math.max(2,_ganttZoom-4);renderGantt(proj())" title="${isES?'Alejar':'Zoom out'}">−</button>
+        <button class="btn btn-ghost btn-sm" onclick="_ganttZoom=Math.max(2,_ganttZoom-4);renderGantt(proj())" title="${isES?'Alejar':'Zoom out'}">âˆ’</button>
         <span style="font-size:11px;color:var(--muted);min-width:40px;text-align:center">${isES?'Zoom':'Zoom'}</span>
         <button class="btn btn-ghost btn-sm" onclick="_ganttZoom=Math.min(60,_ganttZoom+4);renderGantt(proj())" title="${isES?'Acercar':'Zoom in'}">+</button>
       </div>
@@ -460,6 +578,14 @@ function renderGantt(p){
       </div>
       ${rows}
     </div></div></div>`;
+}
+function dupTask(id){
+  const p=proj(); const tk=p.tasks.find(function(t){ return t.id===id; }); if(!tk) return;
+  const copy=JSON.parse(JSON.stringify(tk));
+  copy.id='t'+Date.now();
+  copy.title=(tk.title||'Task')+' (Copy)';
+  p.tasks.push(copy);
+  saveProj(p); renderTimeline(); toast(LANG==='es'?'Tarea duplicada':'Task duplicated','s');
 }
 var calD=new Date();
 function renderCal(p){
@@ -493,7 +619,6 @@ function renderCal(p){
 }
 function toggleTask(tid){const p=proj();const tk=p.tasks.find(tk=>tk.id===tid);if(tk){tk.done=!tk.done;saveProj(p);renderTimeline();}}
 function delTask(tid){
-  if(/^t\d{1,2}$/.test(tid||'')){ toast(LANG==='es'?'Las tareas predeterminadas no se pueden eliminar':'Default tasks cannot be deleted','e'); return; }
   if(!confirm('Delete task?'))return;
   const p=proj();p.tasks=p.tasks.filter(tk=>tk.id!==tid);saveProj(p);renderTimeline();
 }
@@ -523,7 +648,7 @@ function openTaskModal(tid){
 function pickColor(el,c){document.querySelectorAll('#mo-body [data-color]').forEach(d=>d.style.borderColor='transparent');el.style.borderColor='#000';document.getElementById('tk-color').value=c;}
 function saveTask(tid){
   const title=gv('tk-title');const due=gv('tk-due');const start=gv('tk-start');
-  if(!title||!start||!due)return toast(LANG==='es'?'Título, fecha de inicio y fecha límite son requeridos':'Title, start date and due date required','e');
+  if(!title||!start||!due)return toast(LANG==='es'?'TÃ­tulo, fecha de inicio y fecha lÃ­mite son requeridos':'Title, start date and due date required','e');
   const p=proj();
   const data={title,desc:gv('tk-desc'),startDate:start,dueDate:due,assignee:gv('tk-who'),color:gv('tk-color')};
   if(tid){const tk=p.tasks.find(tk=>tk.id===tid);Object.assign(tk,data);}
@@ -537,12 +662,11 @@ function renderGuests(){
   const confirmed=p.guests.filter(g=>g.rsvp==='confirmed').length;
   const declined=p.guests.filter(g=>g.rsvp==='declined').length;
   const pending=p.guests.filter(g=>!g.rsvp||g.rsvp==='pending').length;
-  const seated=p.guests.filter(g=>g.table).length;
   const tables=[...new Set(p.guests.filter(g=>g.table).map(g=>g.table))].length;
   el.innerHTML=`
   <div class="sh">
     <div><div class="sh-title" style="color:#10b981">${t('guest_management')}</div>
-    <div class="sh-sub">${p.guests.length} ${t('total')} · ${confirmed} ${t('confirmed_guests')} · ${pending} ${t('pending_guests')}</div></div>
+    <div class="sh-sub">${p.guests.length} ${t('total')} Â· ${confirmed} ${t('confirmed_guests')} Â· ${pending} ${t('pending_guests')}</div></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-ghost btn-sm" onclick="downloadGuestTemplate()">
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -556,7 +680,7 @@ function renderGuests(){
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         ${LANG==='es'?'Exportar Invitados':'Export Guests'}
       </button>
-      <button class="btn btn-primary btn-sm" onclick="openGuestModal()">
+      <button class="btn btn-primary btn-create-gradient btn-sm" onclick="openGuestModal()">
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>${t('add_guest')}
       </button>
     </div>
@@ -567,11 +691,10 @@ function renderGuests(){
     <div class="gs-stat"><div class="gs-val" style="color:var(--warn)">${pending}</div><div class="gs-lbl">${t('pending')}</div></div>
     <div class="gs-stat"><div class="gs-val" style="color:var(--danger)">${declined}</div><div class="gs-lbl">${t('declined')}</div></div>
     <div class="gs-stat"><div class="gs-val" style="color:var(--gold-h)">${tables}</div><div class="gs-lbl">${t('tables')}</div></div>
-    <div class="gs-stat"><div class="gs-val" style="color:var(--purple)">${seated}</div><div class="gs-lbl">${t('table_num')}</div></div>
   </div>
   <div class="tbar">
-    <button class="tb ${gView==='list'?'active':''}" onclick="gView='list';renderGuests()">${t('all_guests')}</button>
-    <button class="tb ${gView==='seating'?'active':''}" onclick="gView='seating';renderGuests()">${t('layout_designer')}</button>
+    <button class="tb ${gView==='list'?'active':''}" onclick="gView='list';renderGuests()">${LANG==='es'?'Todos los Invitados':'All Guests'}</button>
+    <button class="tb ${gView==='seating'?'active':''}" onclick="gView='seating';renderGuests()">${LANG==='es'?'AsignaciÃ³n por Mesas':'Table Assignments'}</button>
   </div>
   <div id="gview"></div>`;
   gView==='list'?renderGuestList(p):renderSeating(p);
@@ -580,7 +703,7 @@ function renderGuestList(p){
   let guests=[...p.guests];
   if(gFilter)guests=guests.filter(g=>JSON.stringify(g).toLowerCase().includes(gFilter.toLowerCase()));
   guests.sort((a,b)=>{const va=String(a[gSort]||''),vb=String(b[gSort]||'');return gAsc?va.localeCompare(vb,undefined,{numeric:true}):vb.localeCompare(va,undefined,{numeric:true});});
-  const si=k=>gSort===k?(gAsc?'↑':'↓'):'↕';
+  const si=k=>gSort===k?(gAsc?'â†‘':'â†“'):'â†•';
   document.getElementById('gview').innerHTML=`
   <div style="background:#fff;border-radius:var(--r);border:1px solid var(--border);overflow:hidden">
     <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#fafafa">
@@ -607,11 +730,11 @@ function renderGuestList(p){
         ${guests.map(g=>`<tr>
           <td style="font-weight:600">${g.name}</td>
           <td style="font-size:12px;color:var(--muted)">${g.email||''}${g.phone?'<br>'+g.phone:''}</td>
-          <td><span class="badge b-gray">${g.category||'—'}</span></td>
+          <td><span class="badge b-gray">${g.category||'â€”'}</span></td>
           <td><span class="rb ${g.rsvp==='confirmed'?'rb-c':g.rsvp==='declined'?'rb-d':'rb-p'}">${g.rsvp||'pending'}</span></td>
-          <td>${g.table||'—'}</td>
-          <td>${g.plusOne?'✓':''}</td>
-          <td style="font-size:12px">${g.meal||'—'}</td>
+          <td>${g.table||'â€”'}</td>
+          <td>${g.plusOne?'âœ“':''}</td>
+          <td style="font-size:12px">${g.meal||'â€”'}</td>
           <td style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.notes||''}</td>
           <td><div style="display:flex;gap:4px">
             <button class="btn btn-ghost btn-sm btn-icon" onclick="openGuestModal('${g.id}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>
@@ -637,11 +760,11 @@ function renderGuestRows(p){
   tbody.innerHTML=guests.map(g=>`<tr>
     <td style="font-weight:600">${g.name}</td>
     <td style="font-size:12px;color:var(--muted)">${g.email||''}${g.phone?'<br>'+g.phone:''}</td>
-    <td><span class="badge b-gray">${g.category||'—'}</span></td>
+    <td><span class="badge b-gray">${g.category||'â€”'}</span></td>
     <td><span class="rb ${g.rsvp==='confirmed'?'rb-c':g.rsvp==='declined'?'rb-d':'rb-p'}">${g.rsvp||'pending'}</span></td>
-    <td>${g.table||'—'}</td>
-    <td>${g.plusOne?'✓':''}</td>
-    <td style="font-size:12px">${g.meal||'—'}</td>
+    <td>${g.table||'â€”'}</td>
+    <td>${g.plusOne?'âœ“':''}</td>
+    <td style="font-size:12px">${g.meal||'â€”'}</td>
     <td style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.notes||''}</td>
     <td><div style="display:flex;gap:4px">
       <button class="btn btn-ghost btn-sm btn-icon" onclick="openGuestModal('${g.id}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>
@@ -656,11 +779,11 @@ function renderSeating(p){
   document.getElementById('gview').innerHTML=tables.length?tables.map(tb=>{
     const gs=seated.filter(g=>g.table===tb);
     return `<div style="margin-bottom:20px">
-      <div class="seating-th">${t('table_header')} ${tb} · ${gs.length} ${t('guests_lbl')}</div>
+      <div class="seating-th">${t('table_header')} ${tb} Â· ${gs.length} ${t('guests_lbl')}</div>
       ${gs.map(g=>`<div class="seating-row">
         <div><strong>${g.name}</strong>${g.plusOne?' <span class="s-sm">+1</span>':''}</div>
         <div style="display:flex;gap:12px;font-size:12px;color:var(--muted)">
-          <span>${g.meal||'—'}</span>
+          <span>${g.meal||'â€”'}</span>
           <span class="rb ${g.rsvp==='confirmed'?'rb-c':g.rsvp==='declined'?'rb-d':'rb-p'}">${g.rsvp||'pending'}</span>
         </div>
       </div>`).join('')}
@@ -701,11 +824,11 @@ function renderSeating(p){
       ${tables.length ? tables.map(tb => {
         const gs = seated.filter(g => g.table === tb);
         return `<div style="margin-bottom:20px">
-          <div class="seating-th">${t('table_header')} ${tb} · ${gs.length} ${t('guests_lbl')}</div>
+          <div class="seating-th">${t('table_header')} ${tb} Â· ${gs.length} ${t('guests_lbl')}</div>
           ${gs.map(g => `<div class="seating-row">
             <div><strong>${g.name}</strong>${g.plusOne ? ' <span class="s-sm">+1</span>' : ''}</div>
             <div style="display:flex;gap:12px;font-size:12px;color:var(--muted)">
-              <span>${g.meal || '—'}</span>
+              <span>${g.meal || 'â€”'}</span>
               <span class="rb ${g.rsvp==='confirmed'?'rb-c':g.rsvp==='declined'?'rb-d':'rb-p'}">${g.rsvp||'pending'}</span>
             </div>
           </div>`).join('')}
@@ -842,7 +965,7 @@ function openBulkGuestEditModal(){
       <option value="1">${t('yes')}</option>
       <option value="0">${t('no')}</option>
     </select></div>
-    <div class="ig" style="grid-column:1/-1"><label>Notes</label><textarea class="textarea" id="bg-notes" rows="2" placeholder="${LANG==='es'?'Sin cambios si lo dejas vacío':'Leave empty for no change'}"></textarea></div>
+    <div class="ig" style="grid-column:1/-1"><label>Notes</label><textarea class="textarea" id="bg-notes" rows="2" placeholder="${LANG==='es'?'Sin cambios si lo dejas vacÃ­o':'Leave empty for no change'}"></textarea></div>
   </div>
   <div class="mo-foot">
     <button class="btn btn-ghost" onclick="closeMo()">${t('cancel')}</button>
@@ -874,7 +997,7 @@ function applyBulkGuestEdit(){
 }
 function bulkDeleteGuests(){
   if(!guestSelectionCount()) return;
-  if(!confirm(LANG==='es'?'¿Eliminar los invitados seleccionados?':'Delete selected guests?')) return;
+  if(!confirm(LANG==='es'?'Â¿Eliminar los invitados seleccionados?':'Delete selected guests?')) return;
   const p = proj();
   p.guests = p.guests.filter(function(g){ return !isGuestSelected(g.id); });
   saveProj(p);
@@ -894,7 +1017,7 @@ function renderGuestList(p){
   let guests=[...p.guests];
   if(gFilter) guests=guests.filter(g=>JSON.stringify(g).toLowerCase().includes(gFilter.toLowerCase()));
   guests.sort((a,b)=>{const va=String(a[gSort]||''),vb=String(b[gSort]||'');return gAsc?va.localeCompare(vb,undefined,{numeric:true}):vb.localeCompare(va,undefined,{numeric:true});});
-  const si=k=>gSort===k?(gAsc?'↑':'↓'):'↕';
+  const si=k=>gSort===k?(gAsc?'â†‘':'â†“'):'â†•';
   document.getElementById('gview').innerHTML=`
   <div style="background:#fff;border-radius:var(--r);border:1px solid var(--border);overflow:hidden">
     <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#fafafa">
@@ -911,7 +1034,7 @@ function renderGuestList(p){
       <span id="guest-bulk-count" style="font-size:12px;font-weight:600;color:var(--gold-h)">${guestSelectionCount()} ${LANG==='es'?'seleccionado(s)':'selected'}</span>
       <button class="btn btn-ghost btn-sm" onclick="openBulkGuestEditModal()">${LANG==='es'?'Editar seleccionados':'Edit selected'}</button>
       <button class="btn btn-danger btn-sm" onclick="bulkDeleteGuests()">${LANG==='es'?'Eliminar seleccionados':'Delete selected'}</button>
-      <button class="btn btn-ghost btn-sm" onclick="clearGuestSelection()">${LANG==='es'?'Limpiar selección':'Clear selection'}</button>
+      <button class="btn btn-ghost btn-sm" onclick="clearGuestSelection()">${LANG==='es'?'Limpiar selecciÃ³n':'Clear selection'}</button>
     </div>
     <div style="overflow-x:auto">
     <table>
@@ -938,11 +1061,11 @@ function buildGuestRows(guests){
     <td><input type="checkbox" class="guest-sel" data-gid="${g.id}" ${isGuestSelected(g.id)?'checked':''} style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="toggleGuestSelection('${g.id}',this.checked)"></td>
     <td style="font-weight:600">${g.name}</td>
     <td style="font-size:12px;color:var(--muted)">${g.email||''}${g.phone?'<br>'+g.phone:''}</td>
-    <td><span class="badge b-gray">${g.category||'—'}</span></td>
+    <td><span class="badge b-gray">${g.category||'â€”'}</span></td>
     <td><span class="rb ${g.rsvp==='confirmed'?'rb-c':g.rsvp==='declined'?'rb-d':'rb-p'}">${g.rsvp||'pending'}</span></td>
-    <td>${g.table||'—'}</td>
-    <td>${g.plusOne?'✓':''}</td>
-    <td style="font-size:12px">${g.meal||'—'}</td>
+    <td>${g.table||'â€”'}</td>
+    <td>${g.plusOne?'âœ“':''}</td>
+    <td style="font-size:12px">${g.meal||'â€”'}</td>
     <td style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.notes||''}</td>
     <td><div style="display:flex;gap:4px">
       <button class="btn btn-ghost btn-sm btn-icon" onclick="openGuestModal('${g.id}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>
@@ -1010,7 +1133,7 @@ function rowToGuest(obj,filename){
     category:String(obj.category||obj.categoria||obj.group||obj.grupo||'').trim(),
     rsvp:String(rsvpRaw).trim().toLowerCase()||'pending',
     table:String(obj.table_number||obj.table||obj.mesa||'').trim(),
-    plusOne:['yes','1','true','sí','si'].includes(String(obj.plus_one||obj.plusone||obj.acompanante||'').toLowerCase().trim()),
+    plusOne:['yes','1','true','sÃ­','si'].includes(String(obj.plus_one||obj.plusone||obj.acompanante||'').toLowerCase().trim()),
     meal:String(obj.meal_preference||obj.meal||obj.menu||obj.comida||'').trim(),
     dietary:String(obj.dietary_restrictions||obj.dietary||obj.restricciones||'').trim(),
     notes:String(obj.notes||obj.notas||obj.comments||'').trim()
@@ -1181,7 +1304,7 @@ function defaultChairTypes(){
     'camila':           { label: 'Camila',          fill: '#e8a030',              stroke: '#a06010',  costPerChair: 180 },
     'basket':           { label: 'Basket',          fill: '#6abcd4',              stroke: '#2a7090',  costPerChair: 175 },
     'sara':             { label: 'Sara',            fill: '#d45e8a',              stroke: '#903060',  costPerChair: 150 },
-    'lucia':            { label: 'Lucía',           fill: '#5baa5b',              stroke: '#2a6a2a',  costPerChair: 190 },
+    'lucia':            { label: 'LucÃ­a',           fill: '#5baa5b',              stroke: '#2a6a2a',  costPerChair: 190 },
     'valentina':        { label: 'Valentina',       fill: '#e06060',              stroke: '#a02020',  costPerChair: 230 },
     'frida':            { label: 'Frida',           fill: '#3d8b8b',              stroke: '#1a5555',  costPerChair: 190 },
     'dapa':             { label: 'Dapa',            fill: '#b87333',              stroke: '#7a4010',  costPerChair: 180 },
@@ -1190,15 +1313,15 @@ function defaultChairTypes(){
     'chanel':           { label: 'Chanel',          fill: '#f0f0f0',              stroke: '#909090',  costPerChair: 60 },
     'lucca':            { label: 'Lucca',           fill: '#a0c4e0',              stroke: '#4a7090',  costPerChair: 70 },
     'phoenix':          { label: 'Phoenix',         fill: '#ff8c42',              stroke: '#c05010',  costPerChair: 60 },
-    'napoleon':         { label: 'Napoleón',        fill: '#2c3e7a',              stroke: '#101840',  costPerChair: 60 },
+    'napoleon':         { label: 'NapoleÃ³n',        fill: '#2c3e7a',              stroke: '#101840',  costPerChair: 60 },
     'mirage':           { label: 'Mirage',          fill: 'rgba(180,210,240,0.9)',stroke: '#5080b0',  costPerChair: 90 },
     'peineta':          { label: 'Peineta',         fill: '#b5d5b5',              stroke: '#507050',  costPerChair: 38 },
     'tiffany':          { label: 'Tiffany',         fill: '#81c8c8',              stroke: '#307878',  costPerChair: 38 },
     'plegable-adulto':  { label: 'Plegable (adulto)',fill: '#7f8c8d',             stroke: '#3a4a4a',  costPerChair: 25 },
     'plegable-infantil':{ label: 'Plegable Infantil',fill: '#ffb3c1',            stroke: '#c06070',  costPerChair: 20 },
-    'infantil-mono':    { label: 'Infantil Moño',   fill: '#ff6b9d',              stroke: '#c02060',  costPerChair: 60 },
+    'infantil-mono':    { label: 'Infantil MoÃ±o',   fill: '#ff6b9d',              stroke: '#c02060',  costPerChair: 60 },
     'infantil-wishbone':{ label: 'Infantil Wishbone',fill: '#6bcb77',            stroke: '#2a8040',  costPerChair: 60 },
-    'acrilico-novios':  { label: 'Acrílico Novios', fill: 'rgba(200,225,255,0.7)',stroke: '#3060c0',  costPerChair: 850 },
+    'acrilico-novios':  { label: 'AcrÃ­lico Novios', fill: 'rgba(200,225,255,0.7)',stroke: '#3060c0',  costPerChair: 850 },
     'deco':             { label: 'Deco',            fill: '#2d2d2d',              stroke: '#000000',  costPerChair: 380 },
     'lino':             { label: 'Lino',            fill: '#e8d5a3',              stroke: '#a08030',  costPerChair: 130 },
     'lino-novios':      { label: 'Lino Novios',     fill: '#f5e6c8',              stroke: '#c09040',  costPerChair: 430 },
@@ -1292,3 +1415,4 @@ function calcLayoutBudget(items){
   });
   return {total, breakdown};
 }
+

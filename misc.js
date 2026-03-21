@@ -56,7 +56,7 @@ function renderMoodboard(){
   el.innerHTML=`
   <div class="sh">
     <div>
-      <div class="sh-title" style="color:#7c3aed">${t('moodboard_library_title')}</div>
+      <div class="sh-title editorial-title" style="color:#7c3aed">${t('moodboard_library_title')}</div>
       <div class="sh-sub">${total} ${t('images')} · ${mb.folders.length} folders</div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -109,7 +109,7 @@ function renderMoodboard(){
           ${t('upload_images_btn')}<input type="file" accept="image/*" multiple class="hidden" onchange="addMBImages(this,'${folder.id}')">
         </label>
       </div>` : `
-      <div class="mb-bento-grid">
+      <div class="mb-gallery">
         ${folder.images.map((img,ii)=>mbImageCard(img,ii,folder.id,folder.images.length)).join('')}
       </div>`}
     </div>
@@ -125,7 +125,7 @@ function renderMoodboard(){
       <svg class="mb-folder-chevron ${mbOpenFolders['__root__']!==false?'open':''}" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
     </div>
     <div class="mb-folder-body" style="display:${mbOpenFolders['__root__']===false?'none':'block'}">
-      <div class="mb-bento-grid">${mb.uncategorized.map((img,ii)=>mbImageCard(img,ii,null,mb.uncategorized.length)).join('')}</div>
+      <div class="mb-gallery">${mb.uncategorized.map((img,ii)=>mbImageCard(img,ii,null,mb.uncategorized.length)).join('')}</div>
     </div>
   </div>` : ''}`;
 }
@@ -155,7 +155,7 @@ function mbImageCard(img, ii, folderId, total){
       <button class="icon-btn" onclick="event.stopPropagation();moveMBImageModal(${ii},${fidJs})" title="Move to folder">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
       </button>
-      <button class="icon-btn" style="color:#fff;background:rgba(181,64,58,.85)"
+      <button class="icon-btn icon-btn-danger"
               onclick="event.stopPropagation();delMBImg(${ii},${fidJs})" title="Delete">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg>
       </button>

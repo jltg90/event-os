@@ -35,45 +35,10 @@
       <div class="tnav-logo" onclick="showPage('events')">Event<span>OS</span></div>
     </div>
     <div style="flex:1"></div>
-    <button id="lang-btn" class="nav-pill" onclick="toggleLang()" title="Switch language / Cambiar idioma"
-      style="margin-right:12px"
-      >
-      &#127760; <span id="lang-label">EN</span>
-    </button>
     <button id="share-nav-btn" class="nav-pill" onclick="openShareFromNav()" title="Share project with client">
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
       <span class="share-btn-label">Share</span>
     </button>
-    <!-- Sync status pill - inline nav item -->
-    <div id="sync-btn" class="nav-pill nav-status-pill" onclick="manualSync()" title="Click to sync now">
-      <div id="sync-dot" class="nav-dot"></div>
-      <span id="sync-label">Offline</span>
-    </div>
-    <!-- User avatar - circle only -->
-    <div style="position:relative">
-      <div id="upill" class="nav-avatar-trigger" onclick="toggleMenu()" title="Account">
-        <span id="uav" class="nav-avatar-label">?</span>
-      </div>
-      <div class="umenu hidden" id="umenu">
-        <!-- User info header -->
-        <div style="padding:14px 16px;border-bottom:1px solid var(--border)">
-          <div style="font-size:13px;font-weight:600;color:var(--text)" id="uname">User</div>
-          <div style="font-size:11.5px;color:var(--muted);margin-top:2px" id="uemail"></div>
-        </div>
-        <!-- Sync status row -->
-        <div onclick="manualSync();closeMenu()" class="menu-row">
-          <div id="sync-dot-menu" class="nav-dot"></div>
-          <div>
-            <div style="font-size:12px;font-weight:600;color:var(--text)"><span id="sync-label-menu">Offline</span></div>
-            <div style="font-size:10.5px;color:var(--muted);margin-top:1px">Click to sync now</div>
-          </div>
-        </div>
-        <div class="umenu-item" data-i18n="my_events" onclick="showPage('events');closeMenu()">&#128203; My Events</div>
-        <div class="umenu-item" onclick="openLibrary();closeMenu()">&#128218; <span id="lib-menu-label">My Library</span></div>
-        <div class="umenu-item" onclick="showPage('analytics');closeMenu()">&#128202; <span id="analytics-menu-label">Analytics</span></div>
-        <div class="umenu-item" data-i18n="sign_out" style="color:var(--danger);border-top:1px solid var(--border)" onclick="doLogout()">&#128682; Sign Out</div>
-      </div>
-    </div>
   </nav>
 
   <div id="app-body" class="app-body">
@@ -118,8 +83,46 @@
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
           <span data-i18n="nav_analytics">Analytics</span>
         </button>
-        
       </nav>
+      <div class="sidebar-footer">
+        <button id="lang-btn" class="nav-pill sidebar-footer-pill" onclick="toggleLang()" title="Switch language / Cambiar idioma">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M3 12h18"/>
+            <path d="M12 3a13.5 13.5 0 0 1 0 18"/>
+            <path d="M12 3a13.5 13.5 0 0 0 0 18"/>
+            <path d="M7 7.5c1.4.6 3.1.9 5 .9s3.6-.3 5-.9"/>
+            <path d="M7 16.5c1.4-.6 3.1-.9 5-.9s3.6.3 5 .9"/>
+          </svg>
+          <span id="lang-label">EN</span>
+        </button>
+        <div id="sync-btn" class="nav-pill nav-status-pill sidebar-footer-pill" onclick="manualSync()" title="Click to sync now">
+          <div id="sync-dot" class="nav-dot"></div>
+          <span id="sync-label">Offline</span>
+        </div>
+        <div class="sidebar-account-wrap">
+          <div id="upill" class="nav-avatar-trigger sidebar-account-trigger" onclick="toggleMenu()" title="Account">
+            <span id="uav" class="nav-avatar-label">?</span>
+          </div>
+          <div class="umenu hidden" id="umenu">
+            <div style="padding:14px 16px;border-bottom:1px solid var(--border)">
+              <div style="font-size:13px;font-weight:600;color:var(--text)" id="uname">User</div>
+              <div style="font-size:11.5px;color:var(--muted);margin-top:2px" id="uemail"></div>
+            </div>
+            <div onclick="manualSync();closeMenu()" class="menu-row">
+              <div id="sync-dot-menu" class="nav-dot"></div>
+              <div>
+                <div style="font-size:12px;font-weight:600;color:var(--text)"><span id="sync-label-menu">Offline</span></div>
+                <div style="font-size:10.5px;color:var(--muted);margin-top:1px">Click to sync now</div>
+              </div>
+            </div>
+            <div class="umenu-item" data-i18n="my_events" onclick="showPage('events');closeMenu()">&#128203; My Events</div>
+            <div class="umenu-item" onclick="openLibrary();closeMenu()">&#128218; <span id="lib-menu-label">My Library</span></div>
+            <div class="umenu-item" onclick="showPage('analytics');closeMenu()">&#128202; <span id="analytics-menu-label">Analytics</span></div>
+            <div class="umenu-item" data-i18n="sign_out" style="color:var(--danger);border-top:1px solid var(--border)" onclick="doLogout()">&#128682; Sign Out</div>
+          </div>
+        </div>
+      </div>
     </aside>
 
     <div id="app-content" class="app-content">
@@ -136,10 +139,9 @@
     <div class="page-shell">
       <div class="page-header" id="ev-header">
         <div id="ev-header-copy">
-          <h1 style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700" data-i18n="my_events_title">My Events</h1>
-          <p style="color:var(--muted);font-size:14px;margin-top:2px" data-i18n="manage_events">Manage all your event projects</p>
+          <h1 class="editorial-title" style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700" data-i18n="my_events_title">My Events</h1>
         </div>
-        <button class="btn btn-primary" id="ev-create-btn" onclick="openEventModal()">
+        <button class="btn btn-primary btn-create-gradient" id="ev-create-btn" onclick="openEventModal()">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
           <span data-i18n="create_event">New Event</span>
         </button>
@@ -189,13 +191,23 @@
             </div>
           </div>
         </div>
-        <div style="display:flex;gap:4px">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+          <div id="ev-bulktools" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <button class="tb" id="ev-bulk-edit" onclick="openBulkEditEventsModal()" style="display:none;font-size:11px;font-weight:500;padding:4px 10px;white-space:nowrap"></button>
+            <button class="tb" id="ev-bulk-delete" onclick="bulkDeleteEvents()" style="display:none;font-size:11px;font-weight:500;padding:4px 10px;white-space:nowrap;color:var(--danger)"></button>
+            <label class="tb" id="ev-select-all-wrap" style="display:flex;align-items:center;gap:8px;padding:4px 10px;cursor:pointer">
+              <input type="checkbox" id="ev-select-all" onchange="evSelectAllVisible()" style="width:14px;height:14px;accent-color:var(--gold-h);cursor:pointer">
+              <span id="ev-select-all-label"></span>
+            </label>
+          </div>
+          <div style="display:flex;gap:4px">
           <button class="tb active" id="ev-view-grid" onclick="setEvView('grid')" title="Grid view">
             <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
           </button>
           <button class="tb" id="ev-view-list" onclick="setEvView('list')" title="List view">
             <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
           </button>
+          </div>
         </div>
       </div>
       <div id="evgrid"></div>
@@ -207,7 +219,7 @@
     <div class="page-shell">
       <div class="page-header" style="margin-bottom:24px">
         <div>
-          <h1 id="lib-page-title" style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700">My Library</h1>
+          <h1 class="editorial-title" id="lib-page-title" style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700">My Library</h1>
           <p id="lib-page-sub" style="display:none"></p>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap" id="lib-add-btns"></div>
@@ -222,7 +234,7 @@
     <div class="page-shell">
       <div class="page-header" style="margin-bottom:24px">
         <div>
-          <h1 style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700" id="analytics-title">Analytics</h1>
+          <h1 class="editorial-title" style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700" id="analytics-title">Analytics</h1>
           <p style="color:var(--muted);font-size:14px;margin-top:2px" id="analytics-sub">Insights across all your events</p>
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap" id="analytics-controls">
@@ -264,6 +276,10 @@
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;margin-left:auto;padding-right:8px">
+        <button class="btn btn-ghost btn-sm" onclick="openShareFromNav()" title="Share project with client" style="display:flex;align-items:center;gap:5px;font-size:11px">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+          <span>Share</span>
+        </button>
         <button class="btn btn-ghost btn-sm" onclick="openExportPDFModal()" title="Export Presentation PDF" style="display:flex;align-items:center;gap:5px;font-size:11px">
           <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
           <span id="export-pdf-btn-lbl" data-i18n="export_pdf_btn">Export Project PDF</span>
@@ -406,7 +422,15 @@
     <!-- Settings -->
     <div class="mob-drawer-section">Settings</div>
     <button class="mob-drawer-item" onclick="toggleLang();closeMobDrawer()">
-      &#127760; <span id="mob-lang-label">English / Inglés</span>
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="9"/>
+        <path d="M3 12h18"/>
+        <path d="M12 3a13.5 13.5 0 0 1 0 18"/>
+        <path d="M12 3a13.5 13.5 0 0 0 0 18"/>
+        <path d="M7 7.5c1.4.6 3.1.9 5 .9s3.6-.3 5-.9"/>
+        <path d="M7 16.5c1.4-.6 3.1-.9 5-.9s3.6.3 5 .9"/>
+      </svg>
+      <span id="mob-lang-label">English / Inglés</span>
     </button>
     <button class="mob-drawer-item" onclick="openShareFromNav();closeMobDrawer()">
       <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
