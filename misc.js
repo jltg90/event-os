@@ -751,12 +751,31 @@ function formatDMY(s){ if(!s)return'DD/MM/YYYY'; const [y,m,d]=s.split('-'); ret
 function openDateField(id){
   var el = document.getElementById(id);
   if(!el) return;
-  if(typeof el.showPicker === 'function'){
-    el.showPicker();
-    return;
+  try{
+    if(typeof el.focus === 'function') el.focus({ preventScroll:true });
+  }catch(e){
+    try{ el.focus(); }catch(_e){}
   }
-  el.focus();
-  if(typeof el.click === 'function') el.click();
+  try{
+    if(typeof el.showPicker === 'function'){
+      el.showPicker();
+      return;
+    }
+  }catch(e){}
+  try{
+    if(typeof el.click === 'function') el.click();
+  }catch(e){}
+  setTimeout(function(){
+    try{
+      if(typeof el.focus === 'function') el.focus({ preventScroll:true });
+    }catch(e){
+      try{ el.focus(); }catch(_e){}
+    }
+    try{
+      if(typeof el.showPicker === 'function') el.showPicker();
+      else if(typeof el.click === 'function') el.click();
+    }catch(e){}
+  }, 0);
 }
 function daysAway(d){ const dt=new Date(d+'T12:00:00');const n=new Date();n.setHours(0,0,0,0);dt.setHours(0,0,0,0);return Math.round((dt-n)/86400000); }
 function fmtDate(s){ if(!s)return'—'; return formatDMY(s); }
