@@ -2,6 +2,12 @@
 function fixMojibake(str){
   if(typeof str !== 'string') return str;
   var fixed = str;
+  try{
+    if(/[ÃÂâð]/.test(fixed)){
+      var decoded = decodeURIComponent(escape(fixed));
+      if(decoded && decoded !== fixed) fixed = decoded;
+    }
+  }catch(e){}
   var replacements = {
     'Ã¡':'á','Ã©':'é','Ã­':'í','Ã³':'ó','Ãº':'ú',
     'Ã':'Á','Ã‰':'É','Ã':'Í','Ã“':'Ó','Ãš':'Ú',
@@ -24,6 +30,53 @@ function fixMojibake(str){
   return fixed;
 }
 function t(key){ return fixMojibake((TRANSLATIONS[LANG]||TRANSLATIONS.en)[key] || TRANSLATIONS.en[key] || key); }
+function repairMojibakeInDOM(root){
+  try{
+    var scope = root || document.body;
+    if(!scope || typeof document === 'undefined' || typeof document.createTreeWalker !== 'function') return;
+    var textFilter = (typeof NodeFilter !== 'undefined' && NodeFilter.SHOW_TEXT) ? NodeFilter.SHOW_TEXT : 4;
+    var walker = document.createTreeWalker(scope, textFilter, null);
+    var node;
+    while((node = walker.nextNode())){
+      if(!node.nodeValue || !/[ÃÂâð]/.test(node.nodeValue)) continue;
+      var repaired = fixMojibake(node.nodeValue);
+      if(repaired !== node.nodeValue) node.nodeValue = repaired;
+    }
+    var elements = scope.querySelectorAll ? scope.querySelectorAll('[title],[placeholder],input[value],textarea,option]') : [];
+    elements.forEach(function(el){
+      if(el.title && /[ÃÂâð]/.test(el.title)) el.title = fixMojibake(el.title);
+      if(el.placeholder && /[ÃÂâð]/.test(el.placeholder)) el.placeholder = fixMojibake(el.placeholder);
+      if(el.tagName === 'OPTION' && el.textContent && /[ÃÂâð]/.test(el.textContent)) el.textContent = fixMojibake(el.textContent);
+      if((el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && el.readOnly && typeof el.value === 'string' && /[ÃÂâð]/.test(el.value)){
+        el.value = fixMojibake(el.value);
+      }
+    });
+  }catch(e){}
+}
+var _mojibakeObserver = null;
+function startMojibakeObserver(){
+  try{
+    if(_mojibakeObserver || typeof document === 'undefined' || !document.body || typeof MutationObserver === 'undefined') return;
+    repairMojibakeInDOM(document.body);
+    _mojibakeObserver = new MutationObserver(function(mutations){
+      try{
+        mutations.forEach(function(mutation){
+          mutation.addedNodes && mutation.addedNodes.forEach(function(node){
+            if(node.nodeType === 3){
+              if(node.nodeValue && /[ÃÂâð]/.test(node.nodeValue)) node.nodeValue = fixMojibake(node.nodeValue);
+              return;
+            }
+            if(node.nodeType === 1) repairMojibakeInDOM(node);
+          });
+          if(mutation.type === 'characterData' && mutation.target && mutation.target.nodeValue && /[ÃÂâð]/.test(mutation.target.nodeValue)){
+            mutation.target.nodeValue = fixMojibake(mutation.target.nodeValue);
+          }
+        });
+      }catch(e){}
+    });
+    _mojibakeObserver.observe(document.body, { childList:true, subtree:true, characterData:true });
+  }catch(e){}
+}
 
 function getLangPrefKey(userId){
   return 'eventos_lang_' + (userId || 'local');
@@ -138,6 +191,7 @@ function applyTranslations(){
   if(mlb) mlb.textContent = LANG==='es' ? 'English / Inglés' : 'Español / Spanish';
   const ll = document.getElementById('lang-label');
   if(ll) ll.textContent = LANG==='es' ? 'EN' : 'ES';
+  repairMojibakeInDOM(document.body);
 }
 
 
@@ -336,6 +390,7 @@ async function initApp(){
     showLoadingError(getConfigErrorMessage());
     return;
   }
+  startMojibakeObserver();
   var isDevMode = (DB.cur === 'dev_user_local');
   var ok = await loadProjectsFromCloud(DB.cur);
   if(ok !== false || isDevMode) enterApp();

@@ -740,14 +740,166 @@ function toast(msg,type=''){
   const c=document.getElementById('toast-c');
   const t=document.createElement('div');
   t.className='toast '+(type==='s'?'s':type==='e'?'e':'');
-  t.innerHTML=(type==='s'?'✓':type==='e'?'✕':'ℹ')+' '+msg;
+  t.innerHTML=(type==='s'?'✓':type==='e'?'✕':'ℹ')+' '+fixMojibake(msg);
   c.appendChild(t);
   requestAnimationFrame(()=>t.classList.add('show'));
   setTimeout(()=>{t.classList.remove('show');setTimeout(()=>t.remove(),300);},3000);
 }
 
-function today(){ return new Date().toISOString().split('T')[0]; }
-function formatDMY(s){ if(!s)return'DD/MM/YYYY'; const [y,m,d]=s.split('-'); return `${d}/${m}/${y}`; }
+function today(){
+  var dt = new Date();
+  var y = dt.getFullYear();
+  var m = String(dt.getMonth()+1).padStart(2,'0');
+  var d = String(dt.getDate()).padStart(2,'0');
+  return y+'-'+m+'-'+d;
+}
+function formatDMY(s){
+  if(!s) return 'DD/MM/YYYY';
+  if(s instanceof Date && !isNaN(s.getTime())){
+    return String(s.getDate()).padStart(2,'0')+'/'+String(s.getMonth()+1).padStart(2,'0')+'/'+s.getFullYear();
+  }
+  var str = String(s).trim();
+  if(!str) return 'DD/MM/YYYY';
+  if(/^\d{2}\/\d{2}\/\d{4}$/.test(str)) return str;
+  var m1 = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m1) return m1[3]+'/'+m1[2]+'/'+m1[1];
+  var m2 = str.match(/^(\d{4})\/(\d{2})\/(\d{2})/);
+  if(m2) return m2[3]+'/'+m2[2]+'/'+m2[1];
+  var m3 = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(m3) return String(m3[1]).padStart(2,'0')+'/'+String(m3[2]).padStart(2,'0')+'/'+m3[3];
+  var dt = new Date(str);
+  if(!isNaN(dt.getTime())){
+    return String(dt.getDate()).padStart(2,'0')+'/'+String(dt.getMonth()+1).padStart(2,'0')+'/'+dt.getFullYear();
+  }
+  return str;
+}
+function parseUserDate(s){
+  if(!s) return '';
+  var str = String(s).trim();
+  if(!str) return '';
+  var m1 = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if(m1) return m1[3]+'-'+m1[2]+'-'+m1[1];
+  var m2 = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(m2) return str;
+  var dt = new Date(str);
+  if(!isNaN(dt.getTime())){
+    return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+  }
+  return '';
+}
+function normalizeDateInput(el){
+  if(!el) return '';
+  var iso = parseUserDate(el.value);
+  if(iso) el.value = formatDMY(iso);
+  return iso;
+}
+var _calendarPicker = { targetId:null, month:null };
+function openCalendarPicker(id){
+  var input = document.getElementById(id);
+  if(!input) return;
+  var iso = parseUserDate(input.value) || today();
+  var parts = iso.split('-');
+  _calendarPicker.targetId = id;
+  _calendarPicker.month = new Date(Number(parts[0]), Number(parts[1]) - 1, 1);
+  renderCalendarPicker();
+  positionCalendarPicker(input);
+}
+function closeCalendarPicker(){
+  var picker = document.getElementById('calendar-picker');
+  if(picker) picker.classList.remove('open');
+  _calendarPicker.targetId = null;
+}
+function positionCalendarPicker(input){
+  var picker = document.getElementById('calendar-picker');
+  if(!picker || !input) return;
+  picker.style.visibility = 'hidden';
+  picker.classList.add('open');
+  var rect = input.getBoundingClientRect();
+  var top = rect.bottom + window.scrollY + 8;
+  var left = rect.left + window.scrollX;
+  var pickerWidth = picker.offsetWidth || 302;
+  var viewportRight = window.scrollX + document.documentElement.clientWidth - 12;
+  if(left + pickerWidth > viewportRight) left = Math.max(12 + window.scrollX, viewportRight - pickerWidth);
+  picker.style.top = top + 'px';
+  picker.style.left = left + 'px';
+  picker.style.visibility = 'visible';
+}
+function shiftCalendarPicker(delta){
+  if(!_calendarPicker.month) return;
+  _calendarPicker.month = new Date(_calendarPicker.month.getFullYear(), _calendarPicker.month.getMonth() + delta, 1);
+  renderCalendarPicker();
+}
+function selectCalendarDate(iso){
+  if(!_calendarPicker.targetId) return;
+  var input = document.getElementById(_calendarPicker.targetId);
+  if(input){
+    input.value = formatDMY(iso);
+    input.dispatchEvent(new Event('input', { bubbles:true }));
+    input.dispatchEvent(new Event('change', { bubbles:true }));
+  }
+  closeCalendarPicker();
+}
+function renderCalendarPicker(){
+  var picker = document.getElementById('calendar-picker');
+  if(!picker){
+    picker = document.createElement('div');
+    picker.id = 'calendar-picker';
+    picker.className = 'calendar-picker';
+    document.body.appendChild(picker);
+  }
+  if(!_calendarPicker.month) _calendarPicker.month = new Date();
+  var month = _calendarPicker.month;
+  var monthName = month.toLocaleString(LANG==='es'?'es-MX':'en-GB', { month:'long', year:'numeric' });
+  monthName = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+  var first = new Date(month.getFullYear(), month.getMonth(), 1);
+  var startDay = (first.getDay() + 6) % 7;
+  var daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+  var selectedIso = _calendarPicker.targetId ? parseUserDate((document.getElementById(_calendarPicker.targetId)||{}).value) : '';
+  var todayIso = today();
+  var weekDays = LANG==='es' ? ['L','M','M','J','V','S','D'] : ['M','T','W','T','F','S','S'];
+  var cells = '';
+  for(var i=0;i<startDay;i++) cells += '<div class="calendar-day is-empty"></div>';
+  for(var d=1; d<=daysInMonth; d++){
+    var iso = month.getFullYear() + '-' + String(month.getMonth()+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    var cls = 'calendar-day';
+    if(iso === selectedIso) cls += ' is-selected';
+    if(iso === todayIso) cls += ' is-today';
+    cells += '<button type="button" class="'+cls+'" onclick="selectCalendarDate(\''+iso+'\')">'+d+'</button>';
+  }
+  picker.innerHTML = ''
+    + '<div class="calendar-picker-head">'
+    +   '<button type="button" class="calendar-nav-btn" onclick="shiftCalendarPicker(-1)" aria-label="Previous month">'
+    +     '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>'
+    +   '</button>'
+    +   '<div class="calendar-month-label">'+monthName+'</div>'
+    +   '<button type="button" class="calendar-nav-btn" onclick="shiftCalendarPicker(1)" aria-label="Next month">'
+    +     '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>'
+    +   '</button>'
+    + '</div>'
+    + '<div class="calendar-weekdays">'+weekDays.map(function(day){ return '<div>'+day+'</div>'; }).join('')+'</div>'
+    + '<div class="calendar-grid">'+cells+'</div>';
+  if(_calendarPicker.targetId){
+    var input = document.getElementById(_calendarPicker.targetId);
+    if(input) positionCalendarPicker(input);
+  }
+}
+document.addEventListener('click', function(e){
+  var picker = document.getElementById('calendar-picker');
+  if(!picker || !picker.classList.contains('open')) return;
+  if(e.target.closest('#calendar-picker')) return;
+  if(e.target.closest('.date-field')) return;
+  closeCalendarPicker();
+});
+window.addEventListener('resize', function(){
+  if(!_calendarPicker.targetId) return;
+  var input = document.getElementById(_calendarPicker.targetId);
+  if(input) positionCalendarPicker(input);
+});
+window.addEventListener('scroll', function(){
+  if(!_calendarPicker.targetId) return;
+  var input = document.getElementById(_calendarPicker.targetId);
+  if(input) positionCalendarPicker(input);
+}, true);
 function openDateField(id){
   var el = document.getElementById(id);
   if(!el) return;
@@ -901,7 +1053,7 @@ function renderShareModal(p){
   }).join('');
 
   var sharedInfo = s.sharedAt
-    ? '<span style="color:var(--gold-h);font-size:11px">✓ Shared '+new Date(s.sharedAt).toLocaleDateString()+'</span>'
+    ? '<span style="color:var(--gold-h);font-size:11px">✓ Shared '+formatDMY(s.sharedAt)+'</span>'
     : '<span style="color:var(--muted);font-size:11px">Not yet shared</span>';
 
   openMo(
@@ -1056,7 +1208,7 @@ function renderClientPortal(p, share, ownerPreview){
 
 function renderClientPortalContent(p, share, perms, activeSection, ownerPreview){
   var visibleSections = SHARE_SECTIONS.filter(function(s){ return perms[s.id] !== 'off'; });
-  var fmtDate2 = function(d){ if(!d)return'TBD'; try{return new Date(d).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});}catch(e){return d;} };
+  var fmtDate2 = function(d){ if(!d)return'TBD'; return formatDMY(d); };
 
   var tabs = visibleSections.map(function(s){
     return '<button class="client-tab '+(activeSection===s.id?'active':'')+'" data-sid="'+s.id+'" onclick="clientSwitchTab(this.dataset.sid)">'+s.icon+' '+s.label+'</button>';

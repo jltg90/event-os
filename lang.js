@@ -2,16 +2,16 @@ var LANG = 'es';
 var CURRENCY={code:'USD',symbol:'$',name:'US Dollar'};
 var CURRENCIES=[
   {code:'USD',symbol:'$',  name:'US Dollar'},
-  {code:'EUR',symbol:'€',  name:'Euro'},
+  {code:'EUR',symbol:'\u20AC',  name:'Euro'},
   {code:'MXN',symbol:'$',  name:'Mexican Peso'},
-  {code:'GBP',symbol:'£',  name:'British Pound'},
+  {code:'GBP',symbol:'\u00A3',  name:'British Pound'},
   {code:'CAD',symbol:'$',  name:'Canadian Dollar'},
   {code:'ARS',symbol:'$',  name:'Argentine Peso'},
   {code:'COP',symbol:'$',  name:'Colombian Peso'},
   {code:'BRL',symbol:'R$', name:'Brazilian Real'},
   {code:'CLP',symbol:'$',  name:'Chilean Peso'},
   {code:'PEN',symbol:'S/',  name:'Peruvian Sol'},
-  {code:'JPY',symbol:'¥',  name:'Japanese Yen'},
+  {code:'JPY',symbol:'\u00A5',  name:'Japanese Yen'},
   {code:'AUD',symbol:'$',  name:'Australian Dollar'},
   {code:'CHF',symbol:'Fr',  name:'Swiss Franc'},
 ];

@@ -70,12 +70,11 @@ function _openEditModal(id, p) {
     <div class="ig"><label>${t('client_name')} *</label><input class="input" id="e-client" value="${esc(p?.clientName||'')}"></div>
     <div class="ig"><label>${t('event_type')}</label><select class="select" id="e-type">${[['social',t('type_social')],['corporate',t('type_corporate')],['community',t('type_community')],['government',t('type_government')],['education',t('type_education')]].map(([v,l])=>`<option value="${v}"${p?.type===v?' selected':''}>${l}</option>`).join('')}</select></div>
     <div class="ig"><label>${t('event_date')} *</label>
-      <div style="position:relative;cursor:pointer" onclick="openDateField('e-date')" onpointerdown="openDateField('e-date')">
-        <input type="date" id="e-date" value="${p?.date||''}" onkeydown="return false" onpaste="return false" onchange="var d=document.getElementById('e-date-display');if(d){d.firstElementChild.textContent=this.value?formatDMY(this.value):'DD/MM/YYYY';}" oninput="var d=document.getElementById('e-date-display');if(d){d.firstElementChild.textContent=this.value?formatDMY(this.value):'DD/MM/YYYY';}" style="position:absolute;inset:0;opacity:0;pointer-events:none;width:100%;height:100%;z-index:2">
-        <div id="e-date-display" class="input" style="display:flex;align-items:center;justify-content:space-between;width:100%;pointer-events:none">
-          <span>${p?.date?formatDMY(p.date):'DD/MM/YYYY'}</span>
+      <div class="date-field">
+        <input class="input date-field-input" type="text" id="e-date" value="${p?.date?formatDMY(p.date):''}" placeholder="DD/MM/YYYY" readonly onclick="openCalendarPicker('e-date')" onfocus="openCalendarPicker('e-date')">
+        <button type="button" class="date-field-btn" onclick="openCalendarPicker('e-date')" aria-label="${t('event_date')}">
           <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-        </div>
+        </button>
       </div>
     </div>
     <div class="ig"><label>${t('location')}</label><input class="input" id="e-location" value="${esc(p?.location||'')}"></div>
@@ -190,12 +189,11 @@ function _wizStep2(isES) {
     +'<div style="font-size:13px;color:var(--muted);margin-bottom:20px;">'+(isES?'Define cuándo y dónde se llevará a cabo el evento.':'Set when and where the event will take place.')+'</div>'
     +'<div class="ig" style="margin-bottom:14px;">'
     +'<label style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px;">'+(isES?'Fecha del evento *':'Event date *')+'</label>'
-    +'<div style="position:relative;cursor:pointer" onclick="openDateField(\'wiz-date\')" onpointerdown="openDateField(\'wiz-date\')">'
-    +'<input type="date" id="wiz-date" value="'+(_wiz.date||'')+'" onkeydown="return false" onpaste="return false" onchange="if(_wiz){_wiz.date=this.value;var d=document.getElementById(\'wiz-date-disp\');if(d){d.firstElementChild.textContent=this.value?formatDMY(this.value):\'DD/MM/YYYY\';}}" oninput="if(_wiz){_wiz.date=this.value;var d=document.getElementById(\'wiz-date-disp\');if(d){d.firstElementChild.textContent=this.value?formatDMY(this.value):\'DD/MM/YYYY\';}}" style="position:absolute;inset:0;opacity:0;pointer-events:none;width:100%;height:100%;z-index:2">'
-    +'<div id="wiz-date-disp" class="input" style="width:100%;display:flex;align-items:center;justify-content:space-between;pointer-events:none">'
-    +'<span>'+(_wiz.date?formatDMY(_wiz.date):'DD/MM/YYYY')+'</span>'
+    +'<div class="date-field">'
+    +'<input class="input date-field-input" type="text" id="wiz-date" value="'+(_wiz.date?formatDMY(_wiz.date):'')+'" placeholder="DD/MM/YYYY" readonly onclick="openCalendarPicker(\'wiz-date\')" onfocus="openCalendarPicker(\'wiz-date\')">'
+    +'<button type="button" class="date-field-btn" onclick="openCalendarPicker(\'wiz-date\')" aria-label="'+(isES?'Fecha del evento':'Event date')+'">'
     +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>'
-    +'</div></div>'
+    +'</button></div>'
     +'</div>'
     +_wizField('wiz-location', isES?'Sede / Lugar':'Venue / Location', isES?'Nombre o dirección del lugar':'Venue name or address', _wiz.location, 'text')
     +_wizField('wiz-budget',   isES?'Presupuesto total ('+CURRENCY.symbol+')':'Total budget ('+CURRENCY.symbol+')', '0', _wiz.budget, 'number')
@@ -310,7 +308,7 @@ function _wizFinish() {
   var isES   = LANG === 'es';
   var name   = (_wiz.name||'').trim();
   var client = (_wiz.clientName||'').trim();
-  var date   = _wiz.date;
+  var date   = parseUserDate(_wiz.date);
   if (!name||!client||!date) { toast(isES?'Nombre, cliente y fecha son requeridos':'Name, client and date required','e'); return; }
   var np = {
     id: 'p'+Date.now(),
@@ -330,7 +328,7 @@ function _wizFinish() {
 }
 
 function saveEvent(id){
-  const name=gv('e-name'),client=gv('e-client'),date=gv('e-date');
+  const name=gv('e-name'),client=gv('e-client'),date=parseUserDate(gv('e-date'));
   if(!name||!client||!date)return toast('Name, client and date required','e');
   const p=id?uproj()[id]:null;
   const data={name,clientName:client,date,description:gv('e-desc'),type:gv('e-type'),location:gv('e-location'),budget:+gv('e-budget')||0,status:gv('e-status')};

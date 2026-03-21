@@ -37,7 +37,7 @@ function getLib(){
           changed = true;
         }
       } else {
-        lib.vendors.push({id:entryId, name:v.name, date:new Date().toLocaleDateString(), vendors:[JSON.parse(JSON.stringify(v))]});
+        lib.vendors.push({id:entryId, name:v.name, date:formatDMY(today()), vendors:[JSON.parse(JSON.stringify(v))]});
         changed = true;
       }
     });
@@ -177,11 +177,11 @@ function libBuildMigratedLayoutEntry(p){
   var isES=LANG==='es';
   return {
     id:'ll_mig_'+Date.now(),
-    name:(p.name||'Event')+' - '+(isES?'Migrado':'Migrated')+' '+new Date().toLocaleDateString(),
+    name:(p.name||'Event')+' - '+(isES?'Migrado':'Migrated')+' '+formatDMY(today()),
     notes:isES?'Migrado automaticamente desde el evento':'Auto-migrated from event',
     location:p.location||'',
     guests:String(p.guests||''),
-    date:new Date().toLocaleDateString(),
+    date:formatDMY(today()),
     updatedAt:new Date().toISOString(),
     items:JSON.parse(JSON.stringify(p.layoutItems||[])),
     floorplan:p.floorplan?JSON.parse(JSON.stringify(p.floorplan)):null
@@ -676,7 +676,7 @@ function libSaveGlobalVendor(){
   if(!name) return toast(LANG==='es'?'El nombre es requerido':'Name is required','e');
   var v={id:'glv'+Date.now(),name:name,category:(document.getElementById('glv-cat')||{}).value||'',subcategory:(document.getElementById('glv-sub')||{}).value||'',services:(document.getElementById('glv-svc')||{}).value||'',contact:(document.getElementById('glv-email')||{}).value||'',phone:(document.getElementById('glv-phone')||{}).value||'',notes:(document.getElementById('glv-notes')||{}).value||'',hired:false,vendorStatus:'pending',budget:0,payments:[]};
   var lib=getLib();
-  lib.vendors.push({id:'lv'+Date.now(),name:v.name,date:new Date().toLocaleDateString(),vendors:[v]});
+  lib.vendors.push({id:'lv'+Date.now(),name:v.name,date:formatDMY(today()),vendors:[v]});
   saveLib(lib); closeMo(); renderLibrary();
   toast(LANG==='es'?'Proveedor guardado':'Vendor saved','s');
 }
@@ -786,7 +786,7 @@ function libDoImportCSV(){
   _csvParsed.forEach(function(v){
     var exists=lib.vendors.some(function(e){return e.vendors&&e.vendors.some(function(lv){return lv.name.toLowerCase()===v.name.toLowerCase();});});
     if(!exists){
-      lib.vendors.push({id:'lv'+Date.now()+added,name:v.name,date:new Date().toLocaleDateString(),vendors:[JSON.parse(JSON.stringify(v))]});
+      lib.vendors.push({id:'lv'+Date.now()+added,name:v.name,date:formatDMY(today()),vendors:[JSON.parse(JSON.stringify(v))]});
       added++;
     }
   });
@@ -1404,7 +1404,7 @@ function libSaveVendorsDo(){
   if(!ids.length) return toast(LANG==='es'?'Selecciona al menos uno':'Select at least one','e');
   var vendorsToSave = (p.vendors||[]).filter(function(v){return ids.includes(v.id);});
   var lib = getLib();
-  lib.vendors.push({id:'lv'+Date.now(), name:name, date:new Date().toLocaleDateString(), vendors: JSON.parse(JSON.stringify(vendorsToSave))});
+  lib.vendors.push({id:'lv'+Date.now(), name:name, date:formatDMY(today()), vendors: JSON.parse(JSON.stringify(vendorsToSave))});
   saveLib(lib);
   closeMo();
   toast(t('lib_saved'),'s');
@@ -1435,7 +1435,7 @@ function libSaveTasksDo(){
   if(!ids.length) return toast(LANG==='es'?'Selecciona al menos uno':'Select at least one','e');
   var tasksToSave = (p.tasks||[]).filter(function(tk){return ids.includes(tk.id);});
   var lib = getLib();
-  lib.tasks.push({id:'lt'+Date.now(), name:name, date:new Date().toLocaleDateString(), tasks: JSON.parse(JSON.stringify(tasksToSave))});
+  lib.tasks.push({id:'lt'+Date.now(), name:name, date:formatDMY(today()), tasks: JSON.parse(JSON.stringify(tasksToSave))});
   saveLib(lib);
   closeMo();
   toast(t('lib_saved'),'s');
@@ -1479,7 +1479,7 @@ function libSaveLayoutDo(){
   var lib = getLib();
   lib.layouts.push({
     id:'ll'+Date.now(), name:name, notes:notes, location:location, guests:guests,
-    date:new Date().toLocaleDateString(),
+    date:formatDMY(today()),
     updatedAt:new Date().toISOString(),
     items: JSON.parse(JSON.stringify(p.layoutItems||[])),
     floorplan: floorplan
@@ -1505,7 +1505,7 @@ function libRecoverFromEvents(){
       notes:isES?'Recuperado automáticamente desde el evento':'Auto-recovered from event',
       location:p.location||'',
       guests:p.guests||'',
-      date:new Date().toLocaleDateString(),
+      date:formatDMY(today()),
       items:JSON.parse(JSON.stringify(p.layoutItems)),
       floorplan:p.floorplan?JSON.parse(JSON.stringify(p.floorplan)):null
     });
@@ -1557,7 +1557,7 @@ function libSaveTypesDo(type){
   keys.forEach(function(k){ if(srcData[k]) dataToSave[k]=JSON.parse(JSON.stringify(srcData[k])); });
   var lib = getLib();
   if(!lib[type+'_packs']) lib[type+'_packs']=[];
-  lib[type+'_packs'].push({id:'ltp'+Date.now(), name:name, date:new Date().toLocaleDateString(), data:dataToSave});
+  lib[type+'_packs'].push({id:'ltp'+Date.now(), name:name, date:formatDMY(today()), data:dataToSave});
   saveLib(lib);
   closeMo();
   toast(t('lib_saved'),'s');
@@ -1604,7 +1604,7 @@ function libSaveMoodboardDo(){
   var lib = getLib();
   lib.moodboards.push({
     id:'lm'+Date.now(), name:name,
-    date:new Date().toLocaleDateString(),
+    date:formatDMY(today()),
     folders: savedFolders,
     uncategorized: savedUncat
   });
@@ -1635,7 +1635,7 @@ function libCreateMoodboardFolderDo(){
   var name=(document.getElementById('lib-mb-folder-name')||{}).value||'';
   if(!name.trim()) return toast(isES?'Escribe un nombre':'Enter a name','e');
   var lib=getLib();
-  lib.moodboards.push({id:'lm'+Date.now(), name:name.trim(), date:new Date().toLocaleDateString(), images:[]});
+  lib.moodboards.push({id:'lm'+Date.now(), name:name.trim(), date:formatDMY(today()), images:[]});
   saveLib(lib);
   closeMo();
   toast(isES?'Carpeta creada':'Folder created','s');
@@ -1680,7 +1680,7 @@ function libDuplicateMoodboardFolder(id){
   var copy=JSON.parse(JSON.stringify(entry));
   copy.id='lm'+Date.now();
   copy.name=entry.name+(isES?' (Copia)':' (Copy)');
-  copy.date=new Date().toLocaleDateString();
+  copy.date=formatDMY(today());
   lib.moodboards.push(copy);
   saveLib(lib);
   renderLibrary();
@@ -2810,13 +2810,13 @@ function _libLayoutWizGenerate(){
 
   // Save to library
   var lib=getLib();
-  var name=libUniqueLayoutName(isES?'Plano '+new Date().toLocaleDateString():'Layout '+new Date().toLocaleDateString());
+  var name=libUniqueLayoutName(isES?'Plano '+formatDMY(today()):'Layout '+formatDMY(today()));
   var guests=w.guests||'';
   var tables=tableCount;
   var entryId='ll'+Date.now();
   lib.layouts.push({
     id:entryId, name:name, notes:'', location:'', guests:String(guests),
-    date:new Date().toLocaleDateString(),
+    date:formatDMY(today()),
     items:JSON.parse(JSON.stringify(items)),
     floorplan:_libLayoutWiz.floorplan?JSON.parse(JSON.stringify(_libLayoutWiz.floorplan)):null,
     pxPerMeter:(_libLayoutWiz.floorplan&&_libLayoutWiz.floorplan.pxPerMeter)||null
@@ -3033,7 +3033,7 @@ function libDuplicateLayout(entryId){
   newEntry.updatedAt=new Date().toISOString();
   newEntry.id='ll'+Date.now();
   newEntry.name=newName;
-  newEntry.date=new Date().toLocaleDateString();
+  newEntry.date=formatDMY(today());
   if(newEntry.floorplan&&newEntry.floorplan._idb&&typeof _fpLoad==='function'){
     _fpLoad(newEntry.floorplan._idb).then(function(data){
       if(data){

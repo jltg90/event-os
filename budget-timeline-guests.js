@@ -298,7 +298,7 @@ function autoSyncVendorToGlobal(v){
     const lib=getLib();
     const exists=lib.vendors.some(e=>e.vendors&&e.vendors.some(lv=>lv.name.toLowerCase()===v.name.toLowerCase()));
     if(!exists){
-      lib.vendors.push({id:'lv'+Date.now(),name:v.name,date:new Date().toLocaleDateString(),vendors:[JSON.parse(JSON.stringify(v))]});
+      lib.vendors.push({id:'lv'+Date.now(),name:v.name,date:formatDMY(today()),vendors:[JSON.parse(JSON.stringify(v))]});
       saveLib(lib);
     }
   } catch(e){}
@@ -629,8 +629,22 @@ function openTaskModal(tid){
   <div class="ig" style="margin-bottom:12px"><label>${t('task_title_lbl')} *</label><input class="input" id="tk-title" value="${esc(tk?.title||'')}" placeholder="${t('task_title_lbl')}"></div>
   <div class="ig" style="margin-bottom:12px"><label>${t('description_lbl')}</label><textarea class="textarea" id="tk-desc" rows="2" placeholder="Describe the task...">${tk?.desc||''}</textarea></div>
   <div class="form-grid" style="margin-bottom:12px">
-    <div class="ig"><label>${LANG==='es'?'Fecha de Inicio *':'Start Date *'}</label><input class="input" id="tk-start" type="date" value="${tk?.startDate||''}"></div>
-    <div class="ig"><label>${t('due_date_lbl')} *</label><input class="input" id="tk-due" type="date" value="${tk?.dueDate||''}"></div>
+    <div class="ig"><label>${LANG==='es'?'Fecha de Inicio *':'Start Date *'}</label>
+      <div class="date-field">
+        <input class="input date-field-input" id="tk-start" type="text" value="${tk?.startDate?formatDMY(tk.startDate):''}" placeholder="DD/MM/YYYY" readonly onclick="openCalendarPicker('tk-start')" onfocus="openCalendarPicker('tk-start')">
+        <button type="button" class="date-field-btn" onclick="openCalendarPicker('tk-start')" aria-label="${LANG==='es'?'Fecha de Inicio':'Start Date'}">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="ig"><label>${t('due_date_lbl')} *</label>
+      <div class="date-field">
+        <input class="input date-field-input" id="tk-due" type="text" value="${tk?.dueDate?formatDMY(tk.dueDate):''}" placeholder="DD/MM/YYYY" readonly onclick="openCalendarPicker('tk-due')" onfocus="openCalendarPicker('tk-due')">
+        <button type="button" class="date-field-btn" onclick="openCalendarPicker('tk-due')" aria-label="${t('due_date_lbl')}">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        </button>
+      </div>
+    </div>
   </div>
   <div class="form-grid" style="margin-bottom:12px">
     <div class="ig"><label>${t('assignee')}</label><input class="input" id="tk-who" value="${esc(tk?.assignee||'')}" placeholder="Event Coordinator"></div>
@@ -647,7 +661,7 @@ function openTaskModal(tid){
 }
 function pickColor(el,c){document.querySelectorAll('#mo-body [data-color]').forEach(d=>d.style.borderColor='transparent');el.style.borderColor='#000';document.getElementById('tk-color').value=c;}
 function saveTask(tid){
-  const title=gv('tk-title');const due=gv('tk-due');const start=gv('tk-start');
+  const title=gv('tk-title');const due=parseUserDate(gv('tk-due'));const start=parseUserDate(gv('tk-start'));
   if(!title||!start||!due)return toast(LANG==='es'?'TÃ­tulo, fecha de inicio y fecha lÃ­mite son requeridos':'Title, start date and due date required','e');
   const p=proj();
   const data={title,desc:gv('tk-desc'),startDate:start,dueDate:due,assignee:gv('tk-who'),color:gv('tk-color')};
