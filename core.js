@@ -547,6 +547,56 @@ function defaultTasks(){
   ];
 }
 
+function ensureDefaultVendors(p){
+  if(!p) return false;
+  var defaults = defaultVendors();
+  var current = Array.isArray(p.vendors) ? p.vendors : [];
+  var custom = current.filter(function(v){ return !(v && /^dv\d+$/.test(v.id||'')); });
+  var changed = !Array.isArray(p.vendors) || current.length !== defaults.length + custom.length || !p.vendorsInitialized;
+  var merged = defaults.map(function(def){
+    var existing = current.find(function(v){ return v && v.id === def.id; });
+    if(!existing){
+      changed = true;
+      return def;
+    }
+    return Object.assign({}, def, {
+      contact: existing.contact || '',
+      phone: existing.phone || '',
+      budget: existing.budget || 0,
+      payments: Array.isArray(existing.payments) ? existing.payments : [],
+      hired: !!existing.hired,
+      vendorStatus: existing.vendorStatus,
+      notes: existing.notes || ''
+    });
+  }).concat(custom);
+  p.vendors = merged;
+  p.vendorsInitialized = true;
+  return changed;
+}
+
+function ensureDefaultTasks(p){
+  if(!p) return false;
+  var defaults = defaultTasks();
+  var current = Array.isArray(p.tasks) ? p.tasks : [];
+  var custom = current.filter(function(tk){ return !(tk && /^t\d{1,2}$/.test(tk.id||'')); });
+  var changed = !Array.isArray(p.tasks) || current.length !== defaults.length + custom.length;
+  var merged = defaults.map(function(def){
+    var existing = current.find(function(tk){ return tk && tk.id === def.id; });
+    if(!existing){
+      changed = true;
+      return def;
+    }
+    return Object.assign({}, def, {
+      done: !!existing.done,
+      dueDate: existing.dueDate || def.dueDate,
+      startDate: existing.startDate || def.startDate || '',
+      color: existing.color || def.color
+    });
+  }).concat(custom);
+  p.tasks = merged;
+  return changed;
+}
+
 var _evSort='date', _evSortDir=1, _evView='grid';
 var _efAt=true, _efFr=null, _efTo=null;
 
@@ -585,8 +635,8 @@ function setEvFilter(mode){
   _efAt=true; _efFr=null; _efTo=null;
   const fromEl=document.getElementById('ef-from'); const toEl=document.getElementById('ef-to');
   if(fromEl)fromEl.value=''; if(toEl)toEl.value='';
-  const fdEl=document.getElementById('ef-from-display'); if(fdEl)fdEl.firstElementChild.textContent='DD / MM / YYYY';
-  const tdEl=document.getElementById('ef-to-display'); if(tdEl)tdEl.firstElementChild.textContent='DD / MM / YYYY';
+  const fdEl=document.getElementById('ef-from-display'); if(fdEl)fdEl.firstElementChild.textContent='DD/MM/YYYY';
+  const tdEl=document.getElementById('ef-to-display'); if(tdEl)tdEl.firstElementChild.textContent='DD/MM/YYYY';
   const btn=document.getElementById('ef-alltime'); if(btn)btn.classList.add('active');
   saveEvPrefs(); renderEvents();
 }

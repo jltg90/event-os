@@ -1,8 +1,7 @@
 var bTab='comp';
 function renderBudget(){
   const p=proj();const el=document.getElementById('tab-budget');
-  if(!p.vendors){p.vendors=defaultVendors();p.vendorsInitialized=true;saveProj(p);}
-  else if(!p.vendorsInitialized){p.vendorsInitialized=true;if(!p.vendors.length){p.vendors=defaultVendors();}saveProj(p);}
+  if(ensureDefaultVendors(p)) saveProj(p);
   const hired=p.vendors.filter(v=>v.hired);
   const comp=p.vendors.filter(v=>!v.hired);
   const allVendors = p.vendors;
@@ -125,7 +124,11 @@ function setVendorStatus(id, status){
 }
 function hireV(id){const p=proj();const v=p.vendors.find(v=>v.id===id);if(v){v.hired=true;v.vendorStatus='hired';saveProj(p);renderBudget();toast('Vendor hired','s');}}
 function unhireV(id){const p=proj();const v=p.vendors.find(v=>v.id===id);if(v){v.hired=false;v.vendorStatus='pending';saveProj(p);renderBudget();toast('Vendor moved to comparisons');}}
-function delV(id){if(!confirm('Delete vendor?'))return;const p=proj();p.vendors=p.vendors.filter(v=>v.id!==id);saveProj(p);renderBudget();toast('Vendor deleted');}
+function delV(id){
+  if(/^dv\d+$/.test(id||'')){ toast(LANG==='es'?'Los proveedores predeterminados no se pueden eliminar':'Default vendors cannot be deleted','e'); return; }
+  if(!confirm('Delete vendor?'))return;
+  const p=proj();p.vendors=p.vendors.filter(v=>v.id!==id);saveProj(p);renderBudget();toast('Vendor deleted');
+}
 function delPay(vid,pid){const p=proj();const v=p.vendors.find(v=>v.id===vid);if(v){v.payments=v.payments.filter(pay=>pay.id!==pid);saveProj(p);renderBudget();toast('Payment deleted');}}
 function viewReceipt(vid,pid){
   const p=proj();const v=p.vendors.find(v=>v.id===vid);const pay=v?.payments.find(pay=>pay.id===pid);
@@ -278,6 +281,7 @@ function _libUpdateSectionLabels(){
 }
 function renderTimeline(){
   const p=proj();const el=document.getElementById('tab-timeline');
+  if(ensureDefaultTasks(p)) saveProj(p);
   const done=p.tasks.filter(tk=>tk.done).length;
   const ov=p.tasks.filter(tk=>!tk.done&&tk.dueDate<today()).length;
   const pct=p.tasks.length?Math.round(done/p.tasks.length*100):0;
@@ -488,7 +492,11 @@ function renderCal(p){
   </div>`;
 }
 function toggleTask(tid){const p=proj();const tk=p.tasks.find(tk=>tk.id===tid);if(tk){tk.done=!tk.done;saveProj(p);renderTimeline();}}
-function delTask(tid){if(!confirm('Delete task?'))return;const p=proj();p.tasks=p.tasks.filter(tk=>tk.id!==tid);saveProj(p);renderTimeline();}
+function delTask(tid){
+  if(/^t\d{1,2}$/.test(tid||'')){ toast(LANG==='es'?'Las tareas predeterminadas no se pueden eliminar':'Default tasks cannot be deleted','e'); return; }
+  if(!confirm('Delete task?'))return;
+  const p=proj();p.tasks=p.tasks.filter(tk=>tk.id!==tid);saveProj(p);renderTimeline();
+}
 function openTaskModal(tid){
   const p=proj();const tk=tid?p.tasks.find(x=>x.id===tid):null;
   const colors=['#7c3aed','#c9a84c','#10b981','#f59e0b','#ec4899','#ef4444'];
@@ -542,8 +550,12 @@ function renderGuests(){
       </button>
       <label class="btn btn-ghost btn-sm" style="cursor:pointer">
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-        ${t('import_csv')}<input type="file" accept=".csv,.xlsx" multiple class="hidden" onchange="importCSV(this)">
+        ${LANG==='es'?'Importar Invitados':'Import Guests'}<input type="file" accept=".csv,.xlsx" multiple class="hidden" onchange="importCSV(this)">
       </label>
+      <button class="btn btn-ghost btn-sm" onclick="exportGuestsExcel()">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        ${LANG==='es'?'Exportar Invitados':'Export Guests'}
+      </button>
       <button class="btn btn-primary btn-sm" onclick="openGuestModal()">
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>${t('add_guest')}
       </button>
@@ -675,6 +687,33 @@ function openGuestModal(gid){
     <button class="btn btn-primary" onclick="saveGuest('${gid||''}')">${t('save_guest')}</button>
   </div>`);
 }
+
+function renderSeating(p){
+  let seated = p.guests.filter(g => g.table);
+  if(gFilter) seated = seated.filter(g => JSON.stringify(g).toLowerCase().includes(gFilter.toLowerCase()));
+  seated = seated.sort((a,b) => a.table.localeCompare(b.table, undefined, { numeric:true }));
+  const tables = [...new Set(seated.map(g => g.table))];
+  document.getElementById('gview').innerHTML = `<div style="background:#fff;border-radius:var(--r);border:1px solid var(--border);overflow:hidden">
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#fafafa">
+      <input class="input" id="seating-search-input" style="flex:1;min-width:200px" placeholder="${t('search_guests')}" value="${esc(gFilter)}" oninput="var v=this.value;gFilter=v;renderSeating(proj());var el=document.getElementById('seating-search-input');if(el){el.focus();el.value=v;try{el.setSelectionRange(v.length,v.length);}catch(e){}}">
+    </div>
+    <div style="padding:16px">
+      ${tables.length ? tables.map(tb => {
+        const gs = seated.filter(g => g.table === tb);
+        return `<div style="margin-bottom:20px">
+          <div class="seating-th">${t('table_header')} ${tb} · ${gs.length} ${t('guests_lbl')}</div>
+          ${gs.map(g => `<div class="seating-row">
+            <div><strong>${g.name}</strong>${g.plusOne ? ' <span class="s-sm">+1</span>' : ''}</div>
+            <div style="display:flex;gap:12px;font-size:12px;color:var(--muted)">
+              <span>${g.meal || '—'}</span>
+              <span class="rb ${g.rsvp==='confirmed'?'rb-c':g.rsvp==='declined'?'rb-d':'rb-p'}">${g.rsvp||'pending'}</span>
+            </div>
+          </div>`).join('')}
+        </div>`;
+      }).join('') : `<div class="card" style="text-align:center;padding:40px;color:var(--muted)">${t('no_guests_found')}</div>`}
+    </div>
+  </div>`;
+}
 function saveGuest(gid){
   const name=gv('gf-name');if(!name)return toast('Name required','e');
   const p=proj();
@@ -684,6 +723,242 @@ function saveGuest(gid){
   saveProj(p);closeMo();renderGuests();toast(gid?'Guest updated':'Guest added','s');
 }
 function delGuest(gid){if(!confirm('Delete guest?'))return;const p=proj();p.guests=p.guests.filter(g=>g.id!==gid);saveProj(p);renderGuests();}
+
+function exportGuestsExcel(){
+  const p = proj();
+  if(!p || !Array.isArray(p.guests) || !p.guests.length) return toast(LANG==='es'?'No hay invitados para exportar':'No guests to export','e');
+  const rows = p.guests.map(function(g){
+    return [
+      g.name || '',
+      g.email || '',
+      g.phone || '',
+      g.category || '',
+      g.rsvp || 'pending',
+      g.table || '',
+      g.plusOne ? (LANG==='es' ? 'Si' : 'Yes') : (LANG==='es' ? 'No' : 'No'),
+      g.meal || '',
+      g.dietary || '',
+      g.notes || ''
+    ];
+  });
+  const headers = [
+    LANG==='es' ? 'Nombre' : 'Name',
+    'Email',
+    LANG==='es' ? 'Telefono' : 'Phone',
+    LANG==='es' ? 'Categoria' : 'Category',
+    'RSVP',
+    LANG==='es' ? 'Mesa' : 'Table',
+    LANG==='es' ? 'Acompanante' : 'Plus One',
+    LANG==='es' ? 'Comida' : 'Meal',
+    LANG==='es' ? 'Restricciones' : 'Dietary',
+    LANG==='es' ? 'Notas' : 'Notes'
+  ];
+  function escCell(v){
+    return String(v == null ? '' : v)
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;');
+  }
+  const table = '<table><thead><tr>'
+    + headers.map(function(h){ return '<th>'+escCell(h)+'</th>'; }).join('')
+    + '</tr></thead><tbody>'
+    + rows.map(function(r){
+      return '<tr>' + r.map(function(c){ return '<td>'+escCell(c)+'</td>'; }).join('') + '</tr>';
+    }).join('')
+    + '</tbody></table>';
+  const html = '<html><head><meta charset="utf-8"></head><body>'+table+'</body></html>';
+  const blob = new Blob([html], { type:'application/vnd.ms-excel;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const safeName = (p.name || 'guests').replace(/[\\/:*?"<>|]+/g,'-').trim() || 'guests';
+  a.href = url;
+  a.download = safeName + '-guests.xls';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+}
+
+var gSelectedGuestIds = [];
+function guestSelectionCount(){ return gSelectedGuestIds.length; }
+function isGuestSelected(id){ return gSelectedGuestIds.indexOf(id) > -1; }
+function toggleGuestSelection(id, checked){
+  if(checked){
+    if(!isGuestSelected(id)) gSelectedGuestIds.push(id);
+  } else {
+    gSelectedGuestIds = gSelectedGuestIds.filter(function(x){ return x !== id; });
+  }
+  updateGuestBulkBar();
+}
+function clearGuestSelection(){
+  gSelectedGuestIds = [];
+  updateGuestBulkBar();
+}
+function syncGuestSelectionToVisible(){
+  document.querySelectorAll('.guest-sel').forEach(function(chk){
+    chk.checked = isGuestSelected(chk.dataset.gid);
+  });
+  var visible = document.querySelectorAll('.guest-sel').length;
+  var checked = document.querySelectorAll('.guest-sel:checked').length;
+  var all = document.getElementById('guest-chk-all');
+  if(all) all.checked = visible > 0 && visible === checked;
+}
+function updateGuestBulkBar(){
+  var bar = document.getElementById('guest-bulk-bar');
+  var lbl = document.getElementById('guest-bulk-count');
+  if(bar) bar.style.display = guestSelectionCount() ? 'flex' : 'none';
+  if(lbl) lbl.textContent = guestSelectionCount() + ' ' + (LANG==='es' ? 'seleccionado(s)' : 'selected');
+  syncGuestSelectionToVisible();
+}
+function toggleAllVisibleGuests(checked){
+  document.querySelectorAll('.guest-sel').forEach(function(chk){
+    if(checked && !isGuestSelected(chk.dataset.gid)) gSelectedGuestIds.push(chk.dataset.gid);
+    if(!checked) gSelectedGuestIds = gSelectedGuestIds.filter(function(x){ return x !== chk.dataset.gid; });
+  });
+  updateGuestBulkBar();
+}
+function openBulkGuestEditModal(){
+  if(!guestSelectionCount()) return;
+  openMo(`<div class="mo-title">${LANG==='es'?'Editar invitados seleccionados':'Edit selected guests'}</div>
+  <div class="form-grid">
+    <div class="ig"><label>${t('category')}</label><select class="select" id="bg-cat">
+      <option value="">${LANG==='es'?'Sin cambios':'No change'}</option>
+      ${['Family','Friends','Work','VIP','Other'].map(c=>`<option value="${c}">${c}</option>`).join('')}
+    </select></div>
+    <div class="ig"><label>${t('rsvp_status')}</label><select class="select" id="bg-rsvp">
+      <option value="">${LANG==='es'?'Sin cambios':'No change'}</option>
+      <option value="pending">${t('pending_guests')}</option>
+      <option value="confirmed">Confirmed</option>
+      <option value="declined">Declined</option>
+    </select></div>
+    <div class="ig"><label>${t('table_number')}</label><input class="input" id="bg-table" placeholder="${LANG==='es'?'Sin cambios':'No change'}"></div>
+    <div class="ig"><label>${t('meal_pref')}</label><select class="select" id="bg-meal">
+      <option value="">${LANG==='es'?'Sin cambios':'No change'}</option>
+      ${['__clear__','Chicken','Fish','Beef','Vegetarian','Vegan','Kids Menu'].map(m=>`<option value="${m}">${m==='__clear__'?(LANG==='es'?'Limpiar':'Clear'):m}</option>`).join('')}
+    </select></div>
+    <div class="ig"><label>${t('plus_one_q')}</label><select class="select" id="bg-plus">
+      <option value="">${LANG==='es'?'Sin cambios':'No change'}</option>
+      <option value="1">${t('yes')}</option>
+      <option value="0">${t('no')}</option>
+    </select></div>
+    <div class="ig" style="grid-column:1/-1"><label>Notes</label><textarea class="textarea" id="bg-notes" rows="2" placeholder="${LANG==='es'?'Sin cambios si lo dejas vacío':'Leave empty for no change'}"></textarea></div>
+  </div>
+  <div class="mo-foot">
+    <button class="btn btn-ghost" onclick="closeMo()">${t('cancel')}</button>
+    <button class="btn btn-primary" onclick="applyBulkGuestEdit()">${LANG==='es'?'Aplicar cambios':'Apply changes'}</button>
+  </div>`);
+}
+function applyBulkGuestEdit(){
+  const p = proj();
+  const selected = p.guests.filter(function(g){ return isGuestSelected(g.id); });
+  if(!selected.length) return closeMo();
+  const cat = gv('bg-cat');
+  const rsvp = gv('bg-rsvp');
+  const table = gv('bg-table');
+  const meal = gv('bg-meal');
+  const plus = gv('bg-plus');
+  const notes = gv('bg-notes');
+  selected.forEach(function(g){
+    if(cat) g.category = cat;
+    if(rsvp) g.rsvp = rsvp;
+    if(table) g.table = table;
+    if(meal) g.meal = meal==='__clear__' ? '' : meal;
+    if(plus!=='') g.plusOne = plus==='1';
+    if(notes) g.notes = notes;
+  });
+  saveProj(p);
+  closeMo();
+  renderGuests();
+  toast(LANG==='es'?'Invitados actualizados':'Guests updated','s');
+}
+function bulkDeleteGuests(){
+  if(!guestSelectionCount()) return;
+  if(!confirm(LANG==='es'?'¿Eliminar los invitados seleccionados?':'Delete selected guests?')) return;
+  const p = proj();
+  p.guests = p.guests.filter(function(g){ return !isGuestSelected(g.id); });
+  saveProj(p);
+  clearGuestSelection();
+  renderGuests();
+  toast(LANG==='es'?'Invitados eliminados':'Guests deleted','s');
+}
+function delGuest(gid){
+  if(!confirm('Delete guest?')) return;
+  const p = proj();
+  p.guests = p.guests.filter(g => g.id !== gid);
+  gSelectedGuestIds = gSelectedGuestIds.filter(id => id !== gid);
+  saveProj(p);
+  renderGuests();
+}
+function renderGuestList(p){
+  let guests=[...p.guests];
+  if(gFilter) guests=guests.filter(g=>JSON.stringify(g).toLowerCase().includes(gFilter.toLowerCase()));
+  guests.sort((a,b)=>{const va=String(a[gSort]||''),vb=String(b[gSort]||'');return gAsc?va.localeCompare(vb,undefined,{numeric:true}):vb.localeCompare(va,undefined,{numeric:true});});
+  const si=k=>gSort===k?(gAsc?'↑':'↓'):'↕';
+  document.getElementById('gview').innerHTML=`
+  <div style="background:#fff;border-radius:var(--r);border:1px solid var(--border);overflow:hidden">
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#fafafa">
+      <input class="input" style="flex:1;min-width:200px" placeholder="${t('search_guests')}" value="${esc(gFilter)}" oninput="gFilter=this.value;renderGuestRows(proj())">
+      <select class="select" style="width:auto" onchange="gSort=this.value;renderGuestList(proj())">
+        <option value="name" ${gSort==='name'?'selected':''}>${t('sort_name')}</option>
+        <option value="rsvp" ${gSort==='rsvp'?'selected':''}>${t('sort_rsvp')}</option>
+        <option value="table" ${gSort==='table'?'selected':''}>${t('sort_table')}</option>
+        <option value="category" ${gSort==='category'?'selected':''}>${t('sort_category')}</option>
+      </select>
+      <button class="btn btn-ghost btn-sm" onclick="gAsc=!gAsc;renderGuestList(proj())">${gAsc?t('asc'):t('desc')}</button>
+    </div>
+    <div id="guest-bulk-bar" style="display:${guestSelectionCount()?'flex':'none'};padding:10px 16px;border-bottom:1px solid var(--border);gap:8px;align-items:center;flex-wrap:wrap;background:var(--gold-l)">
+      <span id="guest-bulk-count" style="font-size:12px;font-weight:600;color:var(--gold-h)">${guestSelectionCount()} ${LANG==='es'?'seleccionado(s)':'selected'}</span>
+      <button class="btn btn-ghost btn-sm" onclick="openBulkGuestEditModal()">${LANG==='es'?'Editar seleccionados':'Edit selected'}</button>
+      <button class="btn btn-danger btn-sm" onclick="bulkDeleteGuests()">${LANG==='es'?'Eliminar seleccionados':'Delete selected'}</button>
+      <button class="btn btn-ghost btn-sm" onclick="clearGuestSelection()">${LANG==='es'?'Limpiar selección':'Clear selection'}</button>
+    </div>
+    <div style="overflow-x:auto">
+    <table>
+      <thead><tr>
+        <th style="width:36px"><input type="checkbox" id="guest-chk-all" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="toggleAllVisibleGuests(this.checked)"></th>
+        <th onclick="gSort='name';gAsc=gSort==='name'?!gAsc:true;renderGuestList(proj())">${t('col_name')} ${si('name')}</th>
+        <th>${t('col_contact')}</th>
+        <th onclick="gSort='category';gAsc=gSort==='category'?!gAsc:true;renderGuestList(proj())">${t('col_category')} ${si('category')}</th>
+        <th onclick="gSort='rsvp';gAsc=gSort==='rsvp'?!gAsc:true;renderGuestList(proj())">${t('col_rsvp')} ${si('rsvp')}</th>
+        <th onclick="gSort='table';gAsc=gSort==='table'?!gAsc:true;renderGuestList(proj())">${t('col_table')} ${si('table')}</th>
+        <th>${t('col_plus_one')}</th><th>${t('col_meal')}</th><th>${t('col_notes')}</th><th>${t('col_actions')}</th>
+      </tr></thead>
+      <tbody id="guest-rows-body">
+        ${buildGuestRows(guests)}
+      </tbody>
+    </table>
+    </div>
+  </div>`;
+  updateGuestBulkBar();
+}
+function buildGuestRows(guests){
+  if(!guests.length) return `<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--muted)">${t('no_guests_found')}</td></tr>`;
+  return guests.map(g=>`<tr>
+    <td><input type="checkbox" class="guest-sel" data-gid="${g.id}" ${isGuestSelected(g.id)?'checked':''} style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="toggleGuestSelection('${g.id}',this.checked)"></td>
+    <td style="font-weight:600">${g.name}</td>
+    <td style="font-size:12px;color:var(--muted)">${g.email||''}${g.phone?'<br>'+g.phone:''}</td>
+    <td><span class="badge b-gray">${g.category||'—'}</span></td>
+    <td><span class="rb ${g.rsvp==='confirmed'?'rb-c':g.rsvp==='declined'?'rb-d':'rb-p'}">${g.rsvp||'pending'}</span></td>
+    <td>${g.table||'—'}</td>
+    <td>${g.plusOne?'✓':''}</td>
+    <td style="font-size:12px">${g.meal||'—'}</td>
+    <td style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.notes||''}</td>
+    <td><div style="display:flex;gap:4px">
+      <button class="btn btn-ghost btn-sm btn-icon" onclick="openGuestModal('${g.id}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>
+      <button class="btn btn-danger btn-sm btn-icon" onclick="delGuest('${g.id}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+    </div></td>
+  </tr>`).join('');
+}
+function renderGuestRows(p){
+  var tbody = document.getElementById('guest-rows-body');
+  if(!tbody){ renderGuestList(p); return; }
+  var guests=[...p.guests];
+  if(gFilter) guests=guests.filter(g=>JSON.stringify(g).toLowerCase().includes(gFilter.toLowerCase()));
+  guests.sort((a,b)=>{const va=String(a[gSort]||''),vb=String(b[gSort]||'');return gAsc?va.localeCompare(vb,undefined,{numeric:true}):vb.localeCompare(va,undefined,{numeric:true});});
+  tbody.innerHTML = buildGuestRows(guests);
+  updateGuestBulkBar();
+}
 function importCSV(input){
   const files=Array.from(input.files);
   if(!files.length)return;

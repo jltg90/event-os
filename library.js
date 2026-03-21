@@ -16,24 +16,7 @@ function getLib(){
   }
   var lib = all['__library__'];
   if(!lib.vendors)     lib.vendors=[];
-  // Seed default vendors only if the library record already existed in Convex
-  // (i.e. it has an updated_at flag set by loadProjectsFromCloud), to avoid
-  // seeding — and saving — before real data arrives.
-  if(lib.vendors.length===0 && lib._seeded && typeof defaultVendors==='function'){
-    var dvs = defaultVendors();
-    dvs.forEach(function(v){
-      lib.vendors.push({id:'lv_def_'+v.id, name:v.name, date:new Date().toLocaleDateString(), vendors:[JSON.parse(JSON.stringify(v))]});
-    });
-    saveLib(lib);
-  }
   if(!lib.globalTasks) lib.globalTasks=[];
-  if(lib.globalTasks.length===0 && lib._seeded && typeof defaultTasks==='function'){
-    var dts = defaultTasks();
-    dts.forEach(function(tk){
-      lib.globalTasks.push({id:'gt_def_'+tk.id, title:tk.title, desc:tk.desc||'', dueDate:'', assignee:tk.assignee||'', color:tk.color||'#7c3aed', done:false});
-    });
-    saveLib(lib);
-  }
   if(!lib.tasks)       lib.tasks=[];
   if(!lib.layouts)     lib.layouts=[];
   if(!lib.tables)      lib.tables={};
@@ -41,6 +24,38 @@ function getLib(){
   if(!lib.chairs)      lib.chairs={};
   if(!lib.centerpieces)lib.centerpieces={};
   if(!lib.moodboards)  lib.moodboards=[];
+  var changed = false;
+  if(typeof defaultVendors==='function'){
+    defaultVendors().forEach(function(v){
+      var entryId = 'lv_def_'+v.id;
+      var existing = lib.vendors.find(function(entry){ return entry.id===entryId; });
+      if(existing){
+        if(!Array.isArray(existing.vendors) || !existing.vendors.length){
+          existing.vendors = [JSON.parse(JSON.stringify(v))];
+          changed = true;
+        }
+      } else {
+        lib.vendors.push({id:entryId, name:v.name, date:new Date().toLocaleDateString(), vendors:[JSON.parse(JSON.stringify(v))]});
+        changed = true;
+      }
+    });
+  }
+  if(typeof defaultTasks==='function'){
+    defaultTasks().forEach(function(tk){
+      var taskId = 'gt_def_'+tk.id;
+      var existing = (lib.globalTasks||[]).find(function(task){ return task.id===taskId; });
+      if(existing){
+        existing.title = tk.title;
+        existing.desc = tk.desc||'';
+        existing.assignee = tk.assignee||'';
+        existing.color = tk.color||'#7c3aed';
+      } else {
+        lib.globalTasks.push({id:taskId, title:tk.title, desc:tk.desc||'', durationDays:7, dueDate:'', assignee:tk.assignee||'', color:tk.color||'#7c3aed', done:false});
+        changed = true;
+      }
+    });
+  }
+  if(changed) saveLib(lib);
   return lib;
 }
 function saveLib(lib){
@@ -164,13 +179,33 @@ async function libCreateEventLayoutExport(entry){
   return createLayoutExportPayload(entry, floorplan);
 }
 
+function libSyncEditingLayoutToLibrary(entryId){
+  var lib=getLib();
+  var entry=lib.layouts.find(function(e){ return e.id===entryId; });
+  if(!entry) return null;
+  var lp=typeof uproj==='function' ? uproj()['__lib_layout__'] : null;
+  if(!_libEditingLayoutId || _libEditingLayoutId!==entryId || !lp) return entry;
+  if(lp.layoutItems) entry.items=JSON.parse(JSON.stringify(lp.layoutItems));
+  if(lp.floorplan){
+    var syncFp=JSON.parse(JSON.stringify(lp.floorplan));
+    if(syncFp.img && syncFp.img!=='__idb__'){
+      if(!syncFp.thumb) syncFp.thumb=syncFp.img;
+      syncFp.img='__idb__';
+    }
+    entry.floorplan=syncFp;
+  }
+  entry.updatedAt=new Date().toISOString();
+  saveLib(lib);
+  return entry;
+}
+
 async function libApplyLayoutExportToEvent(entryId, pid, opts){
   opts = opts || {};
   var isES=LANG==='es';
   var p = uproj()[pid];
   if(!p) return null;
   var lib = getLib();
-  var entry = lib.layouts.find(function(e){ return e.id===entryId; });
+  var entry = libSyncEditingLayoutToLibrary(entryId) || lib.layouts.find(function(e){ return e.id===entryId; });
   if(!entry){
     toast(isES?'Layout no encontrado en biblioteca':'Layout not found in library','e');
     return null;
@@ -353,6 +388,15 @@ function libCard(title, subtitle, badge, loadBtn, delKey, delType){
     +'<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>'
     +'</div></div>';
 }
+function openLayoutLibraryAndCreate(){
+  _libTab = 'layouts';
+  openLibrary();
+  setTimeout(function(){
+    if(typeof setLibTab === "function") setLibTab('layouts');
+    if(typeof libOpenLayoutWizard === "function") libOpenLayoutWizard();
+  }, 80);
+}
+window.openLayoutLibraryAndCreate = openLayoutLibraryAndCreate;
 
 function renderLibVendorSets(lib){
   if(!lib.vendors.length) return libEmpty();
@@ -439,6 +483,10 @@ function libFilterVendors(q){
   libUpdateBulkBtn();
 }
 function libDeleteSingleVendor(entryId, vid){
+  if(/^lv_def_dv\d+$/.test(entryId||'') || /^dv\d+$/.test(vid||'')){
+    toast(LANG==='es'?'Los proveedores predeterminados no se pueden eliminar':'Default vendors cannot be deleted','e');
+    return;
+  }
   if(!confirm(LANG==='es'?'¿Eliminar este proveedor?':'Delete this vendor?')) return;
   var lib=getLib();
   var entry=lib.vendors.find(function(e){return e.id===entryId;});
@@ -862,6 +910,10 @@ function libSaveEditGlobalTask(tid){
   toast(LANG==='es'?'Tarea actualizada':'Task updated','s');
 }
 function libDeleteGlobalTask(tid){
+  if(/^gt_def_t\d{1,2}$/.test(tid||'')){
+    toast(LANG==='es'?'Las tareas predeterminadas no se pueden eliminar':'Default tasks cannot be deleted','e');
+    return;
+  }
   if(!confirm(LANG==='es'?'¿Eliminar esta tarea?':'Delete this task?')) return;
   var lib=getLib();
   lib.globalTasks=(lib.globalTasks||[]).filter(function(t){return t.id!==tid;});
@@ -1109,7 +1161,8 @@ function libBulkLoadLayoutsToEvent(){
   _libPendingLayoutId=checked[0].dataset.lid;
   libOpenLayoutEventPicker();
 }
-function libOpenLayoutEventPicker(){
+function libOpenLayoutEventPicker(entryId){
+  if(entryId) _libPendingLayoutId=entryId;
   var isES=LANG==='es';
   var allProjects=Object.values(uproj()).filter(function(p){return p&&p.id&&p.id!=='__library__'&&p.id!=='__lib_layout__'&&p.name&&p.status!=='__internal__';});
   if(!allProjects.length) return toast(isES?'No hay eventos creados':'No events created yet','e');
@@ -1171,6 +1224,26 @@ window.libDoLoadLayoutToEvent = libDoLoadLayoutToEvent;
 function libEditLayout(entryId){
   libOpenLayoutEditor(entryId);
 }
+function libRenameEditingLayout(entryId){
+  var input=document.getElementById('lib-layout-editor-name');
+  if(!input) return;
+  var name=(input.value||'').trim();
+  if(!name){
+    toast(LANG==='es'?'El nombre es requerido':'Name is required','e');
+    input.focus();
+    return;
+  }
+  if(!libEnsureUniqueLayoutName(name, entryId)) return;
+  var lib=getLib();
+  var entry=lib.layouts.find(function(e){return e.id===entryId;});
+  if(!entry) return;
+  entry.name=name;
+  entry.updatedAt=new Date().toISOString();
+  saveLib(lib);
+  input.value=name;
+  toast(LANG==='es'?'Plano actualizado':'Layout updated','s');
+}
+window.libRenameEditingLayout = libRenameEditingLayout;
 function libSaveEditLayout(entryId){
   var name=((document.getElementById('ely-name')||{}).value||'').trim();
   if(!name) return toast(LANG==='es'?'El nombre es requerido':'Name is required','e');
@@ -2756,7 +2829,10 @@ function libOpenLayoutEditor(entryId){
     '<div style="display:flex;flex-direction:column;height:calc(100vh - 62px)">'
     +'<div style="display:flex;align-items:center;gap:12px;padding:10px 20px;background:var(--card);border-bottom:1px solid var(--border);flex-shrink:0">'
     +'<button class="btn btn-ghost btn-sm" onclick="libCloseLayoutEditor(\''+entryId+'\',\''+(_prevCID||'')+'\')">← '+(isES?'Volver a Planos':'Back to Layouts')+'</button>'
-    +'<span style="font-weight:700;font-size:15px">'+esc(entry.name)+'</span>'
+    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;flex:1">'
+    +'<input id="lib-layout-editor-name" class="input" value="'+esc(entry.name)+'" style="max-width:320px;font-weight:700;font-size:15px;padding:7px 10px" onblur="libRenameEditingLayout(\''+entryId+'\')" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}">'
+    +'<button class="btn btn-primary btn-sm" onclick="libOpenLayoutEventPicker(\''+entryId+'\')">'+(isES?'Exportar a Evento':'Export to Event')+'</button>'
+    +'</div>'
     +'<span style="font-size:12px;color:var(--muted)">'+(isES?'Los cambios se guardan automáticamente':'Changes are saved automatically')+'</span>'
     +'</div>'
     +'<div id="tab-layout" style="flex:1;overflow:hidden"></div>'

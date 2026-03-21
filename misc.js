@@ -747,10 +747,20 @@ function toast(msg,type=''){
 }
 
 function today(){ return new Date().toISOString().split('T')[0]; }
-function formatDMY(s){ if(!s)return'DD / MM / YYYY'; const [y,m,d]=s.split('-'); return `${d} / ${m} / ${y}`; }
+function formatDMY(s){ if(!s)return'DD/MM/YYYY'; const [y,m,d]=s.split('-'); return `${d}/${m}/${y}`; }
+function openDateField(id){
+  var el = document.getElementById(id);
+  if(!el) return;
+  if(typeof el.showPicker === 'function'){
+    el.showPicker();
+    return;
+  }
+  el.focus();
+  if(typeof el.click === 'function') el.click();
+}
 function daysAway(d){ const dt=new Date(d+'T12:00:00');const n=new Date();n.setHours(0,0,0,0);dt.setHours(0,0,0,0);return Math.round((dt-n)/86400000); }
-function fmtDate(s){ if(!s)return'—'; const [y,mo,d]=s.split('-'); const months=LANG==='es'?['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return d+' '+months[parseInt(mo,10)-1]+' '+y; }
-function fmtDateShort(s){ if(!s)return'—'; const [y,mo,d]=s.split('-'); const months=LANG==='es'?['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return d+' '+months[parseInt(mo,10)-1]+' '+y; }
+function fmtDate(s){ if(!s)return'—'; return formatDMY(s); }
+function fmtDateShort(s){ if(!s)return'—'; return formatDMY(s); }
 function fmtMoney(n){ return'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:0}); }
 function gv(id){ const el=document.getElementById(id);return el?el.value:''; }
 function esc(s){ return String(s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }

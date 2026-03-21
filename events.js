@@ -1,5 +1,14 @@
 ﻿// --- WIZARD STATE ---------------------------------------------------------
 var _wiz = null;
+document.addEventListener('keydown', function(e){
+  if(!_wiz || e.key !== 'Enter' || e.shiftKey) return;
+  var modal = document.getElementById('mo');
+  if(!modal || !modal.classList.contains('open')) return;
+  var active = document.activeElement;
+  if(active && (active.tagName === 'TEXTAREA' || active.tagName === 'BUTTON')) return;
+  e.preventDefault();
+  _wizNext();
+});
 
 // --- STATUS LABEL ---------------------------------------------------------
 var _STATUS_KEY = {'to-be-confirmed':'planning','confirmed':'confirmed','in-progress':'in_progress','completed':'completed','cancelled':'cancelled'};
@@ -57,7 +66,15 @@ function _openEditModal(id, p) {
     <div class="ig" style="grid-column:1/-1"><label>${t('description')}</label><input class="input" id="e-desc" value="${esc(p?.description||'')}"></div>
     <div class="ig"><label>${t('client_name')} *</label><input class="input" id="e-client" value="${esc(p?.clientName||'')}"></div>
     <div class="ig"><label>${t('event_type')}</label><select class="select" id="e-type">${[['social',t('type_social')],['corporate',t('type_corporate')],['community',t('type_community')],['government',t('type_government')],['education',t('type_education')]].map(([v,l])=>`<option value="${v}"${p?.type===v?' selected':''}>${l}</option>`).join('')}</select></div>
-    <div class="ig"><label>${t('event_date')} *</label><input class="input" type="date" id="e-date" value="${p?.date||''}"></div>
+    <div class="ig"><label>${t('event_date')} *</label>
+      <div style="position:relative;cursor:pointer" onclick="openDateField('e-date')">
+        <input type="date" id="e-date" value="${p?.date||''}" onkeydown="return false" onpaste="return false" onchange="var d=document.getElementById('e-date-display');if(d){d.firstElementChild.textContent=this.value?formatDMY(this.value):'DD/MM/YYYY';}" oninput="var d=document.getElementById('e-date-display');if(d){d.firstElementChild.textContent=this.value?formatDMY(this.value):'DD/MM/YYYY';}" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0">
+        <div id="e-date-display" class="input" style="display:flex;align-items:center;justify-content:space-between;width:100%;pointer-events:none">
+          <span>${p?.date?formatDMY(p.date):'DD/MM/YYYY'}</span>
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        </div>
+      </div>
+    </div>
     <div class="ig"><label>${t('location')}</label><input class="input" id="e-location" value="${esc(p?.location||'')}"></div>
     <div class="ig"><label>${t('total_budget')} ($)</label><input class="input" id="e-budget" type="number" value="${p?.budget||''}"></div>
     <div class="ig"><label>${t('status')}</label><select class="select" id="e-status"><option value="to-be-confirmed"${p?.status==='to-be-confirmed'?' selected':''}>${t('status_planning')}</option><option value="confirmed"${p?.status==='confirmed'?' selected':''}>${t('status_confirmed')}</option><option value="in-progress"${p?.status==='in-progress'?' selected':''}>${t('status_in_progress')}</option><option value="completed"${p?.status==='completed'?' selected':''}>${t('status_completed')}</option><option value="cancelled"${p?.status==='cancelled'?' selected':''}>${t('status_cancelled')}</option></select></div>
@@ -170,7 +187,12 @@ function _wizStep2(isES) {
     +'<div style="font-size:13px;color:var(--muted);margin-bottom:20px;">'+(isES?'Define cuándo y dónde se llevará a cabo el evento.':'Set when and where the event will take place.')+'</div>'
     +'<div class="ig" style="margin-bottom:14px;">'
     +'<label style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px;">'+(isES?'Fecha del evento *':'Event date *')+'</label>'
-    +'<input class="input" type="date" id="wiz-date" value="'+(_wiz.date||'')+'" onchange="if(_wiz){_wiz.date=this.value}" oninput="if(_wiz){_wiz.date=this.value}">'
+    +'<div style="position:relative;cursor:pointer" onclick="openDateField(\'wiz-date\')">'
+    +'<input type="date" id="wiz-date" value="'+(_wiz.date||'')+'" onkeydown="return false" onpaste="return false" onchange="if(_wiz){_wiz.date=this.value;var d=document.getElementById(\'wiz-date-disp\');if(d){d.firstElementChild.textContent=this.value?formatDMY(this.value):\'DD/MM/YYYY\';}}" oninput="if(_wiz){_wiz.date=this.value;var d=document.getElementById(\'wiz-date-disp\');if(d){d.firstElementChild.textContent=this.value?formatDMY(this.value):\'DD/MM/YYYY\';}}" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0">'
+    +'<div id="wiz-date-disp" class="input" style="width:100%;display:flex;align-items:center;justify-content:space-between;pointer-events:none">'
+    +'<span>'+(_wiz.date?formatDMY(_wiz.date):'DD/MM/YYYY')+'</span>'
+    +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>'
+    +'</div></div>'
     +'</div>'
     +_wizField('wiz-location', isES?'Sede / Lugar':'Venue / Location', isES?'Nombre o dirección del lugar':'Venue name or address', _wiz.location, 'text')
     +_wizField('wiz-budget',   isES?'Presupuesto total ('+CURRENCY.symbol+')':'Total budget ('+CURRENCY.symbol+')', '0', _wiz.budget, 'number')

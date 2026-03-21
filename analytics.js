@@ -8,6 +8,8 @@ function setAnalyticsAllTime(){
   _aTo   = null;
   const fromEl=document.getElementById('ap-from'); const toEl=document.getElementById('ap-to');
   if(fromEl) fromEl.value=''; if(toEl) toEl.value='';
+  const fromDisp=document.getElementById('ap-from-display'); if(fromDisp) fromDisp.firstElementChild.textContent='DD/MM/YYYY';
+  const toDisp=document.getElementById('ap-to-display'); if(toDisp) toDisp.firstElementChild.textContent='DD/MM/YYYY';
   const btn=document.getElementById('ap-alltime'); if(btn) btn.classList.add('active');
   saveEvPrefs();
   renderAnalytics();
@@ -42,6 +44,15 @@ function renderAnalytics(){
 
   const title=document.getElementById('analytics-title');if(title)title.textContent=t('analytics_title');
   const sub=document.getElementById('analytics-sub');if(sub)sub.textContent=t('analytics_sub');
+  const fromEl=document.getElementById('ap-from'); const toEl=document.getElementById('ap-to');
+  if(fromEl&&!fromEl.value&&_aFr){
+    fromEl.value=_aFr.toISOString().slice(0,10);
+    const d=document.getElementById('ap-from-display'); if(d) d.firstElementChild.textContent=formatDMY(fromEl.value);
+  }
+  if(toEl&&!toEl.value&&_aTo){
+    toEl.value=_aTo.toISOString().slice(0,10);
+    const d=document.getElementById('ap-to-display'); if(d) d.firstElementChild.textContent=formatDMY(toEl.value);
+  }
 
   const el = document.getElementById('analytics-content');
   if(!el) return;
