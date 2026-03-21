@@ -361,7 +361,7 @@ function enterApp(){
   if(mobUav) mobUav.textContent = initial;
   if(mobUname) mobUname.textContent = name;
   if(mobUemail) mobUemail.textContent = email;
-  showPage('dashboard');
+  showPage('events');
   setSyncStatus('ok');
   startSyncPoll();
 }

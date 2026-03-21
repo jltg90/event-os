@@ -85,13 +85,13 @@
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;opacity:.7"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
           <span data-i18n="main_menu_btn">Main Menu</span>
         </button>
-        <button class="sidebar-item" id="snav-dashboard" onclick="showPage('dashboard')">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-          <span data-i18n="nav_dashboard">Dashboard</span>
-        </button>
         <button class="sidebar-item" id="snav-events" onclick="showPage('events')">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
           <span data-i18n="nav_events">Events</span>
+        </button>
+        <button class="sidebar-item" id="snav-dashboard" onclick="showPage('dashboard')">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          <span data-i18n="nav_dashboard">Dashboard</span>
         </button>
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-label" data-i18n="nav_section_events">Events</div>
@@ -134,23 +134,23 @@
   <!-- EVENTS PAGE -->
   <div id="pg-events" class="pg hidden">
     <div class="page-shell">
-      <div class="page-header">
-        <div>
+      <div class="page-header" id="ev-header">
+        <div id="ev-header-copy">
           <h1 style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700" data-i18n="my_events_title">My Events</h1>
           <p style="color:var(--muted);font-size:14px;margin-top:2px" data-i18n="manage_events">Manage all your event projects</p>
         </div>
-        <button class="btn btn-primary" onclick="openEventModal()">
+        <button class="btn btn-primary" id="ev-create-btn" onclick="openEventModal()">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
           <span data-i18n="create_event">New Event</span>
         </button>
       </div>
       <!-- Events search bar -->
-      <div style="margin-bottom:14px;position:relative;display:flex;align-items:center">
+      <div id="ev-searchbar" style="margin-bottom:14px;position:relative;display:flex;align-items:center">
         <svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         <input id="event-search" class="input" placeholder="Search events..." oninput="filterEvents(this.value)" style="padding-left:36px;width:100%">
       </div>
       <!-- Events toolbar: order dropdown + dir + date filter + view toggle - single row -->
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+      <div id="ev-toolbar" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           <!-- Order by dropdown -->
           <div style="position:relative;display:inline-block">

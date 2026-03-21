@@ -378,24 +378,26 @@ function renderEvents(){
   const g=document.getElementById('evgrid');
   g.className=_evView==='list'?'evgrid ev-list':'evgrid';
 
-  const evHeader  = document.getElementById('ev-header');
+  const evHeader = document.getElementById('ev-header');
+  const evHeaderCopy = document.getElementById('ev-header-copy');
+  const evCreateBtn = document.getElementById('ev-create-btn');
+  const evSearchbar = document.getElementById('ev-searchbar');
   const evToolbar = document.getElementById('ev-toolbar');
   if (!list.length) {
-    if (evHeader)  evHeader.style.display  = 'none';
+    if (evHeaderCopy) evHeaderCopy.style.display = 'none';
+    if (evCreateBtn) evCreateBtn.style.display = 'none';
+    if (evSearchbar) evSearchbar.style.display = 'none';
     if (evToolbar) evToolbar.style.display = 'none';
-    g.className = '';
-    g.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;text-align:center;padding:60px 24px 40px;">
-      <div style="font-family:'Cormorant Garamond',serif;font-size:44px;font-weight:700;color:var(--text);letter-spacing:-.02em;margin-bottom:6px">Event<span style="color:var(--gold);font-style:italic">OS</span></div>
-      <p style="font-size:15px;color:var(--muted);margin-bottom:52px;">${LANG==='es'?'Tu plataforma de gestión de eventos':'Your event management platform'}</p>
-      <button class="btn btn-primary" onclick="openEventModal()" style="font-size:15px;padding:14px 32px;letter-spacing:.06em">
-        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-        ${LANG==='es'?'CREA TU PRIMER EVENTO':'CREATE YOUR FIRST EVENT'}
-      </button>
-    </div>`;
+    if (evHeader) evHeader.style.marginBottom = '0';
+    g.className = 'ev-empty-host';
+    g.innerHTML = renderEventsEmptyState();
     return;
   }
-  if (evHeader)  evHeader.style.display  = '';
-  if (evToolbar) evToolbar.style.display = '';
+  if (evHeaderCopy) evHeaderCopy.style.display = '';
+  if (evCreateBtn) evCreateBtn.style.display = 'inline-flex';
+  if (evSearchbar) evSearchbar.style.display = 'flex';
+  if (evToolbar) evToolbar.style.display = 'flex';
+  if (evHeader) evHeader.style.marginBottom = '';
   const tc={social:'b-pink',corporate:'b-blue',community:'b-green',government:'b-orange',education:'b-purple'};
   const tl={social:t('type_social'),corporate:t('type_corporate'),community:t('type_community'),government:t('type_government'),education:t('type_education')};
   if(_evView==='list'){
@@ -467,6 +469,64 @@ function renderEvents(){
       </div>`;
     }).join('');
   }
+}
+
+function renderEventsEmptyState(){
+  const isES = LANG === 'es';
+  return `<section class="ev-empty fade-in">
+    <div class="ev-empty-shell">
+      <div class="ev-empty-aurora" aria-hidden="true"></div>
+      <div class="ev-empty-grid">
+        <div class="ev-empty-copy">
+          <div class="ev-empty-badge">${isES ? 'Primer evento' : 'First event'}</div>
+          <h2 class="ev-empty-title">${isES ? 'Crea tu primer evento con una escena digna del gran dia.' : 'Create your first event with a launch scene worthy of the big day.'}</h2>
+          <p class="ev-empty-subtitle">${isES ? 'Empieza con el nombre, la fecha y los detalles clave. EventOS se encarga del resto para que puedas planear con claridad desde el minuto uno.' : 'Start with the name, date, and key details. EventOS takes care of the rest so your planning begins with clarity from minute one.'}</p>
+          <div class="ev-empty-actions">
+            <button class="btn btn-primary ev-empty-cta" onclick="openEventModal()">
+              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+              ${isES ? 'Crear mi primer evento' : 'Create my first event'}
+            </button>
+          </div>
+        </div>
+        <div class="ev-empty-panel">
+          <div class="ev-empty-panel-top">
+            <div class="ev-empty-orb"></div>
+            <div>
+              <div class="ev-empty-panel-label">${isES ? 'Tu lienzo inicial' : 'Your starting canvas'}</div>
+              <div class="ev-empty-panel-title">${isES ? 'Todo listo para despegar' : 'Everything ready for liftoff'}</div>
+            </div>
+          </div>
+          <div class="ev-empty-checks">
+            <div class="ev-empty-check">
+              <span class="ev-empty-check-icon">${checkIcon()}</span>
+              <div>
+                <strong>${isES ? 'Define la base' : 'Set the foundation'}</strong>
+                <span>${isES ? 'Agrega nombre, fecha, cliente y lugar en segundos.' : 'Add the name, date, client, and venue in seconds.'}</span>
+              </div>
+            </div>
+            <div class="ev-empty-check">
+              <span class="ev-empty-check-icon">${checkIcon()}</span>
+              <div>
+                <strong>${isES ? 'Organiza desde el inicio' : 'Organize from the start'}</strong>
+                <span>${isES ? 'Activa tareas, presupuesto, invitados y layouts desde un solo proyecto.' : 'Kick off tasks, budget, guests, and layouts from a single project.'}</span>
+              </div>
+            </div>
+            <div class="ev-empty-check">
+              <span class="ev-empty-check-icon">${checkIcon()}</span>
+              <div>
+                <strong>${isES ? 'Mantente listo para compartir' : 'Stay ready to share'}</strong>
+                <span>${isES ? 'Cuando el evento exista, podras abrir dashboards y vistas para cliente al instante.' : 'Once the event exists, dashboards and client-facing views are one click away.'}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>`;
+}
+
+function checkIcon(){
+  return '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.3" viewBox="0 0 24 24"><path d="m5 13 4 4L19 7"/></svg>';
 }
 
 function evcRow(bg,clr,icon,lbl,val){return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bg)">
