@@ -1,6 +1,9 @@
 ﻿var mbOpenFolders = {};
 var _lightboxItems = [];
 var _lightboxIndex = 0;
+function mbDefaultFolderName(){
+  return LANG==='es' ? 'Imagenes Importadas' : 'Imported Images';
+}
 
 function getMB(p){
   if(Array.isArray(p.moodboard)){
@@ -9,6 +12,16 @@ function getMB(p){
   }
   if(!p.moodboard.folders) p.moodboard.folders=[];
   if(!p.moodboard.uncategorized) p.moodboard.uncategorized=[];
+  if(p.moodboard.uncategorized.length){
+    var target = p.moodboard.folders.find(function(f){ return f && f._systemFolder; });
+    if(!target){
+      target = {id:'mf'+Date.now(),name:mbDefaultFolderName(),color:'#6b7280',images:[],_systemFolder:true};
+      p.moodboard.folders.unshift(target);
+    }
+    target.images = target.images.concat(p.moodboard.uncategorized);
+    p.moodboard.uncategorized = [];
+    saveProj(p);
+  }
   return p.moodboard;
 }
 
@@ -60,11 +73,11 @@ function renderMoodboard(){
       <div class="sh-sub">${total} ${t('images')} · ${mb.folders.length} folders</div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-ghost" onclick="openNewFolderModal()">
+      <button class="btn btn-ghost" onclick="libQuickLoadMoodboards()">${LANG==='es'?'Importar Moodboard':'Import Moodboard'}</button>
+      <button class="btn btn-primary" onclick="openNewFolderModal()">
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
         ${t('new_folder_btn')}
       </button>
-<button class="btn btn-primary" onclick="window.print()">${t('export_pdf_btn')}</button>
     </div>
   </div>
 
@@ -75,9 +88,6 @@ function renderMoodboard(){
     <p style="font-size:13px;color:var(--muted);margin-bottom:20px">${t('start_moodboard_sub')}</p>
     <div style="display:flex;gap:10px;justify-content:center">
       <button class="btn btn-ghost" onclick="openNewFolderModal()">${t('create_folder_btn')}</button>
-      <label class="btn btn-primary" style="cursor:pointer;display:inline-flex">
-        ${t('upload_images_btn')}<input type="file" accept="image/*" multiple class="hidden" onchange="addMBImages(this,null)">
-      </label>
     </div>
   </div>` : ''}
 
@@ -115,19 +125,7 @@ function renderMoodboard(){
     </div>
   </div>`).join('')}
 
-  <!-- Uncategorized images -->
-  ${mb.uncategorized.length>0 ? `
-  <div class="mb-folder">
-    <div class="mb-folder-header" onclick="toggleMBFolder('__root__')">
-      <svg width="18" height="18" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21,15 16,10 5,21"/></svg>
-      <div class="mb-folder-title" style="color:var(--muted)">${t('uncategorized')}</div>
-      <span class="mb-folder-count">${mb.uncategorized.length} images</span>
-      <svg class="mb-folder-chevron ${mbOpenFolders['__root__']!==false?'open':''}" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
-    </div>
-    <div class="mb-folder-body" style="display:${mbOpenFolders['__root__']===false?'none':'block'}">
-      <div class="mb-gallery">${mb.uncategorized.map((img,ii)=>mbImageCard(img,ii,null,mb.uncategorized.length)).join('')}</div>
-    </div>
-  </div>` : ''}`;
+  `;
 }
 
 function mbImageCard(img, ii, folderId, total){
@@ -263,7 +261,7 @@ function deleteMBFolder(fid){
   const p=proj();const mb=getMB(p);
   const folder=mb.folders.find(f=>f.id===fid);
   if(!folder)return;
-  const msg=`Delete folder "${folder.name}"?${folder.images.length?` (${folder.images.length} image${folder.images.length>1?'s':''} will be moved to Uncategorized)`:''}`;
+  const msg=`Delete folder "${folder.name}"?${folder.images.length?` (${folder.images.length} image${folder.images.length>1?'s':''} will be deleted too)`:''}`;
   openMo(`<div class="mo-title" style="color:#ef4444">Delete Folder</div>
   <p style="font-size:14px;color:var(--muted);margin-bottom:24px">${msg}</p>
   <div class="mo-foot">
@@ -274,7 +272,6 @@ function deleteMBFolder(fid){
 function _doDeleteMBFolder(fid){
   const p=proj();const mb=getMB(p);
   const folder=mb.folders.find(f=>f.id===fid);if(!folder)return;
-  mb.uncategorized.push(...folder.images);
   mb.folders=mb.folders.filter(f=>f.id!==fid);
   saveProj(p);renderMoodboard();toast('Folder deleted');
 }
@@ -282,20 +279,24 @@ function _doDeleteMBFolder(fid){
 async function addMBImages(input, folderId){
   const files=Array.from(input.files);
   if(!files.length)return;
+  if(!folderId){
+    input.value='';
+    return toast(LANG==='es'?'Crea o elige una carpeta antes de subir imagenes':'Create or choose a folder before uploading images','e');
+  }
+  var MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per image
   const p=proj();const mb=getMB(p);
-  toast('Adding images…');
+  toast('Uploading images…');
   let uploaded=0;
   for(const f of files){
+    if(f.size > MAX_FILE_SIZE){
+      toast(f.name + ' is too large (max 5MB)','e');
+      continue;
+    }
     try{
-      const src = await new Promise(function(resolve, reject){
-        const reader = new FileReader();
-        reader.onload = function(ev){ resolve(ev.target.result); };
-        reader.onerror = reject;
-        reader.readAsDataURL(f);
-      });
-      const img={id:'mi'+Date.now()+uploaded,src:src,name:f.name.replace(/\.[^/.]+$/,''),mimeType:f.type||'image/*'};
-      if(folderId){const folder=mb.folders.find(fo=>fo.id===folderId);if(folder)folder.images.push(img);}
-      else{mb.uncategorized.push(img);}
+      var storageId = await EVENTOS_DATA.uploadFile(f);
+      var url = await EVENTOS_DATA.getFileUrl(storageId);
+      const img={id:'mi'+Date.now()+uploaded,src:url,storageId:storageId,name:f.name.replace(/\.[^/.]+$/,''),mimeType:f.type||'image/*'};
+      const folder=mb.folders.find(fo=>fo.id===folderId);if(folder)folder.images.push(img);
       uploaded++;
     }catch(e){console.error('Upload error:',e);toast('Upload error: '+f.name,'e');}
   }
@@ -316,8 +317,12 @@ function delMBImg(idx, folderId){
 }
 async function _doDelMBImg(idx, folderId){
   const p=proj();const mb=getMB(p);
-  if(folderId){const f=mb.folders.find(f=>f.id===folderId);if(f){f.images.splice(idx,1);}}
-  else{mb.uncategorized.splice(idx,1);}
+  var removed;
+  if(folderId){const f=mb.folders.find(f=>f.id===folderId);if(f){removed=f.images.splice(idx,1)[0];}}
+  else{removed=(mb.uncategorized||[]).splice(idx,1)[0];}
+  if(removed && removed.storageId){
+    EVENTOS_DATA.deleteFile(removed.storageId).catch(function(e){console.error('Failed to delete file:',e);});
+  }
   saveProj(p);renderMoodboard();toast('Image deleted');
 }
 
@@ -333,10 +338,6 @@ function moveMBImageModal(idx, folderId){
   const folders=mb.folders;
   openMo(`<div class="mo-title">Move Image to Folder</div>
   <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">
-    <div onclick="doMoveMBImage(${idx},'${folderId||'__root__'}','__root__')" class="option-card">
-      <svg width="16" height="16" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
-      Uncategorized
-    </div>
     ${folders.map(f=>`
     <div onclick="doMoveMBImage(${idx},'${folderId||'__root__'}','${f.id}')" class="option-card">
       <svg width="16" height="16" fill="${f.color||'#f59e0b'}" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
@@ -353,8 +354,7 @@ function doMoveMBImage(idx, fromId, toId){
   if(fromId==='__root__'){img=mb.uncategorized.splice(idx,1)[0];}
   else{const f=mb.folders.find(f=>f.id===fromId);if(f){img=f.images.splice(idx,1)[0];}}
   if(!img){closeMo();return;}
-  if(toId==='__root__'){mb.uncategorized.push(img);}
-  else{const tf=mb.folders.find(f=>f.id===toId);if(tf){tf.images.push(img);mbOpenFolders[toId]=true;}}
+  const tf=mb.folders.find(f=>f.id===toId);if(tf){tf.images.push(img);mbOpenFolders[toId]=true;}
   saveProj(p);closeMo();renderMoodboard();toast('Image moved','s');
 }
 
@@ -845,6 +845,11 @@ function renderCalendarPicker(){
     picker = document.createElement('div');
     picker.id = 'calendar-picker';
     picker.className = 'calendar-picker';
+    ['pointerdown','mousedown','click'].forEach(function(evt){
+      picker.addEventListener(evt, function(e){
+        e.stopPropagation();
+      });
+    });
     document.body.appendChild(picker);
   }
   if(!_calendarPicker.month) _calendarPicker.month = new Date();
@@ -1209,27 +1214,35 @@ function renderClientPortal(p, share, ownerPreview){
 function renderClientPortalContent(p, share, perms, activeSection, ownerPreview){
   var visibleSections = SHARE_SECTIONS.filter(function(s){ return perms[s.id] !== 'off'; });
   var fmtDate2 = function(d){ if(!d)return'TBD'; return formatDMY(d); };
+  var isES = LANG==='es';
 
   var tabs = visibleSections.map(function(s){
-    return '<button class="client-tab '+(activeSection===s.id?'active':'')+'" data-sid="'+s.id+'" onclick="clientSwitchTab(this.dataset.sid)">'+s.icon+' '+s.label+'</button>';
+    return '<button class="client-tab '+(activeSection===s.id?'active':'')+'" data-sid="'+s.id+'" onclick="clientSwitchTab(this.dataset.sid)">'+s.label+'</button>';
   }).join('');
 
-  var sectionContent = activeSection ? buildClientSection(p, perms, activeSection) : '<div style="color:rgba(240,230,204,.35);padding:40px;text-align:center">No sections shared yet</div>';
+  var sectionContent = activeSection ? buildClientSection(p, perms, activeSection) : '<div class="client-empty">'+(isES?'No hay secciones compartidas aún.':'No sections shared yet.')+'</div>';
 
   var previewBanner = ownerPreview ?
-    '<div style="position:sticky;top:0;z-index:999;background:#1a3a1a;border-bottom:2px solid #4caf50;padding:10px 24px;display:flex;align-items:center;justify-content:space-between;font-family:Jost,sans-serif;font-size:12px">'+
-      '<span style="color:#a5d6a7">\u{1F441}\uFE0F Preview mode — this is what your client sees</span>'+
-      '<button onclick="exitClientPortal()" style="background:#4caf50;border:none;color:#fff;padding:5px 16px;border-radius:20px;cursor:pointer;font-size:11px;font-weight:600">&larr; Exit Preview</button>'+
+    '<div style="position:sticky;top:0;z-index:999;background:var(--navy);border-bottom:2px solid var(--gold);padding:10px 24px;display:flex;align-items:center;justify-content:space-between;font-family:Jost,sans-serif;font-size:12px">'+
+      '<span style="color:var(--navy-l)">'+(isES?'Vista previa — esto es lo que ve tu cliente':'Preview mode — this is what your client sees')+'</span>'+
+      '<button onclick="exitClientPortal()" style="background:var(--gold);border:none;color:#1c1a15;padding:5px 16px;border-radius:20px;cursor:pointer;font-size:11px;font-weight:700">&larr; '+(isES?'Salir':'Exit Preview')+'</button>'+
     '</div>' : '';
+
+  var metaParts = [];
+  if(p.date) metaParts.push(fmtDate2(p.date));
+  if(p.location) metaParts.push(esc(p.location));
 
   document.getElementById('client-portal-content').innerHTML =
     previewBanner +
     '<div class="client-hero">'+
-      '<div class="client-badge">&#10024; Event Portal</div>'+
-      '<h1 style="font-size:clamp(24px,5vw,38px);font-weight:700;margin:0 0 6px;letter-spacing:-.01em;font-family:Cormorant Garamond,serif;color:#f0e6cc">'+esc(p.name)+'</h1>'+
-      '<div style="font-size:14px;color:rgba(240,230,204,.55);font-family:Jost,sans-serif;margin-bottom:16px">'+
-        fmtDate2(p.date)+(p.location?' &middot; '+esc(p.location):'')+'</div>'+
-      (share.note?'<div style="background:rgba(201,168,76,.08);border-left:3px solid #c9a84c;padding:12px 16px;border-radius:0 8px 8px 0;font-size:14px;color:rgba(240,230,204,.75);max-width:600px;position:relative;z-index:1">'+esc(share.note)+'</div>':'')+
+      '<div class="client-hero-brand">'+
+        '<span class="client-logo">Event<span>OS</span></span>'+
+        '<span class="client-logo-sep"></span>'+
+        '<span class="client-logo-tag">'+(isES?'Portal del evento':'Event Portal')+'</span>'+
+      '</div>'+
+      '<h1 class="client-event-name">'+esc(p.name)+'</h1>'+
+      (metaParts.length ? '<div class="client-event-meta">'+metaParts.join('<span class="client-event-meta-dot"> · </span>')+'</div>' : '')+
+      (share.note ? '<div class="client-note">'+esc(share.note)+'</div>' : '')+
     '</div>'+
     (visibleSections.length >= 1 ? '<div class="client-nav">'+tabs+'</div>' : '')+
     '<div class="client-body">'+
@@ -1241,6 +1254,30 @@ function renderClientPortalContent(p, share, perms, activeSection, ownerPreview)
 function buildClientSection(p, perms, sectionId){
   var perm = perms[sectionId] || 'view';
   var canEdit = perm === 'edit';
+  var isES = LANG==='es';
+
+  // ── SVG icons for section titles ──────────────────────────
+  var icons = {
+    dashboard: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
+    budget:    '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v1m0 8v1m-3-5h4.5a1.5 1.5 0 0 1 0 3H10a1.5 1.5 0 0 1 0-3m0 0h3a1.5 1.5 0 0 0 0-3H12"/></svg>',
+    timeline:  '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>',
+    guests:    '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="9" cy="7" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="8" r="2.5"/><path d="M21 20c0-2.8-1.8-5-4-5.5"/></svg>',
+    layout:    '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>',
+    moodboard: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="10" rx="1.5"/><rect x="14" y="3" width="7" height="6" rx="1.5"/><rect x="14" y="13" width="7" height="8" rx="1.5"/><rect x="3" y="17" width="7" height="4" rx="1.5"/></svg>'
+  };
+
+  var sectionTitles = {
+    dashboard: isES?'Resumen del evento':'Event Overview',
+    budget:    isES?'Presupuesto y proveedores':'Budget & Vendors',
+    timeline:  isES?'Cronograma':'Timeline',
+    guests:    isES?'Lista de invitados':'Guest List',
+    layout:    isES?'Distribución de mesas':'Event Layout',
+    moodboard: isES?'Moodboard':'Moodboard'
+  };
+
+  function sectionTitle(id){
+    return '<div class="client-section-title">'+(icons[id]||'')+(sectionTitles[id]||id)+'</div>';
+  }
 
   if(sectionId === 'dashboard'){
     var hired = (p.vendors||[]).filter(function(v){return v.hired;});
@@ -1248,18 +1285,22 @@ function buildClientSection(p, perms, sectionId){
     var tb = p.budget||0;
     var pct = tb>0?Math.min(100,Math.round(paid/tb*100)):0;
     var confirmed = (p.guests||[]).filter(function(g){return g.rsvp==='confirmed';}).length;
-    var editNote = canEdit ? '<div style="margin-top:20px;padding:14px;background:rgba(201,168,76,.06);border:1px solid rgba(201,168,76,.2);border-radius:10px">'+
-      '<div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:rgba(240,230,204,.4);margin-bottom:8px">Event Notes</div>'+
-      '<textarea id="client-edit-notes" style="width:100%;background:transparent;border:none;color:rgba(240,230,204,.85);font-family:Jost,sans-serif;font-size:13px;line-height:1.6;resize:vertical;min-height:80px;outline:none" placeholder="Add notes for your client...">'+esc(p.description||'')+'</textarea>'+
-      '<button onclick="clientSaveNotes()" style="margin-top:8px;padding:5px 16px;background:#c9a84c;border:none;color:#1c1a15;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer">Save Notes</button>'+
-      '</div>' : (p.description?'<div style="font-size:14px;color:rgba(240,230,204,.7);line-height:1.6;margin-top:16px">'+esc(p.description)+'</div>':'');
-    return '<div class="client-section">'+
-      '<div class="client-section-title">📊 Event Overview</div>'+
-      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px">'+
-        clientStatCard('📅','Date',fmtDate(p.date))+
-        clientStatCard('📍','Location',p.location||'TBD')+
-        clientStatCard('👥','Guests',String((p.guests||[]).length)+' invited, '+confirmed+' confirmed')+
-        clientStatCard('💰','Budget',fmtMoney(tb))+
+
+    var editNote = canEdit
+      ? '<div style="margin-top:4px;padding:16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r)">'+
+          '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px;font-weight:600">'+(isES?'Notas del evento':'Event Notes')+'</div>'+
+          '<textarea id="client-edit-notes" style="width:100%;background:transparent;border:none;color:var(--text);font-family:Jost,sans-serif;font-size:13px;line-height:1.6;resize:vertical;min-height:80px;outline:none" placeholder="'+(isES?'Agregar notas para tu cliente...':'Add notes for your client...')+'">'+esc(p.description||'')+'</textarea>'+
+          '<button onclick="clientSaveNotes()" style="margin-top:8px;padding:5px 18px;background:var(--gold);border:none;color:#1c1a15;border-radius:var(--pill);font-size:11px;font-weight:700;cursor:pointer">'+(isES?'Guardar':'Save')+'</button>'+
+        '</div>'
+      : (p.description ? '<div style="font-size:14px;color:var(--muted);line-height:1.65;margin-top:4px">'+esc(p.description)+'</div>' : '');
+
+    return '<div class="client-card">'+
+      sectionTitle('dashboard')+
+      '<div class="client-stat-grid">'+
+        clientStatCard(isES?'Fecha':'Date', fmtDate(p.date)||'TBD')+
+        clientStatCard(isES?'Lugar':'Location', p.location||'TBD')+
+        clientStatCard(isES?'Invitados':'Guests', String((p.guests||[]).length)+' / '+confirmed+' '+( isES?'confirmados':'confirmed'))+
+        clientStatCard(isES?'Presupuesto':'Budget', fmtMoney(tb))+
       '</div>'+
       editNote+
     '</div>';
@@ -1269,29 +1310,34 @@ function buildClientSection(p, perms, sectionId){
     var hired2 = (p.vendors||[]).filter(function(v){return v.hired;});
     var rows = hired2.map(function(v){
       var vpaid = v.payments.reduce(function(a,pay){return a+Number(pay.amount);},0);
-      return '<tr style="border-bottom:1px solid rgba(201,168,76,.1)">'+
-        '<td style="padding:10px 12px;font-size:13px">'+esc(v.name)+'</td>'+
-        '<td style="padding:10px 12px;font-size:12px;color:rgba(240,230,204,.5)">'+esc(v.category)+'</td>'+
-        '<td style="padding:10px 12px;text-align:right;font-size:13px">'+fmtMoney(v.price||0)+'</td>'+
-        '<td style="padding:10px 12px;text-align:right;font-size:13px;color:#4caf50">'+fmtMoney(vpaid)+'</td>'+
+      var remaining = (v.price||0) - vpaid;
+      return '<tr>'+
+        '<td style="font-weight:500">'+esc(v.name)+'</td>'+
+        '<td style="color:var(--muted)">'+esc(v.category)+'</td>'+
+        '<td style="text-align:right">'+fmtMoney(v.price||0)+'</td>'+
+        '<td style="text-align:right;color:var(--success);font-weight:500">'+fmtMoney(vpaid)+'</td>'+
+        '<td style="text-align:right;color:'+(remaining>0?'var(--warn)':'var(--muted)')+'">'+fmtMoney(remaining)+'</td>'+
       '</tr>';
     }).join('');
     var totalPaid = hired2.reduce(function(s,v){return s+v.payments.reduce(function(a,pay){return a+Number(pay.amount);},0);},0);
-    return '<div class="client-section">'+
-      '<div class="client-section-title">💰 Budget Summary</div>'+
-      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">'+
-        clientStatCard('🎯','Total Budget',fmtMoney(p.budget||0))+
-        clientStatCard('✅','Hired Vendors',String(hired2.length))+
-        clientStatCard('💸','Total Paid',fmtMoney(totalPaid))+
+    return '<div class="client-card">'+
+      sectionTitle('budget')+
+      '<div class="client-stat-grid" style="grid-template-columns:repeat(3,1fr)">'+
+        clientStatCard(isES?'Presupuesto total':'Total Budget', fmtMoney(tb))+
+        clientStatCard(isES?'Proveedores contratados':'Hired Vendors', String(hired2.length))+
+        clientStatCard(isES?'Total pagado':'Total Paid', fmtMoney(totalPaid))+
       '</div>'+
-      (rows?'<table style="width:100%;border-collapse:collapse">'+
-        '<thead><tr style="border-bottom:1px solid rgba(201,168,76,.2)">'+
-          '<th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:rgba(240,230,204,.4)">Vendor</th>'+
-          '<th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:rgba(240,230,204,.4)">Category</th>'+
-          '<th style="padding:8px 12px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:rgba(240,230,204,.4)">Total</th>'+
-          '<th style="padding:8px 12px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:rgba(240,230,204,.4)">Paid</th>'+
-        '</tr></thead><tbody>'+rows+'</tbody></table>':'<div style="color:rgba(240,230,204,.35);font-size:13px;padding:20px 0">No vendors hired yet</div>')+
-      (canEdit?'<div style="margin-top:16px;padding:12px 14px;background:rgba(201,168,76,.05);border:1px solid rgba(201,168,76,.15);border-radius:8px;font-size:12px;color:rgba(240,230,204,.5)">✏️ Edit mode: vendor management available in the main app</div>':'')+
+      (rows
+        ? '<table class="client-table">'+
+            '<thead><tr>'+
+              '<th>'+(isES?'Proveedor':'Vendor')+'</th>'+
+              '<th>'+(isES?'Categoría':'Category')+'</th>'+
+              '<th style="text-align:right">'+(isES?'Total':'Total')+'</th>'+
+              '<th style="text-align:right">'+(isES?'Pagado':'Paid')+'</th>'+
+              '<th style="text-align:right">'+(isES?'Pendiente':'Remaining')+'</th>'+
+            '</tr></thead><tbody>'+rows+'</tbody>'+
+          '</table>'
+        : '<div class="client-empty">'+(isES?'Sin proveedores contratados':'No vendors hired yet')+'</div>')+
     '</div>';
   }
 
@@ -1299,36 +1345,39 @@ function buildClientSection(p, perms, sectionId){
     var tasks = (p.tasks||[]).sort(function(a,b){return (a.dueDate||'').localeCompare(b.dueDate||'');});
     var done = tasks.filter(function(t){return t.done;}).length;
     var pct2 = tasks.length ? Math.round(done/tasks.length*100) : 0;
+
     var trows = tasks.map(function(tk){
+      var isDone = tk.done;
       var checkEl = canEdit
-        ? '<div onclick="clientToggleTask(\''+esc(tk.id)+'\')" style="width:22px;height:22px;border-radius:50%;background:'+(tk.done?'#4caf50':'rgba(201,168,76,.15)')+';border:2px solid '+(tk.done?'#4caf50':'rgba(201,168,76,.4)')+';flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.2s">'+
-            (tk.done?'<svg width="10" height="10" fill="none" stroke="#fff" stroke-width="3" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>':'')+
+        ? '<div onclick="clientToggleTask(\''+esc(tk.id)+'\')" style="width:20px;height:20px;border-radius:50%;background:'+(isDone?'var(--success)':'transparent')+';border:2px solid '+(isDone?'var(--success)':'var(--border-strong)')+';flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s">'+
+            (isDone?'<svg width="10" height="10" fill="none" stroke="#fff" stroke-width="2.8" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>':'')+
           '</div>'
-        : '<div style="width:18px;height:18px;border-radius:50%;background:'+(tk.done?'#4caf50':'rgba(201,168,76,.2)')+';border:2px solid '+(tk.done?'#4caf50':'rgba(201,168,76,.4)')+';flex-shrink:0;display:flex;align-items:center;justify-content:center">'+
-            (tk.done?'<svg width="10" height="10" fill="none" stroke="#fff" stroke-width="3" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>':'')+
+        : '<div style="width:18px;height:18px;border-radius:50%;background:'+(isDone?'var(--success)':'var(--bg3)')+';border:2px solid '+(isDone?'var(--success)':'var(--border-strong)')+';flex-shrink:0;display:flex;align-items:center;justify-content:center">'+
+            (isDone?'<svg width="10" height="10" fill="none" stroke="#fff" stroke-width="2.8" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>':'')+
           '</div>';
-      return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(201,168,76,.08)">'+
+
+      return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)">'+
         checkEl+
-        '<div style="flex:1"><div style="font-size:13px;'+(tk.done?'text-decoration:line-through;color:rgba(240,230,204,.4)':'')+'">'+(canEdit?'<span title="Click checkbox to toggle">':'')+esc(tk.title)+(canEdit?'</span>':'')+
-          '</div>'+
-          (tk.dueDate?'<div style="font-size:11px;color:rgba(240,230,204,.4);font-family:Jost,sans-serif;margin-top:2px">'+fmtDate(tk.dueDate)+'</div>':'')+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-size:13px;'+(isDone?'text-decoration:line-through;color:var(--light)':'')+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(tk.title)+'</div>'+
+          (tk.dueDate?'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+fmtDate(tk.dueDate)+'</div>':'')+
         '</div>'+
-        (tk.assignee?'<div style="font-size:11px;color:rgba(201,168,76,.7);font-family:Jost,sans-serif">'+esc(tk.assignee)+'</div>':'')+
-        '<div style="font-size:11px;padding:2px 8px;border-radius:10px;background:'+(tk.done?'rgba(76,175,80,.15)':'rgba(201,168,76,.1)')+';color:'+(tk.done?'#4caf50':'rgba(201,168,76,.7)')+'">'+
-          (tk.done?'Done':'Pending')+
+        (tk.assignee?'<div style="font-size:11px;color:var(--gold-h);background:var(--gold-l);padding:2px 8px;border-radius:var(--pill);white-space:nowrap">'+esc(tk.assignee)+'</div>':'')+
+        '<div style="font-size:11px;padding:2px 8px;border-radius:var(--pill);background:'+(isDone?'var(--success-l)':'var(--bg3)')+';color:'+(isDone?'var(--success)':'var(--muted)')+';flex-shrink:0;font-weight:600">'+
+          (isDone?(isES?'Listo':'Done'):(isES?'Pendiente':'Pending'))+
         '</div>'+
       '</div>';
     }).join('');
-    return '<div class="client-section">'+
-      '<div class="client-section-title">📅 Timeline</div>'+
-      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">'+
-        '<div style="flex:1;height:6px;background:rgba(201,168,76,.15);border-radius:3px">'+
-          '<div style="height:100%;width:'+pct2+'%;background:#c9a84c;border-radius:3px;transition:.4s"></div>'+
-        '</div>'+
-        '<span style="font-size:13px;color:#c9a84c;font-weight:600">'+pct2+'% complete</span>'+
+
+    return '<div class="client-card">'+
+      sectionTitle('timeline')+
+      '<div style="display:flex;align-items:center;gap:14px;margin-bottom:24px">'+
+        '<div class="client-progress-bar"><div class="client-progress-fill" style="width:'+pct2+'%"></div></div>'+
+        '<span style="font-size:13px;color:var(--gold-h);font-weight:700;white-space:nowrap">'+pct2+'%</span>'+
+        '<span style="font-size:12px;color:var(--muted)">'+done+' / '+tasks.length+' '+(isES?'tareas':'tasks')+'</span>'+
       '</div>'+
-      (canEdit?'<div style="font-size:11px;color:rgba(201,168,76,.5);margin-bottom:12px">✏️ Click the checkboxes to mark tasks done</div>':'')+
-      (trows||'<div style="color:rgba(240,230,204,.35);font-size:13px;padding:20px 0">No tasks yet</div>')+
+      (canEdit?'<div style="font-size:11px;color:var(--muted);margin-bottom:14px;padding:8px 12px;background:var(--gold-l);border-radius:var(--r-sm);border:1px solid rgba(201,168,76,.2)">'+(isES?'Haz clic en los círculos para marcar tareas como completadas.':'Click the circles to mark tasks as complete.')+'</div>':'')+
+      (trows||'<div class="client-empty">'+(isES?'Sin tareas aún':'No tasks yet')+'</div>')+
     '</div>';
   }
 
@@ -1337,31 +1386,39 @@ function buildClientSection(p, perms, sectionId){
     var conf = guests.filter(function(g){return g.rsvp==='confirmed';}).length;
     var dec = guests.filter(function(g){return g.rsvp==='declined';}).length;
     var pend = guests.filter(function(g){return !g.rsvp||g.rsvp==='pending';}).length;
+
     var grows = guests.slice(0,100).map(function(g, gi){
-      var badge = g.rsvp==='confirmed'?'#4caf50':g.rsvp==='declined'?'#f44336':'#9e9e9e';
+      var isConf = g.rsvp==='confirmed', isDec = g.rsvp==='declined';
+      var dotColor = isConf?'var(--success)':isDec?'var(--danger)':'var(--subtle)';
+
       var rsvpCtrl = canEdit
         ? '<div style="display:flex;gap:4px">'+
-            '<button onclick="clientRSVP('+gi+',\'confirmed\')" style="padding:3px 9px;border-radius:12px;border:1.5px solid;font-size:10px;font-weight:600;cursor:pointer;transition:.15s;background:'+(g.rsvp==='confirmed'?'#4caf50':'transparent')+';border-color:'+(g.rsvp==='confirmed'?'#4caf50':'rgba(240,230,204,.2)')+';color:'+(g.rsvp==='confirmed'?'#fff':'rgba(240,230,204,.5)')+'">✓ Yes</button>'+
-            '<button onclick="clientRSVP('+gi+',\'declined\')" style="padding:3px 9px;border-radius:12px;border:1.5px solid;font-size:10px;font-weight:600;cursor:pointer;transition:.15s;background:'+(g.rsvp==='declined'?'#f44336':'transparent')+';border-color:'+(g.rsvp==='declined'?'#f44336':'rgba(240,230,204,.2)')+';color:'+(g.rsvp==='declined'?'#fff':'rgba(240,230,204,.5)')+'">✗ No</button>'+
+            '<button onclick="clientRSVP('+gi+',\'confirmed\')" style="padding:3px 10px;border-radius:var(--pill);border:1.5px solid;font-size:10px;font-weight:700;cursor:pointer;background:'+(isConf?'var(--success)':'transparent')+';border-color:'+(isConf?'var(--success)':'var(--border-strong)')+';color:'+(isConf?'#fff':'var(--muted)')+'">'+( isES?'Sí':'Yes')+'</button>'+
+            '<button onclick="clientRSVP('+gi+',\'declined\')" style="padding:3px 10px;border-radius:var(--pill);border:1.5px solid;font-size:10px;font-weight:700;cursor:pointer;background:'+(isDec?'var(--danger)':'transparent')+';border-color:'+(isDec?'var(--danger)':'var(--border-strong)')+';color:'+(isDec?'#fff':'var(--muted)')+'">'+( isES?'No':'No')+'</button>'+
           '</div>'
-        : '<div style="width:8px;height:8px;border-radius:50%;background:'+badge+';flex-shrink:0"></div>';
-      return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(201,168,76,.06)">'+
-        '<div style="width:28px;height:28px;border-radius:50%;background:rgba(201,168,76,.15);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#c9a84c;flex-shrink:0">'+esc((g.name||'?')[0].toUpperCase())+'</div>'+
-        '<div style="flex:1;font-size:13px">'+esc(g.name)+(canEdit&&g.dietary?'<div style="font-size:10px;color:rgba(240,230,204,.35)">'+esc(g.dietary)+'</div>':'')+'</div>'+
-        (g.table?'<div style="font-size:11px;color:rgba(240,230,204,.4);font-family:Jost,sans-serif">Table '+esc(String(g.table))+'</div>':'')+
+        : '<div style="width:8px;height:8px;border-radius:50%;background:'+dotColor+';flex-shrink:0"></div>';
+
+      return '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)">'+
+        '<div style="width:30px;height:30px;border-radius:50%;background:var(--gold-l);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--gold-h);flex-shrink:0">'+esc((g.name||'?')[0].toUpperCase())+'</div>'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(g.name)+'</div>'+
+          (g.dietary?'<div style="font-size:11px;color:var(--muted)">'+esc(g.dietary)+'</div>':'')+
+        '</div>'+
+        (g.table?'<div style="font-size:11px;color:var(--muted);white-space:nowrap">'+(isES?'Mesa ':'Table ')+esc(String(g.table))+'</div>':'')+
         rsvpCtrl+
       '</div>';
     }).join('');
-    return '<div class="client-section">'+
-      '<div class="client-section-title">👥 Guest List</div>'+
-      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">'+
-        clientStatCard('✅','Confirmed',String(conf))+
-        clientStatCard('❌','Declined',String(dec))+
-        clientStatCard('⏳','Pending',String(pend))+
+
+    return '<div class="client-card">'+
+      sectionTitle('guests')+
+      '<div class="client-stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">'+
+        clientStatCard(isES?'Confirmados':'Confirmed', String(conf), 'var(--success)')+
+        clientStatCard(isES?'Rechazaron':'Declined', String(dec), 'var(--danger)')+
+        clientStatCard(isES?'Pendientes':'Pending', String(pend))+
       '</div>'+
-      (canEdit?'<div style="font-size:11px;color:rgba(201,168,76,.5);margin-bottom:12px">✏️ Update RSVP status for each guest</div>':'')+
-      (grows||'<div style="color:rgba(240,230,204,.35);font-size:13px;padding:20px 0">No guests yet</div>')+
-      (guests.length>100?'<div style="font-size:11px;color:rgba(240,230,204,.3);margin-top:10px">Showing first 100 of '+guests.length+' guests</div>':'')+
+      (canEdit?'<div style="font-size:11px;color:var(--muted);margin-bottom:14px;padding:8px 12px;background:var(--gold-l);border-radius:var(--r-sm);border:1px solid rgba(201,168,76,.2)">'+(isES?'Actualiza el RSVP de cada invitado.':'Update RSVP status for each guest.')+'</div>':'')+
+      (grows||'<div class="client-empty">'+(isES?'Sin invitados aún':'No guests yet')+'</div>')+
+      (guests.length>100?'<div style="font-size:11px;color:var(--light);margin-top:12px">'+(isES?'Mostrando 100 de ':'Showing first 100 of ')+guests.length+' '+(isES?'invitados':'guests')+'</div>':'')+
     '</div>';
   }
 
@@ -1379,14 +1436,14 @@ function buildClientSection(p, perms, sectionId){
         if(x+w>maxX)maxX=x+w; if(y+h>maxY)maxY=y+h;
       });
       var bw=maxX-minX, bh=maxY-minY;
-      var SVG_W=760, SVG_H=Math.max(200,Math.min(500,Math.round(SVG_W*bh/bw)));
-      var scale=Math.min((SVG_W-40)/bw,(SVG_H-40)/bh);
-      var offX=20-minX*scale, offY=20-minY*scale;
+      var SVG_W=800, SVG_H=Math.max(200,Math.min(520,Math.round(SVG_W*bh/bw)));
+      var scale=Math.min((SVG_W-48)/bw,(SVG_H-48)/bh);
+      var offX=24-minX*scale, offY=24-minY*scale;
 
       var itemSVGs = litems.map(function(it){
         var x=(it.x||0)*scale+offX, y=(it.y||0)*scale+offY;
         var w=(it.w||40)*scale, h=(it.h||40)*scale;
-        var bg=it.bg||'#e0d8cc', bd=it.bdClr||'#999';
+        var bg=it.bg||'#ede5d6', bd=it.bdClr||'#b8a88a';
         var rot=it.rotation||0;
         var cx=x+w/2, cy=y+h/2;
         var isRound=it.radius==='50%';
@@ -1394,32 +1451,29 @@ function buildClientSection(p, perms, sectionId){
         var fontSize=Math.max(7,Math.min(13,Math.round(w*0.18)));
         var transform=rot?'transform="rotate('+rot+' '+cx+' '+cy+')\"':'';
         if(isRound){
-          var rx=w/2, ry=h/2;
-          return '<ellipse cx="'+cx+'" cy="'+cy+'" rx="'+rx+'" ry="'+ry+'" fill="'+bg+'" stroke="'+bd+'" stroke-width="1" '+transform+'/>'+
-            '<text x="'+cx+'" y="'+(cy+fontSize*0.35)+'" text-anchor="middle" font-size="'+fontSize+'" font-family="Jost,sans-serif" fill="'+bd+'" '+transform+'>'+label+'</text>';
-        } else {
-          return '<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="2" fill="'+bg+'" stroke="'+bd+'" stroke-width="1" '+transform+'/>'+
-            '<text x="'+cx+'" y="'+(cy+fontSize*0.35)+'" text-anchor="middle" font-size="'+fontSize+'" font-family="Jost,sans-serif" fill="'+bd+'" '+transform+'>'+label+'</text>';
+          return '<ellipse cx="'+cx+'" cy="'+cy+'" rx="'+(w/2)+'" ry="'+(h/2)+'" fill="'+bg+'" stroke="'+bd+'" stroke-width="1.2" '+transform+'/>'+
+            '<text x="'+cx+'" y="'+(cy+fontSize*0.38)+'" text-anchor="middle" font-size="'+fontSize+'" font-family="Jost,sans-serif" fill="'+bd+'" '+transform+'>'+label+'</text>';
         }
+        return '<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="3" fill="'+bg+'" stroke="'+bd+'" stroke-width="1.2" '+transform+'/>'+
+          '<text x="'+cx+'" y="'+(cy+fontSize*0.38)+'" text-anchor="middle" font-size="'+fontSize+'" font-family="Jost,sans-serif" fill="'+bd+'" '+transform+'>'+label+'</text>';
       }).join('');
 
-      svgContent = '<div style="margin:20px 0;border:1px solid rgba(201,168,76,.15);border-radius:10px;overflow:hidden;background:#1a1712">'+
+      svgContent = '<div style="margin-top:4px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;background:var(--bg2)">'+
         '<svg width="100%" viewBox="0 0 '+SVG_W+' '+SVG_H+'" xmlns="http://www.w3.org/2000/svg" style="display:block">'+
-          '<rect width="'+SVG_W+'" height="'+SVG_H+'" fill="#1a1712"/>'+
+          '<rect width="'+SVG_W+'" height="'+SVG_H+'" fill="#f6f1e9"/>'+
           itemSVGs+
         '</svg>'+
       '</div>';
     }
 
-    return '<div class="client-section">'+
-      '<div class="client-section-title">🪑 Event Layout</div>'+
-      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">'+
-        clientStatCard('🪑','Tables',String(tables.length))+
-        clientStatCard('💺','Total Seats',String(seats))+
-        clientStatCard('📐','Elements',String(litems.length))+
+    return '<div class="client-card">'+
+      sectionTitle('layout')+
+      '<div class="client-stat-grid" style="grid-template-columns:repeat(3,1fr)">'+
+        clientStatCard(isES?'Mesas':'Tables', String(tables.length))+
+        clientStatCard(isES?'Asientos':'Seats', String(seats))+
+        clientStatCard(isES?'Elementos':'Elements', String(litems.length))+
       '</div>'+
-      (litems.length ? svgContent : '<div style="color:rgba(240,230,204,.35);font-size:13px;padding:20px 0">No layout created yet</div>')+
-      (canEdit?'<div style="margin-top:12px;padding:12px 14px;background:rgba(201,168,76,.05);border:1px solid rgba(201,168,76,.15);border-radius:8px;font-size:12px;color:rgba(240,230,204,.5)">✏️ Layout editing is available in the main app</div>':'')+
+      (litems.length ? svgContent : '<div class="client-empty">'+(isES?'Sin distribución creada aún':'No layout created yet')+'</div>')+
     '</div>';
   }
 
@@ -1433,33 +1487,35 @@ function buildClientSection(p, perms, sectionId){
         (mb.folders||[]).reduce(function(acc,f){ return acc.concat(f.images||[]); }, [])
       );
     }
-    var imgGrid = allImgs.length ?
-      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">'+
-        allImgs.map(function(img){
-          return '<div style="border-radius:8px;overflow:hidden;background:rgba(201,168,76,.05)">'+
-            '<img src="'+img.src+'" style="width:100%;aspect-ratio:1;object-fit:cover;display:block" alt="'+esc(img.label||'')+'" loading="lazy" onerror="this.style.display=\'none\'">'+
-            (img.label?'<div style="font-size:10px;color:rgba(240,230,204,.45);padding:4px 6px;font-family:Jost,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(img.label)+'</div>':'')+
-          '</div>';
-        }).join('')+
-      '</div>'
-      : '<div style="color:rgba(240,230,204,.35);font-size:13px;padding:20px 0">No images yet</div>';
-    return '<div class="client-section">'+
-      '<div class="client-section-title">🎨 Moodboard</div>'+
-      (allImgs.length ? '<div style="font-size:12px;color:rgba(240,230,204,.4);margin-bottom:14px">'+allImgs.length+' image'+(allImgs.length!==1?'s':'')+' shared</div>' : '')+
+    var imgGrid = allImgs.length
+      ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px">'+
+          allImgs.map(function(img){
+            return '<div style="border-radius:var(--r-sm);overflow:hidden;background:var(--bg2);border:1px solid var(--border)">'+
+              '<img src="'+img.src+'" style="width:100%;aspect-ratio:1;object-fit:cover;display:block" alt="'+esc(img.label||'')+'" loading="lazy" onerror="this.style.display=\'none\'">'+
+              (img.label?'<div style="font-size:10px;color:var(--muted);padding:4px 7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(img.label)+'</div>':'')+
+            '</div>';
+          }).join('')+
+        '</div>'
+      : '<div class="client-empty">'+(isES?'Sin imágenes aún':'No images yet')+'</div>';
+
+    return '<div class="client-card">'+
+      sectionTitle('moodboard')+
+      (allImgs.length ? '<div style="font-size:12px;color:var(--muted);margin-bottom:16px">'+allImgs.length+' '+(isES?'imagen'+(allImgs.length!==1?'es':''):'image'+(allImgs.length!==1?'s':''))+' '+(isES?'compartidas':'shared')+'</div>' : '')+
       imgGrid+
     '</div>';
   }
 
-  return '<div style="color:rgba(240,230,204,.4);padding:40px;text-align:center">'+
-    '<svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 12px;display:block;opacity:.4"><rect width="11" height="11" x="11" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>This section is not available</div>';
+  return '<div class="client-empty">'+
+    '<svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 12px;display:block;opacity:.3"><rect width="11" height="11" x="11" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'+
+    (isES?'Esta sección no está disponible':'This section is not available')+
+  '</div>';
 }
 
 
-function clientStatCard(icon, label, value){
-  return '<div style="background:rgba(201,168,76,.06);border:1px solid rgba(201,168,76,.15);border-radius:8px;padding:14px">'+
-    '<div style="font-size:18px;margin-bottom:4px">'+icon+'</div>'+
-    '<div style="font-size:20px;font-weight:700;color:#f0e6cc;margin-bottom:2px">'+esc(value)+'</div>'+
-    '<div style="font-size:11px;color:rgba(240,230,204,.4);font-family:Jost,sans-serif;text-transform:uppercase;letter-spacing:.06em">'+label+'</div>'+
+function clientStatCard(label, value, accentColor){
+  return '<div class="client-stat-card">'+
+    '<div class="client-stat-label">'+label+'</div>'+
+    '<div class="client-stat-value"'+(accentColor?' style="color:'+accentColor+'"':'')+'>'+esc(String(value))+'</div>'+
   '</div>';
 }
 
@@ -1467,8 +1523,8 @@ function _clientSave(){
   var p = window._clientProject;
   if(!p) return false;
 
-  if(window._shareMode && window._clientProjectUserId){
-    EVENTOS_DATA.upsertProject(window._clientProjectUserId, p)
+  if(window._shareMode && window._shareToken){
+    EVENTOS_DATA.upsertProjectByShareToken(window._shareToken, p)
       .catch(function(e){ console.error('Client save error:', e); });
     return true;
   }
@@ -1545,6 +1601,7 @@ function exitClientPortal(){
   if(!token) return;
 
   window._shareMode = true;
+  window._shareToken = token;
 
   async function loadShareByToken(){
     var loadingEl = document.getElementById('pg-loading');
@@ -1559,6 +1616,8 @@ function exitClientPortal(){
 
       if(found){
         window._clientProjectUserId = shared.wixUserId;
+        // Resolve storage URLs for shared project before rendering
+        if(typeof resolveStorageUrls === 'function') await resolveStorageUrls(found);
         renderClientPortal(found, foundShare, false);
       } else {
         if(loadingEl){

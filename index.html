@@ -174,20 +174,18 @@
           <!-- Date filter inline -->
           <button class="tb active" id="ef-alltime" onclick="setEvFilter('alltime')" style="font-size:11px;padding:4px 9px;white-space:nowrap"></button>
           <div style="display:flex;align-items:center;gap:4px">
-            <div style="position:relative;width:125px;cursor:pointer" onclick="openDateField('ef-from')" onpointerdown="openDateField('ef-from')">
-              <input type="date" lang="en-GB" id="ef-from" onkeydown="return false" onpaste="return false" style="position:absolute;inset:0;opacity:0;pointer-events:none;width:100%;height:100%;z-index:2" onchange="document.getElementById('ef-from-display').firstElementChild.textContent=formatDMY(this.value);setEvFilterDates()">
-              <div id="ef-from-display" class="input" style="display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:11px;padding:3px 8px;height:28px;white-space:nowrap">
-                <span>DD/MM/YYYY</span>
+            <div class="date-field" style="width:125px">
+              <input class="input date-field-input" type="text" id="ef-from" placeholder="DD/MM/YYYY" readonly onclick="openCalendarPicker('ef-from')" onfocus="openCalendarPicker('ef-from')" onchange="setEvFilterDates()" style="font-size:11px;padding:3px 34px 3px 8px;height:28px;white-space:nowrap">
+              <button type="button" class="date-field-btn" onclick="openCalendarPicker('ef-from')" aria-label="From date" style="width:26px">
                 <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-              </div>
+              </button>
             </div>
             <span style="color:var(--muted);font-size:11px">&#8594;</span>
-            <div style="position:relative;width:125px;cursor:pointer" onclick="openDateField('ef-to')" onpointerdown="openDateField('ef-to')">
-              <input type="date" lang="en-GB" id="ef-to" onkeydown="return false" onpaste="return false" style="position:absolute;inset:0;opacity:0;pointer-events:none;width:100%;height:100%;z-index:2" onchange="document.getElementById('ef-to-display').firstElementChild.textContent=formatDMY(this.value);setEvFilterDates()">
-              <div id="ef-to-display" class="input" style="display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:11px;padding:3px 8px;height:28px;white-space:nowrap">
-                <span>DD/MM/YYYY</span>
+            <div class="date-field" style="width:125px">
+              <input class="input date-field-input" type="text" id="ef-to" placeholder="DD/MM/YYYY" readonly onclick="openCalendarPicker('ef-to')" onfocus="openCalendarPicker('ef-to')" onchange="setEvFilterDates()" style="font-size:11px;padding:3px 34px 3px 8px;height:28px;white-space:nowrap">
+              <button type="button" class="date-field-btn" onclick="openCalendarPicker('ef-to')" aria-label="To date" style="width:26px">
                 <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-              </div>
+              </button>
             </div>
           </div>
         </div>
@@ -240,20 +238,18 @@
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap" id="analytics-controls">
           <button class="tb active" id="ap-alltime" onclick="setAnalyticsAllTime()" id="ap-alltime"></button>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <div style="position:relative;width:140px;cursor:pointer" onclick="openDateField('ap-from')" onpointerdown="openDateField('ap-from')">
-              <input type="date" lang="en-GB" id="ap-from" onkeydown="return false" onpaste="return false" style="position:absolute;inset:0;opacity:0;pointer-events:none;width:100%;height:100%;z-index:2" onchange="document.getElementById('ap-from-display').firstElementChild.textContent=formatDMY(this.value);setAnalyticsDateRange()">
-              <div id="ap-from-display" class="input" style="display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:12px;padding:4px 8px;height:30px;white-space:nowrap">
-                <span>DD/MM/YYYY</span>
+            <div class="date-field" style="width:140px">
+              <input class="input date-field-input" type="text" id="ap-from" placeholder="DD/MM/YYYY" readonly onclick="openCalendarPicker('ap-from')" onfocus="openCalendarPicker('ap-from')" onchange="setAnalyticsDateRange()" style="font-size:12px;padding:4px 34px 4px 8px;height:30px;white-space:nowrap">
+              <button type="button" class="date-field-btn" onclick="openCalendarPicker('ap-from')" aria-label="From date" style="width:26px">
                 <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-              </div>
+              </button>
             </div>
             <span style="color:var(--muted);font-size:12px" id="ap-arrow">&#8594;</span>
-            <div style="position:relative;width:140px;cursor:pointer" onclick="openDateField('ap-to')" onpointerdown="openDateField('ap-to')">
-              <input type="date" lang="en-GB" id="ap-to" onkeydown="return false" onpaste="return false" style="position:absolute;inset:0;opacity:0;pointer-events:none;width:100%;height:100%;z-index:2" onchange="document.getElementById('ap-to-display').firstElementChild.textContent=formatDMY(this.value);setAnalyticsDateRange()">
-              <div id="ap-to-display" class="input" style="display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:12px;padding:4px 8px;height:30px;white-space:nowrap">
-                <span>DD/MM/YYYY</span>
+            <div class="date-field" style="width:140px">
+              <input class="input date-field-input" type="text" id="ap-to" placeholder="DD/MM/YYYY" readonly onclick="openCalendarPicker('ap-to')" onfocus="openCalendarPicker('ap-to')" onchange="setAnalyticsDateRange()" style="font-size:12px;padding:4px 34px 4px 8px;height:30px;white-space:nowrap">
+              <button type="button" class="date-field-btn" onclick="openCalendarPicker('ap-to')" aria-label="To date" style="width:26px">
                 <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-              </div>
+              </button>
             </div>
           </div>
         </div>

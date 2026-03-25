@@ -8,16 +8,14 @@ function setAnalyticsAllTime(){
   _aTo   = null;
   const fromEl=document.getElementById('ap-from'); const toEl=document.getElementById('ap-to');
   if(fromEl) fromEl.value=''; if(toEl) toEl.value='';
-  const fromDisp=document.getElementById('ap-from-display'); if(fromDisp) fromDisp.firstElementChild.textContent='DD/MM/YYYY';
-  const toDisp=document.getElementById('ap-to-display'); if(toDisp) toDisp.firstElementChild.textContent='DD/MM/YYYY';
   const btn=document.getElementById('ap-alltime'); if(btn) btn.classList.add('active');
   saveEvPrefs();
   renderAnalytics();
 }
 
 function setAnalyticsDateRange(){
-  const fromVal=(document.getElementById('ap-from')||{}).value;
-  const toVal=(document.getElementById('ap-to')||{}).value;
+  const fromVal=parseUserDate((document.getElementById('ap-from')||{}).value);
+  const toVal=parseUserDate((document.getElementById('ap-to')||{}).value);
   _aAt = false;
   _aFr = fromVal ? new Date(fromVal+'T00:00:00') : null;
   _aTo   = toVal   ? new Date(toVal+'T23:59:59')   : null;
@@ -31,7 +29,7 @@ function updateAnalyticsLabels(){
 }
 
 function renderAnalytics(){
-  const allProjects = Object.values(uproj()).filter(p=>p&&p.id&&p.id!=='__library__'&&p.id!=='__lib_layout__'&&p.status&&p.status!=='__internal__');
+  const allProjects = Object.values(uproj()).filter(p=>p&&p.id&&!p._metaOnly&&p.id!=='__library__'&&p.id!=='__lib_layout__'&&p.status&&p.status!=='__internal__');
   const farPast=new Date('1900-01-01'); const farFuture=new Date('2100-12-31');
   const from = _aAt ? farPast  : (_aFr||farPast);
   const to   = _aAt ? farFuture: (_aTo  ||farFuture);
@@ -46,12 +44,10 @@ function renderAnalytics(){
   const sub=document.getElementById('analytics-sub');if(sub)sub.textContent=t('analytics_sub');
   const fromEl=document.getElementById('ap-from'); const toEl=document.getElementById('ap-to');
   if(fromEl&&!fromEl.value&&_aFr){
-    fromEl.value=_aFr.toISOString().slice(0,10);
-    const d=document.getElementById('ap-from-display'); if(d) d.firstElementChild.textContent=formatDMY(fromEl.value);
+    fromEl.value=formatDMY(_aFr.toISOString().slice(0,10));
   }
   if(toEl&&!toEl.value&&_aTo){
-    toEl.value=_aTo.toISOString().slice(0,10);
-    const d=document.getElementById('ap-to-display'); if(d) d.firstElementChild.textContent=formatDMY(toEl.value);
+    toEl.value=formatDMY(_aTo.toISOString().slice(0,10));
   }
 
   const el = document.getElementById('analytics-content');

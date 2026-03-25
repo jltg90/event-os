@@ -1,6 +1,10 @@
 ﻿
 var _libTab = 'vendors';
 var _mbOpenFolderId = null;
+var _libOpenVendorGroupId = null;
+var _libOpenTaskGroupId = null;
+var _libVendorWizTargetGroupId = null;
+var _libPlanWizTargetGroupId = null;
 
 function getLib(){
   var all = uproj();
@@ -102,7 +106,7 @@ function loadFloorplanImg(layoutId, callback){
     callback(null);
     return;
   }
-  EVENTOS_DATA.getProjectsByWixUserId(DB.cur)
+  EVENTOS_DATA.getProjectsByWixUserId()
     .then(function(projects){
       if(projects && typeof DB!=='undefined'){
         DB.projects[DB.cur] = projects;
@@ -156,11 +160,48 @@ function libSetPageTitle(title){
 }
 
 
+// Convert an external URL to a base64 data URI so it can be embedded in SVG data URIs
+// (browsers block external resource loading from SVGs rendered via <img> or data: URIs).
+function _urlToDataUri(url){
+  return fetch(url)
+    .then(function(res){ return res.blob(); })
+    .then(function(blob){
+      return new Promise(function(resolve){
+        var reader = new FileReader();
+        reader.onloadend = function(){ resolve(reader.result); };
+        reader.onerror = function(){ resolve(null); };
+        reader.readAsDataURL(blob);
+      });
+    })
+    .catch(function(){ return null; });
+}
+
 function libResolveLayoutFloorplan(entry){
   return new Promise(function(resolve){
     if(!entry || !entry.floorplan){ resolve(null); return; }
     var fp = JSON.parse(JSON.stringify(entry.floorplan));
-    if(fp.img && fp.img!=='__idb__' && fp.img!=='__stored__'){ resolve(fp); return; }
+    // Already a usable data URI or inline image — use as-is
+    if(fp.img && fp.img!=='__idb__' && fp.img!=='__stored__'){
+      // If it's an external URL (not data:), convert to data URI for SVG embedding
+      if(fp.img.indexOf('data:') !== 0 && fp.img.indexOf('http') === 0){
+        _urlToDataUri(fp.img).then(function(dataUri){ fp.img = dataUri || fp.img; resolve(fp); });
+      } else {
+        resolve(fp);
+      }
+      return;
+    }
+    if(fp.img==='__stored__' && fp._storageId){
+      // Try IndexedDB cache first (returns base64), then Convex URL → convert to data URI
+      var _tryIdb = fp._idb ? _fpLoad(fp._idb).catch(function(){ return null; }) : Promise.resolve(null);
+      _tryIdb.then(function(data){
+        if(data){ fp.img = data; resolve(fp); return; }
+        EVENTOS_DATA.getFileUrl(fp._storageId).then(function(url){
+          if(!url){ fp.img = fp.thumb || null; resolve(fp); return; }
+          _urlToDataUri(url).then(function(dataUri){ fp.img = dataUri || fp.thumb || null; resolve(fp); });
+        }).catch(function(){ fp.img = fp.thumb || null; resolve(fp); });
+      });
+      return;
+    }
     if(fp.img==='__idb__' && fp._idb && typeof _fpLoad==='function'){
       _fpLoad(fp._idb).then(function(data){ fp.img = data || fp.thumb || null; resolve(fp); }).catch(function(){ fp.img = fp.thumb || null; resolve(fp); });
       return;
@@ -230,11 +271,32 @@ async function libApplyLayoutExportToEvent(entryId, pid, opts){
     toast(isES?'No se pudo exportar el layout':'Could not export the layout','e');
     return null;
   }
+
+  // Multi-layout: append or update in eventLayouts
+  var layouts = (typeof ensureEventLayouts==='function') ? ensureEventLayouts(p) : [];
+  var existingIdx = layouts.findIndex(function(e){
+    return e.layoutExport && e.layoutExport.layoutId === exp.layoutId;
+  });
+  if(existingIdx >= 0){
+    // Refresh existing (same library source) — update in place
+    layouts[existingIdx].layoutExport = exp;
+  } else {
+    // New import — append and deactivate others
+    layouts.forEach(function(e){ e.active = false; });
+    layouts.push({
+      id: 'el_' + Date.now() + Math.random().toString(36).slice(2,6),
+      layoutExport: exp,
+      addedAt: new Date().toISOString(),
+      active: true
+    });
+  }
+
   p.layoutExport = exp;
   p.layoutItems = [];
   delete p.floorplan;
   saveProj(p);
   if(typeof CID!=='undefined' && CID===pid && typeof CTAB!=='undefined' && CTAB==='layout' && typeof renderLayout==='function') renderLayout();
+  if(typeof renderEventLayoutsBtn==='function') renderEventLayoutsBtn();
   if(opts.toastSuccess) toast(isES?'Layout exportado al evento':'Layout exported to event','s');
   return exp;
 }
@@ -295,8 +357,8 @@ function libLayoutZoomExtents(){
 function renderLibrary(){
   updateLibraryLabels();
   var lib = getLib();
-  var vendorCount = lib.vendors.reduce(function(sum, entry){ return sum + ((entry.vendors||[]).length||0); }, 0);
-  var taskCount = (lib.globalTasks||[]).length;
+  var vendorCount = lib.vendors.length;
+  var taskCount = (lib.tasks||[]).length;
 
   var tabs = [
     {key:'vendors',    icon:'🏢', lbl:t('lib_vendors'),     cnt: vendorCount},
@@ -319,27 +381,35 @@ function renderLibrary(){
   };
   if(addEl){
     if(_libTab==='vendors'){
-      addEl.innerHTML =
-        '<button class="btn btn-ghost btn-sm" onclick="libImportCSV()" style="display:flex;align-items:center;gap:5px;font-size:11px">'
-        +'<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
-        +(LANG==='es'?'Importar CSV':'Import CSV')+'</button>'
-        +'<button class="btn btn-ghost btn-sm" onclick="libDownloadVendorTemplate()" style="display:flex;align-items:center;gap:5px;font-size:11px">'
-        +'<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
-        +(LANG==='es'?'Descargar Plantilla':'Download Template')+'</button>'
-        +'<button class="btn btn-primary btn-create-gradient" onclick="libAddGlobalVendor()">'
-        +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
-        +(LANG==='es'?'Agregar Proveedor':'Add Vendor')+'</button>';
+      if(_libOpenVendorGroupId){
+        addEl.innerHTML =
+          '<button class="btn btn-ghost" style="gap:5px" onclick="libBackToVendorGroups()">'
+          +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>'
+          +(LANG==='es'?'Volver':'Back')+'</button>'
+          +' <button class="btn btn-primary btn-create-gradient" onclick="libOpenVendorModalForGroup(\''+_libOpenVendorGroupId+'\')">'
+          +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
+          +(LANG==='es'?'Agregar Proveedor':'Add Vendor')+'</button>';
+      } else {
+        addEl.innerHTML =
+          '<button class="btn btn-primary btn-create-gradient" onclick="libNewVendorGroupModal()">'
+          +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
+          +(LANG==='es'?'Nuevo Grupo':'New Group')+'</button>';
+      }
     } else if(_libTab==='tasks'){
-      addEl.innerHTML =
-        '<button class="btn btn-ghost btn-sm" onclick="libImportTasksCSV()" style="display:flex;align-items:center;gap:5px;font-size:11px">'
-        +'<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
-        +(LANG==='es'?'Importar CSV':'Import CSV')+'</button>'
-        +'<button class="btn btn-ghost btn-sm" onclick="libDownloadTaskTemplate()" style="display:flex;align-items:center;gap:5px;font-size:11px">'
-        +'<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
-        +(LANG==='es'?'Descargar Plantilla':'Download Template')+'</button>'
-        +'<button class="btn btn-primary btn-create-gradient" onclick="libAddGlobalTask()">'
-        +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
-        +(LANG==='es'?'Agregar Tarea':'Add Task')+'</button>';
+      if(_libOpenTaskGroupId){
+        addEl.innerHTML =
+          '<button class="btn btn-ghost" style="gap:5px" onclick="libBackToTaskGroups()">'
+          +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>'
+          +(LANG==='es'?'Volver':'Back')+'</button>'
+          +' <button class="btn btn-primary btn-create-gradient" onclick="libOpenTaskModalForGroup(\''+_libOpenTaskGroupId+'\')">'
+          +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
+          +(LANG==='es'?'Agregar Tarea':'Add Task')+'</button>';
+      } else {
+        addEl.innerHTML =
+          '<button class="btn btn-primary btn-create-gradient" onclick="libNewTaskGroupModal()">'
+          +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
+          +(LANG==='es'?'Nuevo Grupo':'New Group')+'</button>';
+      }
     } else if(_libTab==='layouts'){
       addEl.innerHTML = lib.layouts.length
         ? '<button class="btn btn-primary btn-create-gradient" onclick="libOpenLayoutWizard()">'
@@ -370,8 +440,8 @@ function renderLibrary(){
   if(!el) return;
 
   switch(_libTab){
-    case 'vendors':     el.innerHTML = renderLibVendors(lib); break;
-    case 'tasks':       el.innerHTML = renderLibGlobalTasks(lib); break;
+    case 'vendors':     el.innerHTML = renderLibVendorSets(lib); break;
+    case 'tasks':       el.innerHTML = renderLibTaskGroups(lib); break;
     case 'layouts':     el.innerHTML = renderLibLayouts(lib); break;
     case 'tables':      el.innerHTML = renderLibTypes(lib,'tables'); break;
     case 'elements':    el.innerHTML = renderLibTypes(lib,'elements'); break;
@@ -381,7 +451,7 @@ function renderLibrary(){
   }
 }
 
-function setLibTab(key){ _libTab=key; _mbOpenFolderId=null; renderLibrary(); }
+function setLibTab(key){ _libTab=key; _mbOpenFolderId=null; _libOpenVendorGroupId=null; _libOpenTaskGroupId=null; renderLibrary(); }
 
 function libEmpty(){
   return '<div style="text-align:center;padding:60px 20px;color:var(--muted)">'
@@ -414,18 +484,217 @@ function openLayoutLibraryAndCreate(){
 window.openLayoutLibraryAndCreate = openLayoutLibraryAndCreate;
 
 function renderLibVendorSets(lib){
-  if(!lib.vendors.length) return libEmpty();
-  return lib.vendors.map(function(entry){
-    var sub = entry.vendors.length+' '+(LANG==='es'?'proveedor(es)':'vendor(s)')+' · '+entry.date;
-    var cats = {};
-    (entry.vendors||[]).forEach(function(v){ if(v.category) cats[v.category]=true; });
-    var catNames = Object.keys(cats);
-    var badge = catNames.length
-      ? '<span class="badge b-gold">'+esc(catNames.slice(0,2).join(' · '))+(catNames.length>2?' +'+(catNames.length-2):'')+'</span>'
-      : '';
-    var loadBtn = proj()?'<button class="btn btn-primary btn-sm" onclick="libLoadVendors(\''+entry.id+'\')">'+(LANG==='es'?'CARGAR':'LOAD')+'</button>':'';
-    return libCard(entry.name, sub, badge, loadBtn, entry.id, 'vendors');
-  }).join('');
+  var isES=LANG==='es';
+  if(_libOpenVendorGroupId){
+    var entry=lib.vendors.find(function(e){return e.id===_libOpenVendorGroupId;});
+    if(!entry){ _libOpenVendorGroupId=null; } else { return renderLibVendorGroupDetail(lib,entry,isES); }
+  }
+  if(!lib.vendors.length){
+    return '<div class="card" style="text-align:center;padding:52px 24px">'
+      +'<svg width="48" height="48" fill="none" stroke="var(--muted)" stroke-width="1.2" viewBox="0 0 24 24" style="margin:0 auto 14px;display:block"><path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Z"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>'
+      +'<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:8px">'+(isES?'No hay grupos de proveedores guardados':'No vendor groups saved yet')+'</div>'
+      +'<div style="font-size:13px;color:var(--muted);max-width:380px;margin:0 auto 20px">'+(isES?'Crea un nuevo grupo para organizar tus proveedores reutilizables.':'Create a new group to organize your reusable vendors.')+'</div>'
+      +'<button class="btn btn-primary btn-create-gradient" onclick="libNewVendorGroupModal()">'
+      +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
+      +(isES?' Nuevo Grupo de Proveedores':' New Vendor Group')+'</button></div>';
+  }
+  var cards=lib.vendors.map(function(e){ return libVendorGroupCard(e,isES); }).join('');
+  return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
+    +'<div style="position:relative;flex:1">'
+    +'<svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>'
+    +'<input class="input" id="lib-vg-search" placeholder="'+(isES?'Buscar grupos o proveedores...':'Search groups or vendors...')+'" oninput="libSearchVendorGroups(this.value)" style="padding-left:36px;width:100%">'
+    +'</div>'
+    +'<button id="lib-vg-bulk-del-btn" class="btn btn-danger btn-sm" style="display:none;white-space:nowrap" onclick="libDeleteSelectedVendorGroups()">'
+    +(isES?'Eliminar':'Delete Selected')+'</button>'
+    +'</div>'
+    +'<div id="lib-vg-list">'+cards+'</div>';
+}
+function libVendorGroupCard(entry,isES){
+  var sub=entry.vendors.length+' '+(isES?'proveedor(es)':'vendor(s)')+' · '+entry.date;
+  var cats={};
+  (entry.vendors||[]).forEach(function(v){ if(v.category) cats[v.category]=true; });
+  var catNames=Object.keys(cats);
+  var badge=catNames.length?'<span class="badge b-gold">'+esc(catNames.slice(0,2).join(' · '))+(catNames.length>2?' +'+(catNames.length-2):'')+'</span>':'';
+  return '<div style="display:flex;align-items:flex-start;gap:10px;padding:16px 18px;background:#fff;border:1.5px solid var(--border);border-radius:var(--r-lg);margin-bottom:10px">'
+    +'<input type="checkbox" class="lib-vg-sel" data-id="'+entry.id+'" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer;flex-shrink:0;margin-top:3px" onchange="libUpdateVendorGroupBulkBtn()">'
+    +'<div style="flex:1;min-width:0;cursor:pointer" onclick="libOpenVendorGroup(\''+entry.id+'\')">'
+    +'<div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px;display:flex;align-items:center;gap:6px">'+esc(entry.name)
+    +'<svg width="12" height="12" fill="none" stroke="var(--muted)" stroke-width="2.5" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>'
+    +'<div style="font-size:12px;color:var(--muted)">'+sub+'</div>'
+    +(badge?'<div style="margin-top:6px">'+badge+'</div>':'')
+    +'</div>'
+    +'<div style="display:flex;gap:6px;flex-shrink:0;align-items:center">'
+    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar nombre':'Edit name')+'" onclick="event.stopPropagation();libRenameVendorGroup(\''+entry.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
+    +'<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();libLoadVendors(\''+entry.id+'\')">'+(isES?'CARGAR':'LOAD')+'</button>'
+    +'<button class="btn btn-danger btn-sm btn-icon" onclick="event.stopPropagation();libDelete(\'vendors\',\''+entry.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
+    +'</div></div>';
+}
+function renderLibVendorGroupDetail(lib,entry,isES){
+  var vendors=entry.vendors||[];
+  var header='<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">'
+    +'<div style="font-size:15px;font-weight:700;color:var(--text)">'+esc(entry.name)+'</div>'
+    +'<button class="btn btn-ghost btn-sm btn-icon" onclick="libRenameVendorGroup(\''+entry.id+'\')" title="'+(isES?'Renombrar':'Rename')+'">'
+    +'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
+    +'<div style="font-size:12px;color:var(--muted);margin-left:auto">'+vendors.length+' '+(isES?'proveedor(es)':'vendor(s)')+'</div>'
+    +'</div>';
+  if(!vendors.length){
+    return header
+      +'<section class="ev-empty fade-in">'
+      +'<div class="ev-empty-shell"><div class="ev-empty-aurora" aria-hidden="true"></div>'
+      +'<div class="ev-empty-grid"><div class="ev-empty-copy">'
+      +'<div class="ev-empty-badge">'+(isES?'Configuración de proveedores':'Vendor setup')+'</div>'
+      +'<h2 class="ev-empty-title">'+(isES?'Organiza todos tus proveedores en un solo lugar.':'Organize all your vendors in one place.')+'</h2>'
+      +'<p class="ev-empty-subtitle">'+(isES?'Crea un plan de proveedores para este grupo. El asistente sugiere los proveedores que necesitas según los servicios que requieras.':'Create a vendor plan for this group. The wizard suggests the vendors you need based on the services you require.')+'</p>'
+      +'<div class="ev-empty-actions">'
+      +'<button class="btn btn-primary btn-create-gradient ev-empty-cta" onclick="libOpenVendorSetupWizardForGroup(\''+entry.id+'\')">'
+      +'<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
+      +(isES?'Crear Plan de Proveedores':'Create Vendor Plan')+'</button>'
+      +'<button class="btn btn-ghost ev-empty-cta" onclick="libOpenVendorModalForGroup(\''+entry.id+'\')">'
+      +'<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
+      +(isES?'Agregar Proveedor':'Add Vendor')+'</button>'
+      +'</div></div></div></div></section>';
+  }
+  var rows=vendors.map(function(v){ return libVendorRow({entryId:entry.id,v:v},isES); }).join('');
+  return header
+    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
+    +'<div style="position:relative;flex:1;display:flex;align-items:center">'
+    +'<svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>'
+    +'<input class="input" placeholder="'+(isES?'Buscar proveedores...':'Search vendors...')+'" oninput="libFilterVendors(this.value)" style="padding-left:36px;width:100%">'
+    +'</div>'
+    +'<button id="lib-bulk-load-btn" class="btn btn-primary btn-sm" style="display:none;white-space:nowrap" onclick="libBulkLoadToEvent()">'
+    +(isES?'CARGAR':'LOAD')+'</button>'
+    +'</div>'
+    +'<div id="lib-vendor-table-wrap">'
+    +'<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm)">'
+    +'<table style="width:100%;border-collapse:collapse">'
+    +'<thead><tr style="background:var(--bg2);border-bottom:1px solid var(--border)">'
+    +'<th style="padding:9px 12px;width:36px"><input type="checkbox" id="lib-chk-all" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libToggleAllVendors(this.checked)" title="'+(isES?'Seleccionar todos':'Select all')+'"></th>'
+    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Proveedor':'Vendor')+'</th>'
+    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Contacto':'Contact')+'</th>'
+    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Servicios':'Services')+'</th>'
+    +'<th style="padding:9px 14px"></th>'
+    +'</tr></thead>'
+    +'<tbody id="lib-vendor-rows">'+rows+'</tbody>'
+    +'</table></div></div>';
+}
+function libOpenVendorGroup(id){ _libOpenVendorGroupId=id; renderLibrary(); }
+function libBackToVendorGroups(){ _libOpenVendorGroupId=null; renderLibrary(); }
+function libUpdateVendorGroupBulkBtn(){
+  var n=document.querySelectorAll('.lib-vg-sel:checked').length;
+  var btn=document.getElementById('lib-vg-bulk-del-btn');
+  if(btn) btn.style.display=n>0?'':'none';
+}
+function libDeleteSelectedVendorGroups(){
+  var ids=Array.from(document.querySelectorAll('.lib-vg-sel:checked')).map(function(c){return c.dataset.id;});
+  if(!ids.length) return;
+  var isES=LANG==='es';
+  if(!confirm(isES?'¿Eliminar '+ids.length+' grupo(s) seleccionado(s)?':'Delete '+ids.length+' selected group(s)?')) return;
+  var lib=getLib();
+  lib.vendors=lib.vendors.filter(function(e){return ids.indexOf(e.id)===-1;});
+  saveLib(lib); renderLibrary();
+  toast(isES?'Grupos eliminados':'Groups deleted');
+}
+function libSearchVendorGroups(q){
+  var lib=getLib(); var isES=LANG==='es'; var s=q.trim().toLowerCase();
+  var filtered=s===''?lib.vendors:lib.vendors.filter(function(entry){
+    if(entry.name.toLowerCase().includes(s)) return true;
+    return (entry.vendors||[]).some(function(v){ return [v.name,v.services,v.contact,v.category].some(function(f){return f&&f.toLowerCase().includes(s);}); });
+  });
+  var el=document.getElementById('lib-vg-list');
+  if(el) el.innerHTML=filtered.length?filtered.map(function(e){ return libVendorGroupCard(e,isES); }).join('')
+    :'<div style="text-align:center;padding:30px;color:var(--muted);font-size:13px">'+(isES?'Sin resultados':'No results')+'</div>';
+}
+function libNewVendorGroupModal(){
+  var isES=LANG==='es';
+  openMo('<div class="mo-title">'+(isES?'Nuevo Grupo de Proveedores':'New Vendor Group')+'</div>'
+    +'<div class="ig" style="margin-bottom:14px"><label>'+(isES?'Nombre del grupo *':'Group name *')+'</label>'
+    +'<input class="input" id="lib-new-vg-name" placeholder="'+(isES?'Ej: Proveedores de Boda':'e.g. Wedding Vendors')+'"></div>'
+    +'<div class="mo-foot">'
+    +'<button class="btn btn-ghost" onclick="closeMo()">'+(isES?'Cancelar':'Cancel')+'</button>'
+    +'<button class="btn btn-primary" onclick="libSaveNewVendorGroup()">'+(isES?'Crear':'Create')+'</button>'
+    +'</div>');
+  setTimeout(function(){ var el=document.getElementById('lib-new-vg-name'); if(el) el.focus(); },80);
+}
+function libSaveNewVendorGroup(){
+  var name=(document.getElementById('lib-new-vg-name')||{}).value||'';
+  var isES=LANG==='es';
+  if(!name.trim()) return toast(isES?'Ingresa un nombre':'Enter a name','e');
+  var lib=getLib(); var id='lvg'+Date.now();
+  lib.vendors.push({id:id,name:name.trim(),date:formatDMY(today()),vendors:[]});
+  saveLib(lib); closeMo(); _libOpenVendorGroupId=id; renderLibrary();
+  toast(isES?'Grupo creado':'Group created','s');
+}
+function libRenameVendorGroup(entryId){
+  var lib=getLib(); var entry=lib.vendors.find(function(e){return e.id===entryId;}); if(!entry) return;
+  var isES=LANG==='es';
+  openMo('<div class="mo-title">'+(isES?'Renombrar Grupo':'Rename Group')+'</div>'
+    +'<div class="ig" style="margin-bottom:14px"><label>'+(isES?'Nombre':'Name')+'</label>'
+    +'<input class="input" id="lib-ren-vg-name" value="'+esc(entry.name)+'"></div>'
+    +'<div class="mo-foot">'
+    +'<button class="btn btn-ghost" onclick="closeMo()">'+(isES?'Cancelar':'Cancel')+'</button>'
+    +'<button class="btn btn-primary" onclick="libSaveVendorGroupName(\''+entryId+'\')">'+(isES?'Guardar':'Save')+'</button>'
+    +'</div>');
+  setTimeout(function(){ var el=document.getElementById('lib-ren-vg-name'); if(el){el.focus();el.select();} },80);
+}
+function libSaveVendorGroupName(entryId){
+  var name=(document.getElementById('lib-ren-vg-name')||{}).value||'';
+  var isES=LANG==='es';
+  if(!name.trim()) return toast(isES?'El nombre no puede estar vacío':'Name cannot be empty','e');
+  var lib=getLib(); var entry=lib.vendors.find(function(e){return e.id===entryId;}); if(!entry) return;
+  entry.name=name.trim(); saveLib(lib); closeMo(); renderLibrary();
+  toast(isES?'Grupo renombrado':'Group renamed','s');
+}
+function libOpenVendorModalForGroup(entryId, vid){
+  var lib=getLib();
+  var entry=lib.vendors.find(function(e){return e.id===entryId;}); if(!entry) return;
+  var v=vid?(entry.vendors||[]).find(function(x){return x.id===vid;}):null;
+  var isES=LANG==='es';
+  var titleRow=v
+    ?'<div class="mo-title">'+(isES?'Editar Proveedor':'Edit Vendor')+'</div>'
+    :'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">'
+      +'<div class="mo-title" style="margin:0">'+(isES?'Agregar Proveedor':'Add Vendor')+'</div>'
+      +'</div>';
+  openMo(titleRow
+    +'<div class="form-grid">'
+    +'<div class="ig" style="grid-column:1/-1"><label>'+(isES?'Nombre *':'Name *')+'</label><input class="input" id="lvm-name" value="'+esc((v&&v.name)||'')+'" placeholder="'+(isES?'Nombre del proveedor':'Vendor name')+'"></div>'
+    +'<div class="ig" style="grid-column:1/-1"><label>'+(isES?'Servicios':'Services')+'</label><input class="input" id="lvm-svc" value="'+esc((v&&v.services)||'')+'" placeholder="'+(isES?'Describe los servicios...':'Describe services...')+'"></div>'
+    +'<div class="ig"><label>'+(isES?'Email de Contacto':'Contact Email')+'</label><input class="input" id="lvm-email" type="email" value="'+esc((v&&v.contact)||'')+'" placeholder="vendor@email.com"></div>'
+    +'<div class="ig"><label>'+(isES?'Teléfono':'Phone')+'</label><input class="input" id="lvm-phone" value="'+esc((v&&v.phone)||'')+'" placeholder="555-0000"></div>'
+    +'<div class="ig"><label>'+(isES?'Presupuesto':'Budget')+'</label><input class="input" id="lvm-budget" type="number" value="'+((v&&v.budget)||'')+'" placeholder="0"></div>'
+    +'<div class="ig"><label>'+(isES?'Estado':'Status')+'</label><select class="select" id="lvm-hired"><option value="0"'+(!v||!v.hired?' selected':'')+'>'+(isES?'Comparación':'Comparison')+'</option><option value="1"'+((v&&v.hired)?' selected':'')+'>'+(isES?'Contratado':'Hired')+'</option></select></div>'
+    +'<div class="ig" style="grid-column:1/-1"><label>'+(isES?'Notas':'Notes')+'</label><textarea class="textarea" id="lvm-notes" rows="2">'+esc((v&&v.notes)||'')+'</textarea></div>'
+    +'</div>'
+    +'<div class="mo-foot">'
+    +'<button class="btn btn-ghost" onclick="closeMo()">'+(isES?'Cancelar':'Cancel')+'</button>'
+    +'<button class="btn btn-primary" onclick="libSaveVendorModalToGroup(\''+entryId+'\',\''+(vid||'')+'\')">'+(isES?'Guardar':'Save')+'</button>'
+    +'</div>');
+  setTimeout(function(){ var el=document.getElementById('lvm-name'); if(el) el.focus(); },80);
+}
+function libSaveVendorModalToGroup(entryId, vid){
+  var name=(document.getElementById('lvm-name')||{}).value||'';
+  var isES=LANG==='es';
+  if(!name.trim()) return toast(isES?'El nombre es requerido':'Name is required','e');
+  var lib=getLib(); var entry=lib.vendors.find(function(e){return e.id===entryId;}); if(!entry) return;
+  var hiredVal=(document.getElementById('lvm-hired')||{}).value==='1';
+  var data={name:name.trim(),services:(document.getElementById('lvm-svc')||{}).value||'',
+    contact:(document.getElementById('lvm-email')||{}).value||'',
+    phone:(document.getElementById('lvm-phone')||{}).value||'',
+    budget:+((document.getElementById('lvm-budget')||{}).value)||0,
+    hired:hiredVal,vendorStatus:hiredVal?'hired':'pending',
+    notes:(document.getElementById('lvm-notes')||{}).value||''};
+  if(vid){
+    var v=(entry.vendors||[]).find(function(x){return x.id===vid;});
+    if(v) Object.assign(v,data);
+  } else {
+    data.id='lv'+Date.now(); data.payments=[];
+    entry.vendors.push(data);
+  }
+  saveLib(lib); closeMo(); renderLibrary();
+  toast(isES?(vid?'Proveedor actualizado':'Proveedor agregado'):(vid?'Vendor updated':'Vendor added'),'s');
+}
+function libOpenVendorSetupWizardForGroup(entryId){
+  _libVendorWizTargetGroupId = entryId;
+  openVendorSetupWizard();
 }
 
 function libVendorRow(item, isES){
@@ -440,7 +709,7 @@ function libVendorRow(item, isES){
     +'<td style="padding:11px 14px;text-align:right" onclick="event.stopPropagation()">'
     +'<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">'
     +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadVendorToEvent(\''+item.entryId+'\',\''+v.id+'\')">'+( isES?'CARGAR':'LOAD')+'</button>'
-    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar':'Edit')+'" onclick="libEditGlobalVendor(\''+item.entryId+'\',\''+v.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
+    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar':'Edit')+'" onclick="libOpenVendorModalForGroup(\''+item.entryId+'\',\''+v.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
     +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Duplicar':'Duplicate')+'" onclick="libDuplicateSingleVendor(\''+item.entryId+'\',\''+v.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>'
     +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDeleteSingleVendor(\''+item.entryId+'\',\''+v.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
     +'</div></td>'
@@ -489,9 +758,15 @@ function libToggleAllVendors(checked){
 function libFilterVendors(q){
   var lib=getLib(); var isES=LANG==='es';
   var allV=[];
-  lib.vendors.forEach(function(entry){(entry.vendors||[]).forEach(function(v){allV.push({entryId:entry.id,v:v});});});
-  var filtered=q.trim()===''?allV:allV.filter(function(item){
-    var v=item.v; var s=q.toLowerCase();
+  if(_libOpenVendorGroupId){
+    var entry=lib.vendors.find(function(e){return e.id===_libOpenVendorGroupId;});
+    if(entry)(entry.vendors||[]).forEach(function(v){allV.push({entryId:entry.id,v:v});});
+  } else {
+    lib.vendors.forEach(function(entry){(entry.vendors||[]).forEach(function(v){allV.push({entryId:entry.id,v:v});});});
+  }
+  var s=q.trim().toLowerCase();
+  var filtered=s===''?allV:allV.filter(function(item){
+    var v=item.v;
     return [v.name,v.category,v.subcategory,v.services,v.contact,v.notes].some(function(f){return f&&f.toLowerCase().includes(s);});
   });
   var rows=filtered.map(function(item){ return libVendorRow(item,isES); }).join('');
@@ -659,8 +934,6 @@ function libAddGlobalVendor(){
     +'</div>'
     +'<div class="form-grid">'
     +'<div class="ig" style="grid-column:1/-1"><label>'+(isES?'Nombre *':'Name *')+'</label><input class="input" id="glv-name" placeholder="'+( isES?'Nombre del proveedor':'Vendor name')+'"></div>'
-    +'<div class="ig"><label>'+(isES?'Categoría':'Category')+'</label><select class="select" id="glv-cat"><option>Venue & Rentals</option><option>Food & Beverage</option><option>Floral & Decor</option><option>Photography & Video</option><option>Entertainment & Music</option><option>Staffing</option><option>Transportation</option><option>Admin & Compliance</option><option>Other</option></select></div>'
-    +'<div class="ig"><label>'+(isES?'Subcategoría':'Subcategory')+'</label><input class="input" id="glv-sub" placeholder="e.g. Florals"></div>'
     +'<div class="ig" style="grid-column:1/-1"><label>'+(isES?'Servicios':'Services')+'</label><input class="input" id="glv-svc" placeholder="'+(isES?'Describe los servicios...':'Describe services...')+'"></div>'
     +'<div class="ig"><label>'+(isES?'Email de Contacto':'Contact Email')+'</label><input class="input" id="glv-email" type="email" placeholder="vendor@email.com"></div>'
     +'<div class="ig"><label>'+(isES?'Teléfono':'Phone')+'</label><input class="input" id="glv-phone" placeholder="555-0000"></div>'
@@ -674,15 +947,17 @@ function libAddGlobalVendor(){
 function libSaveGlobalVendor(){
   var name=(document.getElementById('glv-name')||{}).value||'';
   if(!name) return toast(LANG==='es'?'El nombre es requerido':'Name is required','e');
-  var v={id:'glv'+Date.now(),name:name,category:(document.getElementById('glv-cat')||{}).value||'',subcategory:(document.getElementById('glv-sub')||{}).value||'',services:(document.getElementById('glv-svc')||{}).value||'',contact:(document.getElementById('glv-email')||{}).value||'',phone:(document.getElementById('glv-phone')||{}).value||'',notes:(document.getElementById('glv-notes')||{}).value||'',hired:false,vendorStatus:'pending',budget:0,payments:[]};
+  var v={id:'glv'+Date.now(),name:name,category:'',subcategory:'',services:(document.getElementById('glv-svc')||{}).value||'',contact:(document.getElementById('glv-email')||{}).value||'',phone:(document.getElementById('glv-phone')||{}).value||'',notes:(document.getElementById('glv-notes')||{}).value||'',hired:false,vendorStatus:'pending',budget:0,payments:[]};
   var lib=getLib();
   lib.vendors.push({id:'lv'+Date.now(),name:v.name,date:formatDMY(today()),vendors:[v]});
   saveLib(lib); closeMo(); renderLibrary();
   toast(LANG==='es'?'Proveedor guardado':'Vendor saved','s');
 }
 function libDownloadVendorTemplate(){
-  var csv='Name,Category,Subcategory,Services,Contact Email,Phone,Notes\n'
-    +'"Media & Content","Photography & Video","Photography","Photography, Videography","contact@example.com","555-0000","Sample vendor"\n';
+  var csv='Vendor Name,Services,Contact Email,Phone,Budget,Status,Notes\n'
+    +'"ABC Catering","Catering, Food & Beverage","contact@abccatering.com","555-1234","5000","pending","Full service catering"\n'
+    +'"City AV","AV / Lighting / Production","info@cityav.com","555-5678","3500","hired",""\n'
+    +'"Studio Lens","Photography","hello@studiolens.com","","2000","","Wedding and event photography"\n';
   var blob=new Blob([csv],{type:'text/csv'});
   var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
   a.download='vendor_template.csv'; a.click();
@@ -736,14 +1011,18 @@ function parseCsvToVendors(csvText){
   var lines=csvText.trim().split('\n');
   if(lines.length<2) return [];
   var headers=lines[0].split(',').map(function(h){return h.replace(/"/g,'').trim().toLowerCase();});
+  var validStatuses=['pending','hired','in-progress','paid','cancelled'];
   var results=[];
   for(var i=1;i<lines.length;i++){
     var cols=lines[i].match(/(".*?"|[^,]+|(?<=,)(?=,)|^(?=,))/g)||lines[i].split(',');
     cols=cols.map(function(c){return (c||'').replace(/^"|"$/g,'').trim();});
     var obj={};
     headers.forEach(function(h,idx){obj[h]=cols[idx]||'';});
-    var name=obj['name']||obj['nombre']||'';
+    // Accept both old 'name' header and new 'vendor name' header
+    var name=obj['vendor name']||obj['name']||obj['nombre']||'';
     if(!name) continue;
+    var rawStatus=(obj['status']||obj['estado']||'').toLowerCase().trim();
+    var vendorStatus=validStatuses.indexOf(rawStatus)>-1?rawStatus:'pending';
     results.push({
       id:'csv'+Date.now()+i,
       name:name,
@@ -752,8 +1031,11 @@ function parseCsvToVendors(csvText){
       services:obj['services']||obj['servicios']||'',
       contact:obj['contact email']||obj['email']||obj['contacto']||'',
       phone:obj['phone']||obj['teléfono']||obj['telefono']||'',
+      budget:Number(obj['budget']||obj['presupuesto']||0)||0,
+      vendorStatus:vendorStatus,
+      hired:vendorStatus==='hired'||vendorStatus==='in-progress'||vendorStatus==='paid',
       notes:obj['notes']||obj['notas']||'',
-      hired:false, vendorStatus:'pending', budget:0, payments:[]
+      payments:[]
     });
   }
   return results;
@@ -766,7 +1048,7 @@ function showCsvPreview(vendors){
   }
   var rows=vendors.slice(0,5).map(function(v){
     return '<tr><td style="padding:6px 8px;font-size:12px;font-weight:600">'+esc(v.name)+'</td>'
-      +'<td style="padding:6px 8px;font-size:11px;color:var(--muted)">'+esc(v.category)+'</td>'
+      +'<td style="padding:6px 8px;font-size:11px;color:var(--muted)">'+esc(v.services||'—')+'</td>'
       +'<td style="padding:6px 8px;font-size:11px;color:var(--muted)">'+esc(v.contact||'—')+'</td></tr>';
   }).join('');
   document.getElementById('csv-preview').innerHTML=
@@ -774,7 +1056,7 @@ function showCsvPreview(vendors){
     +'<div style="overflow-x:auto;max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:6px">'
     +'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:var(--bg2)">'
     +'<th style="padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted)">'+(isES?'Nombre':'Name')+'</th>'
-    +'<th style="padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted)">'+(isES?'Categoría':'Category')+'</th>'
+    +'<th style="padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted)">'+(isES?'Servicios':'Services')+'</th>'
     +'<th style="padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted)">'+(isES?'Contacto':'Contact')+'</th>'
     +'</tr></thead><tbody>'+rows+'</tbody></table></div>';
   document.getElementById('csv-import-btn').style.display='';
@@ -850,6 +1132,329 @@ function renderLibGlobalTasks(lib){
     +'</tr></thead>'
     +'<tbody id="lib-task-rows">'+rows+'</tbody>'
     +'</table></div>';
+}
+function renderLibTaskGroups(lib){
+  if(!lib.tasks) lib.tasks=[];
+  var isES=LANG==='es';
+  if(_libOpenTaskGroupId){
+    var entry=lib.tasks.find(function(e){return e.id===_libOpenTaskGroupId;});
+    if(!entry){ _libOpenTaskGroupId=null; } else { return renderLibTaskGroupDetail(lib,entry,isES); }
+  }
+  var groups=lib.tasks;
+  if(!groups.length){
+    return '<div class="card" style="text-align:center;padding:52px 24px">'
+      +'<svg width="48" height="48" fill="none" stroke="var(--muted)" stroke-width="1.2" viewBox="0 0 24 24" style="margin:0 auto 14px;display:block"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>'
+      +'<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:8px">'+(isES?'No hay grupos de tareas guardados':'No task groups saved yet')+'</div>'
+      +'<div style="font-size:13px;color:var(--muted);max-width:380px;margin:0 auto 20px">'+(isES?'Crea un nuevo grupo para organizar tus tareas reutilizables.':'Create a new group to organize your reusable tasks.')+'</div>'
+      +'<button class="btn btn-primary btn-create-gradient" onclick="libNewTaskGroupModal()">'
+      +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
+      +(isES?' Nuevo Grupo de Tareas':' New Task Group')+'</button></div>';
+  }
+  var cards=groups.map(function(e){ return libTaskGroupCard(e,isES); }).join('');
+  return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
+    +'<div style="position:relative;flex:1">'
+    +'<svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>'
+    +'<input class="input" id="lib-tg-search" placeholder="'+(isES?'Buscar grupos o tareas...':'Search groups or tasks...')+'" oninput="libSearchTaskGroups(this.value)" style="padding-left:36px;width:100%">'
+    +'</div>'
+    +'<button id="lib-tg-bulk-del-btn" class="btn btn-danger btn-sm" style="display:none;white-space:nowrap" onclick="libDeleteSelectedTaskGroups()">'
+    +(isES?'Eliminar':'Delete Selected')+'</button>'
+    +'</div>'
+    +'<div id="lib-tg-list">'+cards+'</div>';
+}
+function libTaskGroupCard(entry,isES){
+  var taskCount=(entry.tasks||[]).length;
+  var sub=taskCount+' '+(isES?'tarea(s)':'task(s)')+' · '+entry.date;
+  var preview=(entry.tasks||[]).slice(0,3).map(function(tk){return esc(tk.title||'');}).join(', ')+(taskCount>3?' +'+(taskCount-3):'');
+  var badge=preview?'<span class="badge b-gold" style="font-size:10px;white-space:normal;max-width:340px;display:inline-block">'+preview+'</span>':'';
+  return '<div style="display:flex;align-items:flex-start;gap:10px;padding:16px 18px;background:#fff;border:1.5px solid var(--border);border-radius:var(--r-lg);margin-bottom:10px">'
+    +'<input type="checkbox" class="lib-tg-sel" data-id="'+entry.id+'" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer;flex-shrink:0;margin-top:3px" onchange="libUpdateTaskGroupBulkBtn()">'
+    +'<div style="flex:1;min-width:0;cursor:pointer" onclick="libOpenTaskGroup(\''+entry.id+'\')">'
+    +'<div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px;display:flex;align-items:center;gap:6px">'+esc(entry.name)
+    +'<svg width="12" height="12" fill="none" stroke="var(--muted)" stroke-width="2.5" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>'
+    +'<div style="font-size:12px;color:var(--muted)">'+sub+'</div>'
+    +(badge?'<div style="margin-top:6px">'+badge+'</div>':'')
+    +'</div>'
+    +'<div style="display:flex;gap:6px;flex-shrink:0;align-items:center">'
+    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar nombre':'Edit name')+'" onclick="event.stopPropagation();libRenameTaskGroup(\''+entry.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
+    +'<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();libLoadTasks(\''+entry.id+'\')">'+(isES?'CARGAR':'LOAD')+'</button>'
+    +'<button class="btn btn-danger btn-sm btn-icon" onclick="event.stopPropagation();libDelete(\'tasks\',\''+entry.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
+    +'</div></div>';
+}
+function renderLibTaskGroupDetail(lib,entry,isES){
+  var tasks=entry.tasks||[];
+  var header='<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">'
+    +'<div style="font-size:15px;font-weight:700;color:var(--text)">'+esc(entry.name)+'</div>'
+    +'<button class="btn btn-ghost btn-sm btn-icon" onclick="libRenameTaskGroup(\''+entry.id+'\')" title="'+(isES?'Renombrar':'Rename')+'">'
+    +'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
+    +'<div style="font-size:12px;color:var(--muted);margin-left:auto">'+tasks.length+' '+(isES?'tarea(s)':'task(s)')+'</div>'
+    +'</div>';
+  if(!tasks.length){
+    return header
+      +'<section class="ev-empty fade-in">'
+      +'<div class="ev-empty-shell"><div class="ev-empty-aurora" aria-hidden="true"></div>'
+      +'<div class="ev-empty-grid"><div class="ev-empty-copy">'
+      +'<div class="ev-empty-badge">'+(isES?'Cronograma inicial':'Timeline starter')+'</div>'
+      +'<h2 class="ev-empty-title">'+(isES?'Comienza con un plan maestro listo para trabajar.':'Start with a master plan that is ready to work from.')+'</h2>'
+      +'<p class="ev-empty-subtitle">'+(isES?'Crea una plantilla completa de planificación para este grupo. Después podrás editar cada tarea, responsable y duración como quieras.':'Create a full planning template for this group. After that, you can edit every task, assignee, and duration however you like.')+'</p>'
+      +'<div class="ev-empty-actions">'
+      +'<button class="btn btn-primary btn-create-gradient ev-empty-cta" onclick="libOpenTemplatePlanWizardForGroup(\''+entry.id+'\')">'
+      +'<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
+      +(isES?'Crear Plan de Plantilla':'Create Template Plan')+'</button>'
+      +'<button class="btn btn-ghost ev-empty-cta" onclick="libOpenTaskModalForGroup(\''+entry.id+'\')">'
+      +'<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
+      +(isES?'Agregar Tarea':'Add Task')+'</button>'
+      +'</div></div></div></div></section>';
+  }
+  var rows=tasks.map(function(tk){ return libGroupTaskRow(entry.id,tk,isES); }).join('');
+  return header
+    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
+    +'<div style="position:relative;flex:1">'
+    +'<svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>'
+    +'<input class="input" placeholder="'+(isES?'Buscar tareas...':'Search tasks...')+'" oninput="libFilterGroupTasks(\''+entry.id+'\',this.value)" style="padding-left:36px;width:100%">'
+    +'</div>'
+    +'<button id="lib-gtg-bulk-load-btn" class="btn btn-primary btn-sm" style="display:none;white-space:nowrap" onclick="libBulkLoadGroupTasksToEvent(\''+entry.id+'\')">'
+    +(isES?'CARGAR':'LOAD')+'</button>'
+    +'</div>'
+    +'<div id="lib-task-table-wrap">'
+    +'<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm)">'
+    +'<table style="width:100%;border-collapse:collapse">'
+    +'<thead><tr style="background:var(--bg2);border-bottom:1px solid var(--border)">'
+    +'<th style="padding:9px 12px;width:36px"><input type="checkbox" id="lib-gtg-chk-all" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libToggleAllGroupTasks(this.checked)"></th>'
+    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Tarea':'Task')+'</th>'
+    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Descripción':'Description')+'</th>'
+    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Duración':'Duration')+'</th>'
+    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Asignado a':'Assignee')+'</th>'
+    +'<th style="padding:9px 14px"></th>'
+    +'</tr></thead>'
+    +'<tbody id="lib-gtg-task-rows">'+rows+'</tbody>'
+    +'</table></div></div>';
+}
+function libGroupTaskRow(entryId,tk,isES){
+  var clr=tk.color||'#7c3aed';
+  return '<tr onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
+    +'<td style="padding:11px 12px;width:36px" onclick="event.stopPropagation()">'
+    +'<input type="checkbox" class="lib-gtg-sel" data-entry="'+entryId+'" data-tid="'+tk.id+'" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libUpdateGroupTaskBulkBtn()">'
+    +'</td>'
+    +'<td style="padding:11px 14px;font-weight:600;font-size:13px;vertical-align:middle">'
+    +'<div style="display:flex;align-items:center;gap:8px"><div style="width:10px;height:10px;border-radius:50%;background:'+clr+';flex-shrink:0"></div>'+esc(tk.title)+'</div></td>'
+    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(tk.desc||'—')+'</td>'
+    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted)">'+(tk.durationDays?tk.durationDays+(isES?' días':' days'):'—')+'</td>'
+    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted)">'+esc(tk.assignee||'—')+'</td>'
+    +'<td style="padding:11px 14px;text-align:right" onclick="event.stopPropagation()">'
+    +'<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">'
+    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadGroupTaskToEvent(\''+entryId+'\',\''+tk.id+'\')">'+( isES?'CARGAR':'LOAD')+'</button>'
+    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar':'Edit')+'" onclick="libOpenTaskModalForGroup(\''+entryId+'\',\''+tk.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
+    +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDeleteGroupTask(\''+entryId+'\',\''+tk.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
+    +'</div></td>'
+    +'</tr>';
+}
+function libOpenTaskGroup(id){ _libOpenTaskGroupId=id; renderLibrary(); }
+function libBackToTaskGroups(){ _libOpenTaskGroupId=null; renderLibrary(); }
+function libUpdateTaskGroupBulkBtn(){
+  var n=document.querySelectorAll('.lib-tg-sel:checked').length;
+  var btn=document.getElementById('lib-tg-bulk-del-btn');
+  if(btn) btn.style.display=n>0?'':'none';
+}
+function libUpdateGroupTaskBulkBtn(){
+  var n=document.querySelectorAll('.lib-gtg-sel:checked').length;
+  var btn=document.getElementById('lib-gtg-bulk-load-btn');
+  if(btn) btn.style.display=n>0?'':'none';
+  var all=document.getElementById('lib-gtg-chk-all');
+  if(all) all.checked=(n>0&&n===document.querySelectorAll('.lib-gtg-sel').length);
+}
+function libToggleAllGroupTasks(checked){
+  document.querySelectorAll('.lib-gtg-sel').forEach(function(c){c.checked=checked;});
+  libUpdateGroupTaskBulkBtn();
+}
+function libDeleteSelectedTaskGroups(){
+  var ids=Array.from(document.querySelectorAll('.lib-tg-sel:checked')).map(function(c){return c.dataset.id;});
+  if(!ids.length) return;
+  var isES=LANG==='es';
+  if(!confirm(isES?'¿Eliminar '+ids.length+' grupo(s) seleccionado(s)?':'Delete '+ids.length+' selected group(s)?')) return;
+  var lib=getLib();
+  lib.tasks=lib.tasks.filter(function(e){return ids.indexOf(e.id)===-1;});
+  saveLib(lib); renderLibrary();
+  toast(isES?'Grupos eliminados':'Groups deleted');
+}
+function libSearchTaskGroups(q){
+  var lib=getLib(); var isES=LANG==='es'; var s=q.trim().toLowerCase();
+  var filtered=s===''?lib.tasks:lib.tasks.filter(function(entry){
+    if(entry.name.toLowerCase().includes(s)) return true;
+    return (entry.tasks||[]).some(function(tk){ return [tk.title,tk.desc,tk.assignee].some(function(f){return f&&f.toLowerCase().includes(s);}); });
+  });
+  var el=document.getElementById('lib-tg-list');
+  if(el) el.innerHTML=filtered.length?filtered.map(function(e){ return libTaskGroupCard(e,isES); }).join('')
+    :'<div style="text-align:center;padding:30px;color:var(--muted);font-size:13px">'+(isES?'Sin resultados':'No results')+'</div>';
+}
+function libNewTaskGroupModal(){
+  var isES=LANG==='es';
+  openMo('<div class="mo-title">'+(isES?'Nuevo Grupo de Tareas':'New Task Group')+'</div>'
+    +'<div class="ig" style="margin-bottom:14px"><label>'+(isES?'Nombre del grupo *':'Group name *')+'</label>'
+    +'<input class="input" id="lib-new-tg-name" placeholder="'+(isES?'Ej: Tareas de Boda':'e.g. Wedding Tasks')+'"></div>'
+    +'<div class="mo-foot">'
+    +'<button class="btn btn-ghost" onclick="closeMo()">'+(isES?'Cancelar':'Cancel')+'</button>'
+    +'<button class="btn btn-primary" onclick="libSaveNewTaskGroup()">'+(isES?'Crear':'Create')+'</button>'
+    +'</div>');
+  setTimeout(function(){ var el=document.getElementById('lib-new-tg-name'); if(el) el.focus(); },80);
+}
+function libSaveNewTaskGroup(){
+  var name=(document.getElementById('lib-new-tg-name')||{}).value||'';
+  var isES=LANG==='es';
+  if(!name.trim()) return toast(isES?'Ingresa un nombre':'Enter a name','e');
+  var lib=getLib(); var id='ltg'+Date.now();
+  lib.tasks.push({id:id,name:name.trim(),date:formatDMY(today()),tasks:[]});
+  saveLib(lib); closeMo(); _libOpenTaskGroupId=id; renderLibrary();
+  toast(isES?'Grupo creado':'Group created','s');
+}
+function libRenameTaskGroup(entryId){
+  var lib=getLib(); var entry=lib.tasks.find(function(e){return e.id===entryId;}); if(!entry) return;
+  var isES=LANG==='es';
+  openMo('<div class="mo-title">'+(isES?'Renombrar Grupo':'Rename Group')+'</div>'
+    +'<div class="ig" style="margin-bottom:14px"><label>'+(isES?'Nombre':'Name')+'</label>'
+    +'<input class="input" id="lib-ren-tg-name" value="'+esc(entry.name)+'"></div>'
+    +'<div class="mo-foot">'
+    +'<button class="btn btn-ghost" onclick="closeMo()">'+(isES?'Cancelar':'Cancel')+'</button>'
+    +'<button class="btn btn-primary" onclick="libSaveTaskGroupName(\''+entryId+'\')">'+(isES?'Guardar':'Save')+'</button>'
+    +'</div>');
+  setTimeout(function(){ var el=document.getElementById('lib-ren-tg-name'); if(el){el.focus();el.select();} },80);
+}
+function libSaveTaskGroupName(entryId){
+  var name=(document.getElementById('lib-ren-tg-name')||{}).value||'';
+  var isES=LANG==='es';
+  if(!name.trim()) return toast(isES?'El nombre no puede estar vacío':'Name cannot be empty','e');
+  var lib=getLib(); var entry=lib.tasks.find(function(e){return e.id===entryId;}); if(!entry) return;
+  entry.name=name.trim(); saveLib(lib); closeMo(); renderLibrary();
+  toast(isES?'Grupo renombrado':'Group renamed','s');
+}
+function libFilterGroupTasks(entryId,q){
+  var lib=getLib(); var isES=LANG==='es';
+  var entry=lib.tasks.find(function(e){return e.id===entryId;}); if(!entry) return;
+  var s=q.trim().toLowerCase();
+  var filtered=s===''?entry.tasks:(entry.tasks||[]).filter(function(tk){
+    return [tk.title,tk.desc,tk.assignee].some(function(f){return f&&f.toLowerCase().includes(s);});
+  });
+  var tb=document.getElementById('lib-gtg-task-rows');
+  if(tb) tb.innerHTML=filtered.map(function(tk){ return libGroupTaskRow(entryId,tk,isES); }).join('');
+  libUpdateGroupTaskBulkBtn();
+}
+function libLoadGroupTaskToEvent(entryId,tid){
+  var lib=getLib();
+  var entry=lib.tasks.find(function(e){return e.id===entryId;}); if(!entry) return;
+  var tk=(entry.tasks||[]).find(function(t){return t.id===tid;}); if(!tk) return;
+  libOpenTaskEventPickerModal([tk]);
+}
+function libBulkLoadGroupTasksToEvent(entryId){
+  var lib=getLib();
+  var entry=lib.tasks.find(function(e){return e.id===entryId;}); if(!entry) return;
+  var tasks=[];
+  document.querySelectorAll('.lib-gtg-sel:checked').forEach(function(chk){
+    var tk=(entry.tasks||[]).find(function(t){return t.id===chk.dataset.tid;});
+    if(tk) tasks.push(tk);
+  });
+  if(!tasks.length) return;
+  libOpenTaskEventPickerModal(tasks);
+}
+function libEditGroupTask(entryId,tid){
+  var lib=getLib();
+  var entry=lib.tasks.find(function(e){return e.id===entryId;}); if(!entry) return;
+  var tk=(entry.tasks||[]).find(function(t){return t.id===tid;}); if(!tk) return;
+  var isES=LANG==='es';
+  var colors=['#7c3aed','#c9a84c','#10b981','#f59e0b','#ec4899','#ef4444'];
+  openMo('<div class="mo-title">'+(isES?'Editar Tarea':'Edit Task')+'</div>'
+    +'<div class="ig" style="margin-bottom:12px"><label>'+(isES?'Título *':'Title *')+'</label><input class="input" id="egt-title" value="'+esc(tk.title||'')+'"></div>'
+    +'<div class="ig" style="margin-bottom:12px"><label>'+(isES?'Descripción':'Description')+'</label><textarea class="textarea" id="egt-desc" rows="2">'+esc(tk.desc||'')+'</textarea></div>'
+    +'<div class="form-grid" style="margin-bottom:12px">'
+    +'<div class="ig"><label>'+(isES?'Duración (días)':'Duration (days)')+'</label><input class="input" id="egt-dur" type="number" min="1" value="'+(tk.durationDays||7)+'"></div>'
+    +'<div class="ig"><label>'+(isES?'Asignado a':'Assignee')+'</label><input class="input" id="egt-who" value="'+esc(tk.assignee||'')+'"></div>'
+    +'</div>'
+    +'<div class="ig" style="margin-bottom:8px"><label>'+(isES?'Color':'Color')+'</label></div>'
+    +'<div style="display:flex;gap:10px;margin-bottom:16px">'
+    +colors.map(function(cl){ return '<div onclick="libPickTaskColor(this,\''+cl+'\')" data-color="'+cl+'" style="width:28px;height:28px;border-radius:50%;background:'+cl+';cursor:pointer;border:3px solid '+(tk.color===cl?'#000':'transparent')+';transition:all .15s"></div>'; }).join('')
+    +'</div>'
+    +'<input type="hidden" id="glt-color" value="'+(tk.color||'#7c3aed')+'">'
+    +'<div class="mo-foot">'
+    +'<button class="btn btn-ghost" onclick="closeMo()">'+(isES?'Cancelar':'Cancel')+'</button>'
+    +'<button class="btn btn-primary" onclick="libSaveEditGroupTask(\''+entryId+'\',\''+tid+'\')">'+(isES?'Guardar':'Save')+'</button>'
+    +'</div>');
+}
+function libSaveEditGroupTask(entryId,tid){
+  var title=(document.getElementById('egt-title')||{}).value||'';
+  var isES=LANG==='es';
+  if(!title.trim()) return toast(isES?'El título es requerido':'Title is required','e');
+  var lib=getLib();
+  var entry=lib.tasks.find(function(e){return e.id===entryId;}); if(!entry) return;
+  var tk=(entry.tasks||[]).find(function(t){return t.id===tid;}); if(!tk) return;
+  tk.title=title.trim();
+  tk.desc=(document.getElementById('egt-desc')||{}).value||'';
+  tk.durationDays=parseInt((document.getElementById('egt-dur')||{}).value)||tk.durationDays||7;
+  tk.assignee=(document.getElementById('egt-who')||{}).value||'';
+  tk.color=(document.getElementById('glt-color')||{}).value||tk.color;
+  saveLib(lib); closeMo(); renderLibrary();
+  toast(isES?'Tarea actualizada':'Task updated','s');
+}
+function libDeleteGroupTask(entryId,tid){
+  var isES=LANG==='es';
+  if(!confirm(isES?'¿Eliminar esta tarea?':'Delete this task?')) return;
+  var lib=getLib();
+  var entry=lib.tasks.find(function(e){return e.id===entryId;}); if(!entry) return;
+  entry.tasks=(entry.tasks||[]).filter(function(t){return t.id!==tid;});
+  saveLib(lib); renderLibrary();
+  toast(isES?'Tarea eliminada':'Task deleted');
+}
+function libOpenTaskModalForGroup(entryId, tid){
+  var lib=getLib();
+  var entry=lib.tasks.find(function(e){return e.id===entryId;}); if(!entry) return;
+  var tk=tid?(entry.tasks||[]).find(function(x){return x.id===tid;}):null;
+  var isES=LANG==='es';
+  var colors=['#7c3aed','#c9a84c','#10b981','#f59e0b','#ec4899','#ef4444'];
+  openMo('<div class="mo-title">'+(tk?(isES?'Editar Tarea':'Edit Task'):(isES?'Agregar Tarea':'Add Task'))+'</div>'
+    +'<div class="ig" style="margin-bottom:12px"><label>'+(isES?'Título *':'Title *')+'</label><input class="input" id="ltm-title" value="'+esc((tk&&tk.title)||'')+'" placeholder="'+(isES?'Título de la tarea':'Task title')+'"></div>'
+    +'<div class="ig" style="margin-bottom:12px"><label>'+(isES?'Descripción':'Description')+'</label><textarea class="textarea" id="ltm-desc" rows="2">'+esc((tk&&tk.desc)||'')+'</textarea></div>'
+    +'<div class="form-grid" style="margin-bottom:12px">'
+    +'<div class="ig"><label>'+(isES?'Duración (días)':'Duration (days)')+'</label><input class="input" id="ltm-dur" type="number" min="1" value="'+((tk&&tk.durationDays)||7)+'"></div>'
+    +'<div class="ig"><label>'+(isES?'Asignado a':'Assignee')+'</label><input class="input" id="ltm-who" value="'+esc((tk&&tk.assignee)||'')+'" placeholder="'+(isES?'Coordinador':'Coordinator')+'"></div>'
+    +'</div>'
+    +'<div class="form-grid" style="margin-bottom:12px">'
+    +'<div class="ig"><label>'+(isES?'Fase':'Phase')+'</label><input class="input" id="ltm-phase" value="'+esc((tk&&tk.phase)||'')+'" placeholder="Strategy & Budget"></div>'
+    +'<div class="ig"><label>'+(isES?'Ventana de planificación':'Planning window')+'</label><input class="input" id="ltm-window" value="'+esc((tk&&tk.planningWindow)||'')+'" placeholder="'+(isES?'6 meses antes':'6 months before')+'"></div>'
+    +'</div>'
+    +'<div class="ig" style="margin-bottom:4px"><label>'+(isES?'Color':'Color')+'</label></div>'
+    +'<div style="display:flex;gap:10px;margin-bottom:16px">'
+    +colors.map(function(cl){ return '<div onclick="libPickTaskColor(this,\''+cl+'\')" data-color="'+cl+'" style="width:28px;height:28px;border-radius:50%;background:'+cl+';cursor:pointer;border:3px solid '+((tk&&tk.color||colors[0])===cl?'#000':'transparent')+';transition:all .15s"></div>'; }).join('')
+    +'</div>'
+    +'<input type="hidden" id="glt-color" value="'+((tk&&tk.color)||colors[0])+'">'
+    +'<div class="mo-foot">'
+    +'<button class="btn btn-ghost" onclick="closeMo()">'+(isES?'Cancelar':'Cancel')+'</button>'
+    +'<button class="btn btn-primary" onclick="libSaveTaskModalToGroup(\''+entryId+'\',\''+(tid||'')+'\')">'+(isES?'Guardar':'Save')+'</button>'
+    +'</div>');
+  setTimeout(function(){ var el=document.getElementById('ltm-title'); if(el) el.focus(); },80);
+}
+function libSaveTaskModalToGroup(entryId, tid){
+  var title=(document.getElementById('ltm-title')||{}).value||'';
+  var isES=LANG==='es';
+  if(!title.trim()) return toast(isES?'El título es requerido':'Title is required','e');
+  var lib=getLib(); var entry=lib.tasks.find(function(e){return e.id===entryId;}); if(!entry) return;
+  var data={title:title.trim(),
+    desc:(document.getElementById('ltm-desc')||{}).value||'',
+    durationDays:parseInt((document.getElementById('ltm-dur')||{}).value)||7,
+    assignee:(document.getElementById('ltm-who')||{}).value||'',
+    phase:(document.getElementById('ltm-phase')||{}).value||'',
+    planningWindow:(document.getElementById('ltm-window')||{}).value||'',
+    color:(document.getElementById('glt-color')||{}).value||'#7c3aed',
+    dueDate:'',startDate:'',done:false,status:'not-started'};
+  if(tid){
+    var tk=(entry.tasks||[]).find(function(t){return t.id===tid;});
+    if(tk) Object.assign(tk,data);
+  } else {
+    data.id='gt'+Date.now();
+    entry.tasks.push(data);
+  }
+  saveLib(lib); closeMo(); renderLibrary();
+  toast(isES?(tid?'Tarea actualizada':'Tarea agregada'):(tid?'Task updated':'Task added'),'s');
+}
+function libOpenTemplatePlanWizardForGroup(entryId){
+  _libPlanWizTargetGroupId = entryId;
+  if(typeof openTemplatePlanWizardForLib === 'function') openTemplatePlanWizardForLib();
 }
 function libFilterTasks(q){
   var lib=getLib(); var isES=LANG==='es';
@@ -963,6 +1568,29 @@ function libLoadTaskToEvent(tid){
   var tk=(lib.globalTasks||[]).find(function(t){return t.id===tid;});
   if(!tk) return;
   libOpenTaskEventPickerModal([tk]);
+}
+function libAddTasksToCurrentProject(tasks){
+  var p = proj(); if(!p) return 0;
+  if(!p.tasks) p.tasks = [];
+  var existingTitles = (p.tasks||[]).map(function(t){ return String(t.title||'').toLowerCase(); });
+  var added = 0;
+  (tasks||[]).forEach(function(tk){
+    var title = String((tk&&tk.title)||'').toLowerCase();
+    if(!title || existingTitles.indexOf(title)!==-1) return;
+    var nt = JSON.parse(JSON.stringify(tk));
+    nt.id='t'+Date.now()+Math.random().toString(36).slice(2,6);
+    nt.done=false;
+    var days=tk.durationDays||7;
+    var start=new Date(); start.setHours(0,0,0,0);
+    var end=new Date(start); end.setDate(end.getDate()+days-1);
+    nt.startDate=start.toISOString().split('T')[0];
+    nt.dueDate=end.toISOString().split('T')[0];
+    p.tasks.push(nt);
+    existingTitles.push(title);
+    added++;
+  });
+  saveProj(p);
+  return added;
 }
 function libBulkLoadTasksToEvent(){
   var lib=getLib();
@@ -1111,7 +1739,7 @@ function libLayoutRow(entry, isES){
     +'<td style="padding:11px 12px;width:36px" onclick="event.stopPropagation()">'
     +'<input type="checkbox" class="lib-ly-sel" data-lid="'+entry.id+'" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libUpdateLayoutBulkBtn()">'
     +'</td>'
-    +'<td style="padding:11px 14px;font-weight:600;font-size:13px;vertical-align:middle">'+esc(entry.name)+'</td>'
+    +'<td style="padding:11px 14px;font-weight:600;font-size:13px;vertical-align:middle"><a href="javascript:void(0)" onclick="event.stopPropagation();libOpenLayoutEditor(\''+entry.id+'\')" style="color:inherit;text-decoration:none;cursor:pointer" onmouseover="this.style.color=\'var(--gold)\'" onmouseout="this.style.color=\'inherit\'">'+esc(entry.name)+'</a></td>'
     +'<td style="padding:11px 14px;font-size:12px;color:var(--muted)">'+esc(entry.location||'—')+'</td>'
     +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);text-align:center">'+(entry.guests||seats||'—')+'</td>'
     +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);text-align:center">'+tables+'</td>'
@@ -1241,6 +1869,13 @@ async function libDoLoadLayoutToEvent(){
   var pid=sel.value;
   var p=uproj()[pid];
   if(!p) return;
+  // If the project is still a lightweight meta stub, load full data first
+  // so that saveProj doesn't skip the save and openProject doesn't overwrite our changes.
+  if(p._metaOnly && typeof loadProjectById==='function'){
+    var loaded = await loadProjectById(pid);
+    if(!loaded){ toast(isES?'No se pudo cargar el evento':'Could not load event data','e'); return; }
+    p = loaded;
+  }
   if(!p.layoutExport && p.layoutItems && p.layoutItems.length){
     await migrateLegacyEventLayoutToLibrary(p);
   }
@@ -1402,9 +2037,13 @@ function libSaveVendorsDo(){
   var p = proj(); if(!p) return;
   var ids = Array.from(document.querySelectorAll('.lib-v-chk:checked')).map(function(c){return c.value;});
   if(!ids.length) return toast(LANG==='es'?'Selecciona al menos uno':'Select at least one','e');
-  var vendorsToSave = (p.vendors||[]).filter(function(v){return ids.includes(v.id);});
+  var vendorsToSave = (p.vendors||[]).filter(function(v){return ids.includes(v.id);}).map(function(v){
+    var copy=JSON.parse(JSON.stringify(v));
+    delete copy.hired; delete copy.vendorStatus; copy.payments=[];
+    return copy;
+  });
   var lib = getLib();
-  lib.vendors.push({id:'lv'+Date.now(), name:name, date:formatDMY(today()), vendors: JSON.parse(JSON.stringify(vendorsToSave))});
+  lib.vendors.push({id:'lv'+Date.now(), name:name, date:formatDMY(today()), vendors: vendorsToSave});
   saveLib(lib);
   closeMo();
   toast(t('lib_saved'),'s');
@@ -1870,56 +2509,45 @@ function libMbLightboxClose(){
 }
 
 function libLoadVendors(entryId){
-  var lib = getLib();
-  var entry = lib.vendors.find(function(e){return e.id===entryId;});
+  var lib=getLib();
+  var entry=lib.vendors.find(function(e){return e.id===entryId;});
   if(!entry) return;
-  var p = proj(); if(!p) return;
-  openMo('<div class="mo-title">'+t('lib_load_from')+': '+esc(entry.name)+'</div>'
-    +'<p class="s-hint">'
-    +(LANG==='es'
-      ? 'Se agregarán '+entry.vendors.length+' proveedor(es) al proyecto actual. Los duplicados se omitirán.'
-      : entry.vendors.length+' vendor(s) will be added to the current project. Duplicates will be skipped.')
-    +'</p>'
-    +'<div class="mo-foot">'
-    +'<button class="btn btn-ghost" onclick="closeMo()">'+t('cancel')+'</button>'
-    +'<button class="btn btn-primary" onclick="closeMo();_doLibLoadVendors(\''+entryId+'\')">'+(LANG==='es'?'CARGAR':'LOAD')+'</button>'
-    +'</div>');
+  if(!entry.vendors.length) return toast(LANG==='es'?'Este grupo está vacío':'This group is empty','e');
+  libOpenEventPickerModal(entry.vendors);
+}
+function libAddVendorsToCurrentProject(vendors){
+  var p = proj(); if(!p) return 0;
+  if(!p.vendors) p.vendors = [];
+  var existingNames = (p.vendors||[]).map(function(v){ return String(v.name||'').toLowerCase(); });
+  var added = 0;
+  (vendors||[]).forEach(function(v){
+    var name = String((v&&v.name)||'').toLowerCase();
+    if(!name || existingNames.indexOf(name)!==-1) return;
+    var nv = JSON.parse(JSON.stringify(v));
+    nv.id = 'v'+Date.now()+Math.random().toString(36).slice(2,6);
+    nv.payments = [];
+    p.vendors.push(nv);
+    existingNames.push(name);
+    added++;
+  });
+  saveProj(p);
+  return added;
 }
 function _doLibLoadVendors(entryId){
   var lib = getLib();
   var entry = lib.vendors.find(function(e){return e.id===entryId;});
   if(!entry) return;
-  var p = proj(); if(!p) return;
-  var existingNames = (p.vendors||[]).map(function(v){return v.name.toLowerCase();});
-  var added = 0;
-  entry.vendors.forEach(function(v){
-    if(!existingNames.includes(v.name.toLowerCase())){
-      var nv = JSON.parse(JSON.stringify(v));
-      nv.id = 'v'+Date.now()+Math.random().toString(36).slice(2,6);
-      nv.payments = [];
-      p.vendors.push(nv);
-      added++;
-    }
-  });
-  saveProj(p);
+  var added = libAddVendorsToCurrentProject(entry.vendors);
   toast(t('lib_loaded')+' ('+added+' '+(LANG==='es'?'agregados':'added')+')','s');
   if(CTAB==='budget') renderBudget();
 }
 
 function libLoadTasks(entryId){
-  var lib = getLib();
-  var entry = lib.tasks.find(function(e){return e.id===entryId;});
+  var lib=getLib();
+  var entry=lib.tasks.find(function(e){return e.id===entryId;});
   if(!entry) return;
-  openMo('<div class="mo-title">'+t('lib_load_from')+': '+esc(entry.name)+'</div>'
-    +'<p class="s-hint">'
-    +(LANG==='es'
-      ? 'Se agregarán '+entry.tasks.length+' tarea(s). Las fechas serán borradas para que puedas ajustarlas al nuevo proyecto.'
-      : entry.tasks.length+' task(s) will be added. Dates will be cleared so you can set them for the new project.')
-    +'</p>'
-    +'<div class="mo-foot">'
-    +'<button class="btn btn-ghost" onclick="closeMo()">'+t('cancel')+'</button>'
-    +'<button class="btn btn-primary" onclick="closeMo();_doLibLoadTasks(\''+entryId+'\')">'+(LANG==='es'?'CARGAR':'LOAD')+'</button>'
-    +'</div>');
+  if(!entry.tasks.length) return toast(LANG==='es'?'Este grupo está vacío':'This group is empty','e');
+  libOpenTaskEventPickerModal(entry.tasks);
 }
 function _doLibLoadTasks(entryId){
   var lib = getLib();
@@ -1964,14 +2592,23 @@ function _doLibLoadLayout(entryId){
   if(!entry) return;
   var p = proj(); if(!p) return;
   p.layoutItems = JSON.parse(JSON.stringify(entry.items));
+  // Reset undo history — the layout was fully replaced
+  if(typeof lHistoryReset==='function') lHistoryReset();
   var incFloor = document.getElementById('lib-load-floor');
   if(entry.floorplan && (!incFloor || incFloor.checked)){
-    LState.floorplan = JSON.parse(JSON.stringify(entry.floorplan));
-    if(LState.floorplan && LState.floorplan.img==='__idb__' && LState.floorplan.thumb) LState.floorplan.img=LState.floorplan.thumb;
+    // Set p.floorplan so renderLayout's existing resolution logic handles __stored__ / __idb__
+    p.floorplan = JSON.parse(JSON.stringify(entry.floorplan));
+  } else {
+    // Checkbox unchecked or no floorplan — clear it
+    delete p.floorplan;
+    LState.floorplan = {img:null,opacity:0.4,scale:1,x:0,y:0,w:0,h:0,locked:false,rotation:0};
   }
   saveProj(p);
   toast(t('lib_loaded'),'s');
-  if(CTAB==='layout') renderLayout();
+  if(CTAB==='layout'){
+    renderLayout();
+    setTimeout(function(){ if(typeof lZoom==='function') lZoom(0,'fit'); },160);
+  }
 }
 function libLoadTypes(type){
   var lib = getLib();
@@ -2017,33 +2654,67 @@ function libLoadMoodboard(entryId){
   var lib = getLib();
   var entry = lib.moodboards.find(function(e){return e.id===entryId;});
   if(!entry) return;
-  var totalImgs = (entry.uncategorized||[]).length
+  var totalImgs = (entry.images||[]).length
+    + (entry.uncategorized||[]).length
     + (entry.folders||[]).reduce(function(s,f){return s+f.images.length;},0);
+  var folderCount = (entry.folders||[]).length + ((entry.images||[]).length ? 1 : 0) + ((entry.uncategorized||[]).length ? 1 : 0);
   openMo('<div class="mo-title">'+t('lib_load_from')+': '+esc(entry.name)+'</div>'
     +'<p class="s-hint">'
     +(LANG==='es'
-      ? totalImgs+' imagen(es) y '+(entry.folders||[]).length+' carpeta(s) serán añadidas al moodboard actual.'
-      : totalImgs+' image(s) and '+(entry.folders||[]).length+' folder(s) will be merged into the current moodboard.')
+      ? totalImgs+' imagen(es) y '+folderCount+' carpeta(s) serán añadidas al moodboard actual.'
+      : totalImgs+' image(s) and '+folderCount+' folder(s) will be merged into the current moodboard.')
     +'</p>'
     +'<div class="mo-foot">'
     +'<button class="btn btn-ghost" onclick="closeMo()">'+t('cancel')+'</button>'
     +'<button class="btn btn-primary" onclick="closeMo();_doLibLoadMoodboard(\''+entryId+'\')">'+t('lib_load_btn')+'</button>'
     +'</div>');
 }
+function libMergeMoodboardsToCurrentProject(entries){
+  var p = proj(); if(!p) return 0;
+  var mb = getMB(p);
+  var added = 0;
+  (entries||[]).forEach(function(entry){
+    if(!entry) return;
+    var legacyImages = JSON.parse(JSON.stringify(entry.images||[]));
+    if(legacyImages.length){
+      mb.folders.push({
+        id:'f'+Date.now()+Math.random().toString(36).slice(2,6),
+        name:(entry.name||'Moodboard'),
+        color:'#6b7280',
+        images: legacyImages.map(function(src, idx){
+          return typeof src === 'string'
+            ? { id:'mi'+Date.now()+idx, src:src, name:(entry.name||'Moodboard')+' '+(idx+1), mimeType:'image/*' }
+            : src;
+        })
+      });
+      added += legacyImages.length;
+    }
+    var loose = JSON.parse(JSON.stringify(entry.uncategorized||[]));
+    if(loose.length){
+      mb.folders.push({
+        id:'f'+Date.now()+Math.random().toString(36).slice(2,6),
+        name:(entry.name||'Moodboard')+' Images',
+        color:'#6b7280',
+        images: loose
+      });
+      added += loose.length;
+    }
+    (entry.folders||[]).forEach(function(f){
+      var newF = JSON.parse(JSON.stringify(f));
+      newF.id = 'f'+Date.now()+Math.random().toString(36).slice(2,6);
+      mb.folders.push(newF);
+      added += (newF.images||[]).length;
+    });
+  });
+  p.moodboard = mb;
+  saveProj(p);
+  return added;
+}
 function _doLibLoadMoodboard(entryId){
   var lib = getLib();
   var entry = lib.moodboards.find(function(e){return e.id===entryId;});
   if(!entry) return;
-  var p = proj(); if(!p) return;
-  var mb = getMB(p);
-  (entry.uncategorized||[]).forEach(function(img){ mb.uncategorized.push(JSON.parse(JSON.stringify(img))); });
-  (entry.folders||[]).forEach(function(f){
-    var newF = JSON.parse(JSON.stringify(f));
-    newF.id = 'f'+Date.now()+Math.random().toString(36).slice(2,6);
-    mb.folders.push(newF);
-  });
-  p.moodboard = mb;
-  saveProj(p);
+  libMergeMoodboardsToCurrentProject([entry]);
   toast(t('lib_loaded'),'s');
   if(CTAB==='moodboard') renderMoodboard();
 }
@@ -2052,37 +2723,103 @@ function libQuickSaveVendors(){ if(!proj()) return; libSaveVendorsModal(proj());
 function libQuickSaveTasks(){   if(!proj()) return; libSaveTasksModal(proj()); }
 
 function libQuickSaveMoodboard(){if(!proj()) return; libSaveMoodboardModal(proj()); }
-function libQuickLoadVendors(){
-  var lib=getLib(); if(!lib.vendors.length) return toast(LANG==='es'?'No hay proveedores guardados en la biblioteca':'No vendors saved in library','e');
+function libQuickLoadMoodboards(){
+  var lib=getLib(); if(!lib.moodboards.length) return toast(LANG==='es'?'No hay moodboards guardados en la biblioteca':'No moodboards saved in library','e');
   if(!proj()) return toast(LANG==='es'?'Abre un proyecto primero':'Open a project first','e');
-  if(lib.vendors.length===1){ libLoadVendors(lib.vendors[0].id); return; }
-  openMo('<div class="mo-title">'+t('lib_load_from')+' — '+t('lib_vendors')+'</div>'
+  openMo('<div class="mo-title">'+t('lib_load_from')+' — '+t('lib_moodboards')+'</div>'
+    +'<div class="s-hint" style="margin-bottom:12px">'+(LANG==='es'?'Selecciona uno o varios moodboards para importarlos al evento actual.':'Select one or more moodboards to import into the current event.')+'</div>'
     +'<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;max-height:55vh;overflow-y:auto">'
-    +lib.vendors.map(function(e){
-      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px">'
-        +'<div><div style="font-weight:600;font-size:13px">'+esc(e.name)+'</div>'
-        +'<div class="s-sm">'+e.vendors.length+' '+(LANG==='es'?'proveedor(es)':'vendor(s)')+' · '+e.date+'</div></div>'
-        +"<button class=\"btn btn-primary btn-sm\" onclick=\"closeMo();libLoadVendors('"+e.id+"')\">"+(LANG==='es'?'CARGAR':'LOAD')+'</button>'
-        +'</div>';
+    +(lib.moodboards||[]).map(function(entry){
+      var totalImgs = (entry.images||[]).length + (entry.uncategorized||[]).length + (entry.folders||[]).reduce(function(s,f){ return s + ((f.images||[]).length); }, 0);
+      var folderCount = (entry.folders||[]).length + ((entry.images||[]).length ? 1 : 0) + ((entry.uncategorized||[]).length ? 1 : 0);
+      return '<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;cursor:pointer">'
+        +'<input type="checkbox" class="lib-quick-mb-sel" data-id="'+entry.id+'" style="width:15px;height:15px;accent-color:var(--gold-h);margin-top:2px;flex-shrink:0">'
+        +'<div style="min-width:0">'
+        +'<div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(entry.name)+'</div>'
+        +'<div class="s-sm">'+totalImgs+' '+(LANG==='es'?'imagen(es)':'image(s)')+' · '+folderCount+' '+(LANG==='es'?'carpeta(s)':'folder(s)')+'</div>'
+        +'</div>'
+        +'</label>';
     }).join('')
     +'</div>'
-    +'<div class="mo-foot"><button class="btn btn-ghost" onclick="closeMo()">'+t('cancel')+'</button></div>');
+    +'<div class="mo-foot"><button class="btn btn-ghost" onclick="closeMo()">'+t('cancel')+'</button><button class="btn btn-primary" onclick="libQuickImportSelectedMoodboards()">'+(LANG==='es'?'Importar seleccionados':'Import selected')+'</button></div>');
+}
+function libQuickImportSelectedMoodboards(){
+  var lib = getLib();
+  var selected = Array.from(document.querySelectorAll('.lib-quick-mb-sel:checked'));
+  if(!selected.length) return toast(LANG==='es'?'Selecciona al menos un moodboard':'Select at least one moodboard','e');
+  var entries = [];
+  selected.forEach(function(chk){
+    var entry = (lib.moodboards||[]).find(function(item){ return item.id===chk.dataset.id; });
+    if(entry) entries.push(entry);
+  });
+  var added = libMergeMoodboardsToCurrentProject(entries);
+  closeMo();
+  toast((LANG==='es' ? added+' imagen(es) importadas' : added+' image(s) imported'),'s');
+  if(typeof renderMoodboard==='function' && typeof CTAB!=='undefined' && CTAB==='moodboard') renderMoodboard();
+}
+function libQuickLoadVendors(){
+  var lib=getLib(); if(!lib.vendors.length) return toast(LANG==='es'?'No hay grupos de proveedores guardados en la biblioteca':'No vendor groups saved in library','e');
+  if(!proj()) return toast(LANG==='es'?'Abre un proyecto primero':'Open a project first','e');
+  var isES=LANG==='es';
+  var rows=(lib.vendors||[]).map(function(e){
+    var vCount=(e.vendors||[]).length;
+    return '<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;cursor:pointer">'
+      +'<input type="checkbox" class="lib-quick-vendor-sel" data-entry-id="'+e.id+'" style="width:15px;height:15px;accent-color:var(--gold-h);margin-top:2px;flex-shrink:0">'
+      +'<div style="min-width:0">'
+      +'<div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(e.name)+'</div>'
+      +'<div class="s-sm">'+vCount+' '+(isES?'proveedor(es)':'vendor(s)')+' · '+esc(e.date||'')+'</div>'
+      +'</div></label>';
+  }).join('');
+  openMo('<div class="mo-title">'+t('lib_load_from')+' — '+t('lib_vendors')+'</div>'
+    +'<div class="s-hint" style="margin-bottom:12px">'+(isES?'Selecciona uno o varios grupos para agregarlos al evento actual. Los duplicados se omitirán.':'Select one or more groups to add to the current event. Duplicates will be skipped.')+'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;max-height:55vh;overflow-y:auto">'+rows+'</div>'
+    +'<div class="mo-foot"><button class="btn btn-ghost" onclick="closeMo()">'+t('cancel')+'</button><button class="btn btn-primary" onclick="libQuickImportSelectedVendors()">'+(isES?'Importar seleccionados':'Import selected')+'</button></div>');
+}
+function libQuickImportSelectedVendors(){
+  var lib=getLib();
+  var selected=Array.from(document.querySelectorAll('.lib-quick-vendor-sel:checked'));
+  if(!selected.length) return toast(LANG==='es'?'Selecciona al menos un grupo':'Select at least one group','e');
+  var vendors=[];
+  selected.forEach(function(chk){
+    var entry=lib.vendors.find(function(e){return e.id===chk.dataset.entryId;});
+    if(entry) (entry.vendors||[]).forEach(function(v){vendors.push(v);});
+  });
+  var added=libAddVendorsToCurrentProject(vendors);
+  closeMo();
+  toast((LANG==='es'?added+' proveedor(es) agregados':added+' vendor(s) added'),'s');
+  if(typeof renderBudget==='function' && typeof CTAB!=='undefined' && CTAB==='budget') renderBudget();
 }
 function libQuickLoadTasks(){
-  var lib=getLib(); if(!lib.tasks.length) return toast(LANG==='es'?'No hay tareas guardadas en la biblioteca':'No tasks saved in library','e');
+  var lib=getLib(); if(!(lib.tasks||[]).length) return toast(LANG==='es'?'No hay grupos de tareas guardados en la biblioteca':'No task groups saved in library','e');
   if(!proj()) return toast(LANG==='es'?'Abre un proyecto primero':'Open a project first','e');
-  if(lib.tasks.length===1){ libLoadTasks(lib.tasks[0].id); return; }
+  var isES=LANG==='es';
+  var rows=(lib.tasks||[]).map(function(e){
+    var tCount=(e.tasks||[]).length;
+    return '<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;cursor:pointer">'
+      +'<input type="checkbox" class="lib-quick-task-sel" data-entry-id="'+e.id+'" style="width:15px;height:15px;accent-color:var(--gold-h);margin-top:2px;flex-shrink:0">'
+      +'<div style="min-width:0">'
+      +'<div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(e.name)+'</div>'
+      +'<div class="s-sm">'+tCount+' '+(isES?'tarea(s)':'task(s)')+' · '+esc(e.date||'')+'</div>'
+      +'</div></label>';
+  }).join('');
   openMo('<div class="mo-title">'+t('lib_load_from')+' — '+t('lib_tasks')+'</div>'
-    +'<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;max-height:55vh;overflow-y:auto">'
-    +lib.tasks.map(function(e){
-      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px">'
-        +'<div><div style="font-weight:600;font-size:13px">'+esc(e.name)+'</div>'
-        +'<div class="s-sm">'+e.tasks.length+' '+(LANG==='es'?'tarea(s)':'task(s)')+' · '+e.date+'</div></div>'
-        +"<button class=\"btn btn-primary btn-sm\" onclick=\"closeMo();libLoadTasks('"+e.id+"')\">"+(LANG==='es'?'CARGAR':'LOAD')+'</button>'
-        +'</div>';
-    }).join('')
-    +'</div>'
-    +'<div class="mo-foot"><button class="btn btn-ghost" onclick="closeMo()">'+t('cancel')+'</button></div>');
+    +'<div class="s-hint" style="margin-bottom:12px">'+(isES?'Selecciona uno o varios grupos para importarlos al evento actual. Las fechas se borrarán para que puedas ajustarlas. Los duplicados se omitirán.':'Select one or more groups to import into the current event. Dates will be cleared so you can set them for the new project. Duplicates will be skipped.')+'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;max-height:55vh;overflow-y:auto">'+rows+'</div>'
+    +'<div class="mo-foot"><button class="btn btn-ghost" onclick="closeMo()">'+t('cancel')+'</button><button class="btn btn-primary" onclick="libQuickImportSelectedTasks()">'+(isES?'Importar seleccionados':'Import selected')+'</button></div>');
+}
+function libQuickImportSelectedTasks(){
+  var lib=getLib();
+  var selected=Array.from(document.querySelectorAll('.lib-quick-task-sel:checked'));
+  if(!selected.length) return toast(LANG==='es'?'Selecciona al menos un grupo':'Select at least one group','e');
+  var tasks=[];
+  selected.forEach(function(chk){
+    var entry=(lib.tasks||[]).find(function(e){return e.id===chk.dataset.entryId;});
+    if(entry) (entry.tasks||[]).forEach(function(tk){tasks.push(tk);});
+  });
+  var added=libAddTasksToCurrentProject(tasks);
+  closeMo();
+  toast((LANG==='es'?added+' tarea(s) importadas':added+' task(s) imported'),'s');
+  if(typeof renderTimeline==='function' && typeof CTAB!=='undefined' && CTAB==='timeline') renderTimeline();
 }
 function libQuickLoadLayout(){
   var lib=getLib(); if(!lib.layouts.length) return toast(LANG==='es'?'No hay planos guardados en la biblioteca':'No layouts saved in library','e');
@@ -2125,6 +2862,9 @@ window.libMbLightboxNav = libMbLightboxNav;
 window.libMbLightboxClose = libMbLightboxClose;
 window.libMbBackToFolders = libMbBackToFolders;
 window.libMoodboardUploadConfirm = libMoodboardUploadConfirm;
+window.libLoadMoodboard = libLoadMoodboard;
+window.libQuickLoadMoodboards = libQuickLoadMoodboards;
+window.libQuickImportSelectedMoodboards = libQuickImportSelectedMoodboards;
 window.libLoadVendors = libLoadVendors;
 window.libLoadTasks = libLoadTasks;
 window.libLoadLayout = libLoadLayout;
@@ -2304,87 +3044,95 @@ function _libRenderLayoutWizard(){
   } else if(s===3){
     if(!w.tables||Array.isArray(w.tables)) w.tables={};
 
-    // Catalogue: round first, then rectangular (with +4 side chairs)
+    // Catalogue: matches layout editor's Add Table modal format
     var catalogue=[
-      // Round
-      {key:'round-0.8',    cat:'round', label:'0.8m',      wM:0.8, hM:0.8, chairs:4,  cols:6},
-      {key:'round-1.0',    cat:'round', label:'1.0m',      wM:1.0, hM:1.0, chairs:6,  cols:5},
-      {key:'round-1.2',    cat:'round', label:'1.2m',      wM:1.2, hM:1.2, chairs:8,  cols:5},
-      {key:'round-1.4',    cat:'round', label:'1.4m',      wM:1.4, hM:1.4, chairs:10, cols:5},
-      {key:'round-1.5',    cat:'round', label:'1.5m',      wM:1.5, hM:1.5, chairs:10, cols:5},
-      {key:'round-1.6',    cat:'round', label:'1.6m',      wM:1.6, hM:1.6, chairs:12, cols:4},
-      {key:'round-1.7',    cat:'round', label:'1.7m',      wM:1.7, hM:1.7, chairs:12, cols:4},
-      {key:'round-1.8',    cat:'round', label:'1.8m',      wM:1.8, hM:1.8, chairs:14, cols:4},
-      {key:'round-1.9',    cat:'round', label:'1.9m',      wM:1.9, hM:1.9, chairs:14, cols:4},
-      {key:'round-2.0',    cat:'round', label:'2.0m',      wM:2.0, hM:2.0, chairs:16, cols:4},
-      // Rectangular (with 2 chairs per side = +4 total)
-      {key:'rect-2x1.2',   cat:'rect',  label:'2×1.2m',   wM:2.0, hM:1.2, chairs:10, cols:4},
-      {key:'rect-2.4x1.2', cat:'rect',  label:'2.4×1.2m', wM:2.4, hM:1.2, chairs:12, cols:4},
-      {key:'rect-2.6x1.2', cat:'rect',  label:'2.6×1.2m', wM:2.6, hM:1.2, chairs:12, cols:4},
-      {key:'rect-2.8x1.2', cat:'rect',  label:'2.8×1.2m', wM:2.8, hM:1.2, chairs:14, cols:4},
-      {key:'rect-3x1.2',   cat:'rect',  label:'3×1.2m',   wM:3.0, hM:1.2, chairs:14, cols:3},
-      {key:'rect-3.2x1.2', cat:'rect',  label:'3.2×1.2m', wM:3.2, hM:1.2, chairs:16, cols:3},
-      {key:'rect-3.4x1.2', cat:'rect',  label:'3.4×1.2m', wM:3.4, hM:1.2, chairs:16, cols:3},
-      {key:'rect-3.6x1.2', cat:'rect',  label:'3.6×1.2m', wM:3.6, hM:1.2, chairs:18, cols:3},
-      {key:'rect-3.8x1.2', cat:'rect',  label:'3.8×1.2m', wM:3.8, hM:1.2, chairs:18, cols:3},
-      {key:'rect-4x1.2',   cat:'rect',  label:'4×1.2m',   wM:4.0, hM:1.2, chairs:20, cols:3},
+      // Round — ordered by seating capacity
+      {key:'round-0.8', cat:'round',label:'4 seats',dim:'0.8m',wM:0.8,hM:0.8,chairs:4,cols:6},
+      {key:'round-1.0', cat:'round',label:'6 seats',dim:'1.0m',wM:1.0,hM:1.0,chairs:6,cols:5},
+      {key:'round-1.2', cat:'round',label:'8 seats',dim:'1.2m',wM:1.2,hM:1.2,chairs:8,cols:5},
+      {key:'round-1.5', cat:'round',label:'10 seats',dim:'1.5m',wM:1.5,hM:1.5,chairs:10,cols:5},
+      {key:'round-1.6', cat:'round',label:'12 seats',dim:'1.6m',wM:1.6,hM:1.6,chairs:12,cols:4},
+      {key:'round-1.8', cat:'round',label:'14 seats',dim:'1.8m',wM:1.8,hM:1.8,chairs:14,cols:4},
+      {key:'round-2.0', cat:'round',label:'16 seats',dim:'2.0m',wM:2.0,hM:2.0,chairs:16,cols:4},
+      // Rectangular — ordered by seating capacity
+      {key:'rect-1.2x0.8',cat:'rect',label:'4 seats',dim:'1.2 x 0.8m',wM:1.2,hM:0.8,chairs:4,cols:4},
+      {key:'rect-1.8x0.8',cat:'rect',label:'6 seats',dim:'1.8 x 0.8m',wM:1.8,hM:0.8,chairs:6,cols:4},
+      {key:'rect-2.0x1.0',cat:'rect',label:'8 seats',dim:'2.0 x 1.0m',wM:2.0,hM:1.0,chairs:8,cols:4},
+      {key:'rect-2.4x1.2',cat:'rect',label:'10 seats',dim:'2.4 x 1.2m',wM:2.4,hM:1.2,chairs:10,cols:4},
+      {key:'rect-2.8x1.2',cat:'rect',label:'12 seats',dim:'2.8 x 1.2m',wM:2.8,hM:1.2,chairs:12,cols:4},
+      {key:'rect-3.2x1.2',cat:'rect',label:'14 seats',dim:'3.2 x 1.2m',wM:3.2,hM:1.2,chairs:14,cols:3},
+      {key:'rect-3.6x1.2',cat:'rect',label:'16 seats',dim:'3.6 x 1.2m',wM:3.6,hM:1.2,chairs:16,cols:3},
+      // Special — S-shaped tables
+      {key:'s-table-14',cat:'s-table',label:'14 seats',dim:'4.0 x 1.5m',wM:4.0,hM:1.5,chairs:14,cols:2},
+      {key:'s-table-16',cat:'s-table',label:'16 seats',dim:'4.5 x 1.5m',wM:4.5,hM:1.5,chairs:16,cols:2},
     ];
 
-    // SVG table drawing with correct proportions
-    // Chair is ~0.45m wide × 0.45m deep; table height 1.2m for rect types
-    // Scale: 1m = 50px for display
+    // SVG table drawing — matches layout editor's Add Table modal style
     function drawTableSVGv2(item, selected){
+      if(item.cat==='s-table') return _drawWizSTableSVG(item, selected);
       var SCALE=44;
-      var CS=0.38*SCALE; // chair diameter
-      var CG=0.06*SCALE; // gap chair-to-table
+      var CS=0.32*SCALE; var CG=0.06*SCALE;
+      var tableFill=selected?'#e8dcc8':'#f0ece0';
+      var chairFill=selected?'#9a7b5a':'#b08968';
       var tw=item.wM*SCALE; var th=item.hM*SCALE;
       var padX=CS+CG+2; var padY=CS+CG+2;
-      var svgW=tw+padX*2; var svgH=th+padY*2+14;
+      var svgW=tw+padX*2; var svgH=th+padY*2;
       var tx=padX; var ty=padY;
-      // Colors: warm parchment tables, warm wood-brown chairs — matches app gold palette
-      var tableFill   = selected ? '#d4b896' : '#ede3cf';
-      var tableStroke = selected ? '#b8956a' : '#c9aa80';
-      var chairFill   = '#8c7355';
-      var chairStroke = '#6b574a';
-      var cAttr=' fill="'+chairFill+'" stroke="'+chairStroke+'" stroke-width="1"';
-      var chairs='';
-      var n=item.chairs;
-
+      var chairs=''; var n=item.chairs;
       if(item.cat==='round'){
         var r=tw/2; var cx=tx+r; var cy=ty+r;
         for(var ci=0;ci<n;ci++){
           var ang=2*Math.PI*ci/n-Math.PI/2;
           var dist=r+CG+CS/2;
           var ccx=cx+dist*Math.cos(ang); var ccy=cy+dist*Math.sin(ang);
-          chairs+='<circle cx="'+ccx.toFixed(1)+'" cy="'+ccy.toFixed(1)+'" r="'+(CS/2).toFixed(1)+'"'+cAttr+'/>';
+          chairs+='<circle cx="'+ccx.toFixed(1)+'" cy="'+ccy.toFixed(1)+'" r="'+(CS/2).toFixed(1)+'" fill="'+chairFill+'"/>';
         }
-        chairs+='<circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="'+r.toFixed(1)+'" fill="'+tableFill+'" stroke="'+tableStroke+'" stroke-width="1.5"/>';
+        chairs+='<circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="'+r.toFixed(1)+'" fill="'+tableFill+'"/>';
       } else {
         var sideN=2;
         var topN=Math.ceil((n-sideN*2)/2); var botN=Math.floor((n-sideN*2)/2);
-        // Top chairs
         for(var ci=0;ci<topN;ci++){
           var cx2=tx+(ci+0.5)*(tw/topN); var cy2=ty-CG-CS/2;
-          chairs+='<circle cx="'+cx2.toFixed(1)+'" cy="'+cy2.toFixed(1)+'" r="'+(CS/2).toFixed(1)+'"'+cAttr+'/>';
+          chairs+='<circle cx="'+cx2.toFixed(1)+'" cy="'+cy2.toFixed(1)+'" r="'+(CS/2).toFixed(1)+'" fill="'+chairFill+'"/>';
         }
-        // Bottom chairs
         for(var ci=0;ci<botN;ci++){
           var cx2=tx+(ci+0.5)*(tw/botN); var cy2=ty+th+CG+CS/2;
-          chairs+='<circle cx="'+cx2.toFixed(1)+'" cy="'+cy2.toFixed(1)+'" r="'+(CS/2).toFixed(1)+'"'+cAttr+'/>';
+          chairs+='<circle cx="'+cx2.toFixed(1)+'" cy="'+cy2.toFixed(1)+'" r="'+(CS/2).toFixed(1)+'" fill="'+chairFill+'"/>';
         }
-        // Side chairs (2 per side)
         for(var ci=0;ci<sideN;ci++){
           var cy3=ty+(ci+0.5)*(th/sideN);
-          chairs+='<circle cx="'+(tx-CG-CS/2).toFixed(1)+'" cy="'+cy3.toFixed(1)+'" r="'+(CS/2).toFixed(1)+'"'+cAttr+'/>';
-          chairs+='<circle cx="'+(tx+tw+CG+CS/2).toFixed(1)+'" cy="'+cy3.toFixed(1)+'" r="'+(CS/2).toFixed(1)+'"'+cAttr+'/>';
+          chairs+='<circle cx="'+(tx-CG-CS/2).toFixed(1)+'" cy="'+cy3.toFixed(1)+'" r="'+(CS/2).toFixed(1)+'" fill="'+chairFill+'"/>';
+          chairs+='<circle cx="'+(tx+tw+CG+CS/2).toFixed(1)+'" cy="'+cy3.toFixed(1)+'" r="'+(CS/2).toFixed(1)+'" fill="'+chairFill+'"/>';
         }
-        // Table body
-        chairs+='<rect x="'+tx.toFixed(1)+'" y="'+ty.toFixed(1)+'" width="'+tw.toFixed(1)+'" height="'+th.toFixed(1)+'" rx="2" fill="'+tableFill+'" stroke="'+tableStroke+'" stroke-width="1.5"/>';
+        chairs+='<rect x="'+tx.toFixed(1)+'" y="'+ty.toFixed(1)+'" width="'+tw.toFixed(1)+'" height="'+th.toFixed(1)+'" rx="2" fill="'+tableFill+'"/>';
       }
-      return '<svg viewBox="0 0 '+svgW.toFixed(0)+' '+svgH.toFixed(0)+'" width="'+svgW.toFixed(0)+'" height="'+svgH.toFixed(0)+'" style="display:block;overflow:visible">'
-        +chairs
-        +'<text x="'+(svgW/2).toFixed(1)+'" y="'+(svgH-1).toFixed(1)+'" text-anchor="middle" font-size="8.5" fill="#9a836a" font-family="Jost,sans-serif">'+item.label+'</text>'
-        +'</svg>';
+      return '<svg viewBox="0 0 '+svgW.toFixed(0)+' '+svgH.toFixed(0)+'" width="'+svgW.toFixed(0)+'" height="'+svgH.toFixed(0)+'" style="display:block;overflow:visible">'+chairs+'</svg>';
+    }
+
+    function _drawWizSTableSVG(item, selected){
+      var tableFill=selected?'#e8dcc8':'#f0ece0';
+      var chairFill=selected?'#9a7b5a':'#b08968';
+      var n=item.chairs; var half=Math.floor(n/2);
+      var W=160; var H=72; var pad=16; var cr=6.5;
+      var svgW=W+pad*2; var svgH=H+pad*2;
+      var ox=pad; var oy=pad;
+      var amp=14; var bh=H/2; var bandW=16;
+      function topEdge(t){ return oy+bh-amp*Math.sin(t*Math.PI)-bandW+(bandW*0.35)*Math.sin(t*Math.PI); }
+      function botEdge(t){ return oy+bh+amp*Math.sin(t*Math.PI)+bandW-(bandW*0.35)*Math.sin(t*Math.PI); }
+      var pts=40; var topPath=''; var botPath='';
+      for(var i=0;i<=pts;i++){var t=i/pts;var x=ox+t*W;topPath+=(i===0?'M':'L')+x.toFixed(1)+','+topEdge(t).toFixed(1);}
+      for(var i=pts;i>=0;i--){var t=i/pts;var x=ox+t*W;botPath+='L'+x.toFixed(1)+','+botEdge(t).toFixed(1);}
+      var path='<path d="'+topPath+botPath+'Z" fill="'+tableFill+'"/>';
+      var chairs=''; var is16=n>=16;
+      for(var ci=0;ci<half;ci++){
+        var t=is16?(ci+0.5)/half:(ci+1)/(half+1);
+        chairs+='<circle cx="'+(ox+t*W).toFixed(1)+'" cy="'+(topEdge(t)-cr-3).toFixed(1)+'" r="'+cr+'" fill="'+chairFill+'"/>';
+      }
+      for(var ci=0;ci<half;ci++){
+        var t=is16?(ci+0.5)/half:(ci+1)/(half+1);
+        chairs+='<circle cx="'+(ox+t*W).toFixed(1)+'" cy="'+(botEdge(t)+cr+3).toFixed(1)+'" r="'+cr+'" fill="'+chairFill+'"/>';
+      }
+      return '<svg viewBox="0 0 '+svgW+' '+svgH+'" width="'+svgW+'" height="'+svgH+'" style="display:block;overflow:visible">'+chairs+path+'</svg>';
     }
 
     var totalTables=0; var totalChairs=0;
@@ -2396,29 +3144,31 @@ function _libRenderLayoutWizard(){
 
     function renderCatSection(catKey, titleEN, titleES){
       var items=catalogue.filter(function(c){return c.cat===catKey;});
-      return '<div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 8px">'+(isES?titleES:titleEN)+'</div>'
+      return '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:16px 0 8px">'+(isES?titleES:titleEN)+'</div>'
         +'<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px">'
         +items.map(function(item){
           var sel=w.tables[item.key]&&w.tables[item.key].n>0;
           var cnt=(w.tables[item.key]||{}).n||0;
-          return '<div onclick="_libWizToggleTable(\''+item.key+'\')" style="cursor:pointer;padding:8px 6px;border:2px solid '+(sel?'var(--gold)':'var(--border)')+';border-radius:10px;background:'+(sel?'var(--gold-l)':'var(--card)')+';text-align:center;transition:.15s;position:relative">'
+          return '<div onclick="_libWizToggleTable(\''+item.key+'\')" style="cursor:pointer;padding:8px 6px 6px;border:2px solid '+(sel?'var(--gold)':'var(--border)')+';border-radius:10px;background:'+(sel?'var(--gold-l)':'var(--card)')+';text-align:center;transition:.15s;min-width:72px;position:relative">'
             +drawTableSVGv2(item,sel)
-            +'<div style="margin-top:4px;font-size:10px;color:var(--muted)">'+(isES?'Sillas:':'Chairs:')+' '+item.chairs+'</div>'
+            +'<div style="margin-top:5px;font-size:12px;font-weight:600;color:var(--text);line-height:1.2">'+item.label+'</div>'
+            +'<div style="font-size:10px;color:var(--muted);margin-top:1px">'+(item.dim||'')+'</div>'
             +(sel
-              ?'<div onclick="event.stopPropagation()" style="margin-top:4px"><input type="number" min="1" value="'+cnt+'" onchange="_libLayoutWiz.tables[\''+item.key+'\']||(_libLayoutWiz.tables[\''+item.key+'\']={chairs:'+item.chairs+',cols:'+item.cols+',chairType:\'default\',cp:\'none\'});_libLayoutWiz.tables[\''+item.key+'\'].n=parseInt(this.value)||1;_libRenderLayoutWizard()" oninput="_libLayoutWiz.tables[\''+item.key+'\']||(_libLayoutWiz.tables[\''+item.key+'\']={chairs:'+item.chairs+',cols:'+item.cols+',chairType:\'default\',cp:\'none\'});_libLayoutWiz.tables[\''+item.key+'\'].n=parseInt(this.value)||1" style="width:52px;text-align:center;padding:3px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:700"><div style="font-size:9px;color:var(--muted);margin-top:1px">'+(isES?'cantidad':'qty')+'</div></div>'
-              :'<div style="font-size:10px;color:var(--light);margin-top:4px">'+(isES?'clic':'click')+'</div>')
+              ?'<div onclick="event.stopPropagation()" style="margin-top:5px"><input type="number" min="1" value="'+cnt+'" onchange="_libLayoutWiz.tables[\''+item.key+'\']||(_libLayoutWiz.tables[\''+item.key+'\']={chairs:'+item.chairs+',cols:'+item.cols+',chairType:\'default\',cp:\'none\'});_libLayoutWiz.tables[\''+item.key+'\'].n=parseInt(this.value)||1;_libRenderLayoutWizard()" oninput="_libLayoutWiz.tables[\''+item.key+'\']||(_libLayoutWiz.tables[\''+item.key+'\']={chairs:'+item.chairs+',cols:'+item.cols+',chairType:\'default\',cp:\'none\'});_libLayoutWiz.tables[\''+item.key+'\'].n=parseInt(this.value)||1" style="width:48px;text-align:center;padding:3px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:700;background:var(--bg)"><div style="font-size:9px;color:var(--muted);margin-top:1px">'+(isES?'cantidad':'qty')+'</div></div>'
+              :'')
             +'</div>';
         }).join('')
         +'</div>';
     }
 
     body='<div style="font-size:15px;font-weight:700;margin-bottom:4px">'+(isES?'Mesas':'Tables')+'</div>'
-      +'<div style="font-size:12px;color:var(--muted);margin-bottom:10px">'+(isES?'Haz clic en una mesa para seleccionarla.':'Click a table to select it, then enter quantity.')+'</div>'
+      +'<div style="font-size:12px;color:var(--muted);margin-bottom:10px">'+(isES?'Haz clic en una mesa para seleccionarla.':'Click a table to select it.')+'</div>'
       +renderCatSection('round', 'Round Tables',        'Mesas Redondas')
       +renderCatSection('rect',  'Rectangular Tables',  'Mesas Rectangulares')
-      +'<div style="background:var(--bg2);border-radius:var(--r);padding:10px 14px;display:flex;gap:24px;font-size:13px;margin-top:12px;flex-wrap:wrap">'
-      +'<span>⬛ <strong>'+totalTables+'</strong> '+(isES?'mesas':'tables')+'</span>'
-      +'<span>🪑 <strong>'+totalChairs+'</strong> '+(isES?'sillas':'chairs')+'</span>'
+      +renderCatSection('s-table','Special Tables',     'Mesas Especiales')
+      +'<div style="background:var(--bg2);border-radius:var(--r);padding:10px 14px;display:flex;gap:24px;font-size:13px;margin-top:14px;flex-wrap:wrap">'
+      +'<span><strong>'+totalTables+'</strong> '+(isES?'mesas':'tables')+'</span>'
+      +'<span><strong>'+totalChairs+'</strong> '+(isES?'sillas':'chairs')+'</span>'
       +'</div>';
   }
 
@@ -2523,10 +3273,9 @@ function _libWizToggleTable(key){
   var _moScrollY=_scrollEl?_scrollEl.scrollTop:0;
   if(!_libLayoutWiz.tables) _libLayoutWiz.tables={};
   var catalogue=[
-    {key:'rect-2x1.2',chairs:6,cols:4},{key:'rect-2.4x1.2',chairs:8,cols:4},{key:'rect-2.6x1.2',chairs:8,cols:4},{key:'rect-2.8x1.2',chairs:10,cols:4},{key:'rect-3x1.2',chairs:10,cols:3},{key:'rect-3.2x1.2',chairs:12,cols:3},{key:'rect-3.4x1.2',chairs:12,cols:3},{key:'rect-3.6x1.2',chairs:14,cols:3},{key:'rect-3.8x1.2',chairs:14,cols:3},{key:'rect-4x1.2',chairs:16,cols:3},
-    {key:'dend-2x1.2',chairs:6,cols:4},{key:'dend-2.4x1.2',chairs:8,cols:4},{key:'dend-2.6x1.2',chairs:8,cols:4},{key:'dend-2.8x1.2',chairs:10,cols:4},{key:'dend-3x1.2',chairs:10,cols:3},{key:'dend-3.2x1.2',chairs:12,cols:3},{key:'dend-3.4x1.2',chairs:12,cols:3},{key:'dend-3.6x1.2',chairs:14,cols:3},{key:'dend-3.8x1.2',chairs:14,cols:3},{key:'dend-4x1.2',chairs:16,cols:3},
-    {key:'oval-2x1.2',chairs:6,cols:4},{key:'oval-2.4x1.2',chairs:8,cols:4},{key:'oval-2.6x1.2',chairs:8,cols:4},{key:'oval-2.8x1.2',chairs:10,cols:4},{key:'oval-3x1.2',chairs:10,cols:3},{key:'oval-3.2x1.2',chairs:12,cols:3},{key:'oval-3.4x1.2',chairs:12,cols:3},{key:'oval-3.6x1.2',chairs:14,cols:3},{key:'oval-3.8x1.2',chairs:14,cols:3},{key:'oval-4x1.2',chairs:16,cols:3},
-    {key:'round-0.8',chairs:4,cols:6},{key:'round-1.0',chairs:6,cols:5},{key:'round-1.2',chairs:8,cols:5},{key:'round-1.4',chairs:10,cols:5},{key:'round-1.5',chairs:10,cols:5},{key:'round-1.6',chairs:12,cols:4},{key:'round-1.7',chairs:12,cols:4},{key:'round-1.8',chairs:14,cols:4},{key:'round-1.9',chairs:14,cols:4},{key:'round-2.0',chairs:16,cols:4},
+    {key:'round-0.8',chairs:4,cols:6},{key:'round-1.0',chairs:6,cols:5},{key:'round-1.2',chairs:8,cols:5},{key:'round-1.5',chairs:10,cols:5},{key:'round-1.6',chairs:12,cols:4},{key:'round-1.8',chairs:14,cols:4},{key:'round-2.0',chairs:16,cols:4},
+    {key:'rect-1.2x0.8',chairs:4,cols:4},{key:'rect-1.8x0.8',chairs:6,cols:4},{key:'rect-2.0x1.0',chairs:8,cols:4},{key:'rect-2.4x1.2',chairs:10,cols:4},{key:'rect-2.8x1.2',chairs:12,cols:4},{key:'rect-3.2x1.2',chairs:14,cols:3},{key:'rect-3.6x1.2',chairs:16,cols:3},
+    {key:'s-table-14',chairs:14,cols:2},{key:'s-table-16',chairs:16,cols:2},
   ];
   var cat=catalogue.find(function(c){return c.key===key;});
   if(_libLayoutWiz.tables[key]&&_libLayoutWiz.tables[key].n>0){
@@ -2660,10 +3409,9 @@ function _libLayoutWizGenerate(){
 
   // Table catalogue key -> shape/size info
   var catalogueMap={
-    'rect-2x1.2':{shape:'rect-table',wM:2.0,hM:1.2,round:false},'rect-2.4x1.2':{shape:'rect-table',wM:2.4,hM:1.2,round:false},'rect-2.6x1.2':{shape:'rect-table',wM:2.6,hM:1.2,round:false},'rect-2.8x1.2':{shape:'rect-table',wM:2.8,hM:1.2,round:false},'rect-3x1.2':{shape:'rect-table',wM:3.0,hM:1.2,round:false},'rect-3.2x1.2':{shape:'rect-table',wM:3.2,hM:1.2,round:false},'rect-3.4x1.2':{shape:'rect-table',wM:3.4,hM:1.2,round:false},'rect-3.6x1.2':{shape:'rect-table',wM:3.6,hM:1.2,round:false},'rect-3.8x1.2':{shape:'rect-table',wM:3.8,hM:1.2,round:false},'rect-4x1.2':{shape:'rect-table',wM:4.0,hM:1.2,round:false},
-    'dend-2x1.2':{shape:'rect-table',wM:2.0,hM:1.2,round:false},'dend-2.4x1.2':{shape:'rect-table',wM:2.4,hM:1.2,round:false},'dend-2.6x1.2':{shape:'rect-table',wM:2.6,hM:1.2,round:false},'dend-2.8x1.2':{shape:'rect-table',wM:2.8,hM:1.2,round:false},'dend-3x1.2':{shape:'rect-table',wM:3.0,hM:1.2,round:false},'dend-3.2x1.2':{shape:'rect-table',wM:3.2,hM:1.2,round:false},'dend-3.4x1.2':{shape:'rect-table',wM:3.4,hM:1.2,round:false},'dend-3.6x1.2':{shape:'rect-table',wM:3.6,hM:1.2,round:false},'dend-3.8x1.2':{shape:'rect-table',wM:3.8,hM:1.2,round:false},'dend-4x1.2':{shape:'rect-table',wM:4.0,hM:1.2,round:false},
-    'oval-2x1.2':{shape:'rect-table',wM:2.0,hM:1.2,round:false},'oval-2.4x1.2':{shape:'rect-table',wM:2.4,hM:1.2,round:false},'oval-2.6x1.2':{shape:'rect-table',wM:2.6,hM:1.2,round:false},'oval-2.8x1.2':{shape:'rect-table',wM:2.8,hM:1.2,round:false},'oval-3x1.2':{shape:'rect-table',wM:3.0,hM:1.2,round:false},'oval-3.2x1.2':{shape:'rect-table',wM:3.2,hM:1.2,round:false},'oval-3.4x1.2':{shape:'rect-table',wM:3.4,hM:1.2,round:false},'oval-3.6x1.2':{shape:'rect-table',wM:3.6,hM:1.2,round:false},'oval-3.8x1.2':{shape:'rect-table',wM:3.8,hM:1.2,round:false},'oval-4x1.2':{shape:'rect-table',wM:4.0,hM:1.2,round:false},
-    'round-0.8':{shape:'round-table',wM:0.8,hM:0.8,round:true},'round-1.0':{shape:'round-table',wM:1.0,hM:1.0,round:true},'round-1.2':{shape:'round-table',wM:1.2,hM:1.2,round:true},'round-1.4':{shape:'round-table',wM:1.4,hM:1.4,round:true},'round-1.5':{shape:'round-table',wM:1.5,hM:1.5,round:true},'round-1.6':{shape:'round-table',wM:1.6,hM:1.6,round:true},'round-1.7':{shape:'round-table',wM:1.7,hM:1.7,round:true},'round-1.8':{shape:'round-table',wM:1.8,hM:1.8,round:true},'round-1.9':{shape:'round-table',wM:1.9,hM:1.9,round:true},'round-2.0':{shape:'round-table',wM:2.0,hM:2.0,round:true},
+    'round-0.8':{shape:'round-table',wM:0.8,hM:0.8,round:true},'round-1.0':{shape:'round-table',wM:1.0,hM:1.0,round:true},'round-1.2':{shape:'round-table',wM:1.2,hM:1.2,round:true},'round-1.5':{shape:'round-table',wM:1.5,hM:1.5,round:true},'round-1.6':{shape:'round-table',wM:1.6,hM:1.6,round:true},'round-1.8':{shape:'round-table',wM:1.8,hM:1.8,round:true},'round-2.0':{shape:'round-table',wM:2.0,hM:2.0,round:true},
+    'rect-1.2x0.8':{shape:'rect-table',wM:1.2,hM:0.8,round:false},'rect-1.8x0.8':{shape:'rect-table',wM:1.8,hM:0.8,round:false},'rect-2.0x1.0':{shape:'rect-table',wM:2.0,hM:1.0,round:false},'rect-2.4x1.2':{shape:'rect-table',wM:2.4,hM:1.2,round:false},'rect-2.8x1.2':{shape:'rect-table',wM:2.8,hM:1.2,round:false},'rect-3.2x1.2':{shape:'rect-table',wM:3.2,hM:1.2,round:false},'rect-3.6x1.2':{shape:'rect-table',wM:3.6,hM:1.2,round:false},
+    's-table-14':{shape:'s-table',wM:4.0,hM:1.5,round:false},'s-table-16':{shape:'s-table',wM:4.5,hM:1.5,round:false},
   };
   var tables=Array.isArray(w.tables)?{}:w.tables;
   Object.keys(tables).forEach(function(key){
@@ -2829,11 +3577,11 @@ function _libLayoutWizGenerate(){
   // Redirect to library layouts tab and open the editor
   _libTab='layouts';
   renderLibrary();
-  setTimeout(function(){ libOpenLayoutEditor(entryId); },200);
+  setTimeout(function(){ libOpenLayoutEditor(entryId, null, true); },200);
 }
 window._libLayoutWizGenerate = _libLayoutWizGenerate;
 
-function libOpenLayoutEditor(entryId){
+function libOpenLayoutEditor(entryId, _unused, isNew){
   _libEditingLayoutId=entryId;
   var lib=getLib();
   var entry=lib.layouts.find(function(e){return e.id===entryId;});
@@ -2889,16 +3637,16 @@ function libOpenLayoutEditor(entryId){
 
   // Hide normal library UI, inject full-height layout shell
   pgLib.innerHTML=
-    '<div style="display:flex;flex-direction:column;height:calc(100vh - 62px)">'
+    '<div style="display:flex;flex-direction:column;height:100vh">'
     +'<div style="display:flex;align-items:center;gap:12px;padding:10px 20px;background:var(--card);border-bottom:1px solid var(--border);flex-shrink:0">'
     +'<button class="btn btn-ghost btn-sm" onclick="libCloseLayoutEditor(\''+entryId+'\',\''+(_prevCID||'')+'\')">← '+(isES?'Volver a Planos':'Back to Layouts')+'</button>'
     +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;flex:1">'
     +'<input id="lib-layout-editor-name" class="input" value="'+esc(entry.name)+'" style="max-width:320px;font-weight:700;font-size:15px;padding:7px 10px" onblur="libRenameEditingLayout(\''+entryId+'\')" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}">'
-    +'<button class="btn btn-primary btn-sm" onclick="libOpenLayoutEventPicker(\''+entryId+'\')">'+(isES?'CARGAR':'LOAD')+'</button>'
+    +'<button class="btn btn-primary btn-sm" onclick="libOpenLayoutEventPicker(\''+entryId+'\')">'+(isES?'CARGAR A EVENTO':'LOAD TO EVENT')+'</button>'
     +'</div>'
     +'<span style="font-size:12px;color:var(--muted)">'+(isES?'Los cambios se guardan automáticamente':'Changes are saved automatically')+'</span>'
     +'</div>'
-    +'<div id="tab-layout" style="flex:1;overflow:hidden"></div>'
+    +'<div id="lib-layout-canvas" style="flex:1;overflow:hidden"></div>'
     +'</div>';
 
   // Auto-save: poll for changes every 2 seconds — only saves current layout's items and floorplan metadata
@@ -2923,6 +3671,7 @@ function libOpenLayoutEditor(entryId){
   CTAB='layout';
   if(typeof renderLayout==='function') renderLayout();
   setTimeout(function(){ if(typeof lZoom==='function') lZoom(0,'fit'); },160);
+  if(isNew) setTimeout(function(){ if(typeof startLayoutTour==='function') startLayoutTour(); },600);
 }
 window.libOpenLayoutEditor = libOpenLayoutEditor;
 
@@ -2942,6 +3691,11 @@ function libCloseLayoutEditor(entryId, prevCID){
     saveLib(lib);
   }
   _libEditingLayoutId=null;
+  // Remove the pseudo-project from memory so it never bleeds into real event rendering
+  if(typeof uproj==='function' && typeof DB!=='undefined' && DB.cur && DB.projects[DB.cur]){
+    delete DB.projects[DB.cur]['__lib_layout__'];
+    if(typeof cacheDB==='function') cacheDB();
+  }
   // Restore CID
   CID = (prevCID && prevCID!=='null' && prevCID!=='undefined') ? prevCID : null;
   _libTab='layouts';
@@ -2963,6 +3717,43 @@ function libCloseLayoutEditor(entryId, prevCID){
   renderLibrary();
 }
 window.libCloseLayoutEditor = libCloseLayoutEditor;
+
+// Called by showPage() when the user navigates away from the library page without
+// clicking "Back to Layouts". Cleans up state without triggering a page switch.
+function libCancelLayoutEditor(){
+  if(!_libEditingLayoutId) return;
+  if(window._libAutoSaveInterval){ clearInterval(window._libAutoSaveInterval); window._libAutoSaveInterval=null; }
+  // Final save of layout items to the library entry
+  var lib=getLib();
+  var entry=lib.layouts.find(function(e){return e.id===_libEditingLayoutId;});
+  var lp=typeof uproj==='function'?uproj()['__lib_layout__']:null;
+  if(entry && lp){
+    entry.items=JSON.parse(JSON.stringify(lp.layoutItems||[]));
+    entry.updatedAt=new Date().toISOString();
+    saveLib(lib);
+  }
+  _libEditingLayoutId=null;
+  // Remove pseudo-project from memory
+  if(typeof DB!=='undefined' && DB.cur && DB.projects[DB.cur]){
+    delete DB.projects[DB.cur]['__lib_layout__'];
+    if(typeof cacheDB==='function') cacheDB();
+  }
+  // Restore pg-library to its normal state so it looks correct if navigated back to
+  var pgLib=document.getElementById('pg-library');
+  if(pgLib){
+    pgLib.innerHTML=
+      '<div style="max-width:1200px;margin:0 auto;padding:32px 24px;width:100%">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px">'
+        +'<div><h1 class="editorial-title" id="lib-page-title" style="font-family:\'Cormorant Garamond\',serif;font-size:28px;font-weight:700">Layouts</h1>'
+      +'<p id="lib-page-sub" style="display:none"></p></div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap" id="lib-add-btns"></div>'
+      +'</div>'
+      +'<div style="display:none" id="lib-tabs"></div>'
+      +'<div id="lib-content"></div>'
+      +'</div>';
+  }
+}
+window.libCancelLayoutEditor = libCancelLayoutEditor;
 
 // No global hook needed — auto-save is triggered directly by libOpenLayoutEditor
 

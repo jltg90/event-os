@@ -50,6 +50,147 @@ function isEventLayoutViewOnly(p){
   return !!(p && p.id && p.id!=='__library__' && p.id!=='__lib_layout__' && !isLibraryLayoutEditing());
 }
 
+// ─── Multi-layout support ───────────────────────────────────────────────────
+function ensureEventLayouts(p){
+  if(!p) return [];
+  if(!p.eventLayouts){
+    p.eventLayouts = [];
+    if(p.layoutExport){
+      p.eventLayouts.push({
+        id: 'el_' + Date.now(),
+        layoutExport: p.layoutExport,
+        addedAt: p.layoutExport.exportedAt || new Date().toISOString(),
+        active: true
+      });
+    }
+  }
+  return p.eventLayouts;
+}
+
+function getActiveEventLayout(p){
+  var layouts = ensureEventLayouts(p);
+  var active = layouts.find(function(e){ return e.active; });
+  return active || layouts[0] || null;
+}
+
+function switchEventLayout(elId){
+  var p = proj(); if(!p) return;
+  var layouts = ensureEventLayouts(p);
+  var entry = layouts.find(function(e){ return e.id === elId; });
+  if(!entry) return;
+  layouts.forEach(function(e){ e.active = false; });
+  entry.active = true;
+  p.layoutExport = entry.layoutExport;
+  saveProj(p);
+  var panelWasOpen = _eventLayoutsPanelOpen;
+  if(_eventLayoutsPanelOpen) closeEventLayoutsPanel();
+  if(typeof CTAB!=='undefined' && CTAB==='layout') renderLayout();
+  // Re-open panel after re-render so active badge updates immediately
+  if(panelWasOpen) setTimeout(function(){ openEventLayoutsPanel(); }, 0);
+}
+
+function removeEventLayout(elId){
+  var p = proj(); if(!p) return;
+  var isES = LANG==='es';
+  var layouts = ensureEventLayouts(p);
+  var idx = layouts.findIndex(function(e){ return e.id === elId; });
+  if(idx < 0) return;
+  var wasActive = layouts[idx].active;
+  var name = (layouts[idx].layoutExport && layouts[idx].layoutExport.layoutName) || '';
+  layouts.splice(idx, 1);
+  if(wasActive){
+    if(layouts.length > 0){
+      layouts[0].active = true;
+      p.layoutExport = layouts[0].layoutExport;
+    } else {
+      p.layoutExport = null;
+    }
+  }
+  saveProj(p);
+  toast((isES ? 'Layout removido: ' : 'Layout removed: ') + name, 's');
+  closeEventLayoutsPanel();
+  if(typeof CTAB!=='undefined' && CTAB==='layout') renderLayout();
+  // Re-open panel after re-render if there are still layouts to show
+  if(layouts.length) setTimeout(function(){ openEventLayoutsPanel(); }, 0);
+}
+
+function renderEventLayoutsBtn(){
+  // Layouts button is now rendered inline in renderEventLayoutViewer — no-op
+}
+
+var _eventLayoutsPanelOpen = false;
+function openEventLayoutsPanel(){
+  // Check actual DOM — renderLayout() may have destroyed the panel without calling close
+  var existingPanel = document.getElementById('event-layouts-panel');
+  if(_eventLayoutsPanelOpen && existingPanel){ closeEventLayoutsPanel(); return; }
+  if(!existingPanel) _eventLayoutsPanelOpen = false;
+  _eventLayoutsPanelOpen = true;
+  var p = proj(); if(!p) return;
+  var isES = LANG==='es';
+  var layouts = ensureEventLayouts(p);
+  var rows = layouts.map(function(entry){
+    var exp = entry.layoutExport || {};
+    var isActive = !!entry.active;
+    var date = exp.exportedAt ? new Date(exp.exportedAt).toLocaleDateString(isES?'es-MX':'en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
+    var tables = exp.summary && exp.summary.tables ? exp.summary.tables : 0;
+    var guests = exp.summary && exp.summary.guests ? exp.summary.guests : '-';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1.5px solid '+(isActive?'var(--gold)':'var(--border)')+';background:'+(isActive?'var(--gold-l)':'var(--card)')+';cursor:pointer;transition:.15s" onclick="switchEventLayout(\''+entry.id+'\')">'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(exp.layoutName || 'Layout')+'</div>'
+      +'<div style="font-size:11px;color:var(--muted)">'+tables+' '+(isES?'mesas':'tables')+' · '+guests+' '+(isES?'inv.':'guests')+(date ? ' · '+date : '')+'</div>'
+      +'</div>'
+      +(isActive ? '<span style="font-size:10px;font-weight:700;color:var(--gold-h);text-transform:uppercase;letter-spacing:.05em;flex-shrink:0">'+(isES?'Activo':'Active')+'</span>' : '')
+      +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Eliminar':'Remove')+'" onclick="event.stopPropagation();removeEventLayout(\''+entry.id+'\')" style="flex-shrink:0;color:var(--danger)"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
+      +'</div>';
+  }).join('');
+
+  var emptyMsg = !layouts.length
+    ? '<div style="padding:18px;text-align:center;color:var(--muted);font-size:13px">'+(isES?'No hay layouts cargados en este evento.':'No layouts loaded into this event.')+'</div>'
+    : '';
+
+  var panel = document.createElement('div');
+  panel.id = 'event-layouts-panel';
+  panel.style.cssText = 'position:absolute;top:100%;right:0;z-index:900;width:340px;max-height:70vh;overflow-y:auto;background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.15);padding:14px;margin-top:4px';
+  panel.innerHTML = '<div style="font-family:Cormorant Garamond,serif;font-size:20px;font-weight:700;margin-bottom:12px">'+(isES?'Layouts del Evento':'Event Layouts')+'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">'+rows+emptyMsg+'</div>'
+    +'<button class="btn btn-primary" style="width:100%" onclick="closeEventLayoutsPanel();openLayoutLibraryPicker()">'
+    +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="M12 5v14M5 12h14"/></svg>'
+    +(isES?'Cargar otro layout':'Load another layout')+'</button>';
+
+  var anchor = document.getElementById('ev-layouts-wrap');
+  if(!anchor) return;
+  // Remove existing
+  var old = document.getElementById('event-layouts-panel');
+  if(old) old.remove();
+  anchor.appendChild(panel);
+
+  // Close on outside click
+  setTimeout(function(){
+    document.addEventListener('click', _closeLayoutsPanelOutside, true);
+  }, 0);
+}
+
+function _closeLayoutsPanelOutside(e){
+  var panel = document.getElementById('event-layouts-panel');
+  var btn = document.getElementById('ev-layouts-btn');
+  if(panel && !panel.contains(e.target) && btn && !btn.contains(e.target)){
+    closeEventLayoutsPanel();
+  }
+}
+
+function closeEventLayoutsPanel(){
+  _eventLayoutsPanelOpen = false;
+  var el = document.getElementById('event-layouts-panel');
+  if(el) el.remove();
+  document.removeEventListener('click', _closeLayoutsPanelOutside, true);
+}
+
+window.switchEventLayout = switchEventLayout;
+window.removeEventLayout = removeEventLayout;
+window.openEventLayoutsPanel = openEventLayoutsPanel;
+window.closeEventLayoutsPanel = closeEventLayoutsPanel;
+window.renderEventLayoutsBtn = renderEventLayoutsBtn;
+
 function _layoutDimLabel(item, ppm){
   var w = ((item.w||0) / ppm).toFixed(2);
   var h = ((item.h||0) / ppm).toFixed(2);
@@ -148,6 +289,7 @@ function buildLayoutSnapshotGraphic(opts){
 
   items.forEach(function(item){
     var isRound = item.shape==='round-table'||item.radius==='50%'||(LSHAPES_M[item.shape]&&LSHAPES_M[item.shape].radius==='50%');
+    var isSTable = item.shape==='s-table';
     var rot = item.rotation || 0;
     var iw = sc(item.w);
     var ih = sc(item.h);
@@ -155,6 +297,7 @@ function buildLayoutSnapshotGraphic(opts){
     var iy = sy(item.y);
     var inner = '';
 
+    // ── Chairs ── same distribution logic as renderChairs() in editor
     if(item.chairs){
       var n = item.chairs;
       var cs = Math.max(4, Math.round(CHAIR_SZ * scale));
@@ -162,79 +305,102 @@ function buildLayoutSnapshotGraphic(opts){
       var cType = item.chairType || 'default';
       var ct = CHAIR_TYPES[cType] || CHAIR_TYPES['default'];
       var cfill = ct ? ct.fill : '#e8e4d8';
-      var cstroke = ct ? (ct.stroke || 'none') : 'none';
       var positions = [];
       var w = sc(item.w), h = sc(item.h);
 
-      if(isRound){
+      if(isSTable){
+        var half = Math.floor(n/2);
+        var is16 = n >= 16;
+        var sAmp=h*0.19, sBh=h/2, sBandW=h*0.22;
+        function _sSvgTop(t){ return sBh - sAmp*Math.sin(t*Math.PI) - sBandW + (sBandW*0.35)*Math.sin(t*Math.PI); }
+        function _sSvgBot(t){ return sBh + sAmp*Math.sin(t*Math.PI) + sBandW - (sBandW*0.35)*Math.sin(t*Math.PI); }
+        for(var ci=0;ci<half;ci++){
+          var tc=(is16?(ci+0.5)/half:(ci+1)/(half+1));
+          positions.push({x:tc*w, y:_sSvgTop(tc)-(cs/2+gap)});
+        }
+        for(var ci2=0;ci2<half;ci2++){
+          var tc2=(is16?(ci2+0.5)/half:(ci2+1)/(half+1));
+          positions.push({x:tc2*w, y:_sSvgBot(tc2)+(cs/2+gap)});
+        }
+      } else if(isRound){
         for(var i=0;i<n;i++){
           var angle=(i/n)*2*Math.PI - Math.PI/2;
-          positions.push({
-            x: w/2 + (w/2 + cs/2 + gap)*Math.cos(angle),
-            y: h/2 + (h/2 + cs/2 + gap)*Math.sin(angle)
-          });
+          positions.push({x:w/2+(w/2+cs/2+gap)*Math.cos(angle), y:h/2+(h/2+cs/2+gap)*Math.sin(angle)});
         }
       } else if(item.shape==='rect-table'){
-        var longSide=4, shortSide=Math.max(1,Math.round((n-longSide*2)/2));
-        var top=longSide, bot=longSide, left=shortSide, right=shortSide;
-        for(var j=0;j<top;j++) positions.push({x:(j+1)*w/(top+1), y:-(cs/2+gap)});
-        for(var k=0;k<bot;k++) positions.push({x:(k+1)*w/(bot+1), y:h+cs/2+gap});
-        for(var l=0;l<left;l++) positions.push({x:-(cs/2+gap), y:(l+1)*h/(left+1)});
-        for(var m=0;m<right;m++) positions.push({x:w+cs/2+gap, y:(m+1)*h/(right+1)});
+        // Mirror editor: 2 chairs per short side, remainder split top/bottom
+        var sideN=2;
+        var topN=Math.ceil((n-sideN*2)/2), botN=Math.floor((n-sideN*2)/2);
+        for(var j=0;j<topN;j++) positions.push({x:(j+1)*w/(topN+1), y:-(cs/2+gap)});
+        for(var k=0;k<botN;k++) positions.push({x:(k+1)*w/(botN+1), y:h+cs/2+gap});
+        for(var l=0;l<sideN;l++) positions.push({x:-(cs/2+gap), y:(l+1)*h/(sideN+1)});
+        for(var m=0;m<sideN;m++) positions.push({x:w+cs/2+gap, y:(m+1)*h/(sideN+1)});
       } else {
-        var chairSlot = cs + 5;
-        var longCap = Math.max(1,Math.floor(w/chairSlot));
+        var chairSlot=cs+5;
+        var longCap=Math.max(1,Math.floor(w/chairSlot));
         var top2=0,bot2=0,left2=0,right2=0;
         if(n<=2*longCap){ top2=Math.ceil(n/2); bot2=Math.floor(n/2); }
-        else {
-          top2=longCap; bot2=longCap;
-          var rem=n-top2-bot2;
-          left2=Math.ceil(rem/2); right2=Math.floor(rem/2);
-        }
+        else { top2=longCap; bot2=longCap; var rem=n-top2-bot2; left2=Math.ceil(rem/2); right2=Math.floor(rem/2); }
         for(var n1=0;n1<top2;n1++) positions.push({x:(n1+1)*w/(top2+1), y:-(cs/2+gap)});
         for(var n2=0;n2<bot2;n2++) positions.push({x:(n2+1)*w/(bot2+1), y:h+cs/2+gap});
         for(var n3=0;n3<left2;n3++) positions.push({x:-(cs/2+gap), y:(n3+1)*h/(left2+1)});
         for(var n4=0;n4<right2;n4++) positions.push({x:w+cs/2+gap, y:(n4+1)*h/(right2+1)});
       }
-
-      var chairIsRound = !cType.startsWith('plegable') && !cType.startsWith('basket');
+      // All chairs render as circles, no stroke — matches editor's border-radius:50%; border:none
       positions.forEach(function(pos){
-        if(chairIsRound){
-          inner += '<ellipse cx="'+Math.round(pos.x)+'" cy="'+Math.round(pos.y)+'" rx="'+Math.round(cs/2)+'" ry="'+Math.round(cs/2)+'" fill="'+cfill+'" stroke="'+cstroke+'" stroke-width="0.8"/>';
-        } else {
-          inner += '<rect x="'+Math.round(pos.x - cs/2)+'" y="'+Math.round(pos.y - cs/2)+'" width="'+cs+'" height="'+cs+'" rx="2" fill="'+cfill+'" stroke="'+cstroke+'" stroke-width="0.8"/>';
-        }
+        inner += '<ellipse cx="'+Math.round(pos.x)+'" cy="'+Math.round(pos.y)+'" rx="'+Math.round(cs/2)+'" ry="'+Math.round(cs/2)+'" fill="'+cfill+'" stroke="none"/>';
       });
     }
 
-    var rx;
-    if(isRound){ rx = Math.min(iw,ih)/2; }
-    else {
-      var shapeDef = LSHAPES_M[item.shape];
-      if(shapeDef && shapeDef.radius && shapeDef.radius==='0px'){ rx=0; }
-      else if(item.radius && item.radius==='0px'){ rx=0; }
-      else if(item.radius && item.radius!=='50%'){
-        var rNum = parseFloat(item.radius);
-        rx = isNaN(rNum) ? 3 : rNum;
-      } else { rx = 3; }
+    // ── Table body ──
+    if(isSTable){
+      // Sinusoidal s-table path — matches _renderSTableBody() in editor
+      var sW=iw, sH=ih;
+      var sAmp2=sH*0.19, sBh2=sH/2, sBandW2=sH*0.22;
+      var pts=40, topPath='', botPath='';
+      for(var pi=0;pi<=pts;pi++){
+        var pt=pi/pts, px2=pt*sW;
+        var ty=sBh2-sAmp2*Math.sin(pt*Math.PI)-sBandW2+(sBandW2*0.35)*Math.sin(pt*Math.PI);
+        topPath+=(pi===0?'M':'L')+px2.toFixed(1)+','+ty.toFixed(1);
+      }
+      for(var pi2=pts;pi2>=0;pi2--){
+        var pt2=pi2/pts, px3=pt2*sW;
+        var by=sBh2+sAmp2*Math.sin(pt2*Math.PI)+sBandW2-(sBandW2*0.35)*Math.sin(pt2*Math.PI);
+        botPath+='L'+px3.toFixed(1)+','+by.toFixed(1);
+      }
+      inner += '<path d="'+topPath+botPath+'Z" fill="'+(item.bg||'#ffffff')+'" stroke="none" filter="url(#lsds)"/>';
+    } else {
+      var rx;
+      if(isRound){ rx=Math.min(iw,ih)/2; }
+      else {
+        var shapeDef=LSHAPES_M[item.shape];
+        if(shapeDef&&shapeDef.radius&&shapeDef.radius==='0px'){ rx=0; }
+        else if(item.radius&&item.radius==='0px'){ rx=0; }
+        else if(item.radius&&item.radius!=='50%'){ var rNum=parseFloat(item.radius); rx=isNaN(rNum)?3:rNum; }
+        else { rx=3; }
+      }
+      // No colored stroke — matches editor (box-shadow only); drop-shadow filter approximates it
+      inner += '<rect x="0" y="0" width="'+iw+'" height="'+ih+'" rx="'+rx+'" fill="'+(item.bg||'#ffffff')+'" stroke="none" filter="url(#lsds)"/>';
     }
 
-    inner += '<rect x="0" y="0" width="'+iw+'" height="'+ih+'" rx="'+rx+'" fill="'+(item.bg||'#ffffff')+'" stroke="'+(item.bdClr||'#ccc')+'" stroke-width="1"/>';
+    // ── Centerpiece ──
     if(item.centerpiece && item.centerpiece!=='none'){
-      var ct2 = CENTERPIECE_TYPES[item.centerpiece];
-      if(ct2 && ct2.color){
-        var cpSz = Math.round(Math.min(iw,ih)*0.55);
+      var ct2=CENTERPIECE_TYPES[item.centerpiece];
+      if(ct2&&ct2.color){
+        var cpSz=Math.round(Math.min(iw,ih)*0.55);
         inner += '<ellipse cx="'+(iw/2)+'" cy="'+(ih/2)+'" rx="'+(cpSz/2)+'" ry="'+(cpSz/2)+'" fill="'+ct2.color+'" opacity="0.55"/>';
       }
     }
 
+    // ── Label — font-size range and weight match renderLItem() ──
     var wM = item.w / PPM;
-    var fs = Math.max(6, Math.min(13, Math.round(wM * 8 * scale)));
-    inner += '<text x="'+(iw/2)+'" y="'+(ih/2+fs*0.35)+'" text-anchor="middle" font-family="Jost,Segoe UI,Arial,sans-serif" font-size="'+fs+'" fill="'+(item.bdClr||'#444')+'" font-weight="400">'+esc(item.label||'')+'</text>';
+    var fs = Math.max(7, Math.min(14, Math.round(wM * 8 * scale)));
+    inner += '<text x="'+(iw/2)+'" y="'+(ih/2+fs*0.35)+'" text-anchor="middle" font-family="Jost,Segoe UI,Arial,sans-serif" font-size="'+fs+'" fill="'+(item.bdClr||'#444')+'" font-weight="300">'+esc(item.label||'')+'</text>';
     svgItems += '<g transform="translate('+ix+','+iy+') rotate('+rot+','+(iw/2)+','+(ih/2)+')">'+inner+'</g>\n';
   });
 
-  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="'+svgW+'" height="'+svgH+'" viewBox="0 0 '+svgW+' '+svgH+'"><rect width="'+svgW+'" height="'+svgH+'" fill="#ffffff"/>'+svgItems+'</svg>';
+  var defs = '<defs><filter id="lsds" x="-25%" y="-25%" width="150%" height="150%"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000000" flood-opacity="0.10"/></filter></defs>';
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="'+svgW+'" height="'+svgH+'" viewBox="0 0 '+svgW+' '+svgH+'"><rect width="'+svgW+'" height="'+svgH+'" fill="#ffffff"/>'+defs+svgItems+'</svg>';
   return { svg: svg, svgW: svgW, svgH: svgH, image: _svgDataUri(svg) };
 }
 
@@ -283,8 +449,45 @@ function refreshEventLayoutFromLibrary(){
   libApplyLayoutExportToEvent(exp.layoutId, p.id, {toastSuccess:true});
 }
 
+// Returns the correct layout container element:
+// - When the library layout editor is open, it renders into #lib-layout-canvas
+// - Otherwise it renders into the project tab #tab-layout
+function _layoutEl(){
+  return document.getElementById(
+    (typeof _libEditingLayoutId!=='undefined' && _libEditingLayoutId)
+      ? 'lib-layout-canvas'
+      : 'tab-layout'
+  );
+}
+
+var _lvZoom = 1;
+function _lvZoomSet(z, mx, my){
+  var newZ = Math.max(0.5, Math.min(4, z));
+  if(newZ === _lvZoom) return;
+  var vp  = document.getElementById('lv-viewport');
+  var img = document.getElementById('lv-img');
+  var lbl = document.getElementById('lv-zoom-lbl');
+  // Anchor: content coordinate currently under the cursor (or viewport centre)
+  var anchorX, anchorY;
+  if(vp){
+    var ax = (mx != null) ? mx : vp.clientWidth  / 2;
+    var ay = (my != null) ? my : vp.clientHeight / 2;
+    anchorX = (vp.scrollLeft + ax) / _lvZoom;
+    anchorY = (vp.scrollTop  + ay) / _lvZoom;
+  }
+  _lvZoom = newZ;
+  if(img) img.style.width = Math.round(newZ * 100) + '%';
+  if(lbl) lbl.textContent = Math.round(newZ * 100) + '%';
+  // Restore the same content point under the cursor
+  if(vp){
+    vp.scrollLeft = anchorX * newZ - ax;
+    vp.scrollTop  = anchorY * newZ - ay;
+  }
+}
+function _lvZoomIn(){ _lvZoomSet(_lvZoom + 0.25); }
+function _lvZoomOut(){ _lvZoomSet(_lvZoom - 0.25); }
 function renderEventLayoutViewer(p){
-  var el=document.getElementById('tab-layout');
+  var el=_layoutEl();
   if(!el) return;
   var exp = p.layoutExport || null;
   var missingSource = false;
@@ -294,6 +497,8 @@ function renderEventLayoutViewer(p){
   var summary = exp && exp.summary ? exp.summary : null;
   var exportedAt = exp && exp.exportedAt ? new Date(exp.exportedAt) : null;
   var dateLabel = exportedAt && !isNaN(exportedAt) ? exportedAt.toLocaleDateString(LANG==='es'?'es-MX':'en-US',{year:'numeric',month:'long',day:'numeric'}) : '';
+
+  var layouts = ensureEventLayouts(p);
 
   if(window.innerWidth <= 768){
     el.style.height = 'auto';
@@ -316,7 +521,47 @@ function renderEventLayoutViewer(p){
         return '<tr><td style="padding:10px 12px;font-weight:600">'+esc(row.type)+'</td><td style="padding:10px 12px;color:var(--muted)">'+esc(row.dimensions)+'</td><td style="padding:10px 12px;text-align:center">'+row.qty+'</td><td style="padding:10px 12px;color:var(--muted)">'+esc(labels)+'</td></tr>';
       }).join('')
     : '<tr><td colspan="4" style="padding:14px 12px;color:var(--muted);text-align:center">'+(LANG==='es'?'No hay elementos en este layout':'No elements in this layout')+'</td></tr>';
-  el.innerHTML = '<div style="max-width:1180px;margin:0 auto;padding:24px;width:100%"><div style="display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start;margin-bottom:20px"><div style="flex:1;min-width:260px"><div style="font-family:Cormorant Garamond,serif;font-size:32px;font-weight:700;margin-bottom:6px">'+esc(exp.layoutName || (LANG==='es'?'Layout exportado':'Exported layout'))+'</div><div style="font-size:13px;color:var(--muted);line-height:1.6">'+(LANG==='es'?'Vista de solo lectura del layout exportado desde la Biblioteca.':'Read-only view of the layout exported from the Library.')+(dateLabel?(' '+(LANG==='es'?'Exportado el ':'Exported on ')+dateLabel+'.'):'')+'</div>'+(missingSource?'<div style="margin-top:12px;padding:10px 12px;border:1px solid rgba(239,68,68,.25);background:rgba(239,68,68,.08);border-radius:10px;font-size:12px;color:var(--danger)">'+(LANG==='es'?'El layout fuente ya no existe en la Biblioteca. Puedes ver esta exportacion, pero no actualizarla.':'The source layout no longer exists in the Library. You can still view this export, but you cannot refresh it.')+'</div>':'')+'</div><div style="display:flex;flex-wrap:wrap;gap:8px">'+(missingSource?'':'<button class="btn btn-ghost" onclick="openEventLayoutInLibrary()">'+(LANG==='es'?'Editar en Biblioteca':'Edit in Library')+'</button>')+'</div></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px"><div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">'+(LANG==='es'?'Mesas':'Tables')+'</div><div style="font-size:24px;font-weight:700">'+((summary&&summary.tables)||0)+'</div></div><div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">'+(LANG==='es'?'Invitados':'Guests')+'</div><div style="font-size:24px;font-weight:700">'+((summary&&summary.guests)||'-')+'</div></div></div><div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;box-shadow:var(--sh-sm);margin-bottom:18px">'+(exp.image?'<img src="'+exp.image+'" alt="'+esc(exp.layoutName||'Layout')+'" style="display:block;width:100%;height:auto;border-radius:14px;border:1px solid var(--border);background:#fff">':'<div style="padding:44px;text-align:center;color:var(--muted)">'+(LANG==='es'?'No se pudo generar la imagen del layout':'Could not generate the layout image')+'</div>')+'</div><div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;box-shadow:var(--sh-sm)"><div style="font-family:Cormorant Garamond,serif;font-size:24px;font-weight:700;margin-bottom:12px">'+(LANG==='es'?'Resumen de Elementos':'Element Summary')+'</div><div style="overflow:auto"><table style="width:100%;border-collapse:collapse"><thead><tr style="background:var(--bg2)"><th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--muted)">'+(LANG==='es'?'Elemento':'Element')+'</th><th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--muted)">'+(LANG==='es'?'Dimensiones':'Dimensions')+'</th><th style="padding:10px 12px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--muted)">'+(LANG==='es'?'Cantidad':'Qty')+'</th><th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--muted)">'+(LANG==='es'?'Etiquetas':'Labels')+'</th></tr></thead><tbody>'+summaryRows+'</tbody></table></div></div></div>';
+  _lvZoom = 1;
+  var isES = LANG==='es';
+  var imgSection = exp.image
+    ? '<div style="display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-bottom:10px">'
+        +'<button class="btn btn-ghost btn-sm" onclick="_lvZoomOut()" title="'+(isES?'Alejar':'Zoom out')+'" style="padding:3px 10px;font-size:17px;line-height:1">−</button>'
+        +'<span id="lv-zoom-lbl" style="font-size:11px;font-weight:700;color:var(--light);min-width:40px;text-align:center;letter-spacing:.04em">100%</span>'
+        +'<button class="btn btn-ghost btn-sm" onclick="_lvZoomIn()" title="'+(isES?'Acercar':'Zoom in')+'" style="padding:3px 10px;font-size:17px;line-height:1">+</button>'
+        +'<button class="btn btn-ghost btn-sm" onclick="_lvZoomSet(1)" style="font-size:11px;padding:3px 9px">'+(isES?'Ajustar':'Fit')+'</button>'
+      +'</div>'
+      +'<div id="lv-viewport" style="overflow:auto;max-height:72vh;border-radius:14px;border:1px solid var(--border);background:#fff;cursor:zoom-in">'
+        +'<img id="lv-img" src="'+exp.image+'" alt="'+esc(exp.layoutName||'Layout')+'" style="display:block;width:100%;height:auto;border-radius:14px">'
+      +'</div>'
+    : '<div style="padding:44px;text-align:center;color:var(--muted)">'+(isES?'No se pudo generar la imagen del layout':'Could not generate the layout image')+'</div>';
+
+  el.innerHTML = '<div style="max-width:1180px;margin:0 auto;padding:24px;width:100%"><div style="display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start;margin-bottom:20px"><div style="flex:1;min-width:260px"><div style="font-family:Cormorant Garamond,serif;font-size:32px;font-weight:700;margin-bottom:6px">'+esc(exp.layoutName || (isES?'Layout exportado':'Exported layout'))+'</div><div style="font-size:13px;color:var(--muted);line-height:1.6">'+(isES?'Vista de solo lectura del layout exportado desde la Biblioteca.':'Read-only view of the layout exported from the Library.')+(dateLabel?(' '+(isES?'Exportado el ':'Exported on ')+dateLabel+'.'):'')+'</div>'+(missingSource?'<div style="margin-top:12px;padding:10px 12px;border:1px solid rgba(239,68,68,.25);background:rgba(239,68,68,.08);border-radius:10px;font-size:12px;color:var(--danger)">'+(isES?'El layout fuente ya no existe en la Biblioteca. Puedes ver esta exportacion, pero no actualizarla.':'The source layout no longer exists in the Library. You can still view this export, but you cannot refresh it.')+'</div>':'')+'</div><div style="display:flex;flex-wrap:wrap;gap:8px">'+(missingSource?'':'<button class="btn btn-ghost" onclick="openEventLayoutInLibrary()">'+(isES?'Editar en Biblioteca':'Edit in Library')+'</button>')+'<div id="ev-layouts-wrap" style="position:relative"><button id="ev-layouts-btn" class="btn btn-ghost" onclick="openEventLayoutsPanel()" style="display:flex;align-items:center;gap:6px"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>'+(isES?'Layouts':'Layouts')+' ('+layouts.length+')</button></div></div></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px"><div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">'+(isES?'Mesas':'Tables')+'</div><div style="font-size:24px;font-weight:700">'+((summary&&summary.tables)||0)+'</div></div><div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">'+(isES?'Invitados':'Guests')+'</div><div style="font-size:24px;font-weight:700">'+((summary&&summary.guests)||'-')+'</div></div></div><div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;box-shadow:var(--sh-sm);margin-bottom:18px">'+imgSection+'</div><div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;box-shadow:var(--sh-sm)"><div style="font-family:Cormorant Garamond,serif;font-size:24px;font-weight:700;margin-bottom:12px">'+(isES?'Resumen de Elementos':'Element Summary')+'</div><div style="overflow:auto"><table style="width:100%;border-collapse:collapse"><thead><tr style="background:var(--bg2)"><th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--muted)">'+(isES?'Elemento':'Element')+'</th><th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--muted)">'+(isES?'Dimensiones':'Dimensions')+'</th><th style="padding:10px 12px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--muted)">'+(isES?'Cantidad':'Qty')+'</th><th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--muted)">'+(isES?'Etiquetas':'Labels')+'</th></tr></thead><tbody>'+summaryRows+'</tbody></table></div></div></div>';
+
+  var lv = document.getElementById('lv-viewport');
+  if(lv){
+    lv.addEventListener('wheel', function(e){
+      e.preventDefault();
+      var rect = lv.getBoundingClientRect();
+      _lvZoomSet(_lvZoom + (e.deltaY < 0 ? 0.25 : -0.25), e.clientX - rect.left, e.clientY - rect.top);
+    }, {passive:false});
+    // Right-click drag to pan
+    var _lvPan = null;
+    lv.addEventListener('mousedown', function(e){
+      if(e.button !== 2) return;
+      _lvPan = {x: e.clientX, y: e.clientY, sl: lv.scrollLeft, st: lv.scrollTop};
+      lv.style.cursor = 'grabbing';
+      e.preventDefault();
+    });
+    lv.addEventListener('mousemove', function(e){
+      if(!_lvPan) return;
+      lv.scrollLeft = _lvPan.sl - (e.clientX - _lvPan.x);
+      lv.scrollTop  = _lvPan.st - (e.clientY - _lvPan.y);
+    });
+    var _lvPanEnd = function(){ _lvPan = null; lv.style.cursor = 'zoom-in'; };
+    lv.addEventListener('mouseup',    _lvPanEnd);
+    lv.addEventListener('mouseleave', _lvPanEnd);
+    lv.addEventListener('contextmenu', function(e){ if(_lvPan !== null || e.button === 2) e.preventDefault(); });
+  }
 }
 
 function ensureEventLayoutExport(p){
@@ -346,7 +591,9 @@ function ensureEventLayoutFresh(p){
   var libEntry = getLib().layouts.find(function(entry){ return entry.id===p.layoutExport.layoutId; });
   if(!libEntry) return Promise.resolve(p.layoutExport);
   var sourceVersion = libEntry.updatedAt || libEntry.date || '';
-  if((p.layoutExport.libraryVersion || '') === sourceVersion) return Promise.resolve(p.layoutExport);
+  // Skip refresh only if version matches AND the snapshot image is present.
+  // The image is stripped before saving to Convex (to reduce size) and must be regenerated on load.
+  if((p.layoutExport.libraryVersion || '') === sourceVersion && p.layoutExport.image) return Promise.resolve(p.layoutExport);
   if(_layoutRefreshPending[p.id]) return _layoutRefreshPending[p.id];
   _layoutRefreshPending[p.id] = libApplyLayoutExportToEvent(libEntry.id, p.id, {toastSuccess:false}).then(function(exp){
     delete _layoutRefreshPending[p.id];
@@ -383,7 +630,10 @@ function saveLayoutData(){
     if(entry){
       entry.items=JSON.parse(JSON.stringify(LState.items));
       var fpCopy=JSON.parse(JSON.stringify(LState.floorplan));
-      if(fpCopy.img && fpCopy.img!=='__idb__'){
+      if(fpCopy._storageId){
+        fpCopy.img='__stored__';
+        delete fpCopy.thumb;
+      } else if(fpCopy.img && fpCopy.img!=='__idb__' && fpCopy.img!=='__stored__'){
         var fpKey=fpCopy._idb||('libfp_'+_libEditingLayoutId+'_'+Date.now());
         if(typeof _fpSave==='function') _fpSave(fpKey,fpCopy.img).catch(function(){});
         if(!fpCopy.thumb) fpCopy.thumb=fpCopy.img;
@@ -412,6 +662,32 @@ var LDragOffset={};
 var _canvasPad=2000;
 var _layoutQuoteCollapsed=true;
 
+function openLayoutImportModal(){
+  var lib=getLib();
+  var isES=LANG==='es';
+  if(!lib.layouts.length){
+    toast(isES?'No hay planos guardados en la biblioteca todavía':'No layouts saved in the library yet','e');
+    return;
+  }
+  openMo('<div class="mo-title">'+(isES?'Importar Layout':'Import Layout')+'</div>'
+    +'<p class="s-hint">'+(isES
+      ?'Selecciona un plano para cargarlo en este evento. Esto reemplazará el diseño actual.'
+      :'Select a layout to load into this event. This will replace the current layout.')+'</p>'
+    +'<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:4px;max-height:55vh;overflow-y:auto">'
+    +lib.layouts.map(function(e){
+      var tables=e.items.filter(function(i){return i.shape&&i.shape.includes('table');}).length;
+      var seats=e.items.reduce(function(s,i){return s+(i.chairs||0);},0);
+      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;gap:10px">'
+        +'<div style="min-width:0">'
+          +'<div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(e.name)+'</div>'
+          +'<div class="s-sm">'+tables+' '+(isES?'mesas':'tables')+' · '+seats+' '+(isES?'asientos':'seats')+(e.date?' · '+esc(e.date):'')+'</div>'
+        +'</div>'
+        +'<button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="closeMo();_doLibLoadLayout(\''+e.id+'\')">'+t('lib_load_btn')+'</button>'
+      +'</div>';
+    }).join('')
+    +'</div>'
+    +'<div class="mo-foot"><button class="btn btn-ghost" onclick="closeMo()">'+t('cancel')+'</button></div>');
+}
 function renderLayout(){
   var _savedScroll={x:0,y:0};
   var _outerBefore=document.getElementById('lcanvas-outer');
@@ -419,19 +695,26 @@ function renderLayout(){
   if(_outerBefore){_savedScroll.x=_outerBefore.scrollLeft;_savedScroll.y=_outerBefore.scrollTop;}
   const p=proj();
   if(!p){
-    var _noProj=document.getElementById('tab-layout');
+    var _noProj=_layoutEl();
     if(_noProj) _noProj.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:60vh;flex-direction:column;gap:16px"><div style="font-family:Cormorant Garamond,serif;font-size:24px;font-weight:700;color:var(--muted)">'+(LANG==='es'?'Selecciona un proyecto primero':'Select a project first')+'</div></div>';
+    return;
+  }
   if(isEventLayoutViewOnly(p)){
+    // Sync p.layoutExport from the active eventLayouts entry (after reload, active may differ)
+    if(p.eventLayouts && p.eventLayouts.length){
+      var _activeEl = p.eventLayouts.find(function(e){ return e.active; }) || p.eventLayouts[0];
+      if(_activeEl && _activeEl.layoutExport) p.layoutExport = _activeEl.layoutExport;
+    }
     var needsMigration = !p.layoutExport && p.layoutItems && p.layoutItems.length;
     var needsRefresh = false;
     if(p.layoutExport && p.layoutExport.layoutId && typeof getLib==='function'){
       var currentLibEntry = getLib().layouts.find(function(entry){ return entry.id===p.layoutExport.layoutId; });
       var currentSourceVersion = currentLibEntry ? (currentLibEntry.updatedAt || currentLibEntry.date || '') : '';
-      needsRefresh = !!(_layoutRefreshPending[p.id] || (currentLibEntry && (p.layoutExport.libraryVersion || '') !== currentSourceVersion));
+      needsRefresh = !!(_layoutRefreshPending[p.id] || (currentLibEntry && ((p.layoutExport.libraryVersion || '') !== currentSourceVersion || !p.layoutExport.image)));
     }
     if(needsMigration || needsRefresh){
       ensureEventLayoutFresh(p);
-      var migratingEl=document.getElementById('tab-layout');
+      var migratingEl=_layoutEl();
       if(migratingEl){
         var syncTitle = needsRefresh
           ? (LANG==='es'?'Actualizando layout del evento':'Updating event layout')
@@ -446,17 +729,41 @@ function renderLayout(){
     renderEventLayoutViewer(p);
     return;
   }
-    return;
-  }
   LState.items=p.layoutItems||[];
   ensureLayoutQuoteState(p);
   syncLayoutStyles(p);
+  // Reset undo history when the project context changes (different event or library layout)
+  if(p.id !== _LHistoryContextId){
+    lHistoryReset();
+    _LHistoryContextId = p.id;
+  }
   if(LHistorySaving&&LHistory.length===0) lHistorySave();
   LSHAPES=getLSHAPES();
   var defaultFloorplan={img:null,opacity:0.4,scale:1,x:0,y:0,w:0,h:0,locked:false,rotation:0};
-  var _hasFPInMemory=LState.floorplan&&LState.floorplan.img&&LState.floorplan.img!=='__idb__';
+  var _hasFPInMemory=LState.floorplan&&LState.floorplan.img&&LState.floorplan.img!=='__idb__'&&LState.floorplan.img!=='__stored__';
 
-  if(p.floorplan&&p.floorplan.img==='__idb__'&&p.floorplan._idb){
+  if(p.floorplan&&p.floorplan.img==='__stored__'&&p.floorplan._storageId){
+    // Convex file storage: try IndexedDB cache first, then resolve from Convex
+    if(_hasFPInMemory&&LState.floorplan._storageId===p.floorplan._storageId){
+      LState.floorplan=Object.assign(defaultFloorplan,p.floorplan,{img:LState.floorplan.img,_storageId:p.floorplan._storageId});
+    } else {
+      LState.floorplan=Object.assign(defaultFloorplan,p.floorplan,{img:null});
+      var _fpIdbKey=p.floorplan._idb;
+      var _fpSid=p.floorplan._storageId;
+      (function loadFP(){
+        if(_fpIdbKey){
+          _fpLoad(_fpIdbKey).then(function(data){
+            if(data){LState.floorplan.img=data;renderLayoutCanvas();}
+            else return EVENTOS_DATA.getFileUrl(_fpSid).then(function(url){if(url){LState.floorplan.img=url;renderLayoutCanvas();}});
+          }).catch(function(){
+            EVENTOS_DATA.getFileUrl(_fpSid).then(function(url){if(url){LState.floorplan.img=url;renderLayoutCanvas();}}).catch(function(){});
+          });
+        } else {
+          EVENTOS_DATA.getFileUrl(_fpSid).then(function(url){if(url){LState.floorplan.img=url;renderLayoutCanvas();}}).catch(function(){});
+        }
+      })();
+    }
+  } else if(p.floorplan&&p.floorplan.img==='__idb__'&&p.floorplan._idb){
     if(_hasFPInMemory&&LState.floorplan._idb===p.floorplan._idb){
       LState.floorplan=Object.assign(defaultFloorplan,p.floorplan,{img:LState.floorplan.img,_idb:p.floorplan._idb});
     } else {
@@ -465,7 +772,7 @@ function renderLayout(){
         if(data){LState.floorplan.img=data;LState.floorplan._idb=p.floorplan._idb;renderLayoutCanvas();}
       }).catch(function(){});
     }
-  } else if(p.floorplan&&p.floorplan.img&&p.floorplan.img!=='__idb__'){
+  } else if(p.floorplan&&p.floorplan.img&&p.floorplan.img!=='__idb__'&&p.floorplan.img!=='__stored__'){
     LState.floorplan=Object.assign(defaultFloorplan,p.floorplan);
   } else if(p.floorplan){
     LState.floorplan=Object.assign(defaultFloorplan,p.floorplan);
@@ -474,7 +781,7 @@ function renderLayout(){
   }
   if(typeof _measureLines==='undefined')window._measureLines=[];
   if(typeof _measurePoints==='undefined')window._measurePoints=[];
-  const el=document.getElementById('tab-layout');
+  const el=_layoutEl();
   if(!el) return;
   if(el.classList.contains('hidden')) return;
   if(window.innerWidth <= 768){
@@ -488,7 +795,7 @@ function renderLayout(){
   }
   var _isEmptyEventLayout = (!LState.items.length && !LState.floorplan.img && !(typeof _libEditingLayoutId!=='undefined' && _libEditingLayoutId));
   if(_isEmptyEventLayout){
-    el.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;min-height:60vh;padding:24px"><div style="max-width:520px;width:100%;text-align:center;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:36px 28px;box-shadow:0 18px 44px rgba(0,0,0,.08)"><div style="width:76px;height:76px;border-radius:50%;background:var(--gold-l);display:flex;align-items:center;justify-content:center;margin:0 auto 22px"><svg width="34" height="34" fill="none" stroke="var(--gold-h)" stroke-width="1.7" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div><div style="font-family:Cormorant Garamond,serif;font-size:30px;font-weight:700;margin-bottom:10px">'+(LANG==='es'?'Crea tu primer layout':'Create your first layout')+'</div><div style="color:var(--muted);font-size:14px;line-height:1.6;max-width:420px;margin:0 auto 24px">'+(LANG==='es'?'Empieza desde cero o importa un layout guardado de tu biblioteca para este evento.':'Start from scratch or import a saved library layout into this event.')+'</div><div style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap"><button class="btn btn-primary" style="padding:14px 26px;font-size:14px;font-weight:700" onclick="openLayoutLibraryAndCreate()">+ '+(LANG==='es'?'Crear primer layout':'Create First Layout')+'</button><button class="btn btn-ghost" style="padding:14px 22px;font-size:14px;font-weight:700" onclick="libQuickLoadLayout()">'+(LANG==='es'?'Importa tu layout':'Import your layout')+'</button></div></div></div>';
+    el.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;min-height:60vh;padding:24px"><div style="max-width:520px;width:100%;text-align:center;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:36px 28px;box-shadow:0 18px 44px rgba(0,0,0,.08)"><div style="width:76px;height:76px;border-radius:50%;background:var(--gold-l);display:flex;align-items:center;justify-content:center;margin:0 auto 22px"><svg width="34" height="34" fill="none" stroke="var(--gold-h)" stroke-width="1.7" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div><div style="font-family:Cormorant Garamond,serif;font-size:30px;font-weight:700;margin-bottom:10px">'+(LANG==='es'?'Crea tu primer layout':'Create your first layout')+'</div><div style="color:var(--muted);font-size:14px;line-height:1.6;max-width:420px;margin:0 auto 24px">'+(LANG==='es'?'Empieza desde cero o importa un layout guardado de tu biblioteca para este evento.':'Start from scratch or import a saved library layout into this event.')+'</div><div style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap"><button class="btn btn-primary" style="padding:14px 26px;font-size:14px;font-weight:700" onclick="openLayoutLibraryAndCreate()">+ '+(LANG==='es'?'Crear primer layout':'Create First Layout')+'</button><button class="btn btn-ghost" style="padding:14px 22px;font-size:14px;font-weight:700" onclick="openLayoutImportModal()">'+(LANG==='es'?'Importa tu layout':'Import your layout')+'</button></div></div></div>';
     return;
   }
   el.innerHTML=`
@@ -502,20 +809,24 @@ function renderLayout(){
       <div class="layout-toolbar">
         <div style="position:relative">
           <button id="add-element-trigger" class="btn btn-ghost btn-sm" onclick="toggleAddElementMenu()" style="height:28px;padding:0 10px;font-size:12px;white-space:nowrap">+ ${LANG==='es'?'Agregar elemento':'Add element'}</button>
-          <div id="add-element-menu" style="display:none;position:absolute;left:0;top:calc(100% + 6px);min-width:190px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px;box-shadow:0 12px 24px rgba(0,0,0,0.12);z-index:50">
+          <div id="add-element-menu" style="display:none;position:absolute;left:0;top:calc(100% + 6px);min-width:200px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px;box-shadow:0 12px 24px rgba(0,0,0,0.12);z-index:50">
             <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start;padding:8px 10px;font-size:12px" onclick="selectAddElement('table')">${LANG==='es'?'Mesa':'Table'}</button>
             <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start;padding:8px 10px;font-size:12px" onclick="selectAddElement('event-element')">${LANG==='es'?'Elemento de evento':'Event element'}</button>
             <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start;padding:8px 10px;font-size:12px" onclick="selectAddElement('floorplan')">${LState.floorplan.img?(LANG==='es'?'Reemplazar plano':'Replace floorplan'):(LANG==='es'?'Plano de piso':'Floorplan image')}</button>
+            <div style="height:1px;background:var(--border);margin:6px 2px"></div>
+            <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start;padding:8px 10px;font-size:12px;color:var(--muted)" onclick="openChairEditor()">${LANG==='es'?'Gestionar sillas':'Manage chairs'}</button>
+            <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start;padding:8px 10px;font-size:12px;color:var(--muted)" onclick="openCenterpieceEditor()">${LANG==='es'?'Gestionar centros de mesa':'Manage centerpieces'}</button>
           </div>
         </div>
-        <div class="zoom-bar">
+        <div id="layout-zoom-bar" class="zoom-bar">
           <button class="zoom-btn" onclick="lZoom(-0.1)">-</button>
           <span style="font-size:12px;font-weight:600;min-width:45px;text-align:center">${Math.round(LState.zoom*100)}%</span>
           <button class="zoom-btn" onclick="lZoom(0.1)">+</button>
         </div>
         <div style="width:1px;height:24px;background:var(--border)"></div>
-        <button title="Zoom to fit" onclick="lZoom(0,'fit')" style="width:28px;height:28px;border:1px solid var(--border);background:transparent;border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:var(--tr)" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)';this.style.borderColor='var(--gold)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)';this.style.borderColor='var(--border)'"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3h6M3 3v6M21 3h-6M21 3v6M3 21h6M3 21v-6M21 21h-6M21 21v-6"/></svg></button>
-        <button title="Zoom to selected" onclick="lZoom(0,'sel')" style="width:28px;height:28px;border:1px solid var(--border);background:transparent;border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:var(--tr)" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)';this.style.borderColor='var(--gold)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)';this.style.borderColor='var(--border)'"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="4 2"/><path d="M8 8h8M8 12h8M8 16h5"/><circle cx="18" cy="18" r="3" fill="currentColor" stroke="none"/></svg></button>
+        <button id="lbtn-zoom-fit" title="Zoom to fit" onclick="lZoom(0,'fit')" style="width:28px;height:28px;border:1px solid var(--border);background:transparent;border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:var(--tr)" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)';this.style.borderColor='var(--gold)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)';this.style.borderColor='var(--border)'"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3h6M3 3v6M21 3h-6M21 3v6M3 21h6M3 21v-6M21 21h-6M21 21v-6"/></svg></button>
+        <button id="lbtn-zoom-sel" title="Zoom to selected" onclick="lZoom(0,'sel')" style="width:28px;height:28px;border:1px solid var(--border);background:transparent;border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:var(--tr)" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)';this.style.borderColor='var(--gold)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)';this.style.borderColor='var(--border)'"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="4 2"/><path d="M8 8h8M8 12h8M8 16h5"/><circle cx="18" cy="18" r="3" fill="currentColor" stroke="none"/></svg></button>
+        <button id="lbtn-measure" title="${LANG==='es'?'Medir distancias':'Measure distances'}" onclick="toggleMeasureMode()" style="width:28px;height:28px;border:1px solid ${LState.measureMode?'var(--gold)':'var(--border)'};background:${LState.measureMode?'var(--gold-l)':'transparent'};border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:${LState.measureMode?'var(--gold-h)':'var(--muted)'};transition:var(--tr)" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)';this.style.borderColor='var(--gold)'" onmouseout="if(!LState.measureMode){this.style.background='transparent';this.style.color='var(--muted)';this.style.borderColor='var(--border)'}"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M2 2l20 20M6 2v4M2 6h4M18 22v-4M22 18h-4"/></svg></button>${_measureLines.length?`<button title="${LANG==='es'?'Borrar mediciones':'Clear measurements'}" onclick="clearMeasurements()" style="width:28px;height:28px;border:1px solid var(--border);background:transparent;border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--danger);transition:var(--tr)" onmouseover="this.style.background='rgba(220,53,69,.08)';this.style.borderColor='var(--danger)'" onmouseout="this.style.background='transparent';this.style.borderColor='var(--border)'"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`:''}
         <div style="width:1px;height:24px;background:var(--border)"></div>
         <span style="font-size:12px;color:var(--muted)">
           ${LState.items.length} ${t('items_count')} |
@@ -526,18 +837,16 @@ function renderLayout(){
         </span>
         <div style="flex:1"></div>
         ${(()=>{const q=getLayoutQuoteSummary(LState.items, ensureLayoutQuoteState(p));return (q.total>0||q.extraRows.length)?`<div id="layout-quote-total-pill" style="background:var(--gold-l);border:1px solid rgba(201,168,76,.3);border-radius:20px;padding:4px 14px;font-size:12px;font-weight:600;color:var(--gold-h);cursor:pointer" onclick="showLayoutBudget()" title="${t('layout_quote_open')}">${t('layout_quote_title')}: ${formatCost(q.total)}</div>`:'';})()}
-        <button onclick="LState.useSnap=!LState.useSnap;renderLayoutUI()" title="Toggle snap to grid"
+        <button id="lbtn-snap" onclick="LState.useSnap=!LState.useSnap;renderLayoutUI()" title="Toggle snap to grid"
           style="height:28px;padding:0 10px;border:1px solid ${LState.useSnap?'var(--gold)':'var(--border)'};background:${LState.useSnap?'var(--gold-l)':'transparent'};border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;color:${LState.useSnap?'var(--gold-h)':'var(--muted)'};transition:var(--tr);white-space:nowrap"
           onmouseover="this.style.borderColor='var(--gold)'" onmouseout="if(!LState.useSnap)this.style.borderColor='var(--border)'">
           <span style="display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M1 3.5h10M1 6h10M1 8.5h10M3.5 1v10M6 1v10M8.5 1v10"/></svg>${LState.useSnap?'Snap ON':'Snap OFF'}</span>
         </button>
         ${LState.floorplan.img?`
-        <div style="display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:4px 8px;flex-wrap:wrap">
+        <div id="lbtn-floorplan" style="display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:4px 8px;flex-wrap:wrap">
           <span style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em">${LANG==='es'?'Plano':'Floorplan'}</span>
           ${LState.scaleMode?`
-          <span style="font-size:11px;color:var(--muted)">${LANG==='es'?'Marca A y B en el plano':'Pick A and B on the floorplan'}</span>
-          <input id="scale-dist" type="number" step="0.1" min="0.1" placeholder="m" style="width:72px;height:28px;border:1px solid var(--border);border-radius:5px;background:var(--bg2);color:var(--text);font-size:12px;text-align:center;padding:0 6px" onclick="event.stopPropagation()">
-          <button class="btn btn-primary btn-sm" onclick="applyScaleCalibration()">${LANG==='es'?'Aplicar':'Apply'}</button>
+          <span style="font-size:12px;color:var(--gold-h);font-weight:600;display:flex;align-items:center;gap:5px"><svg width="8" height="8" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="currentColor"/></svg>${LANG==='es'?'Calibrando escala…':'Calibrating scale…'}</span>
           <button class="btn btn-ghost btn-sm" onclick="cancelScaleMode()">${LANG==='es'?'Cancelar':'Cancel'}</button>
           `:`
           <button class="btn btn-ghost btn-sm" onclick="triggerFloorplanUpload()">${LANG==='es'?'Cambiar imagen':'Change image'}</button>
@@ -551,13 +860,13 @@ function renderLayout(){
           <button class="btn btn-ghost btn-sm" onclick="removeFloorplan()" style="color:var(--danger)">${LANG==='es'?'Quitar':'Remove'}</button>
           `}
         </div>`:''}
-        <div style="display:flex;align-items:center;gap:3px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:4px 8px;opacity:1;gap:5px">
+        <div id="lbtn-font" style="display:flex;align-items:center;gap:3px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:4px 8px;opacity:1;gap:5px">
           <span style="font-size:10px;color:var(--muted);margin-right:2px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Aa</span>
           <button title="Decrease font size" onclick="changeFontSize(-1)" style="width:28px;height:28px;border:none;background:transparent;cursor:pointer;border-radius:4px;font-size:18px;color:var(--muted);line-height:1" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'">-</button>
           <span style="font-size:11px;color:var(--muted);min-width:44px;text-align:center"><input id="toolbar-font-size" type="number" min="5" max="99" style="width:44px;font-size:12px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:2px 4px;background:var(--bg);color:var(--text)" placeholder="--" oninput="setFontSizeDirect(+this.value)" onkeydown="if(event.key==='Enter')this.blur();event.stopPropagation();" onclick="event.stopPropagation()"></span>
           <button title="Increase font size" onclick="changeFontSize(1)" style="width:28px;height:28px;border:none;background:transparent;cursor:pointer;border-radius:4px;font-size:18px;color:var(--muted);line-height:1" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'">+</button>
         </div>
-        <div style="display:flex;align-items:center;gap:3px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:3px 6px;opacity:1">
+        <div id="lbtn-align" style="display:flex;align-items:center;gap:3px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:3px 6px;opacity:1">
           <span style="font-size:10px;color:var(--muted);margin-right:3px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">${t('align')}</span>
           <button title="Align Left" onclick="alignSelected('left')" class="s-ibtn" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 6h16M4 12h10M4 18h13"/><line x1="2" y1="4" x2="2" y2="20" stroke-width="2.5"/></svg></button>
           <button title="Center Horizontally" onclick="alignSelected('cx')" class="s-ibtn" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M8 6h8M5 12h14M7 18h10"/><line x1="12" y1="2" x2="12" y2="22" stroke-width="2.5" stroke-dasharray="2 2"/></svg></button>
@@ -570,12 +879,12 @@ function renderLayout(){
           <button title="Distribute Horizontally" onclick="alignSelected('dist-h')" class="s-ibtn" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="1" y="6" width="5" height="12" rx="1"/><rect x="9.5" y="8" width="5" height="8" rx="1"/><rect x="18" y="5" width="5" height="14" rx="1"/><line x1="3.5" y1="3" x2="3.5" y2="21" stroke-dasharray="2 2" stroke-width="1.2"/><line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="2 2" stroke-width="1.2"/><line x1="20.5" y1="3" x2="20.5" y2="21" stroke-dasharray="2 2" stroke-width="1.2"/></svg></button>
           <button title="Distribute Vertically" onclick="alignSelected('dist-v')" class="s-ibtn" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="6" y="1" width="12" height="5" rx="1"/><rect x="8" y="9.5" width="8" height="5" rx="1"/><rect x="5" y="18" width="14" height="5" rx="1"/><line x1="3" y1="3.5" x2="21" y2="3.5" stroke-dasharray="2 2" stroke-width="1.2"/><line x1="3" y1="12" x2="21" y2="12" stroke-dasharray="2 2" stroke-width="1.2"/><line x1="3" y1="20.5" x2="21" y2="20.5" stroke-dasharray="2 2" stroke-width="1.2"/></svg></button>
         </div>
-        <div style="display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:4px 8px;opacity:1">
+        <div id="lbtn-rotate" style="display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:4px 8px;opacity:1">
           <button title="Rotate counterclockwise" onclick="doRotate(-getRotateStep())" style="width:32px;height:32px;border:none;background:transparent;cursor:pointer;border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--muted)" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 10H4V5"/><path d="M20 11a8 8 0 1 0-2.34 5.66L20 14"/></svg></button>
           <input id="rotate-step" type="number" value="90" min="1" step="1" style="width:54px;height:30px;border:1px solid var(--border);border-radius:5px;background:var(--bg2);color:var(--text);font-size:12px;text-align:center;padding:0 4px" title="Degrees per rotation step" onclick="event.stopPropagation()">
           <button title="Rotate clockwise" onclick="doRotate(getRotateStep())" style="width:32px;height:32px;border:none;background:transparent;cursor:pointer;border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--muted)" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 10h5V5"/><path d="M4 11a8 8 0 1 1 2.34 5.66L4 14"/></svg></button>
         </div>
-        <button class="btn btn-ghost btn-sm" onclick="exportLayoutFull()">${t('export')}</button>
+        <button id="lbtn-export" class="btn btn-ghost btn-sm" onclick="exportLayoutFull()">${t('export')}</button>
       </div>
       ${renderLayoutQuoteWorkspace(p)}
       <!-- Canvas -->
@@ -614,7 +923,7 @@ function renderLayout(){
               <div style="font-family:Cormorant Garamond,serif;font-size:22px;font-weight:700;color:var(--muted);margin-bottom:16px">${t("create_general_layout")||"Start your layout"}</div>
               <div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap">
                 <button class="btn btn-primary" style="padding:14px 28px;font-size:14px;font-weight:700" onclick="openLayoutLibraryAndCreate()">+ ${t("create_general_layout")||"Create General Layout"}</button>
-                <button class="btn btn-ghost" style="padding:14px 22px;font-size:14px;font-weight:700" onclick="libQuickLoadLayout()">${LANG==="es"?"Importa tu layout":"Import your layout"}</button>
+                <button class="btn btn-ghost" style="padding:14px 22px;font-size:14px;font-weight:700" onclick="openLayoutImportModal()">${LANG==="es"?"Importa tu layout":"Import your layout"}</button>
               </div>
               <div style="font-size:12px;color:var(--light);margin-top:10px">${LANG==="es"?"O arrastra elementos desde el panel izquierdo":"Or drag elements from the left panel"}</div>
             </div>`:''}
@@ -631,10 +940,23 @@ function renderLayout(){
             ${_measurePoints.length===1?`
               <circle cx="${_measurePoints[0].x}" cy="${_measurePoints[0].y}" r="6" fill="#f59e0b" stroke="#fff" stroke-width="2"/>
               <line id="measure-preview" x1="${_measurePoints[0].x}" y1="${_measurePoints[0].y}" x2="${_measurePoints[0].x}" y2="${_measurePoints[0].y}" stroke="#f59e0b" stroke-width="2" stroke-dasharray="6 3"/>
-              <text id="measure-preview-label" x="${_measurePoints[0].x}" y="${_measurePoints[0].y-10}" fill="#f59e0b" font-size="12" font-weight="700" text-anchor="middle" font-family="monospace">ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦</text>
+              <text id="measure-preview-label" x="${_measurePoints[0].x}" y="${_measurePoints[0].y-10}" fill="#f59e0b" font-size="12" font-weight="700" text-anchor="middle" font-family="monospace">...</text>
             `:''}
           </svg>
         </div>
+      ${LState.scaleMode?`<div id="scale-wizard" onmousedown="event.stopPropagation()" onclick="event.stopPropagation()" style="position:fixed;top:130px;left:50%;transform:translateX(-50%);z-index:500;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px 22px;box-shadow:var(--sh-md);min-width:300px;max-width:400px;pointer-events:all">
+        <div style="display:flex;align-items:center;gap:4px;margin-bottom:16px">
+          <div style="width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;${LState.scalePoints.length===0?'background:var(--gold-h);color:#fff':'background:var(--gold-l);color:var(--gold-h);border:2px solid var(--gold-h)'}">${LState.scalePoints.length>0?'✓':'A'}</div>
+          <div style="flex:1;height:1px;background:${LState.scalePoints.length>0?'var(--gold-h)':'var(--border)'}"></div>
+          <div style="width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;${LState.scalePoints.length===1?'background:var(--gold-h);color:#fff':LState.scalePoints.length>1?'background:var(--gold-l);color:var(--gold-h);border:2px solid var(--gold-h)':'background:var(--bg2);color:var(--muted);border:2px solid var(--border)'}">${LState.scalePoints.length>1?'✓':'B'}</div>
+          <div style="flex:1;height:1px;background:${LState.scalePoints.length>1?'var(--gold-h)':'var(--border)'}"></div>
+          <div style="width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;${LState.scalePoints.length===2?'background:var(--gold-h);color:#fff':'background:var(--bg2);color:var(--muted);border:2px solid var(--border)'}">m</div>
+        </div>
+        ${LState.scalePoints.length===0?`<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div style="width:36px;height:36px;border-radius:50%;background:rgba(245,158,11,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="7"/><line x1="12" y1="17" x2="12" y2="22"/><line x1="2" y1="12" x2="7" y2="12"/><line x1="17" y1="12" x2="22" y2="12"/></svg></div><div><div style="font-weight:700;font-size:14px">${LANG==='es'?'Haz clic en el punto A':'Click point A'}</div><div style="font-size:12px;color:var(--muted);margin-top:2px">${LANG==='es'?'Elige un extremo de una distancia conocida en el plano':'Pick one end of a known distance on the floorplan'}</div></div></div>`:''}
+        ${LState.scalePoints.length===1?`<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div style="width:36px;height:36px;border-radius:50%;background:rgba(16,185,129,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="7"/><line x1="12" y1="17" x2="12" y2="22"/><line x1="2" y1="12" x2="7" y2="12"/><line x1="17" y1="12" x2="22" y2="12"/></svg></div><div><div style="font-weight:700;font-size:14px">${LANG==='es'?'Haz clic en el punto B':'Click point B'}</div><div style="font-size:12px;color:var(--muted);margin-top:2px">${LANG==='es'?'Elige el otro extremo de la misma distancia':'Pick the other end of the same distance'}</div></div></div>`:''}
+        ${LState.scalePoints.length>=2?`<div style="margin-bottom:14px"><div style="font-weight:700;font-size:14px;margin-bottom:3px">${LANG==='es'?'Ingresa la distancia real':'Enter real-world distance'}</div><div style="font-size:12px;color:var(--muted);margin-bottom:10px">${LANG==='es'?'¿Cuántos metros hay entre A y B en la realidad?':'How many meters apart are A and B in real life?'}</div><div style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:var(--bg2);border-radius:8px;font-size:11px;color:var(--muted);margin-bottom:12px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5"><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="8" x2="4" y2="16"/><line x1="20" y1="8" x2="20" y2="16"/></svg>${Math.round(Math.hypot(LState.scalePoints[1].x-LState.scalePoints[0].x,LState.scalePoints[1].y-LState.scalePoints[0].y))} px ${LANG==='es'?'medidos':'measured'}</div><div style="display:flex;align-items:center;gap:8px"><input id="scale-dist" type="number" step="0.1" min="0.1" placeholder="0.00" style="width:88px;height:34px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text);font-size:14px;text-align:center;padding:0 8px" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter'){applyScaleCalibration();}event.stopPropagation();"><span style="font-size:13px;color:var(--muted);font-weight:600">m</span><button class="btn btn-primary btn-sm" onclick="applyScaleCalibration()" style="flex:1">${LANG==='es'?'Aplicar':'Apply'}</button></div></div>`:''}
+        <button class="btn btn-ghost btn-sm" onclick="cancelScaleMode()" style="width:100%;justify-content:center;margin-top:2px">${LANG==='es'?'Cancelar':'Cancel'}</button>
+      </div>`:''}
       </div>
       <div style="padding:5px 16px;background:var(--card);border-top:1px solid var(--border);font-size:10.5px;color:var(--muted);display:flex;gap:16px;align-items:center;flex-wrap:wrap">
         <span>${t('scroll_zoom')}</span>
@@ -780,8 +1102,7 @@ function renderLayoutQuoteWorkspace(p){
           <div style="font-size:12px;color:var(--muted)">${t('layout_quote_sub')}</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-ghost btn-sm" onclick="toggleLayoutQuoteWorkspace()">${_layoutQuoteCollapsed?t('layout_quote_show'):t('layout_quote_hide')}</button>
-          
+          <button id="lbtn-quote-toggle" class="btn btn-ghost btn-sm" onclick="toggleLayoutQuoteWorkspace()">${_layoutQuoteCollapsed?t('layout_quote_show'):t('layout_quote_hide')}</button>
         </div>
       </div>
       <div style="${hiddenBody}">
@@ -814,21 +1135,32 @@ function renderLayoutQuoteWorkspace(p){
 
 function renderLayoutQuoteAutoTable(quote){
   if(!quote.autoRows.length) return '';
+  var isES=LANG==='es';
   var rows=quote.autoRows.map(function(row){
+    var chairDef=CHAIR_TYPES[row.chairType]||CHAIR_TYPES['default']||{costPerChair:0};
+    var cpDef=CENTERPIECE_TYPES[row.centerpieceKey]||{cost:0};
     var chairOpts=Object.keys(CHAIR_TYPES).map(function(key){
       return '<option value="'+key+'"'+(row.chairType===key?' selected':'')+'>'+esc(CHAIR_TYPES[key].label)+'</option>';
     }).join('');
     var cpOpts=Object.keys(CENTERPIECE_TYPES).map(function(key){
       return '<option value="'+key+'"'+(row.centerpieceKey===key?' selected':'')+'>'+esc(CENTERPIECE_TYPES[key].label)+'</option>';
     }).join('');
+    var chairPriceCell=row.isTable&&row.chairsPerUnit>0
+      ? '<input class="input" type="number" min="0" step="0.01" value="'+(chairDef.costPerChair||0)+'" style="font-size:11px;padding:5px 6px;width:80px" title="'+(isES?'Precio por silla':'Price per chair')+'" onchange="lQuoteUpdateChairTypeCost(\''+row.chairType+'\',this.value)">'
+      : '<span style="font-size:11px;color:var(--muted)">-</span>';
+    var cpPriceCell=row.isTable&&row.centerpieceKey!=='none'
+      ? '<input class="input" type="number" min="0" step="0.01" value="'+(cpDef.cost||0)+'" style="font-size:11px;padding:5px 6px;width:80px" title="'+(isES?'Precio por centro':'Price per piece')+'" onchange="lQuoteUpdateCenterpieceTypeCost(\''+row.centerpieceKey+'\',this.value)">'
+      : '<span style="font-size:11px;color:var(--muted)">-</span>';
     return '<tr style="border-bottom:1px solid var(--bg2)">'+
       '<td style="padding:9px 10px;font-size:12px;font-weight:600">'+esc(row.label)+'</td>'+
       '<td style="padding:9px 10px;text-align:center;font-size:12px">'+row.qty+'</td>'+
       '<td style="padding:6px 8px">'+(row.isTable?'<select class="input" style="font-size:11px;padding:5px 6px" onchange="lQuoteUpdateGroupChairType(\''+row.key+'\',this.value)">'+chairOpts+'</select>':'<span style="font-size:11px;color:var(--muted)">-</span>')+'</td>'+
       '<td style="padding:6px 8px">'+(row.isTable?'<select class="input" style="font-size:11px;padding:5px 6px" onchange="lQuoteUpdateGroupCenterpiece(\''+row.key+'\',this.value)">'+cpOpts+'</select>':'<span style="font-size:11px;color:var(--muted)">-</span>')+'</td>'+
       '<td style="padding:9px 10px;text-align:center;font-size:12px">'+(row.chairsPerUnit||'-')+'</td>'+
-      '<td style="padding:6px 8px"><input class="input" type="number" min="0" step="0.01" value="'+row.unitElementPrice+'" style="font-size:11px;padding:5px 6px;min-width:90px" onchange="lQuoteUpdateGroupCost(\''+row.key+'\',this.value)"></td>'+
+      '<td style="padding:6px 8px"><input class="input" type="number" min="0" step="0.01" value="'+row.unitElementPrice+'" style="font-size:11px;padding:5px 6px;width:80px" onchange="lQuoteUpdateGroupCost(\''+row.key+'\',this.value)"></td>'+
+      '<td style="padding:6px 8px">'+chairPriceCell+'</td>'+
       '<td style="padding:9px 10px;text-align:right;font-size:12px">'+formatCost(row.unitChairPriceTotal)+'</td>'+
+      '<td style="padding:6px 8px">'+cpPriceCell+'</td>'+
       '<td style="padding:9px 10px;text-align:right;font-size:12px">'+formatCost(row.unitCenterpiecePrice)+'</td>'+
       '<td style="padding:9px 10px;text-align:right;font-size:12px;font-weight:600">'+formatCost(row.unitTotal)+'</td>'+
       '<td style="padding:9px 10px;text-align:right;font-size:12px;font-weight:700;color:var(--gold-h)">'+formatCost(row.rowTotal)+'</td>'+
@@ -848,7 +1180,9 @@ function renderLayoutQuoteAutoTable(quote){
           '<th style="padding:8px 10px;text-align:left">'+t('centerpiece')+'</th>'+
           '<th style="padding:8px 10px;text-align:center">'+t('layout_quote_seats_unit')+'</th>'+
           '<th style="padding:8px 10px;text-align:left">'+t('layout_quote_base')+'</th>'+
+          '<th style="padding:8px 10px;text-align:left">'+(isES?'$/Silla':'$/Chair')+'</th>'+
           '<th style="padding:8px 10px;text-align:right">'+t('layout_quote_chair_cost')+'</th>'+
+          '<th style="padding:8px 10px;text-align:left">'+(isES?'$/Centro':'$/Centerpiece')+'</th>'+
           '<th style="padding:8px 10px;text-align:right">'+t('layout_quote_centerpiece_cost')+'</th>'+
           '<th style="padding:8px 10px;text-align:right">'+t('layout_quote_unit_total')+'</th>'+
           '<th style="padding:8px 10px;text-align:right">'+t('layout_quote_row_total')+'</th>'+
@@ -857,6 +1191,20 @@ function renderLayoutQuoteAutoTable(quote){
       '</table>'+
     '</div>'+
   '</div>';
+}
+
+function lQuoteUpdateChairTypeCost(chairType, val){
+  if(!CHAIR_TYPES[chairType]) return;
+  CHAIR_TYPES[chairType].costPerChair=Math.max(0,Number(val||0));
+  saveLayoutStyles();
+  renderLayoutUI();
+}
+
+function lQuoteUpdateCenterpieceTypeCost(cpKey, val){
+  if(!CENTERPIECE_TYPES[cpKey]) return;
+  CENTERPIECE_TYPES[cpKey].cost=Math.max(0,Number(val||0));
+  saveLayoutStyles();
+  renderLayoutUI();
 }
 
 function renderLayoutQuoteExtrasTable(quote){
@@ -987,6 +1335,7 @@ function getChairPad(item){
  
 function renderLItem(item){
   const isRound = item.shape==='round-table'||item.radius==='50%'||(LSHAPES_M[item.shape]&&LSHAPES_M[item.shape].radius==='50%');
+  const isSTable = item.shape==='s-table';
   const chairsHTML = renderChairs(item);
   const pad = getChairPad(item);
   const cornerRadius = isRound ? '50%' : '0px';
@@ -996,6 +1345,13 @@ function renderLItem(item){
   const fontSize = item.fontSize || autoFontSize;
   const seatsSize = Math.max(6, Math.min(11, Math.round(wM * 6)));
   const cpHTML = renderCenterpiece(item);
+  const bodyHTML = isSTable ? _renderSTableBody(item) :
+    `<div style="position:absolute;inset:0;border-radius:${cornerRadius};background:${item.bg};overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.10)">
+        ${cpHTML}
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;z-index:2;pointer-events:none">
+          <div class="litem-label" style="color:${textClr};font-size:${fontSize}px;font-weight:300;letter-spacing:0.03em;font-family:'Jost',sans-serif;text-align:center;line-height:1.2">${item.label}</div>
+        </div>
+      </div>`;
   return `<div class="litem ${LState.sel.includes(item.id)?'sel':''}"
     id="li_${item.id}"
     data-id="${item.id}"
@@ -1003,14 +1359,35 @@ function renderLItem(item){
     ondblclick="openLItemModal('${item.id}')">
     <div style="position:relative;width:100%;height:100%">
       ${chairsHTML}
-      <div style="position:absolute;inset:0;border-radius:${cornerRadius};background:${item.bg};overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.10)">
-        ${cpHTML}
-        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;z-index:2;pointer-events:none">
-          <div class="litem-label" style="color:${textClr};font-size:${fontSize}px;font-weight:300;letter-spacing:0.03em;font-family:'Jost',sans-serif;text-align:center;line-height:1.2">${item.label}</div>
-        </div>
-      </div>
+      ${bodyHTML}
     </div>
   </div>`;
+}
+
+function _renderSTableBody(item){
+  var w=item.w, h=item.h;
+  var amp=h*0.19;
+  var bh=h/2;
+  var bandW=h*0.22;
+  var pts=40;
+  function topEdge(t){ return bh-amp*Math.sin(t*Math.PI)-bandW+(bandW*0.35)*Math.sin(t*Math.PI); }
+  function botEdge(t){ return bh+amp*Math.sin(t*Math.PI)+bandW-(bandW*0.35)*Math.sin(t*Math.PI); }
+  var topPath=''; var botPath='';
+  for(var i=0;i<=pts;i++){
+    var t=i/pts; var x=t*w;
+    topPath+=(i===0?'M':'L')+x.toFixed(1)+','+topEdge(t).toFixed(1);
+  }
+  for(var i=pts;i>=0;i--){
+    var t=i/pts; var x=t*w;
+    botPath+='L'+x.toFixed(1)+','+botEdge(t).toFixed(1);
+  }
+  return '<div style="position:absolute;inset:0;overflow:visible;pointer-events:none">'
+    +'<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" style="position:absolute;inset:0;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.10))">'
+    +'<path d="'+topPath+botPath+'Z" fill="'+item.bg+'"/>'
+    +'</svg>'
+    +'<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;pointer-events:none">'
+    +'<div class="litem-label" style="color:'+item.bdClr+';font-size:'+(item.fontSize||Math.max(7,Math.min(14,Math.round((w/getPPM())*8))))+'px;font-weight:300;letter-spacing:0.03em;font-family:Jost,sans-serif;text-align:center;line-height:1.2">'+item.label+'</div>'
+    +'</div></div>';
 }
 
 function renderCenterpiece(item){
@@ -1037,7 +1414,22 @@ function renderChairs(item){
   const isRound = item.shape==='round-table'||item.radius==='50%'||(LSHAPES_M[item.shape]&&LSHAPES_M[item.shape].radius==='50%');
   const isSquare = item.shape==='square-table';
   
-  if(isRound){
+  if(item.shape==='s-table'){
+    // S-table: chairs along the serpentine edges
+    const half=Math.floor(n/2);
+    const amp=h*0.19; const bh=h/2; const bandW=h*0.22;
+    function sTopEdge(t){ return bh-amp*Math.sin(t*Math.PI)-bandW+(bandW*0.35)*Math.sin(t*Math.PI); }
+    function sBotEdge(t){ return bh+amp*Math.sin(t*Math.PI)+bandW-(bandW*0.35)*Math.sin(t*Math.PI); }
+    const is16=n>=16;
+    for(let ci=0;ci<half;ci++){
+      const t=is16?(ci+0.5)/half:(ci+1)/(half+1);
+      positions.push({x:t*w, y:sTopEdge(t)-(cs/2+gap)});
+    }
+    for(let ci=0;ci<half;ci++){
+      const t=is16?(ci+0.5)/half:(ci+1)/(half+1);
+      positions.push({x:t*w, y:sBotEdge(t)+(cs/2+gap)});
+    }
+  } else if(isRound){
     for(let i=0;i<n;i++){
       const angle=(i/n)*2*Math.PI - Math.PI/2;
       positions.push({x:w/2+(w/2+cs/2+gap)*Math.cos(angle), y:h/2+(h/2+cs/2+gap)*Math.sin(angle)});
@@ -1080,8 +1472,31 @@ function lAddBtn(shape,label,icon,bg,clr){
   </button>`;
 }
 function setAddMode(shape){
-  LState.addMode=LState.addMode===shape?null:shape;
-  document.getElementById('lcanvas-outer').style.cursor=LState.addMode?'crosshair':'default';
+  // Place item immediately at the center of the visible viewport
+  LSHAPES=getLSHAPES();
+  var def=LSHAPES[shape]||LSHAPES['round-table'];
+  if(!def) return;
+  var p=proj(); if(!p) return;
+  var chairs=def.chairs||0;
+  var _tempMinSide=Math.min(def.w,def.h);
+  var _tempChairPx=Math.max(8,Math.round(_tempMinSide*0.22));
+  var _tempGapPx=Math.max(1,Math.round(_tempMinSide*0.04));
+  var pad=chairs?_tempChairPx+_tempGapPx:0;
+  var vc=_getVisibleCanvasCenter();
+  var snap=function(n){return LState.useSnap?Math.round(n/LState.snapGrid)*LState.snapGrid:Math.round(n);};
+  var isTable=['round-table','rect-table','square-table'].includes(shape)||!!(LSHAPES_M[shape]&&LSHAPES_M[shape]._isCustomTable);
+  var tableCount=LState.items.filter(function(i){return ['round-table','rect-table','square-table'].includes(i.shape)||(LSHAPES_M[i.shape]&&LSHAPES_M[i.shape]._isCustomTable);}).length+1;
+  var newLabel=isTable?String(tableCount):def.label;
+  var newItem={
+    id:'li'+Date.now(),shape:shape,
+    x:snap(vc.x-def.w/2-pad),y:snap(vc.y-def.h/2-pad),
+    w:def.w,h:def.h,bg:def.bg,bdClr:def.bdClr,
+    radius:def.radius,label:newLabel,chairs:chairs,
+    chairType:'default',centerpiece:'none',cost:0,rotation:0,
+  };
+  LState.items.push(newItem);p.layoutItems=LState.items;saveProj(p);
+  LState.sel=[newItem.id];LState.addMode=null;
+  lHistorySave();
   renderLayout();
 }
 
@@ -1121,13 +1536,18 @@ function triggerFloorplanUpload(){
 var _addTableSelection={};
 function _addTableDrawSVG(item, selected){
   var SCALE=44;
-  var CS=0.38*SCALE; var CG=0.06*SCALE;
+  var CS=0.32*SCALE; var CG=0.06*SCALE;
+  var tableFill=selected?'#e8dcc8':'#f0ece0';
+  var chairFill=selected?'#9a7b5a':'#b08968';
+
+  if(item.cat==='s-table'){
+    return _drawSTableSVG(item, tableFill, chairFill);
+  }
+
   var tw=item.wM*SCALE; var th=item.hM*SCALE;
   var padX=CS+CG+2; var padY=CS+CG+2;
-  var svgW=tw+padX*2; var svgH=th+padY*2+14;
+  var svgW=tw+padX*2; var svgH=th+padY*2;
   var tx=padX; var ty=padY;
-  var tableFill=selected?'#93b8d8':'#aac9e8';
-  var chairFill='#e07a52';
   var chairs=''; var n=item.chairs;
   if(item.cat==='round'){
     var r=tw/2; var cx=tx+r; var cy=ty+r;
@@ -1154,33 +1574,82 @@ function _addTableDrawSVG(item, selected){
       chairs+='<circle cx="'+(tx-CG-CS/2).toFixed(1)+'" cy="'+cy3.toFixed(1)+'" r="'+(CS/2).toFixed(1)+'" fill="'+chairFill+'"/>';
       chairs+='<circle cx="'+(tx+tw+CG+CS/2).toFixed(1)+'" cy="'+cy3.toFixed(1)+'" r="'+(CS/2).toFixed(1)+'" fill="'+chairFill+'"/>';
     }
-    chairs+='<rect x="'+tx.toFixed(1)+'" y="'+ty.toFixed(1)+'" width="'+tw.toFixed(1)+'" height="'+th.toFixed(1)+'" fill="'+tableFill+'"/>';
+    chairs+='<rect x="'+tx.toFixed(1)+'" y="'+ty.toFixed(1)+'" width="'+tw.toFixed(1)+'" height="'+th.toFixed(1)+'" rx="2" fill="'+tableFill+'"/>';
   }
-  return '<svg viewBox="0 0 '+svgW.toFixed(0)+' '+svgH.toFixed(0)+'" width="'+svgW.toFixed(0)+'" height="'+svgH.toFixed(0)+'" style="display:block;overflow:visible">'+chairs+'<text x="'+(svgW/2).toFixed(1)+'" y="'+(svgH-1).toFixed(1)+'" text-anchor="middle" font-size="8.5" fill="#888" font-family="Jost,sans-serif">'+item.label+'</text></svg>';
+  return '<svg viewBox="0 0 '+svgW.toFixed(0)+' '+svgH.toFixed(0)+'" width="'+svgW.toFixed(0)+'" height="'+svgH.toFixed(0)+'" style="display:block;overflow:visible">'+chairs+'</svg>';
+}
+
+function _drawSTableSVG(item, tableFill, chairFill){
+  // S-shaped serpentine table — exact geometry from reference images
+  var n=item.chairs;
+  var half=Math.floor(n/2);
+  var W=160; var H=72;
+  var pad=16; var cr=6.5;
+  var svgW=W+pad*2; var svgH=H+pad*2;
+  var ox=pad; var oy=pad;
+  // S-curve wave amplitude and table band half-height
+  var amp=14; var bh=H/2;
+  // The S-shape body: top edge curves up-left then down-right, bottom edge inverse
+  // Build as a closed path: top edge left-to-right, then bottom edge right-to-left
+  function topY(t){ return oy+bh - amp*Math.sin(t*Math.PI); }
+  function botY(t){ return oy+bh + amp*Math.sin(t*Math.PI); }
+  // Top edge narrower at ends via vertical pinch
+  var bandW=16;
+  function topEdge(t){ return topY(t)-bandW+(bandW*0.35)*Math.sin(t*Math.PI); }
+  function botEdge(t){ return botY(t)+bandW-(bandW*0.35)*Math.sin(t*Math.PI); }
+  var pts=40;
+  var topPath=''; var botPath='';
+  for(var i=0;i<=pts;i++){
+    var t=i/pts; var x=ox+t*W;
+    topPath+=(i===0?'M':'L')+x.toFixed(1)+','+topEdge(t).toFixed(1);
+  }
+  for(var i=pts;i>=0;i--){
+    var t=i/pts; var x=ox+t*W;
+    botPath+='L'+x.toFixed(1)+','+botEdge(t).toFixed(1);
+  }
+  var path='<path d="'+topPath+botPath+'Z" fill="'+tableFill+'"/>';
+  // Chairs along the top and bottom edges of the S
+  var chairs='';
+  var is16=n>=16;
+  for(var ci=0;ci<half;ci++){
+    // Top row: chairs above the top edge
+    var t;
+    if(is16){ t=(ci+0.5)/half; }
+    else { t=(ci+1)/(half+1); }
+    var cx=ox+t*W;
+    var cy=topEdge(t)-cr-3;
+    chairs+='<circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="'+cr+'" fill="'+chairFill+'"/>';
+  }
+  for(var ci=0;ci<half;ci++){
+    // Bottom row: chairs below the bottom edge
+    var t;
+    if(is16){ t=(ci+0.5)/half; }
+    else { t=(ci+1)/(half+1); }
+    var cx=ox+t*W;
+    var cy=botEdge(t)+cr+3;
+    chairs+='<circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="'+cr+'" fill="'+chairFill+'"/>';
+  }
+  return '<svg viewBox="0 0 '+svgW+' '+svgH+'" width="'+svgW+'" height="'+svgH+'" style="display:block;overflow:visible">'+chairs+path+'</svg>';
 }
 
 function _addTableCatalogue(){
   return [
-    {key:'round-0.8',cat:'round',label:'0.8m',wM:0.8,hM:0.8,chairs:4},
-    {key:'round-1.0',cat:'round',label:'1.0m',wM:1.0,hM:1.0,chairs:6},
-    {key:'round-1.2',cat:'round',label:'1.2m',wM:1.2,hM:1.2,chairs:8},
-    {key:'round-1.4',cat:'round',label:'1.4m',wM:1.4,hM:1.4,chairs:10},
-    {key:'round-1.5',cat:'round',label:'1.5m',wM:1.5,hM:1.5,chairs:10},
-    {key:'round-1.6',cat:'round',label:'1.6m',wM:1.6,hM:1.6,chairs:12},
-    {key:'round-1.7',cat:'round',label:'1.7m',wM:1.7,hM:1.7,chairs:12},
-    {key:'round-1.8',cat:'round',label:'1.8m',wM:1.8,hM:1.8,chairs:14},
-    {key:'round-1.9',cat:'round',label:'1.9m',wM:1.9,hM:1.9,chairs:14},
-    {key:'round-2.0',cat:'round',label:'2.0m',wM:2.0,hM:2.0,chairs:16},
-    {key:'rect-2x1.2',cat:'rect',label:'2.0m x 1.2m',wM:2.0,hM:1.2,chairs:10},
-    {key:'rect-2.4x1.2',cat:'rect',label:'2.4m x 1.2m',wM:2.4,hM:1.2,chairs:12},
-    {key:'rect-2.6x1.2',cat:'rect',label:'2.6m x 1.2m',wM:2.6,hM:1.2,chairs:12},
-    {key:'rect-2.8x1.2',cat:'rect',label:'2.8m x 1.2m',wM:2.8,hM:1.2,chairs:14},
-    {key:'rect-3x1.2',cat:'rect',label:'3.0m x 1.2m',wM:3.0,hM:1.2,chairs:14},
-    {key:'rect-3.2x1.2',cat:'rect',label:'3.2m x 1.2m',wM:3.2,hM:1.2,chairs:16},
-    {key:'rect-3.4x1.2',cat:'rect',label:'3.4m x 1.2m',wM:3.4,hM:1.2,chairs:16},
-    {key:'rect-3.6x1.2',cat:'rect',label:'3.6m x 1.2m',wM:3.6,hM:1.2,chairs:18},
-    {key:'rect-3.8x1.2',cat:'rect',label:'3.8m x 1.2m',wM:3.8,hM:1.2,chairs:18},
-    {key:'rect-4x1.2',cat:'rect',label:'4.0m x 1.2m',wM:4.0,hM:1.2,chairs:20},
+    {key:'round-0.8', cat:'round',label:'4 seats',dim:'0.8m',wM:0.8,hM:0.8,chairs:4},
+    {key:'round-1.0', cat:'round',label:'6 seats',dim:'1.0m',wM:1.0,hM:1.0,chairs:6},
+    {key:'round-1.2', cat:'round',label:'8 seats',dim:'1.2m',wM:1.2,hM:1.2,chairs:8},
+    {key:'round-1.5', cat:'round',label:'10 seats',dim:'1.5m',wM:1.5,hM:1.5,chairs:10},
+    {key:'round-1.6', cat:'round',label:'12 seats',dim:'1.6m',wM:1.6,hM:1.6,chairs:12},
+    {key:'round-1.8', cat:'round',label:'14 seats',dim:'1.8m',wM:1.8,hM:1.8,chairs:14},
+    {key:'round-2.0', cat:'round',label:'16 seats',dim:'2.0m',wM:2.0,hM:2.0,chairs:16},
+    {key:'rect-1.2x0.8',cat:'rect',label:'4 seats',dim:'1.2 x 0.8m',wM:1.2,hM:0.8,chairs:4},
+    {key:'rect-1.8x0.8',cat:'rect',label:'6 seats',dim:'1.8 x 0.8m',wM:1.8,hM:0.8,chairs:6},
+    {key:'rect-2.0x1.0',cat:'rect',label:'8 seats',dim:'2.0 x 1.0m',wM:2.0,hM:1.0,chairs:8},
+    {key:'rect-2.4x1.2',cat:'rect',label:'10 seats',dim:'2.4 x 1.2m',wM:2.4,hM:1.2,chairs:10},
+    {key:'rect-2.8x1.2',cat:'rect',label:'12 seats',dim:'2.8 x 1.2m',wM:2.8,hM:1.2,chairs:12},
+    {key:'rect-3.2x1.2',cat:'rect',label:'14 seats',dim:'3.2 x 1.2m',wM:3.2,hM:1.2,chairs:14},
+    {key:'rect-3.6x1.2',cat:'rect',label:'16 seats',dim:'3.6 x 1.2m',wM:3.6,hM:1.2,chairs:16},
+    {key:'s-table-14',cat:'s-table',label:'14 seats',dim:'4.0 x 1.5m',wM:4.0,hM:1.5,chairs:14},
+    {key:'s-table-16',cat:'s-table',label:'16 seats',dim:'4.5 x 1.5m',wM:4.5,hM:1.5,chairs:16},
   ];
 }
 
@@ -1205,31 +1674,32 @@ function _renderAddTableModalBody(){
   Object.keys(_addTableSelection).forEach(function(k){
     var e=_addTableSelection[k]; if(!e||!e.n) return;
     var cat=catalogue.find(function(c){return c.key===k;});
-    if(cat){totalT+=e.n; totalC+=e.n*cat.chairs;}
+    if(cat){totalT+=e.n; totalC+=e.n*(e.chairs!=null?e.chairs:cat.chairs);}
   });
   function catSection(catKey,titleEN,titleES){
     var items=catalogue.filter(function(c){return c.cat===catKey;});
-    return '<div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 8px">'+(isES?titleES:titleEN)+'</div>'
+    return '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:16px 0 8px">'+(isES?titleES:titleEN)+'</div>'
       +'<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px">'
       +items.map(function(item){
         var sel=_addTableSelection[item.key]&&_addTableSelection[item.key].n>0;
         var cnt=(_addTableSelection[item.key]||{}).n||0;
-        return '<div onclick="_addTableToggle(\''+item.key+'\')" style="cursor:pointer;padding:8px 6px;border:2px solid '+(sel?'var(--gold)':'var(--border)')+';border-radius:10px;background:'+(sel?'var(--gold-l)':'var(--card)')+';text-align:center;transition:.15s;position:relative">'
+        return '<div onclick="_addTableToggle(\''+item.key+'\')" style="cursor:pointer;padding:8px 6px 6px;border:2px solid '+(sel?'var(--gold)':'var(--border)')+';border-radius:10px;background:'+(sel?'var(--gold-l)':'var(--card)')+';text-align:center;transition:.15s;min-width:72px;position:relative">'
           +_addTableDrawSVG(item,sel)
-          +'<div style="margin-top:4px;font-size:10px;color:var(--muted)">'+(isES?'Sillas:':'Chairs:')+' '+item.chairs+'</div>'
+          +'<div style="margin-top:5px;font-size:12px;font-weight:600;color:var(--text);line-height:1.2">'+item.label+'</div>'
+          +'<div style="font-size:10px;color:var(--muted);margin-top:1px">'+(item.dim||'')+'</div>'
           +(sel
-            ?'<div onclick="event.stopPropagation()" style="margin-top:4px"><input type="number" min="1" value="'+cnt+'" onchange="_addTableSelection[\''+item.key+'\'].n=parseInt(this.value)||1;_renderAddTableModalBody()" oninput="_addTableSelection[\''+item.key+'\'].n=parseInt(this.value)||1" style="width:52px;text-align:center;padding:3px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:700"><div style="font-size:9px;color:var(--muted);margin-top:1px">'+(isES?'cantidad':'qty')+'</div></div>'
-            :'<div style="font-size:10px;color:var(--light);margin-top:4px">'+(isES?'clic':'click')+'</div>')
+            ?'<div onclick="event.stopPropagation()" style="margin-top:5px"><input type="number" min="1" value="'+cnt+'" onchange="_addTableSelection[\''+item.key+'\'].n=parseInt(this.value)||1;_renderAddTableModalBody()" oninput="_addTableSelection[\''+item.key+'\'].n=parseInt(this.value)||1" style="width:48px;text-align:center;padding:3px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:700;background:var(--bg)"><div style="font-size:9px;color:var(--muted);margin-top:1px">'+(isES?'cantidad':'qty')+'</div></div>'
+            :'')
           +'</div>';
       }).join('')
       +'</div>';
   }
-  var body='<div style="font-size:12px;color:var(--muted);margin-bottom:10px">'+(isES?'Haz clic en una mesa para seleccionarla, luego ingresa la cantidad.':'Click a table to select it, then enter quantity.')+'</div>'
-    +catSection('round','Round Tables','Mesas Redondas')
+  var body=catSection('round','Round Tables','Mesas Redondas')
     +catSection('rect','Rectangular Tables','Mesas Rectangulares')
-    +'<div style="background:var(--bg2);border-radius:var(--r);padding:10px 14px;display:flex;gap:24px;font-size:13px;margin-top:12px;flex-wrap:wrap">'
-    +'<span>? <strong>'+totalT+'</strong> '+(isES?'mesas':'tables')+'</span>'
-    +'<span>?? <strong>'+totalC+'</strong> '+(isES?'sillas':'chairs')+'</span>'
+    +catSection('s-table','Special Tables','Mesas Especiales')
+    +'<div style="background:var(--bg2);border-radius:var(--r);padding:10px 14px;display:flex;gap:24px;font-size:13px;margin-top:14px;flex-wrap:wrap">'
+    +'<span><strong>'+totalT+'</strong> '+(isES?'mesas':'tables')+'</span>'
+    +'<span><strong>'+totalC+'</strong> '+(isES?'sillas':'seats')+'</span>'
     +'</div>';
   var el=document.getElementById('add-table-scroll');
   if(el) el.innerHTML=body;
@@ -1250,8 +1720,8 @@ function openAddTableModal(){
 function _getVisibleCanvasCenter(){
   var outer=document.getElementById('lcanvas-outer');
   if(!outer) return {x:400,y:400};
-  var cx=(outer.scrollLeft+outer.clientWidth/2)/LState.zoom;
-  var cy=(outer.scrollTop+outer.clientHeight/2)/LState.zoom;
+  var cx=(outer.scrollLeft-_canvasPad+outer.clientWidth/2)/LState.zoom;
+  var cy=(outer.scrollTop-_canvasPad+outer.clientHeight/2)/LState.zoom;
   return {x:Math.round(cx),y:Math.round(cy)};
 }
 
@@ -1276,7 +1746,7 @@ function doAddTablesToLayout(){
   var ppm=(typeof DEFAULT_PPM!=='undefined')?DEFAULT_PPM:(typeof getPPM==='function'?getPPM():40);
   var SHAPES=typeof getLSHAPES!=='undefined'?getLSHAPES():{};
   var shapeMap={
-    'rect':'rect-table','dend':'rect-table','oval':'rect-table','round':'round-table'
+    'rect':'rect-table','dend':'rect-table','oval':'rect-table','round':'round-table','s-table':'s-table'
   };
   var spacing=Math.round(1.2*ppm);
   var p=proj();
@@ -1496,36 +1966,47 @@ function updateMeasurePreview(rawPoint, constrainAxis){
   }
 }
 
-var LHistory=[], LHistoryPos=-1, LHistorySaving=true;
+var LHistory=[], LHistoryPos=-1, LHistorySaving=true, _LHistoryContextId=null;
+function lHistoryReset(){
+  LHistory=[]; LHistoryPos=-1;
+}
 function lHistorySave(){
   if(!LHistorySaving)return;
-  var snapshot=JSON.stringify(LState.items);
+  var fp=LState.floorplan;
+  var snapshot=JSON.stringify({
+    items:LState.items,
+    fp:{x:fp.x,y:fp.y,scale:fp.scale,rotation:fp.rotation||0,opacity:fp.opacity,w:fp.w,h:fp.h,locked:fp.locked}
+  });
   if(LHistoryPos<LHistory.length-1) LHistory=LHistory.slice(0,LHistoryPos+1);
   if(LHistory.length>0&&LHistory[LHistoryPos]===snapshot)return;
   LHistory.push(snapshot);
   if(LHistory.length>200){ LHistory.shift(); LHistoryPos--; }
   LHistoryPos=LHistory.length-1;
 }
+function _lHistoryApply(snap){
+  if(Array.isArray(snap)){
+    LState.items=snap;
+  } else {
+    LState.items=snap.items;
+    if(snap.fp) Object.assign(LState.floorplan,snap.fp);
+  }
+}
 function lUndo(){
   if(LHistoryPos<=0){toast(LANG==='es'?'Nada que deshacer':'Nothing to undo','e');return;}
   LHistoryPos--;
   LHistorySaving=false;
-  LState.items=JSON.parse(LHistory[LHistoryPos]);
+  _lHistoryApply(JSON.parse(LHistory[LHistoryPos]));
   LState.sel=[];
-  var _savedFP=LState.floorplan;
   var p=proj();p.layoutItems=LState.items;saveProj(p);
-  LState.floorplan=_savedFP;
   renderLayoutCanvas();LHistorySaving=true;toast(LANG==='es'?'Deshacer':'Undo','s');
 }
 function lRedo(){
   if(LHistoryPos>=LHistory.length-1){toast(LANG==='es'?'Nada que rehacer':'Nothing to redo','e');return;}
   LHistoryPos++;
   LHistorySaving=false;
-  LState.items=JSON.parse(LHistory[LHistoryPos]);
+  _lHistoryApply(JSON.parse(LHistory[LHistoryPos]));
   LState.sel=[];
-  var _savedFP=LState.floorplan;
   var p=proj();p.layoutItems=LState.items;saveProj(p);
-  LState.floorplan=_savedFP;
   renderLayoutCanvas();LHistorySaving=true;toast(LANG==='es'?'Rehacer':'Redo','s');
 }
 function getLayoutInstanceKey(item){
@@ -1735,46 +2216,6 @@ function lCanvasDown(e){
   }
   if(e.button!==0)return;
 
-  if(LState.addMode){
-    const canvas=document.getElementById('lcanvas');
-    const cr=canvas.getBoundingClientRect();
-    const rawX=(e.clientX-cr.left)/LState.zoom;
-    const rawY=(e.clientY-cr.top)/LState.zoom;
-    LSHAPES=getLSHAPES();
-    const def=LSHAPES[LState.addMode]||LSHAPES['round-table'];
-    const snap=n=>LState.useSnap?Math.round(n/LState.snapGrid)*LState.snapGrid:Math.round(n);
-    const chairs=def.chairs||0;
-    const _tempMinSide=Math.min(def.w,def.h);
-    const _tempChairPx=Math.max(8,Math.round(_tempMinSide*0.22));
-    const _tempGapPx=Math.max(1,Math.round(_tempMinSide*0.04));
-    const pad=chairs?_tempChairPx+_tempGapPx:0;
-    const p=proj();
-    const isTable=['round-table','rect-table','square-table'].includes(LState.addMode)||!!(LSHAPES_M[LState.addMode]&&LSHAPES_M[LState.addMode]._isCustomTable);
-    const tableCount=LState.items.filter(i=>['round-table','rect-table','square-table'].includes(i.shape)||(LSHAPES_M[i.shape]&&LSHAPES_M[i.shape]._isCustomTable)).length+1;
-    const newLabel=isTable?String(tableCount):def.label;
-    const nonTableShapes=['dance-floor','bar','stage','dj-booth','gift-table','photo-booth'];
-    const isNonTable=nonTableShapes.includes(LState.addMode)||!!(LSHAPES_M[LState.addMode]&&LSHAPES_M[LState.addMode]._isCustomElem);
-    let placeX=snap(rawX-def.w/2-pad);
-    if(isNonTable){
-      const df=LState.items.find(i=>i.shape==='dance-floor');
-      if(df){
-        placeX=snap(df.x+df.w/2-def.w/2);
-      }
-    }
-    const newItem={
-      id:'li'+Date.now(),shape:LState.addMode,
-      x:placeX,y:snap(rawY-def.h/2-pad),
-      w:def.w,h:def.h,bg:def.bg,bdClr:def.bdClr,
-      radius:def.radius,label:newLabel,chairs,
-      chairType:'default',centerpiece:'none',cost:0,rotation:0,
-    };
-    LState.items.push(newItem);p.layoutItems=LState.items;saveProj(p);
-    LState.sel=[newItem.id];LState.addMode=null;
-    lHistorySave();
-    renderLayout();
-    return;
-  }
-
   if(!e.target.closest('.litem')){
     if(!e.shiftKey&&!e.ctrlKey&&!e.metaKey) LState.sel=[];
     const outer=document.getElementById('lcanvas-outer');
@@ -1912,6 +2353,7 @@ function lCanvasUp(e){
   }
   if(_fpDragging){
     _fpDragging=false;
+    lHistorySave();
     saveFloorplan();
     renderLayoutUI();
     return;
@@ -1978,40 +2420,58 @@ function clearLayoutConfirm(){
 }
 
 function openChairEditor(){
+  var isES=LANG==='es';
   var rows=Object.entries(CHAIR_TYPES).map(([k,v])=>{
-    var imgSrc = CHAIR_IMAGES[k] || '';
-    var thumb = imgSrc
-      ? '<img src="'+imgSrc+'" onclick="window.SCI[this.dataset.ci]()" data-ci="'+k+'" class="chair-zoom" style="width:44px;height:44px;object-fit:contain;border-radius:6px;border:1px solid #e0d4b0;background:#faf8f2;cursor:pointer;display:block" title="Click to enlarge">'
-      : '<div style="width:44px;height:44px;border-radius:6px;background:'+(v.fill.startsWith('rgba')?'#e8e8e8':v.fill)+';border:1px solid #ddd"></div>';
-    return '<div style="display:grid;grid-template-columns:50px 1fr 36px 80px;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">'+
-      '<div>'+thumb+'</div>'+
-      '<input class="input" style="font-size:11px;padding:4px 8px" id="ch-label-'+k+'" value="'+v.label+'" placeholder="Name">'+
-      '<input class="input" type="color" style="width:34px;height:28px;padding:2px" id="ch-fill-'+k+'" value="'+(v.fill.startsWith('rgba')?'#e8e8e8':v.fill)+'" title="Fill color">'+
-      '<input class="input" type="number" style="font-size:11px;padding:4px 6px" id="ch-cost-'+k+'" value="'+(v.costPerChair||0)+'" placeholder="0">'+
-      '</div>';
+    var isDefault=k==='default';
+    var swatch='<div style="width:28px;height:28px;border-radius:50%;background:'+(v.fill.startsWith('rgba')?'#e8e8e8':v.fill)+';border:1.5px solid var(--border);flex-shrink:0"></div>';
+    var delBtn=isDefault
+      ? '<div style="width:28px"></div>'
+      : '<button class="btn btn-danger btn-icon btn-sm" onclick="deleteChairType(\''+k+'\')" title="'+(isES?'Eliminar':'Delete')+'"><svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>';
+    return '<div style="display:grid;grid-template-columns:32px 1fr 36px 84px 28px;gap:6px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)">'+
+      swatch+
+      '<input class="input" style="font-size:11px;padding:4px 8px" id="ch-label-'+k+'" value="'+esc(v.label)+'" placeholder="'+(isES?'Nombre':'Name')+'"'+(isDefault?' readonly style="font-size:11px;padding:4px 8px;background:var(--bg2);color:var(--muted)"':'')+'>'+
+      '<input class="input" type="color" style="width:34px;height:30px;padding:2px;cursor:pointer" id="ch-fill-'+k+'" value="'+(v.fill.startsWith('rgba')?'#e8e8e8':v.fill)+'" title="'+(isES?'Color':'Color')+'">'+
+      '<input class="input" type="number" min="0" step="0.01" style="font-size:11px;padding:4px 6px" id="ch-cost-'+k+'" value="'+(v.costPerChair||0)+'" placeholder="0">'+
+      delBtn+
+    '</div>';
   }).join('');
-  openMo('<div class="mo-title">'+t('edit_chairs')+'</div>'+
-    '<div style="display:grid;grid-template-columns:50px 1fr 36px 80px;gap:8px;padding:4px 0 8px;border-bottom:2px solid var(--border);margin-bottom:4px">'+
-      '<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase">'+t('col_photo')+'</span>'+
-      '<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase">'+t('col_name')+'</span>'+
-      '<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase">'+t('col_color')+'</span>'+
-      '<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase">'+t('col_price')+' ($)</span>'+
+  openMo(
+    '<div class="mo-title">'+(isES?'Sillas':'Chairs')+'</div>'+
+    '<div style="display:grid;grid-template-columns:32px 1fr 36px 84px 28px;gap:6px;padding:4px 0 8px;border-bottom:2px solid var(--border);margin-bottom:2px">'+
+      '<span></span>'+
+      '<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase">'+(isES?'Nombre':'Name')+'</span>'+
+      '<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase">'+(isES?'Color':'Color')+'</span>'+
+      '<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase">$/'+( isES?'Silla':'Chair')+'</span>'+
+      '<span></span>'+
     '</div>'+
-    '<div style="max-height:60vh;overflow-y:auto">'+rows+
-    '<div style="padding:10px 0;border-top:1px solid var(--border);margin-top:8px">'+
-      '<div style="font-weight:700;font-size:11px;color:var(--gold-h);margin-bottom:8px">'+t('add_new_chair')+'</div>'+
-      '<div style="display:flex;gap:6px">'+
-        '<input class="input" id="ch-new-label" placeholder="Name" style="flex:2;font-size:11px">'+
-        '<input class="input" type="color" id="ch-new-fill" value="#e8d8c8" style="width:34px;height:34px;padding:2px;flex-shrink:0">'+
-        '<input class="input" type="number" id="ch-new-cost" placeholder="$/silla" value="0" style="width:64px;font-size:11px">'+
-        '<button class="btn btn-ghost btn-sm" onclick="addNewChairType()" style="white-space:nowrap">'+t('add')+'</button>'+
+    '<div style="max-height:55vh;overflow-y:auto">'+rows+
+      '<div style="padding:12px 0 4px;margin-top:8px;border-top:1px solid var(--border)">'+
+        '<div style="font-size:11px;font-weight:700;color:var(--gold-h);margin-bottom:8px">'+(isES?'Agregar silla personalizada':'Add custom chair')+'</div>'+
+        '<div style="display:flex;gap:6px;align-items:center">'+
+          '<input class="input" id="ch-new-label" placeholder="'+(isES?'Nombre (requerido)':'Name (required)')+'" style="flex:1;font-size:11px">'+
+          '<input class="input" type="color" id="ch-new-fill" value="#c9a84c" style="width:34px;height:34px;padding:2px;flex-shrink:0" title="'+(isES?'Color (requerido)':'Color (required)')+'">'+
+          '<input class="input" type="number" min="0" step="0.01" id="ch-new-cost" placeholder="$/'+( isES?'silla':'chair')+'" value="0" style="width:72px;font-size:11px">'+
+          '<button class="btn btn-ghost btn-sm" onclick="addNewChairType()" style="white-space:nowrap">'+t('add')+'</button>'+
+        '</div>'+
       '</div>'+
-    '</div>'+
     '</div>'+
     '<div class="mo-foot">'+
       '<button class="btn btn-ghost" onclick="closeMo()">'+t('cancel')+'</button>'+
       '<button class="btn btn-primary" onclick="saveChairEditor()">'+t('save')+'</button>'+
-    '</div>');
+    '</div>'
+  );
+}
+
+function deleteChairType(key){
+  if(key==='default') return;
+  var isES=LANG==='es';
+  if(!confirm(isES?'¿Eliminar esta silla? Las mesas que la usan pasarán a la silla predeterminada.':'Delete this chair? Tables using it will revert to the default chair.')) return;
+  delete CHAIR_TYPES[key];
+  var p=proj();
+  if(p){ (p.layoutItems||[]).forEach(function(it){ if(it.chairType===key) it.chairType='default'; }); }
+  saveLayoutStyles();
+  if(p) saveProj(p);
+  closeMo(); openChairEditor(); renderLayout();
 }
 
 function addNewChairType(){
@@ -2040,33 +2500,58 @@ function saveChairEditor(){
 }
 
 function openCenterpieceEditor(){
-  var rows=Object.entries(CENTERPIECE_TYPES).filter(([k])=>k!=='none').map(([k,v])=>`
-    <div style="display:grid;grid-template-columns:1fr 36px 80px;gap:6px;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)">
-      <input class="input" style="font-size:11px;padding:4px 8px" id="cp-label-${k}" value="${v.label}" placeholder="Name">
-      <input class="input" type="color" style="width:34px;height:28px;padding:2px" id="cp-color-${k}" value="${v.color||'#ff8080'}" title="Color">
-      <input class="input" type="number" style="font-size:11px;padding:4px 6px" id="cp-cost-${k}" value="${v.cost||0}" placeholder="0">
-    </div>`).join('');
-  openMo(`<div class="mo-title">${t('edit_centerpieces')}</div>
-    <div style="display:grid;grid-template-columns:1fr 36px 80px;gap:6px;padding:4px 0 8px;border-bottom:2px solid var(--border);margin-bottom:4px">
-      <span class="s-lbl">${t('col_name')}</span>
-      <span class="s-lbl">${t('col_color')}</span>
-      <span class="s-lbl">${t('col_price')} ($)</span>
-    </div>
-    <div style="max-height:60vh;overflow-y:auto">${rows}
-    <div style="padding:10px 0;border-top:1px solid var(--border);margin-top:8px">
-      <div style="font-weight:700;font-size:11px;color:var(--gold-h);margin-bottom:8px">${t('add_new_centerpiece')}</div>
-      <div style="display:flex;gap:6px">
-        <input class="input" id="cp-new-label" placeholder="Name" style="flex:2;font-size:11px">
-        <input class="input" type="color" id="cp-new-color" value="#e05080" style="width:34px;height:34px;padding:2px;flex-shrink:0">
-        <input class="input" type="number" id="cp-new-cost" placeholder="$/pc" value="0" style="width:64px;font-size:11px">
-        <button class="btn btn-ghost btn-sm" onclick="addNewCenterpieceType()" style="white-space:nowrap">${t('add')}</button>
-      </div>
-    </div>
-    </div>
-    <div class="mo-foot">
-      <button class="btn btn-ghost" onclick="closeMo()">${t('cancel')}</button>
-      <button class="btn btn-primary" onclick="saveCenterpieceEditor()">${t('save')}</button>
-    </div>`);
+  var isES=LANG==='es';
+  var customRows=Object.entries(CENTERPIECE_TYPES).filter(([k])=>k!=='none').map(([k,v])=>
+    '<div style="display:grid;grid-template-columns:28px 1fr 36px 84px 28px;gap:6px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)">'+
+      '<div style="width:24px;height:24px;border-radius:50%;background:'+(v.color||'#ccc')+';border:1.5px solid var(--border);flex-shrink:0"></div>'+
+      '<input class="input" style="font-size:11px;padding:4px 8px" id="cp-label-'+k+'" value="'+esc(v.label)+'" placeholder="'+(isES?'Nombre':'Name')+'">'+
+      '<input class="input" type="color" style="width:34px;height:30px;padding:2px;cursor:pointer" id="cp-color-'+k+'" value="'+(v.color||'#e05080')+'" title="Color">'+
+      '<input class="input" type="number" min="0" step="0.01" style="font-size:11px;padding:4px 6px" id="cp-cost-'+k+'" value="'+(v.cost||0)+'" placeholder="0">'+
+      '<button class="btn btn-danger btn-icon btn-sm" onclick="deleteCenterpieceType(\''+k+'\')" title="'+(isES?'Eliminar':'Delete')+'"><svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>'+
+    '</div>'
+  ).join('');
+
+  var emptyMsg=!customRows ? '<div style="padding:12px 0;font-size:12px;color:var(--muted)">'+(isES?'Sin centros de mesa personalizados aún.':'No custom centerpieces yet.')+'</div>' : '';
+
+  openMo(
+    '<div class="mo-title">'+(isES?'Centros de mesa':'Centerpieces')+'</div>'+
+    (customRows
+      ? '<div style="display:grid;grid-template-columns:28px 1fr 36px 84px 28px;gap:6px;padding:4px 0 8px;border-bottom:2px solid var(--border);margin-bottom:2px">'+
+          '<span></span>'+
+          '<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase">'+(isES?'Nombre':'Name')+'</span>'+
+          '<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase">'+(isES?'Color':'Color')+'</span>'+
+          '<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase">$/'+( isES?'Centro':'Piece')+'</span>'+
+          '<span></span>'+
+        '</div>'
+      : '')+
+    '<div style="max-height:55vh;overflow-y:auto">'+customRows+emptyMsg+
+      '<div style="padding:12px 0 4px;margin-top:8px;border-top:1px solid var(--border)">'+
+        '<div style="font-size:11px;font-weight:700;color:var(--gold-h);margin-bottom:8px">'+(isES?'Agregar centro de mesa':'Add centerpiece')+'</div>'+
+        '<div style="display:flex;gap:6px;align-items:center">'+
+          '<input class="input" id="cp-new-label" placeholder="'+(isES?'Nombre (requerido)':'Name (required)')+'" style="flex:1;font-size:11px">'+
+          '<input class="input" type="color" id="cp-new-color" value="#e05080" style="width:34px;height:34px;padding:2px;flex-shrink:0" title="'+(isES?'Color (requerido)':'Color (required)')+'">'+
+          '<input class="input" type="number" min="0" step="0.01" id="cp-new-cost" placeholder="$/'+( isES?'centro':'piece')+'" value="0" style="width:72px;font-size:11px">'+
+          '<button class="btn btn-ghost btn-sm" onclick="addNewCenterpieceType()" style="white-space:nowrap">'+t('add')+'</button>'+
+        '</div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="mo-foot">'+
+      '<button class="btn btn-ghost" onclick="closeMo()">'+t('cancel')+'</button>'+
+      '<button class="btn btn-primary" onclick="saveCenterpieceEditor()">'+t('save')+'</button>'+
+    '</div>'
+  );
+}
+
+function deleteCenterpieceType(key){
+  if(key==='none') return;
+  var isES=LANG==='es';
+  if(!confirm(isES?'¿Eliminar este centro de mesa? Las mesas que lo usan quedarán sin centro.':'Delete this centerpiece? Tables using it will revert to none.')) return;
+  delete CENTERPIECE_TYPES[key];
+  var p=proj();
+  if(p){ (p.layoutItems||[]).forEach(function(it){ if(it.centerpiece===key) it.centerpiece='none'; }); }
+  saveLayoutStyles();
+  if(p) saveProj(p);
+  closeMo(); openCenterpieceEditor(); renderLayout();
 }
 
 function addNewCenterpieceType(){
@@ -2280,7 +2765,7 @@ function openGeneralLayoutModal(){
   var chairOpts=Object.entries(CHAIR_TYPES).map(([k,v])=>`<option value="${k}">${v.label}${v.costPerChair>0?' ($'+v.costPerChair+'/silla)':''}</option>`).join('');
   var cpOpts=Object.entries(CENTERPIECE_TYPES).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('');
   openMo(`<div class="mo-title">? Create General Layout</div>
-  <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Configure your venue layout. Default: 30 round tables (6ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â5), dance floor, shot bar, dinner platform and DJ booth in center.</div>
+  <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Configure your venue layout. Default: 30 round tables (6×5), dance floor, shot bar, dinner platform and DJ booth in center.</div>
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
     <div style="border:1px solid var(--border);border-radius:10px;padding:12px">
       <div style="font-weight:700;font-size:12px;color:var(--gold-h);margin-bottom:10px">? Round Tables</div>
@@ -2308,7 +2793,7 @@ function openGeneralLayoutModal(){
     </div>
   </div>
   <div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:16px">
-    <div style="font-weight:700;font-size:12px;color:var(--gold-h);margin-bottom:10px">?? Center Elements</div>
+    <div style="font-weight:700;font-size:12px;color:var(--gold-h);margin-bottom:10px">&#10022; Center Elements</div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
       <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">Dance Floor (m)</label>
         <input class="input" type="number" step="0.1" id="gl-df-w" value="7.32" style="margin-bottom:4px" placeholder="Width">
@@ -2329,7 +2814,7 @@ function openGeneralLayoutModal(){
     </div>
   </div>
   <div style="background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.2);border-radius:8px;padding:10px;font-size:11px;color:var(--muted);margin-bottom:16px">
-    ?? This will replace your current layout. Tables are arranged in a grid; center elements are placed in the middle.
+    &#9432; This will replace your current layout. Tables are arranged in a grid; center elements are placed in the middle.
   </div>
   <div class="mo-foot">
     <button class="btn btn-ghost" onclick="closeMo()">Cancel</button>
@@ -2375,7 +2860,7 @@ function generateGeneralLayout(){
   var rcCell=makeCell(rcDef,rectChairs);
   var sqCell=makeCell(sqDef,sqChairs);
 
-  // Distribute each table type evenly ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â half of each type on each side
+  // Distribute each table type evenly — half of each type on each side
   var leftQ=[], rightQ=[];
   function _splitType(n, maker){
     var lCount=Math.ceil(n/2);
@@ -2440,7 +2925,7 @@ function generateGeneralLayout(){
     }
   }
 
-  // Place RIGHT tables ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â columns reversed so layout mirrors the left side
+  // Place RIGHT tables — columns reversed so layout mirrors the left side
   var rightStartX=centralX+centerW+sp;
   for(var row=0;row<rightRows;row++){
     for(var col=0;col<rightCols;col++){
@@ -2487,7 +2972,7 @@ function toggleFloorplanLock(){
   LState.floorplan.locked=!LState.floorplan.locked;
   saveFloorplan();
   renderLayout();
-  toast(LState.floorplan.locked?'?? Floorplan locked':'?? Floorplan unlocked','s');
+  toast(LState.floorplan.locked?'&#128274; Floorplan locked':'&#128275; Floorplan unlocked','s');
 }
 
 
@@ -2520,7 +3005,7 @@ function renderMeasureOverlay(){
   var preview=_measurePoints.length===1?
     '<circle cx="'+_measurePoints[0].x+'" cy="'+_measurePoints[0].y+'" r="6" fill="#f59e0b" stroke="#fff" stroke-width="2"/>'+
     '<line id="measure-preview" x1="'+_measurePoints[0].x+'" y1="'+_measurePoints[0].y+'" x2="'+_measurePoints[0].x+'" y2="'+_measurePoints[0].y+'" stroke="#f59e0b" stroke-width="2" stroke-dasharray="6 3"/>'+
-    '<text id="measure-preview-label" x="'+_measurePoints[0].x+'" y="'+(+_measurePoints[0].y-10)+'" fill="#f59e0b" font-size="12" font-weight="700" text-anchor="middle" font-family="monospace">ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦</text>':
+    '<text id="measure-preview-label" x="'+_measurePoints[0].x+'" y="'+(+_measurePoints[0].y-10)+'" fill="#f59e0b" font-size="12" font-weight="700" text-anchor="middle" font-family="monospace">...</text>':
     '';
   ov.innerHTML=lines+preview;
 }
@@ -2547,7 +3032,8 @@ function renderLayoutCanvas(){
 function handleFloorplanUpload(e){
   var file=e.target.files[0];
   if(!file)return;
-  toast(LANG==='es'?'Cargando planoÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦':'Loading floorplanÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦');
+  if(file.size > 10*1024*1024){toast(LANG==='es'?'Archivo muy grande (max 10MB)':'File too large (max 10MB)','e');return;}
+  toast(LANG==='es'?'Cargando plano...':'Loading floorplan...');
   var reader=new FileReader();
   reader.onload=function(ev){
     var origData=ev.target.result;
@@ -2565,14 +3051,35 @@ function handleFloorplanUpload(e){
         finalData=cvs.toDataURL('image/jpeg',0.6);
       }
       var _fpKey='fp_'+Math.random().toString(36).slice(2,10)+'_'+Date.now();
-      _fpSave(_fpKey, finalData).then(function(){
-        var targetW=LState.canvasW*0.8;
-        var fpScale=1;
-        if(cw>targetW) fpScale=targetW/cw;
-        var placement=_getCenteredFloorplanPlacement(cw,ch,fpScale);
+      // Save to IndexedDB as local cache
+      _fpSave(_fpKey, finalData).catch(function(){});
+      var targetW=LState.canvasW*0.8;
+      var fpScale=1;
+      if(cw>targetW) fpScale=targetW/cw;
+      var placement=_getCenteredFloorplanPlacement(cw,ch,fpScale);
+      // Upload to Convex file storage
+      var fpBlob=EVENTOS_DATA.base64ToBlob(finalData);
+      EVENTOS_DATA.uploadFile(fpBlob).then(function(storageId){
+        return EVENTOS_DATA.getFileUrl(storageId).then(function(url){
+          LState.floorplan={
+            img:url||finalData,
+            opacity:0.4,
+            scale:fpScale,
+            x:placement.x,y:placement.y,
+            w:cw,h:ch,
+            _idb:_fpKey,
+            _storageId:storageId
+          };
+          var p=proj();
+          p.floorplan={opacity:0.4,scale:LState.floorplan.scale,x:LState.floorplan.x,y:LState.floorplan.y,w:cw,h:ch,locked:false,rotation:0,pxPerMeter:null,img:'__stored__',_idb:_fpKey,_storageId:storageId};
+          saveProj(p);
+          renderLayout();
+          startScaleMode();
+        });
+      }).catch(function(err){
+        console.error('Convex upload error, falling back to IndexedDB:',err);
         LState.floorplan={
           img:finalData,
-          thumb:finalData,
           opacity:0.4,
           scale:fpScale,
           x:placement.x,y:placement.y,
@@ -2580,19 +3087,11 @@ function handleFloorplanUpload(e){
           _idb:_fpKey
         };
         var p=proj();
-        p.floorplan={opacity:0.4,scale:LState.floorplan.scale,x:LState.floorplan.x,y:LState.floorplan.y,w:cw,h:ch,locked:false,rotation:0,pxPerMeter:null,img:'__idb__',_idb:_fpKey,thumb:finalData};
+        p.floorplan={opacity:0.4,scale:LState.floorplan.scale,x:LState.floorplan.x,y:LState.floorplan.y,w:cw,h:ch,locked:false,rotation:0,pxPerMeter:null,img:'__idb__',_idb:_fpKey};
         saveProj(p);
         renderLayout();
-      }).catch(function(err){
-        console.error('IndexedDB save error:',err);
-        var targetW=LState.canvasW*0.8;
-        var fpScale=1;
-        if(cw>targetW) fpScale=targetW/cw;
-        var placement=_getCenteredFloorplanPlacement(cw,ch,fpScale);
-        LState.floorplan={img:finalData,thumb:finalData,opacity:0.4,scale:fpScale,x:placement.x,y:placement.y,w:cw,h:ch};
-        saveFloorplan();
-        renderLayout();
-        toast(LANG==='es'?'Plano cargado (sin cach? persistente)':'Floorplan loaded (no persistent cache)','s');
+        toast(LANG==='es'?'Plano guardado localmente':'Floorplan saved locally','s');
+        startScaleMode();
       });
     };
     img.src=origData;
@@ -2609,12 +3108,14 @@ function handleFloorplanDrop(e){
 }
 
 function removeFloorplan(){
-  if(!confirm(LANG==='es'?'ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿Quitar el plano?':'Remove the floorplan image?'))return;
+  if(!confirm(LANG==='es'?'¿Quitar el plano?':'Remove the floorplan image?'))return;
   var idbKey=LState.floorplan._idb;
+  var storageId=LState.floorplan._storageId;
   LState.floorplan={img:null,opacity:0.4,scale:1,x:0,y:0,w:0,h:0};
   LState.scaleMode=false;LState.scalePoints=[];
   var p=proj();delete p.floorplan;saveProj(p);
   if(idbKey) _fpDelete(idbKey).catch(function(){});
+  if(storageId) EVENTOS_DATA.deleteFile(storageId).catch(function(){});
   renderLayout();
   toast(LANG==='es'?'Plano eliminado':'Floorplan removed','s');
 }
@@ -2622,7 +3123,10 @@ function removeFloorplan(){
 function saveFloorplan(){
   var p=proj();
   var fpCopy=JSON.parse(JSON.stringify(LState.floorplan));
-  if(fpCopy._idb){
+  if(fpCopy._storageId){
+    fpCopy.img='__stored__';
+    delete fpCopy.thumb;
+  } else if(fpCopy._idb){
     if(!fpCopy.thumb && fpCopy.img && fpCopy.img!=='__idb__') fpCopy.thumb=fpCopy.img;
     fpCopy.img='__idb__';
   }
@@ -2630,11 +3134,32 @@ function saveFloorplan(){
   saveProj(p);
 }
 function startScaleMode(){
-  if(!LState.floorplan.img)return toast('Upload a floorplan first','e');
-  LState.scaleMode=true;
-  LState.scalePoints=[];
-  renderLayout();
-  toast('Click two points on the floorplan along a known distance','s');
+  if(!LState.floorplan.img) return toast(LANG==='es'?'Primero sube un plano':'Upload a floorplan first','e');
+  var isES=LANG==='es';
+  openMo('<div style="max-width:460px;padding:4px 0">'
+    +'<div style="font-family:Cormorant Garamond,serif;font-size:28px;font-weight:700;margin-bottom:8px">'+(isES?'Escalar plano':'Scale Floor Plan')+'</div>'
+    +'<div style="color:var(--muted);font-size:13px;line-height:1.6;margin-bottom:22px">'+(isES?'Selecciona dos puntos a lo largo de una distancia conocida en tu plano, luego ingresa la distancia real para ajustar la escala.':'Pick two points along a known distance on your floorplan, then enter the real-world length to set the correct scale.')+'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px">'
+    +'<div style="display:flex;align-items:flex-start;gap:14px;padding:12px 14px;background:var(--bg2);border-radius:12px">'
+    +'<div style="min-width:26px;height:26px;border-radius:50%;background:rgba(245,158,11,.15);color:var(--gold-h);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;border:2px solid var(--gold-h)">1</div>'
+    +'<div><div style="font-weight:600;font-size:13px;margin-bottom:2px">'+(isES?'Haz clic en el punto A':'Click point A')+'</div>'
+    +'<div style="font-size:12px;color:var(--muted)">'+(isES?'Elige un extremo de una distancia conocida, como el ancho de una sala.':'Pick one end of a known distance, like a room width or wall length.')+'</div></div></div>'
+    +'<div style="display:flex;align-items:flex-start;gap:14px;padding:12px 14px;background:var(--bg2);border-radius:12px">'
+    +'<div style="min-width:26px;height:26px;border-radius:50%;background:rgba(16,185,129,.1);color:#10b981;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;border:2px solid #10b981">2</div>'
+    +'<div><div style="font-weight:600;font-size:13px;margin-bottom:2px">'+(isES?'Haz clic en el punto B':'Click point B')+'</div>'
+    +'<div style="font-size:12px;color:var(--muted)">'+(isES?'Elige el otro extremo de la misma distancia.':'Pick the other end of the same known distance.')+'</div></div></div>'
+    +'<div style="display:flex;align-items:flex-start;gap:14px;padding:12px 14px;background:var(--bg2);border-radius:12px">'
+    +'<div style="min-width:26px;height:26px;border-radius:50%;background:var(--bg);color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;border:2px solid var(--border)">m</div>'
+    +'<div><div style="font-weight:600;font-size:13px;margin-bottom:2px">'+(isES?'Ingresa la distancia real':'Enter the real distance')+'</div>'
+    +'<div style="font-size:12px;color:var(--muted)">'+(isES?'Escribe cuántos metros hay entre A y B en la realidad.':'Type how many meters apart A and B are in real life.')+'</div></div></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:10px;justify-content:flex-end">'
+    +'<button class="btn btn-ghost" onclick="closeMo()">'+(isES?'Cancelar':'Cancel')+'</button>'
+    +'<button class="btn btn-primary" onclick="closeMo();_beginScaleMode()">'+(isES?'Iniciar escalado':'Begin Scaling')+'</button>'
+    +'</div></div>');
+}
+function _beginScaleMode(){
+  LState.scaleMode=true;LState.scalePoints=[];renderLayout();
 }
 
 function cancelScaleMode(){
@@ -2727,7 +3252,7 @@ function updateFontSizeUI(){
     }
   } else {
     inp.value = '';
-    inp.placeholder = LState.sel.length > 1 ? 'ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â·ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â·ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â·' : 'ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â';
+    inp.placeholder = LState.sel.length > 1 ? '·' : '—';
     inp.disabled = LState.sel.length === 0;
     inp.style.opacity = LState.sel.length === 0 ? '0.4' : '1';
   }
@@ -2825,7 +3350,7 @@ function rotateSelected(deg){
   var p=proj();p.layoutItems=LState.items;saveProj(p);
   lHistorySave();
   renderLayout();
-  toast('Rotated '+deg+'ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°','s');
+  toast('Rotated '+deg+'°','s');
 }
 
 function alignSelected(mode){
@@ -2899,12 +3424,15 @@ function renderLPropsPanel(){
     </div>
     ${isTable?(
       '<div class="lsb-prop"><label>'+t('chair_style')+'</label>'+
-      '<div style="display:flex;align-items:center;gap:8px">'+
-      (selectedChairImg ? '<img src="'+selectedChairImg+'" onclick="window.SCI[this.dataset.ci]&&window.SCI[this.dataset.ci]()" data-ci="'+cType+'" class="chair-zoom" style="width:40px;height:40px;object-fit:contain;border-radius:6px;border:1px solid #e0d4b0;background:#faf8f2;cursor:pointer;flex-shrink:0" title="Click to enlarge">' : '')+
+      '<div style="display:flex;align-items:center;gap:6px">'+
       '<select class="input" style="font-size:11px;flex:1" onchange="lPropChange(\''+id+'\',\'chairType\',this.value);renderLPropsPanel()">'+chairOpts+'</select>'+
+      '<button class="btn btn-ghost btn-icon btn-sm" onclick="openChairEditor()" title="'+(LANG==='es'?'Gestionar sillas':'Manage chairs')+'"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>'+
       '</div></div>'+
       '<div class="lsb-prop"><label>'+t('centerpiece')+'</label>'+
-      '<select class="input" style="font-size:11px" onchange="lPropChange(\''+id+'\',\'centerpiece\',this.value)">'+cpOpts+'</select></div>'
+      '<div style="display:flex;align-items:center;gap:6px">'+
+      '<select class="input" style="font-size:11px;flex:1" onchange="lPropChange(\''+id+'\',\'centerpiece\',this.value)">'+cpOpts+'</select>'+
+      '<button class="btn btn-ghost btn-icon btn-sm" onclick="openCenterpieceEditor()" title="'+(LANG==='es'?'Gestionar centros':'Manage centerpieces')+'"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>'+
+      '</div></div>'
     ):''}
     <div class="lsb-prop"><label>${t('cost')}</label><input class="input" type="number" value="${item.cost||0}" min="0" step="0.01" oninput="lPropChange('${id}','cost',+this.value||0)"></div>
     <button class="btn btn-danger btn-sm w-full" style="margin-top:6px" onclick="delLItem('${id}')">${t('delete')}</button>
@@ -2970,9 +3498,9 @@ function openLItemModal(id){
     <div class="ig"><label>${_es?'Alto (m)':'Height (m)'}</label>
       <input class="input" id="li-h" type="number" step="0.05" value="${(item.h/getPPM()).toFixed(2)}">
     </div>
-    <div class="ig"><label>${_es?'Sillas / Asientos':'Chairs / Seats'}</label>
+    ${isTable?`<div class="ig"><label>${_es?'Sillas / Asientos':'Chairs / Seats'}</label>
       <input class="input" id="li-chairs" type="number" value="${item.chairs||0}" min="0" max="30">
-    </div>
+    </div>`:''}
     ${isTable?`<div class="ig" style="grid-column:1/-1"><label>${_es?'Tipo de Mesa':'Table Type'}</label>
       <input type="hidden" id="li-new-typekey" value="">
       <input type="hidden" id="li-new-shape" value="">
@@ -2981,8 +3509,8 @@ function openLItemModal(id){
       <input type="hidden" id="li-new-chairs" value="">
       <input type="hidden" id="li-new-radius" value="">
       <div style="display:flex;align-items:center;gap:10px">
-        <span id="li-type-label" style="font-size:13px;color:var(--text)">${item._typeKey?item._typeKey.replace(/-/g,' ').replace(/(\d)/,' $1'):(item.shape==='round-table'?(item.w/getPPM()).toFixed(1)+'m '+ (_es?'Redonda':'Round'):(item.w/getPPM()).toFixed(1)+'ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â'+(item.h/getPPM()).toFixed(1)+'m '+(_es?'Rectangular':'Rect'))}</span>
-        <button class="btn btn-ghost btn-sm" type="button" onclick="openChangeTableTypePicker('${id}')" style="white-space:nowrap">?? ${_es?'Cambiar Tipo':'Change Type'}</button>
+        <span id="li-type-label" style="font-size:13px;color:var(--text)">${item._typeKey?item._typeKey.replace(/-/g,' ').replace(/(\d)/,' $1'):(item.shape==='round-table'?(item.w/getPPM()).toFixed(1)+'m '+ (_es?'Redonda':'Round'):(item.w/getPPM()).toFixed(1)+'×'+(item.h/getPPM()).toFixed(1)+'m '+(_es?'Rectangular':'Rect'))}</span>
+        <button class="btn btn-ghost btn-sm" type="button" onclick="openChangeTableTypePicker('${id}')" style="white-space:nowrap">&#8635; ${_es?'Cambiar Tipo':'Change Type'}</button>
       </div>
     </div>`:''}
     <div class="ig"><label>${_es?'Color de Relleno':'Fill Color'}</label>
@@ -3001,7 +3529,7 @@ function openLItemModal(id){
     <select class="input" id="li-cp" style="font-size:12px">${cpOpts}</select>
   </div>`:''}
   <div style="font-size:10.5px;color:var(--muted);margin-bottom:8px;padding:8px;background:rgba(201,168,76,.06);border-radius:6px;border:1px solid rgba(201,168,76,.15)">
-    ?? ${_es?`Las <strong>instancias</strong> comparten cambios. Las <strong>copias</strong> quedan separadas.`:`<strong>Instances</strong> share changes. <strong>Copies</strong> stay independent.`}
+    &#9432; ${_es?`Las <strong>instancias</strong> comparten cambios. Las <strong>copias</strong> quedan separadas.`:`<strong>Instances</strong> share changes. <strong>Copies</strong> stay independent.`}
   </div>
   <div class="mo-foot">
     <button class="btn btn-ghost" onclick="closeMo()">${t('cancel')}</button>
@@ -3035,13 +3563,14 @@ function openChangeTableTypePicker(itemId){
   var currentKey=item?item._typeKey:'';
   function catSection(catKey,titleEN,titleES){
     var items=catalogue.filter(function(c){return c.cat===catKey;});
-    return '<div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 8px">'+(isES?titleES:titleEN)+'</div>'
+    return '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 8px">'+(isES?titleES:titleEN)+'</div>'
       +'<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px">'
       +items.map(function(it){
         var sel=it.key===currentKey;
-        return '<div onclick="selectNewTableType(\''+itemId+'\',\''+it.key+'\')" style="cursor:pointer;padding:8px 6px;border:2px solid '+(sel?'var(--gold)':'var(--border)')+';border-radius:10px;background:'+(sel?'var(--gold-l)':'var(--card)')+';text-align:center;transition:.15s">'
+        return '<div onclick="selectNewTableType(\''+itemId+'\',\''+it.key+'\')" style="cursor:pointer;padding:8px 6px 6px;border:2px solid '+(sel?'var(--gold)':'var(--border)')+';border-radius:10px;background:'+(sel?'var(--gold-l)':'var(--card)')+';text-align:center;transition:.15s;min-width:72px">'
           +_addTableDrawSVG(it,sel)
-          +'<div style="margin-top:4px;font-size:10px;color:var(--muted)">'+(isES?'Sillas:':'Chairs:')+' '+it.chairs+'</div>'
+          +'<div style="margin-top:5px;font-size:12px;font-weight:600;color:var(--text);line-height:1.2">'+it.label+'</div>'
+          +'<div style="font-size:10px;color:var(--muted);margin-top:1px">'+(it.dim||'')+'</div>'
           +'</div>';
       }).join('')
       +'</div>';
@@ -3050,9 +3579,11 @@ function openChangeTableTypePicker(itemId){
     +'<div style="overflow-y:auto;max-height:55vh">'
     +catSection('round','Round Tables','Mesas Redondas')
     +catSection('rect','Rectangular Tables','Mesas Rectangulares')
+    +catSection('s-table','Special Tables','Mesas Especiales')
     +'</div>'
     +'<div class="mo-foot">'
-    +'<button class="btn btn-ghost" onclick="closeMo();openLItemModal(\''+itemId+'\')">'+(isES?'Cancelar':'Cancel')+'</button>'
+    +'<button class="btn btn-ghost" onclick="closeMo();openLItemModal(\''+itemId+'\')">&#8592; '+(isES?'Volver':'Back')+'</button>'
+    +'<button class="btn btn-ghost" onclick="closeMo()">'+(isES?'Cancelar':'Cancel')+'</button>'
     +'</div>');
 }
 
@@ -3061,14 +3592,15 @@ function selectNewTableType(itemId,typeKey){
   var cat=catalogue.find(function(c){return c.key===typeKey;});
   if(!cat) return;
   var ppm=(typeof DEFAULT_PPM!=='undefined')?DEFAULT_PPM:(typeof getPPM==='function'?getPPM():40);
-  var shape=cat.cat==='round'?'round-table':'rect-table';
+  var shapeMap={'round':'round-table','rect':'rect-table','s-table':'s-table'};
+  var shape=shapeMap[cat.cat]||'rect-table';
   var tw=Math.round(cat.wM*ppm);
   var th=Math.round(cat.hM*ppm);
   var radius=cat.cat==='round'?'50%':'0px';
   // Store in a temporary global so the edit modal can read it
   window._pendingTypeChange={typeKey:typeKey,shape:shape,w:tw,h:th,chairs:cat.chairs,radius:radius,label:cat.label};
   closeMo();
-  // Re-open the edit modal ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â the hidden inputs will be populated
+  // Re-open the edit modal — the hidden inputs will be populated
   setTimeout(function(){
     openLItemModal(itemId);
   },100);
@@ -3081,7 +3613,8 @@ function saveLItem(id){
   const hM=parseFloat(gv('li-h'));
   const newW=wM>0?Math.round(wM*getPPM()):item.w;
   const newH=hM>0?Math.round(hM*getPPM()):item.h;
-  const newChairs=+gv('li-chairs');
+  const _chEl=document.getElementById('li-chairs');
+  const newChairs=_chEl?+_chEl.value:(item.chairs||0);
   const newBg=gv('li-bg');
   const newBdClr=gv('li-bdc');
   const ctEl=document.getElementById('li-ctype');
@@ -3307,56 +3840,7 @@ function lBudgetGrpCp(el){
 }
 
 function openStylesEditor(){
-  const chairRows = Object.entries(CHAIR_TYPES).map(([k,v])=>{
-    const imgSrc = CHAIR_IMAGES[k] || '';
-    const imgCell = imgSrc
-      ? '<img src="'+imgSrc+'" onclick="window.SCI[this.dataset.ci]&&window.SCI[this.dataset.ci]()" class="chair-thumb chair-zoom" data-ci="'+k+'" title="Click to enlarge">'
-      : '<span style="display:inline-block;width:36px;height:36px;border-radius:4px;background:'+(v.fill.startsWith('rgba')?'#e8e8e8':v.fill)+';border:1px solid #ddd"></span>';
-    return `<tr>
-      <td style="padding:6px 8px;white-space:nowrap">${imgCell}</td>
-      <td style="padding:6px 8px"><input style="width:100%;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px" value="${v.label}" onchange="CHAIR_TYPES['${k}'].label=this.value;saveLayoutStyles()"></td>
-      <td style="padding:6px 8px;text-align:center"><input type="color" value="${v.fill.startsWith('rgba')?'#e8e8e8':v.fill}" style="width:32px;height:28px;border:none;cursor:pointer;border-radius:4px" onchange="CHAIR_TYPES['${k}'].fill=this.value;saveLayoutStyles()"></td>
-      <td style="padding:6px 8px;text-align:center"><input type="color" value="${v.stroke||'#bbbbbb'}" style="width:32px;height:28px;border:none;cursor:pointer;border-radius:4px" onchange="CHAIR_TYPES['${k}'].stroke=this.value;saveLayoutStyles()"></td>
-      <td style="padding:6px 8px"><input type="number" min="0" step="0.01" value="${v.costPerChair||0}" style="width:70px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px" placeholder="0" onchange="CHAIR_TYPES['${k}'].costPerChair=+this.value||0;saveLayoutStyles()"></td>
-    </tr>`;
-  }).join('');
-
-  const cpRows = Object.entries(CENTERPIECE_TYPES).filter(([k])=>k!=='none').map(([k,v])=>`
-    <tr>
-      <td style="padding:6px 8px"><input style="width:100%;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px" value="${v.label}" onchange="CENTERPIECE_TYPES['${k}'].label=this.value;saveLayoutStyles()"></td>
-      <td style="padding:6px 8px;text-align:center"><input type="color" value="${v.color||'#888888'}" style="width:32px;height:28px;border:none;cursor:pointer;border-radius:4px" onchange="CENTERPIECE_TYPES['${k}'].color=this.value;saveLayoutStyles()"></td>
-      <td style="padding:6px 8px"><input type="number" min="0" step="0.01" value="${v.cost||0}" style="width:70px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px" placeholder="0" onchange="CENTERPIECE_TYPES['${k}'].cost=+this.value||0;saveLayoutStyles()"></td>
-    </tr>`).join('');
-
-  openMo(`<div class="mo-title">?? Styles Editor</div>
-  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--light);margin-bottom:8px">Chair Styles</div>
-  <div style="overflow-x:auto;margin-bottom:18px">
-    <table style="width:100%;border-collapse:collapse;font-size:12px">
-      <thead><tr style="background:var(--bg2)">
-        <th style="padding:7px 8px;text-align:center;font-size:10px;text-transform:uppercase;width:44px">Photo</th>
-        <th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;min-width:100px">${t('name')}</th>
-        <th style="padding:7px 8px;text-align:center;font-size:10px;text-transform:uppercase">Fill</th>
-        <th style="padding:7px 8px;text-align:center;font-size:10px;text-transform:uppercase">Border</th>
-        <th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase">$/Chair</th>
-      </tr></thead>
-      <tbody>${chairRows}</tbody>
-    </table>
-  </div>
-  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--light);margin-bottom:8px">Centerpiece Types</div>
-  <div style="overflow-x:auto">
-    <table style="width:100%;border-collapse:collapse;font-size:12px">
-      <thead><tr style="background:var(--bg2)">
-        <th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;min-width:120px">Name</th>
-        <th style="padding:7px 8px;text-align:center;font-size:10px;text-transform:uppercase">Color</th>
-        <th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase">$/Piece</th>
-      </tr></thead>
-      <tbody>${cpRows}</tbody>
-    </table>
-  </div>
-  <div class="mo-foot">
-    <button class="btn btn-ghost" onclick="closeMo()">Close</button>
-    <button class="btn btn-primary" onclick="saveLayoutStyles();closeMo();renderLayout();toast('Styles saved','s')">Save & Apply</button>
-  </div>`);
+  openChairEditor();
 }
 
 
@@ -3457,7 +3941,7 @@ function exportLayoutFull(layoutName){
   <section class="hero">
     <div>
       <h1>${text(name)}</h1>
-      <div class="sub">${text(t('layout_quote_title'))} � ${text(exportedOn)}</div>
+      <div class="sub">${text(t('layout_quote_title'))} � ${text(exportedOn)}</div>
       <div class="sub">${text(t('layout_quote_sub'))}</div>
     </div>
   </section>
@@ -3527,10 +4011,253 @@ function exportLayoutFull(layoutName){
   a.href=URL.createObjectURL(blob);
   a.download=`Layout_${name.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.html`;
   a.click();
-  toast(isES?'Exportaci�n descargada':'Export downloaded','s');
+  toast(isES?'Exportaci�n descargada':'Export downloaded','s');
 }
 
 function exportLayoutPDF(){ exportLayoutFull(); }
+
+
+// ─── Layout Editor Guided Tour ─────────────────────────────────────────────
+
+var _lTourIndex=0;
+
+var _lTourSteps=[
+  {
+    target:'add-element-trigger',
+    title:function(){return LANG==='es'?'Agregar elementos':'Add Elements';},
+    body:function(){return LANG==='es'
+      ?'Haz clic aquí para agregar mesas y elementos de evento al plano. También puedes cargar una imagen de plano de piso.'
+      :'Click here to add tables and event elements to your layout. You can also upload a floorplan image.';},
+    pos:'bottom'
+  },
+  {
+    target:'layout-zoom-bar',
+    title:function(){return LANG==='es'?'Zoom':'Zoom';},
+    body:function(){return LANG==='es'
+      ?'Usa los botones – y + para hacer zoom. También puedes hacer scroll con el mouse sobre el lienzo para acercar o alejar.'
+      :'Use the – and + buttons to zoom. You can also scroll the mouse wheel over the canvas to zoom in and out.';},
+    pos:'bottom'
+  },
+  {
+    target:'lbtn-zoom-fit',
+    title:function(){return LANG==='es'?'Zoom para ajustar':'Zoom to Fit';},
+    body:function(){return LANG==='es'
+      ?'Haz clic para que todos los elementos quepan en la pantalla de una vez.'
+      :'Click to fit all elements into view at once.';},
+    pos:'bottom'
+  },
+  {
+    target:'lbtn-zoom-sel',
+    title:function(){return LANG==='es'?'Zoom a selección':'Zoom to Selected';},
+    body:function(){return LANG==='es'
+      ?'Selecciona uno o más elementos y haz clic aquí para enfocar la vista en ellos.'
+      :'Select one or more elements, then click here to focus the view on them.';},
+    pos:'bottom'
+  },
+  {
+    target:'lbtn-measure',
+    title:function(){return LANG==='es'?'Herramienta de medición':'Measure Tool';},
+    body:function(){return LANG==='es'
+      ?'Activa la herramienta de medición y haz clic y arrastra en el lienzo para medir distancias entre puntos.'
+      :'Activate the measure tool and click-drag on the canvas to measure distances between points.';},
+    pos:'bottom'
+  },
+  {
+    target:'lbtn-snap',
+    title:function(){return LANG==='es'?'Alinear a cuadrícula (Snap)':'Snap to Grid';},
+    body:function(){return LANG==='es'
+      ?'Cuando está activado, los elementos se alinean automáticamente a la cuadrícula al moverlos, facilitando la organización precisa.'
+      :'When enabled, elements snap to the grid as you move them, making precise arrangement easy.';},
+    pos:'bottom'
+  },
+  {
+    target:'lbtn-floorplan',
+    fallback:'add-element-trigger',
+    title:function(){return LANG==='es'?'Controles del plano de piso':'Floorplan Controls';},
+    body:function(){return LANG==='es'
+      ?'Cuando hay un plano cargado, usa estos controles para cambiar la imagen, calibrar la escala, bloquearla o ajustar su opacidad.'
+      :'When a floorplan is loaded, use these controls to swap the image, calibrate scale, lock it in place, or adjust its opacity.';},
+    pos:'bottom'
+  },
+  {
+    target:'lbtn-font',
+    title:function(){return LANG==='es'?'Controles de fuente':'Font Controls';},
+    body:function(){return LANG==='es'
+      ?'Ajusta el tamaño de fuente de las etiquetas de los elementos seleccionados.'
+      :'Adjust the font size of labels on selected elements.';},
+    pos:'bottom'
+  },
+  {
+    target:'lbtn-align',
+    title:function(){return LANG==='es'?'Controles de alineación':'Align Controls';},
+    body:function(){return LANG==='es'
+      ?'Alinea o distribuye varios elementos seleccionados: izquierda, centro, derecha, arriba, medio, abajo, o distribución equitativa.'
+      :'Align or distribute multiple selected elements: left, center, right, top, middle, bottom, or even spacing.';},
+    pos:'bottom'
+  },
+  {
+    target:'lbtn-rotate',
+    title:function(){return LANG==='es'?'Controles de rotación':'Rotate Controls';},
+    body:function(){return LANG==='es'
+      ?'Rota los elementos seleccionados en sentido horario o antihorario. El número central define los grados por paso.'
+      :'Rotate selected elements clockwise or counter-clockwise. The center number sets degrees per step.';},
+    pos:'bottom'
+  },
+  {
+    target:'lbtn-quote-toggle',
+    title:function(){return LANG==='es'?'Herramienta de cotización':'Quote Tool';},
+    body:function(){return LANG==='es'
+      ?'Cuando los elementos tienen precios asignados, aparece aquí el total de la cotización. Haz clic para ver el desglose completo de costos del plano.'
+      :'When elements have prices assigned, the quote total appears here. Click it to see the full cost breakdown for the layout.';},
+    pos:'bottom'
+  },
+  {
+    target:'lbtn-export',
+    title:function(){return LANG==='es'?'Exportar':'Export';},
+    body:function(){return LANG==='es'
+      ?'Exporta tu plano como un archivo HTML completo con detalles de elementos, cotización y una vista previa visual.'
+      :'Export your layout as a self-contained HTML file with element details, quote, and a visual preview.';},
+    pos:'bottom'
+  },
+  {
+    target:null,
+    title:function(){return LANG==='es'?'Edición con doble clic':'Double-Click Editing';},
+    body:function(){return LANG==='es'
+      ?'Haz doble clic en cualquier elemento del lienzo para editar su etiqueta, precio, sillas y más directamente en el panel de propiedades.'
+      :'Double-click any element on the canvas to edit its label, price, chairs, and more directly in the properties panel.';},
+    pos:'center'
+  },
+  {
+    target:null,
+    title:function(){return LANG==='es'?'Instancia vs. Copia':'Instance vs. Copy';},
+    body:function(){return LANG==='es'
+      ?'Los elementos de la biblioteca son instancias vinculadas: editarlos actualiza todas sus copias en el plano. Usa el menú contextual para crear una copia independiente.'
+      :'Library elements are linked instances: editing one updates all copies in the layout. Use the right-click menu to create an independent copy.';},
+    pos:'center'
+  },
+  {
+    target:null,
+    title:function(){return LANG==='es'?'Desplazamiento y selección múltiple':'Pan & Multi-Select';},
+    body:function(){return LANG==='es'
+      ?'<strong>Desplazarse:</strong> Mantén espacio y arrastra para mover el lienzo.<br><strong>Seleccionar varios:</strong> Arrastra en el lienzo vacío para un rectángulo de selección. Mantén Shift y haz clic para agregar o quitar elementos de la selección.'
+      :'<strong>Pan:</strong> Hold Space and drag to pan the canvas.<br><strong>Multi-select:</strong> Drag on empty canvas for a selection box. Hold Shift and click to add or remove items from the selection.';},
+    pos:'center'
+  },
+  {
+    target:null,
+    title:function(){return LANG==='es'?'Atajos de teclado':'Keyboard Shortcuts';},
+    body:function(){return LANG==='es'
+      ?'<strong>Ctrl+C / Ctrl+V</strong> — Copiar y pegar<br><strong>Supr / Retroceso</strong> — Eliminar seleccionados<br><strong>Ctrl+Z</strong> — Deshacer<br><strong>Flechas</strong> — Mover con precisión'
+      :'<strong>Ctrl+C / Ctrl+V</strong> — Copy and paste<br><strong>Delete / Backspace</strong> — Delete selected<br><strong>Ctrl+Z</strong> — Undo<br><strong>Arrow keys</strong> — Nudge selected elements';},
+    pos:'center'
+  }
+];
+
+function startLayoutTour(){
+  _lTourIndex=0;
+  _renderLayoutTourStep();
+}
+
+function _lTourGetEl(step){
+  if(!step.target) return null;
+  var el=document.getElementById(step.target);
+  if(!el && step.fallback) el=document.getElementById(step.fallback);
+  return el||null;
+}
+
+function _renderLayoutTourStep(){
+  var existing=document.getElementById('ltour-overlay');
+  if(existing) existing.remove();
+
+  if(_lTourIndex>=_lTourSteps.length){ _lTourEnd(); return; }
+
+  var step=_lTourSteps[_lTourIndex];
+  var targetEl=_lTourGetEl(step);
+  var isCenter=!targetEl||step.pos==='center';
+  var isES=LANG==='es';
+  var total=_lTourSteps.length;
+
+  // Progress dots
+  var dots='';
+  for(var i=0;i<total;i++){
+    dots+='<span style="width:'+(i===_lTourIndex?'18':'7')+'px;height:7px;border-radius:4px;background:'+(i===_lTourIndex?'var(--gold,#c9a84c)':'rgba(201,168,76,.3)')+';display:inline-block;transition:width .25s,background .25s"></span>';
+  }
+
+  // Spotlight rect
+  var spotRect=null;
+  if(targetEl){
+    var r=targetEl.getBoundingClientRect();
+    var pad=8;
+    spotRect={x:r.left-pad,y:r.top-pad,w:r.width+pad*2,h:r.height+pad*2};
+  }
+
+  // Card position
+  var cardStyle='';
+  if(isCenter){
+    cardStyle='position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100002;';
+  } else {
+    var br=targetEl.getBoundingClientRect();
+    var vw=window.innerWidth;
+    var cardW=320;
+    var left=br.left+cardW+12>vw ? Math.max(12,br.right-cardW) : br.left;
+    left=Math.max(12,Math.min(left,vw-cardW-12));
+    var top=br.bottom+12;
+    if(top+240>window.innerHeight) top=br.top-252;
+    if(top<8) top=8;
+    cardStyle='position:fixed;top:'+top+'px;left:'+left+'px;z-index:100002;';
+  }
+
+  // SVG mask
+  var svgMask='';
+  if(spotRect){
+    var rx=Math.min(10,spotRect.h/2);
+    svgMask='<svg style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:100001" xmlns="http://www.w3.org/2000/svg"><defs><mask id="ltourmask"><rect width="100%" height="100%" fill="white"/><rect x="'+spotRect.x+'" y="'+spotRect.y+'" width="'+spotRect.w+'" height="'+spotRect.h+'" rx="'+rx+'" fill="black"/></mask></defs><rect width="100%" height="100%" fill="rgba(10,8,5,0.62)" mask="url(#ltourmask)"/></svg>';
+  } else {
+    svgMask='<div style="position:fixed;inset:0;background:rgba(10,8,5,0.55);z-index:100001;pointer-events:none"></div>';
+  }
+
+  var prevBtn=_lTourIndex>0
+    ?'<button onclick="_lTourPrev()" style="border:1px solid var(--border,#e7dccb);background:transparent;color:var(--text,#241f17);border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer">'+(isES?'Atrás':'Back')+'</button>'
+    :'';
+  var nextLabel=_lTourIndex===total-1?(isES?'Finalizar':'Done'):(isES?'Siguiente':'Next');
+
+  var html='<div id="ltour-overlay" style="position:fixed;inset:0;z-index:100000;pointer-events:none">'
+    +svgMask
+    +'<div style="'+cardStyle+'pointer-events:auto;width:320px;background:var(--card,#fff);border:1px solid var(--border,#e7dccb);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.22);padding:22px 22px 18px;font-family:inherit;box-sizing:border-box">'
+    +  '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px">'
+    +    '<div style="font-size:15px;font-weight:700;color:var(--text,#241f17);line-height:1.3">'+step.title()+'</div>'
+    +    '<button onclick="_lTourEnd()" style="border:none;background:transparent;cursor:pointer;color:var(--muted,#9a8a6a);font-size:20px;line-height:1;padding:0;flex-shrink:0;margin-top:-2px" title="'+(isES?'Cerrar tour':'Close tour')+'">×</button>'
+    +  '</div>'
+    +  '<div style="font-size:13px;color:var(--muted,#6f665c);line-height:1.65;margin-bottom:18px">'+step.body()+'</div>'
+    +  '<div style="display:flex;align-items:center;gap:8px">'
+    +    '<div style="display:flex;gap:4px;align-items:center;flex:1;min-width:0;overflow:hidden">'+dots+'</div>'
+    +    '<div style="display:flex;gap:8px;align-items:center;flex-shrink:0">'
+    +      prevBtn
+    +      '<button onclick="_lTourNext()" style="border:none;background:var(--gold,#c9a84c);color:#fff;border-radius:8px;padding:6px 18px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">'+nextLabel+'</button>'
+    +    '</div>'
+    +  '</div>'
+    +'</div>'
+    +'</div>';
+
+  var wrap=document.createElement('div');
+  wrap.innerHTML=html;
+  document.body.appendChild(wrap.firstChild);
+}
+
+function _lTourNext(){
+  _lTourIndex++;
+  if(_lTourIndex>=_lTourSteps.length){ _lTourEnd(); return; }
+  _renderLayoutTourStep();
+}
+
+function _lTourPrev(){
+  if(_lTourIndex>0){ _lTourIndex--; _renderLayoutTourStep(); }
+}
+
+function _lTourEnd(){
+  var el=document.getElementById('ltour-overlay');
+  if(el) el.remove();
+}
 
 
 

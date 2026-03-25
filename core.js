@@ -204,6 +204,9 @@ var EVENTOS_DATA = window.EVENTOS_DATA || null;
 var _saveTimer = null;
 var _lastSyncTime = null;
 
+var _fileUrlCache = {};
+var _loadedProjects = {}; // { userId: Set<projectId> } — tracks which projects have full data loaded
+
 function hasRequiredConfig(){
   return !!(EVENTOS_DATA && EVENTOS_DATA.isConfigured && EVENTOS_DATA.isConfigured() && AI_PROXY_URL);
 }
@@ -213,8 +216,39 @@ function getConfigErrorMessage(){
   return 'Missing app configuration. Check app-config.js and reload.';
 }
 
+// Strip a project down to metadata fields for localStorage caching.
+// Keeps tasks (needed for renderAppDash), drops vendors/guests/layouts/moodboard.
+function _projectToMetaStub(p){
+  if(!p) return p;
+  return {
+    id: p.id,
+    name: p.name,
+    clientName: p.clientName,
+    date: p.date,
+    location: p.location,
+    type: p.type,
+    status: p.status,
+    budget: p.budget,
+    description: p.description,
+    tasks: p.tasks,
+    share: p.share,
+    _seeded: p._seeded,
+    _metaOnly: true
+  };
+}
+
 function cacheDB(){
-  try{ if(DB.cur) localStorage.setItem('eventos_cache_'+DB.cur, JSON.stringify(DB.projects[DB.cur]||{})); }catch(e){}
+  try{
+    if(!DB.cur) return;
+    var projects = DB.projects[DB.cur] || {};
+    var toCache = {};
+    Object.keys(projects).forEach(function(pid){
+      var p = projects[pid];
+      // Keep __library__ fully cached (templates, not large user data)
+      toCache[pid] = (pid === '__library__') ? p : _projectToMetaStub(p);
+    });
+    localStorage.setItem('eventos_cache_'+DB.cur, JSON.stringify(toCache));
+  }catch(e){}
 }
 function loadCache(userId){
   try{
@@ -224,6 +258,185 @@ function loadCache(userId){
   return false;
 }
 
+// Resolve Convex storage IDs to URLs for display in a single project
+async function resolveStorageUrls(p){
+  if(!p || typeof p !== 'object') return;
+  var ids = [];
+  // Moodboard images
+  var mb = p.moodboard;
+  if(mb && typeof mb === 'object'){
+    var allImgs = (mb.uncategorized || []).concat(
+      (mb.folders || []).reduce(function(acc, f){ return acc.concat(f.images || []); }, [])
+    );
+    allImgs.forEach(function(img){
+      if(img.storageId && !_fileUrlCache[img.storageId]) ids.push(img.storageId);
+    });
+  }
+  // Payment receipts
+  (p.vendors || []).forEach(function(v){
+    (v.payments || []).forEach(function(pay){
+      if(pay.receiptStorageId && !_fileUrlCache[pay.receiptStorageId]) ids.push(pay.receiptStorageId);
+    });
+  });
+  // Floorplan
+  if(p.floorplan && p.floorplan._storageId && !_fileUrlCache[p.floorplan._storageId]){
+    ids.push(p.floorplan._storageId);
+  }
+  if(!ids.length) return;
+  // Deduplicate
+  var unique = []; var seen = {};
+  ids.forEach(function(id){ if(!seen[id]){ seen[id]=true; unique.push(id); } });
+  try{
+    var urls = await EVENTOS_DATA.getFileUrls(unique);
+    unique.forEach(function(id, i){ if(urls[i]) _fileUrlCache[id] = urls[i]; });
+  }catch(e){ console.error('resolveStorageUrls:', e); return; }
+  // Populate src fields from cache
+  if(mb && typeof mb === 'object'){
+    var populate = function(img){
+      if(img.storageId && _fileUrlCache[img.storageId]) img.src = _fileUrlCache[img.storageId];
+    };
+    (mb.uncategorized || []).forEach(populate);
+    (mb.folders || []).forEach(function(f){ (f.images || []).forEach(populate); });
+  }
+  (p.vendors || []).forEach(function(v){
+    (v.payments || []).forEach(function(pay){
+      if(pay.receiptStorageId && _fileUrlCache[pay.receiptStorageId]) pay.receipt = _fileUrlCache[pay.receiptStorageId];
+    });
+  });
+  if(p.floorplan && p.floorplan._storageId && _fileUrlCache[p.floorplan._storageId]){
+    if(p.floorplan.img === '__stored__') p.floorplan.img = _fileUrlCache[p.floorplan._storageId];
+  }
+}
+
+// Resolve URLs for all projects belonging to a user
+async function resolveAllProjectUrls(userId){
+  var projects = DB.projects[userId];
+  if(!projects) return;
+  var allIds = [];
+  Object.keys(projects).forEach(function(pid){
+    var p = projects[pid];
+    if(!p || typeof p !== 'object') return;
+    var mb = p.moodboard;
+    if(mb && typeof mb === 'object'){
+      (mb.uncategorized || []).concat(
+        (mb.folders || []).reduce(function(acc, f){ return acc.concat(f.images || []); }, [])
+      ).forEach(function(img){
+        if(img.storageId && !_fileUrlCache[img.storageId]) allIds.push(img.storageId);
+      });
+    }
+    (p.vendors || []).forEach(function(v){
+      (v.payments || []).forEach(function(pay){
+        if(pay.receiptStorageId && !_fileUrlCache[pay.receiptStorageId]) allIds.push(pay.receiptStorageId);
+      });
+    });
+    if(p.floorplan && p.floorplan._storageId && !_fileUrlCache[p.floorplan._storageId]) allIds.push(p.floorplan._storageId);
+  });
+  if(!allIds.length) return;
+  var unique = []; var seen = {};
+  allIds.forEach(function(id){ if(!seen[id]){ seen[id]=true; unique.push(id); } });
+  try{
+    var urls = await EVENTOS_DATA.getFileUrls(unique);
+    unique.forEach(function(id, i){ if(urls[i]) _fileUrlCache[id] = urls[i]; });
+  }catch(e){ console.error('resolveAllProjectUrls:', e); return; }
+  // Populate all projects
+  Object.keys(projects).forEach(function(pid){
+    var p = projects[pid];
+    if(!p || typeof p !== 'object') return;
+    var mb = p.moodboard;
+    if(mb && typeof mb === 'object'){
+      var populate = function(img){
+        if(img.storageId && _fileUrlCache[img.storageId]) img.src = _fileUrlCache[img.storageId];
+      };
+      (mb.uncategorized || []).forEach(populate);
+      (mb.folders || []).forEach(function(f){ (f.images || []).forEach(populate); });
+    }
+    (p.vendors || []).forEach(function(v){
+      (v.payments || []).forEach(function(pay){
+        if(pay.receiptStorageId && _fileUrlCache[pay.receiptStorageId]) pay.receipt = _fileUrlCache[pay.receiptStorageId];
+      });
+    });
+    if(p.floorplan && p.floorplan._storageId && _fileUrlCache[p.floorplan._storageId]){
+      if(p.floorplan.img === '__stored__') p.floorplan.img = _fileUrlCache[p.floorplan._storageId];
+    }
+  });
+}
+
+// Lazy migration: upload base64 images to Convex file storage in the background
+async function migrateBase64Images(p){
+  if(!p || typeof p !== 'object' || p._migrating) return;
+  var dirty = false;
+  var isBase64 = EVENTOS_DATA.isBase64Image;
+
+  // Migrate moodboard images
+  var mb = p.moodboard;
+  if(mb && typeof mb === 'object'){
+    var migrateImg = async function(img){
+      if(img.storageId || !isBase64(img.src)) return;
+      try{
+        var storageId = await EVENTOS_DATA.uploadBase64(img.src);
+        var url = await EVENTOS_DATA.getFileUrl(storageId);
+        img.storageId = storageId;
+        if(url){ img.src = url; _fileUrlCache[storageId] = url; }
+        dirty = true;
+      }catch(e){ console.error('Migration error (moodboard):', e); }
+    };
+    var allImgs = (mb.uncategorized || []).concat(
+      (mb.folders || []).reduce(function(acc, f){ return acc.concat(f.images || []); }, [])
+    );
+    for(var i = 0; i < allImgs.length; i++) await migrateImg(allImgs[i]);
+  }
+
+  // Migrate payment receipts
+  for(var vi = 0; vi < (p.vendors || []).length; vi++){
+    var v = p.vendors[vi];
+    for(var pi = 0; pi < (v.payments || []).length; pi++){
+      var pay = v.payments[pi];
+      if(pay.receiptStorageId || !isBase64(pay.receipt)) continue;
+      try{
+        var sid = await EVENTOS_DATA.uploadBase64(pay.receipt);
+        var rurl = await EVENTOS_DATA.getFileUrl(sid);
+        pay.receiptStorageId = sid;
+        if(rurl){ pay.receipt = rurl; _fileUrlCache[sid] = rurl; }
+        dirty = true;
+      }catch(e){ console.error('Migration error (receipt):', e); }
+    }
+  }
+
+  // Migrate floorplan thumb (if large base64 is stored inline)
+  if(p.floorplan && !p.floorplan._storageId && p.floorplan.img && p.floorplan.img !== '__idb__' && isBase64(p.floorplan.img)){
+    try{
+      var fpBlob = EVENTOS_DATA.base64ToBlob(p.floorplan.img);
+      var fpSid = await EVENTOS_DATA.uploadFile(fpBlob);
+      var fpUrl = await EVENTOS_DATA.getFileUrl(fpSid);
+      p.floorplan._storageId = fpSid;
+      if(fpUrl){ p.floorplan.img = fpUrl; _fileUrlCache[fpSid] = fpUrl; }
+      dirty = true;
+    }catch(e){ console.error('Migration error (floorplan):', e); }
+  }
+
+  if(dirty){
+    saveProj(p);
+    console.log('EventOS: migrated base64 images to file storage for project', p.id);
+  }
+}
+
+// Run lazy migration for all projects in the background
+function migrateAllProjectImages(userId){
+  var projects = DB.projects[userId];
+  if(!projects) return;
+  var pids = Object.keys(projects).filter(function(pid){ return pid !== '__library__'; });
+  var idx = 0;
+  function next(){
+    if(idx >= pids.length) return;
+    var p = projects[pids[idx]];
+    idx++;
+    if(p) migrateBase64Images(p).then(next).catch(function(){ next(); });
+    else next();
+  }
+  // Start migration after a short delay to not block initial render
+  setTimeout(next, 3000);
+}
+
 async function loadProjectsFromCloud(userId){
   setSyncStatus('syncing');
 
@@ -231,22 +444,32 @@ async function loadProjectsFromCloud(userId){
   if(hadCache) renderEvents();
 
   try{
+    // Phase 1: fast metadata load — renders the events list quickly
     var controller = typeof AbortController!=='undefined' ? new AbortController() : null;
     var timeoutId = controller ? setTimeout(function(){ controller.abort(); }, 12000) : null;
-    var projects = await EVENTOS_DATA.getProjectsByWixUserId(userId, {
+    var metaProjects = await EVENTOS_DATA.getProjectMetaByWixUserId({
       signal: controller ? controller.signal : undefined
     });
     if(timeoutId) clearTimeout(timeoutId);
-    if(projects && Object.keys(projects).length > 0){
-      DB.projects[userId] = projects;
-      if(projects['__library__']) projects['__library__']._seeded = true;
-      cacheDB();
+    if(metaProjects && Object.keys(metaProjects).length > 0){
+      if(!DB.projects[userId]) DB.projects[userId] = {};
+      // Merge: keep any fully-loaded project already in memory (from cache), fill the rest with stubs
+      Object.keys(metaProjects).forEach(function(pid){
+        var existing = DB.projects[userId][pid];
+        if(!existing || existing._metaOnly){
+          DB.projects[userId][pid] = metaProjects[pid];
+        }
+      });
     } else if(!hadCache){
       if(!DB.projects[userId]) DB.projects[userId] = {};
     }
     renderEvents();
     _lastSyncTime = Date.now();
     setSyncStatus('ok');
+
+    // Phase 2: load full project data in the background
+    _loadFullProjectsBackground(userId);
+
   } catch(e){
     console.error('loadProjectsFromCloud:', e);
     if(e && e.name==='AbortError'){
@@ -269,24 +492,103 @@ async function loadProjectsFromCloud(userId){
   return true;
 }
 
+async function _loadFullProjectsBackground(userId){
+  try{
+    var projects = await EVENTOS_DATA.getProjectsByWixUserId();
+    if(projects && Object.keys(projects).length > 0){
+      // Merge rather than full-replace: preserve any events created locally while the
+      // fetch was in-flight (e.g. user created a new event before background load finished).
+      if(!DB.projects[userId]) DB.projects[userId] = {};
+      Object.keys(projects).forEach(function(pid){
+        var inMem = DB.projects[userId][pid];
+        // Only overwrite if: no local copy exists, or the local copy is still a meta stub
+        if(!inMem || inMem._metaOnly) DB.projects[userId][pid] = projects[pid];
+      });
+      if(DB.projects[userId]['__library__']) DB.projects[userId]['__library__']._seeded = true;
+      if(!_loadedProjects[userId]) _loadedProjects[userId] = new Set();
+      Object.keys(projects).forEach(function(pid){ _loadedProjects[userId].add(pid); });
+      cacheDB();
+
+      // The library needs its extras (layouts) immediately so getLib().layouts is populated
+      var lib = DB.projects[userId] && DB.projects[userId]['__library__'];
+      if(lib && lib._hasExtras && !lib._extrasLoaded){
+        await _mergeProjectExtras('__library__', lib);
+        cacheDB();
+      }
+    }
+    resolveAllProjectUrls(userId).then(function(){
+      cacheDB();
+      migrateAllProjectImages(userId);
+    }).catch(function(e){ console.error('resolveAllProjectUrls:', e); });
+  }catch(e){ console.error('_loadFullProjectsBackground:', e); }
+}
+
+// Fetch the companion extras document and merge guests/layoutItems/savedLayouts/layouts into p in-place.
+async function _mergeProjectExtras(projectId, p){
+  try{
+    var extras = await EVENTOS_DATA.getProjectExtras(projectId);
+    if(extras){
+      p.guests       = extras.guests       || [];
+      p.layoutItems  = extras.layoutItems  || [];
+      p.savedLayouts = extras.savedLayouts || [];
+      if(extras.layouts) p.layouts = extras.layouts;
+    }
+    p._extrasLoaded = true;
+  }catch(e){ console.error('EventOS: _mergeProjectExtras:', e); }
+}
+
+async function loadProjectById(projectId){
+  if(!DB.cur || !projectId) return null;
+  try{
+    var data = await EVENTOS_DATA.getProjectById(projectId);
+    if(data){
+      if(data._hasExtras) await _mergeProjectExtras(projectId, data);
+      if(!DB.projects[DB.cur]) DB.projects[DB.cur] = {};
+      DB.projects[DB.cur][projectId] = data;
+      if(!_loadedProjects[DB.cur]) _loadedProjects[DB.cur] = new Set();
+      _loadedProjects[DB.cur].add(projectId);
+      resolveStorageUrls(data).catch(function(){});
+      cacheDB();
+    }
+    return data;
+  }catch(e){ console.error('loadProjectById:', e); return null; }
+}
+
 function showLoadingError(msg){
   var el = document.getElementById('pg-loading-error');
   if(el){ el.textContent = msg; el.style.display = 'block'; }
 }
 
 async function saveProj(p){
+  // Never write a metadata stub to Convex — it would overwrite full project data with empty fields
+  if(p && p._metaOnly){
+    console.warn('EventOS: skipped saveProj for meta-only stub', p.id, '— full data not yet loaded');
+    return;
+  }
   if(!DB.projects[DB.cur]) DB.projects[DB.cur] = {};
   DB.projects[DB.cur][p.id] = p;
   cacheDB();
+  // Internal pseudo-projects live in memory/localStorage only — never persist to Convex
+  if(p.id === '__lib_layout__') return;
 
   setSyncStatus('saving');
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(async function(){
     try{
-      await EVENTOS_DATA.upsertProject(DB.cur, p);
+      await EVENTOS_DATA.upsertProject(p);
+      // Advance _lastSyncTime so our own save doesn't appear as "changed" on the next delta poll
       _lastSyncTime = Date.now();
       setSyncStatus('ok');
-    }catch(e){ console.error('saveProj:', e); setSyncStatus('offline'); }
+    }catch(e){
+      setSyncStatus('error');
+      if(e && e.message && e.message.indexOf('__oversize__') !== -1){
+        console.error('EventOS: project', p.id, 'is too large to save even after splitting extras');
+        toast('This event has too much data to save even after optimization. Archive old payments or remove unused layout items to continue.', 'e');
+      } else {
+        console.error('saveProj:', e);
+        setSyncStatus('offline');
+      }
+    }
   }, 1500);
 }
 
@@ -300,7 +602,7 @@ async function delProj(id){
   if(DB.projects[DB.cur]) delete DB.projects[DB.cur][id];
   cacheDB();
   try{
-    await EVENTOS_DATA.deleteProject(DB.cur, id);
+    await EVENTOS_DATA.deleteProject(id);
   }catch(e){ console.error('delProj:', e); }
 }
 
@@ -308,24 +610,73 @@ async function manualSync(){
   if(!DB.cur) return;
   setSyncStatus('syncing');
   try{
-    var _mc = typeof AbortController!=='undefined' ? new AbortController() : null;
-    var _mt = _mc ? setTimeout(function(){ _mc.abort(); }, 10000) : null;
-    var projects = await EVENTOS_DATA.getProjectsByWixUserId(DB.cur, {
-      signal: _mc ? _mc.signal : undefined
-    });
-    if(_mt) clearTimeout(_mt);
-    if(projects && Object.keys(projects).length > 0){
-      DB.projects[DB.cur] = projects;
-      if(projects['__library__']) projects['__library__']._seeded = true;
-      cacheDB();
-    } else {
-      DB.projects[DB.cur] = {};
-      cacheDB();
+    var since = _lastSyncTime || (Date.now() - 300000);
+
+    // Step 1: ask Convex which project IDs changed since our last sync.
+    // Uses the by_wix_user_updated index — reads 0 documents when nothing changed.
+    var changedIds = await EVENTOS_DATA.getChangedProjectIds(since);
+
+    if(!changedIds || !changedIds.length){
+      _lastSyncTime = Date.now();
+      setSyncStatus('ok');
+      return;
     }
-    renderEvents();
+
+    // Step 2: fetch only the changed projects individually
+    var anyFetched = false;
+    for(var i = 0; i < changedIds.length; i++){
+      var id = changedIds[i];
+      try{
+        var data = await EVENTOS_DATA.getProjectById(id);
+        if(data){
+          if(data._hasExtras){
+            // If extras were already in memory (user has the project open), preserve them.
+            // Otherwise fetch fresh to keep guests/layout current.
+            var prev = DB.projects[DB.cur] && DB.projects[DB.cur][id];
+            if(prev && prev._extrasLoaded){
+              data.guests       = prev.guests       || [];
+              data.layoutItems  = prev.layoutItems  || [];
+              data.savedLayouts = prev.savedLayouts || [];
+              if(prev.layouts) data.layouts = prev.layouts;
+              data._extrasLoaded = true;
+            } else {
+              await _mergeProjectExtras(id, data);
+            }
+          }
+          if(!DB.projects[DB.cur]) DB.projects[DB.cur] = {};
+          DB.projects[DB.cur][id] = data;
+          if(!_loadedProjects[DB.cur]) _loadedProjects[DB.cur] = new Set();
+          _loadedProjects[DB.cur].add(id);
+          if(id === '__library__') data._seeded = true;
+          resolveStorageUrls(data).catch(function(){});
+          anyFetched = true;
+        }
+      }catch(e){ console.error('manualSync: failed to fetch project', id, e); }
+    }
+
+    if(anyFetched){
+      cacheDB();
+      renderEvents();
+      // If the currently open project was updated externally, re-render its active tab
+      if(CID && changedIds.indexOf(CID) !== -1){
+        renderPNav();
+        var tabRenders = {
+          dashboard: typeof renderDash==='function'?renderDash:null,
+          budget: typeof renderBudget==='function'?renderBudget:null,
+          timeline: typeof renderTimeline==='function'?renderTimeline:null,
+          guests: typeof renderGuests==='function'?renderGuests:null,
+          layout: typeof renderLayout==='function'?renderLayout:null,
+          moodboard: typeof renderMoodboard==='function'?renderMoodboard:null
+        };
+        var fn = tabRenders[CTAB];
+        if(fn) fn();
+      }
+    }
+
     _lastSyncTime = Date.now();
     setSyncStatus('ok');
   }catch(e){
+    console.error('manualSync:', e);
     setSyncStatus('offline');
   }
 }
@@ -334,8 +685,10 @@ var _syncPollTimer = null;
 function startSyncPoll(){
   if(_syncPollTimer) clearInterval(_syncPollTimer);
   _syncPollTimer = setInterval(function(){
+    // Skip polling when the tab is hidden — no point syncing what the user can't see
+    if(typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
     if(DB.cur) manualSync();
-  }, 60000);
+  }, 300000); // 5 minutes
 }
 
 window.addEventListener('message', function(event){
@@ -353,6 +706,12 @@ window.addEventListener('message', function(event){
 
   WIX_USER = { userId: newUserId, email: d.email||'', displayName: d.displayName||'', token: d.token||'' };
   DB.cur = newUserId;
+
+  // If already initialised for this user, just keep the stored Wix token fresh
+  // so that session renewal (_doReauth) can send a valid signature.
+  if(_appInitialized && typeof EVENTOS_DATA !== 'undefined' && EVENTOS_DATA.updateWixToken){
+    EVENTOS_DATA.updateWixToken(d.token || '');
+  }
 
   if(document.readyState !== 'loading') initApp();
   else window.addEventListener('DOMContentLoaded', initApp, { once: true });
@@ -392,6 +751,12 @@ async function initApp(){
   }
   startMojibakeObserver();
   var isDevMode = (DB.cur === 'dev_user_local');
+  try{
+    await EVENTOS_DATA.authenticate(WIX_USER ? WIX_USER.token || '' : '', DB.cur);
+  }catch(authErr){
+    showLoadingError('Authentication failed. Please reload the page.');
+    return;
+  }
   var ok = await loadProjectsFromCloud(DB.cur);
   if(ok !== false || isDevMode) enterApp();
 }
@@ -475,6 +840,11 @@ function closeMenu(){ document.getElementById('umenu').classList.add('hidden'); 
 document.addEventListener('click',e=>{ if(!e.target.closest('#upill')&&!e.target.closest('#umenu')) closeMenu(); });
 
 function showPage(p){
+  // If the user navigates away from the library while the layout editor is open,
+  // clean up its state so stale data doesn't bleed into other views.
+  if(p !== 'library' && typeof libCancelLayoutEditor === 'function' && typeof _libEditingLayoutId !== 'undefined' && _libEditingLayoutId){
+    libCancelLayoutEditor();
+  }
   ['pg-dashboard','pg-events','pg-project','pg-analytics','pg-library'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.classList.add('hidden');
   });
@@ -489,7 +859,26 @@ function showPage(p){
   else if(p==='analytics') renderAnalytics();
   else if(p==='library') renderLibrary();
 }
-function openProject(id){ CID=id; showPage('project'); }
+async function openProject(id){
+  CID = id;
+  var p = DB.projects[DB.cur] && DB.projects[DB.cur][id];
+  if(p && p._metaOnly){
+    // Full data not yet loaded — fetch it before rendering the project page
+    setSyncStatus('syncing');
+    var loaded = await loadProjectById(id);
+    setSyncStatus('ok');
+    if(!loaded){
+      toast('Could not load event data. Check your connection and try again.', 'e');
+      return;
+    }
+  } else if(p && p._hasExtras && !p._extrasLoaded){
+    // Main data loaded but large arrays (guests, layout items) are in a companion document
+    setSyncStatus('syncing');
+    await _mergeProjectExtras(id, p);
+    setSyncStatus('ok');
+  }
+  showPage('project');
+}
 
 function renderPNav(){
   const p=proj();if(!p)return;
@@ -711,15 +1100,13 @@ function setEvFilter(mode){
   _efAt=true; _efFr=null; _efTo=null;
   const fromEl=document.getElementById('ef-from'); const toEl=document.getElementById('ef-to');
   if(fromEl)fromEl.value=''; if(toEl)toEl.value='';
-  const fdEl=document.getElementById('ef-from-display'); if(fdEl)fdEl.firstElementChild.textContent='DD/MM/YYYY';
-  const tdEl=document.getElementById('ef-to-display'); if(tdEl)tdEl.firstElementChild.textContent='DD/MM/YYYY';
   const btn=document.getElementById('ef-alltime'); if(btn)btn.classList.add('active');
   saveEvPrefs(); renderEvents();
 }
 
 function setEvFilterDates(){
-  const fromVal=(document.getElementById('ef-from')||{}).value;
-  const toVal=(document.getElementById('ef-to')||{}).value;
+  const fromVal=parseUserDate((document.getElementById('ef-from')||{}).value);
+  const toVal=parseUserDate((document.getElementById('ef-to')||{}).value);
   _efAt=false;
   _efFr=fromVal?new Date(fromVal+'T00:00:00'):null;
   _efTo  =toVal  ?new Date(toVal+'T23:59:59')  :null;

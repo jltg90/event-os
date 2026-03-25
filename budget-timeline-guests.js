@@ -2,9 +2,32 @@
 function renderBudget(){
   const p=proj();const el=document.getElementById('tab-budget');
   if(ensureDefaultVendors(p)) saveProj(p);
-  const hired=p.vendors.filter(v=>v.hired);
-  const comp=p.vendors.filter(v=>!v.hired);
   const allVendors = p.vendors;
+  const isES = LANG==='es';
+  if(!allVendors.length){
+    el.innerHTML=`
+  <div class="sh">
+    <div><div class="sh-title editorial-title" style="color:#f59e0b">${t('budget_management_title')}</div>
+    <div class="sh-sub">${isES?'Gestiona tus proveedores y presupuesto del evento':'Manage your event vendors and budget'}</div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <button class="btn btn-ghost" onclick="libDownloadVendorTemplate()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>${isES?'Descargar Plantilla':'Download Template'}
+      </button>
+      <button class="btn btn-ghost" onclick="libQuickLoadVendors()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>${isES?'Importar Proveedores':'Import Vendors'}
+      </button>
+      <button class="btn btn-ghost" onclick="libQuickSaveVendors()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>${isES?'Guardar en Biblioteca':'Save to Library'}
+      </button>
+      <button class="btn btn-primary btn-create-gradient" onclick="openVendorModal()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>${t('add_vendor')}
+      </button>
+    </div>
+  </div>
+  ${renderVendorEmptyState()}`;
+    return;
+  }
+  const hired=allVendors.filter(v=>v.hired);
   const estimatedTotal = allVendors.reduce((s,v)=>s+Number(v.budget),0);
   const tb=hired.reduce((s,v)=>s+Number(v.budget),0);
   const paid=hired.reduce((s,v)=>s+v.payments.reduce((a,pay)=>a+Number(pay.amount),0),0);
@@ -17,6 +40,15 @@ function renderBudget(){
     <div><div class="sh-title editorial-title" style="color:#f59e0b">${t('budget_management_title')}</div>
     <div class="sh-sub">${t('budget_label')}: ${fmtMoney(tb)} Â· ${t('paid_label')}: ${fmtMoney(paid)} Â· ${t('balance_label')}: ${fmtMoney(tb-paid)}</div></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <button class="btn btn-ghost" onclick="libDownloadVendorTemplate()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>${LANG==='es'?'Descargar Plantilla':'Download Template'}
+      </button>
+      <button class="btn btn-ghost" onclick="libQuickLoadVendors()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>${LANG==='es'?'Importar Proveedores':'Import Vendors'}
+      </button>
+      <button class="btn btn-ghost" onclick="libQuickSaveVendors()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>${LANG==='es'?'Guardar en Biblioteca':'Save to Library'}
+      </button>
       <button class="btn btn-primary btn-create-gradient" onclick="openVendorModal()">
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>${t('add_vendor')}
       </button>
@@ -53,6 +85,287 @@ function renderBudget(){
   </div>
   <div id="vlist">${renderVendorTable(allVendors, '')}</div>`;
 }
+
+function renderVendorEmptyState(){
+  const isES = LANG==='es';
+  return `<section class="ev-empty fade-in">
+    <div class="ev-empty-shell">
+      <div class="ev-empty-aurora" aria-hidden="true"></div>
+      <div class="ev-empty-grid">
+        <div class="ev-empty-copy">
+          <div class="ev-empty-badge">${isES?'Configuracion de proveedores':'Vendor setup'}</div>
+          <h2 class="ev-empty-title">${isES?'Organiza todos tus proveedores en un solo lugar.':'Organize all your vendors in one place.'}</h2>
+          <p class="ev-empty-subtitle">${isES?'Crea un plan de proveedores personalizado para tu evento. El asistente sugiere los proveedores que necesitas segun los servicios que requieras, y te permite marcar los que ya tienes confirmados.':'Create a tailored vendor plan for your event. The wizard suggests the vendors you need based on your services, and lets you mark which ones are already confirmed.'}</p>
+          <div class="ev-empty-actions">
+            <button class="btn btn-primary btn-create-gradient ev-empty-cta" onclick="openVendorSetupWizard()">
+              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+              ${isES?'Crear Plan de Proveedores':'Create Vendor Plan'}
+            </button>
+            <button class="btn btn-ghost ev-empty-cta" onclick="openVendorModal()">
+              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+              ${t('add_vendor')}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>`;
+}
+
+// ── Vendor Setup Wizard ────────────────────────────────────────────────────────
+
+var VENDOR_TEMPLATES = [
+  {id:'venue',      name_en:'Venue',                name_es:'Lugar',                  services_en:'Venue / Event Space',            services_es:'Lugar / Espacio para eventos',  serviceKey:'venue',         priority:'critical'},
+  {id:'coordinator',name_en:'Event Coordinator',    name_es:'Coordinador de Eventos',  services_en:'Event Coordination',            services_es:'Coordinacion de eventos',        serviceKey:'coordinator',   priority:'critical'},
+  {id:'catering',   name_en:'Catering',             name_es:'Catering',                services_en:'Catering, Food & Beverage',     services_es:'Catering, Alimentos y Bebidas', serviceKey:'catering',      priority:'critical'},
+  {id:'bar',        name_en:'Bar Service',          name_es:'Servicio de Bar',         services_en:'Bar & Beverage Service',        services_es:'Servicio de Bar y Bebidas',      serviceKey:'catering',      priority:'important'},
+  {id:'decor',      name_en:'Decor & Florals',      name_es:'Decoracion y Flores',     services_en:'Decor, Florals & Styling',      services_es:'Decoracion, Flores y Estilismo',serviceKey:'decor',         priority:'important'},
+  {id:'rentals',    name_en:'Rentals',              name_es:'Alquiler de Mobiliario',  services_en:'Furniture & Equipment Rentals', services_es:'Alquiler de Muebles y Equipos',  serviceKey:'decor',         priority:'important'},
+  {id:'av',         name_en:'AV & Lighting',        name_es:'Audio y Luces',           services_en:'AV / Lighting / Production',    services_es:'Audio, Luces y Produccion',      serviceKey:'av',            priority:'important'},
+  {id:'photo',      name_en:'Photographer',         name_es:'Fotografo',               services_en:'Photography',                   services_es:'Fotografia',                     serviceKey:'photo',         priority:'critical'},
+  {id:'video',      name_en:'Videographer',         name_es:'Videografo',              services_en:'Videography',                   services_es:'Videografia',                    serviceKey:'photo',         priority:'important'},
+  {id:'entertain',  name_en:'Entertainment',        name_es:'Entretenimiento',         services_en:'Entertainment / Music / DJ',   services_es:'Entretenimiento / Musica / DJ',  serviceKey:'entertainment', priority:'important'},
+  {id:'staffing',   name_en:'Event Staffing',       name_es:'Personal de Evento',      services_en:'Event Staffing & Servers',     services_es:'Personal y Meseros',             serviceKey:'catering',      priority:'optional'},
+  {id:'transport',  name_en:'Transportation',       name_es:'Transporte',              services_en:'Guest Transportation',         services_es:'Transporte de Invitados',        serviceKey:'transport',     priority:'optional'},
+  {id:'permits',    name_en:'Permits & Security',   name_es:'Permisos y Seguridad',    services_en:'Permits, Licenses & Security', services_es:'Permisos, Licencias y Seguridad',serviceKey:'permits',       priority:'optional'},
+  {id:'signage',    name_en:'Signage & Print',      name_es:'Senaletica e Impresos',   services_en:'Signage, Printing & Stationery',services_es:'Senaletica, Impresos y Papeleria',serviceKey:'decor',        priority:'optional'},
+  {id:'seating',    name_en:'Seating Chart Service',name_es:'Servicio de Mesas',       services_en:'Seating Chart & Table Layout', services_es:'Distribucion de Mesas',          serviceKey:'seating',       priority:'optional'}
+];
+
+var _vendorWiz = null;
+
+// SVG icons for vendor service tiles (no emoji — consistent cross-platform rendering)
+var _vwIcons = {
+  needVenue:       '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',
+  needCoordinator: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4M12 16h4M8 11h.01M8 16h.01"/></svg>',
+  needCatering:    '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>',
+  needBar:         '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M8 22H6a2 2 0 0 1-2-2v-7l-1-1V6h14v6l-1 1v7a2 2 0 0 1-2 2h-2"/><path d="M6 6V2h12v4"/><path d="M10 11v5a2 2 0 0 0 4 0v-5"/></svg>',
+  needDecor:       '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+  needRentals:     '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="12" y1="12" x2="12" y2="12"/></svg>',
+  needAV:          '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>',
+  needPhoto:       '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>',
+  needVideo:       '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>',
+  needEntertain:   '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>',
+  needStaffing:    '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  needTransport:   '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>',
+  needPermits:     '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>',
+  needSignage:     '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>',
+  needSeating:     '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>'
+};
+
+function openVendorSetupWizard(){
+  _vendorWiz = {
+    step: 0,
+    needVenue: true, needCoordinator: true, needCatering: true, needBar: false,
+    needDecor: false, needRentals: false, needAV: false, needPhoto: true,
+    needVideo: false, needEntertain: false, needStaffing: false,
+    needTransport: false, needPermits: false, needSignage: false, needSeating: false,
+    confirmed: {}
+  };
+  _renderVendorWiz();
+}
+
+function _renderVendorWiz(){
+  if(!_vendorWiz) return;
+  var isES = LANG==='es';
+  var s = _vendorWiz.step;
+  var stepLabels = isES ? ['Servicios','Confirmados','Vista previa'] : ['Services','Confirmed','Preview'];
+
+  var prog = '<div style="display:flex;align-items:flex-start;gap:0;margin-bottom:24px;">';
+  for(var i=0;i<stepLabels.length;i++){
+    var done=i<s, active=i===s;
+    var circBg  = done?'var(--gold)':active?'var(--gold-l)':'var(--bg)';
+    var circBd  = (done||active)?'var(--gold)':'var(--border)';
+    var circClr = done?'#fff':active?'var(--gold-h)':'var(--light)';
+    var txtClr  = active?'var(--gold-h)':done?'var(--text)':'var(--light)';
+    var inner   = done?'<svg width="11" height="11" fill="none" stroke="#fff" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>':String(i+1);
+    var lineClr = i<=s?'var(--gold)':'var(--border)';
+    var line    = i>0?'<div style="position:absolute;right:50%;top:13px;width:100%;height:1px;background:'+lineClr+'"></div>':'';
+    prog += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;position:relative;">'
+      +line
+      +'<div style="width:26px;height:26px;border-radius:50%;border:1.5px solid '+circBd+';background:'+circBg+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:'+circClr+';position:relative;z-index:1;">'+inner+'</div>'
+      +'<div style="font-size:10px;margin-top:5px;color:'+txtClr+';font-weight:'+(active?'600':'400')+';white-space:nowrap;letter-spacing:.3px;">'+stepLabels[i]+'</div>'
+      +'</div>';
+  }
+  prog += '</div>';
+
+  var body = s===0 ? _vendorWizStep0(isES) : s===1 ? _vendorWizStep1(isES) : _vendorWizStep2(isES);
+  var backBtn = s>0
+    ? '<button class="btn btn-ghost" onclick="_vendorWizBack()">'+(isES?'← Atras':'← Back')+'</button>'
+    : '<button class="btn btn-ghost" onclick="closeMo()">'+(isES?'Cancelar':'Cancel')+'</button>';
+  var nextLbl = s===2
+    ? (isES?'Crear Plan':'Create Plan')
+    : (isES?'Siguiente →':'Next →');
+  var nextOnclick = s===2 ? '_vendorWizGenerate()' : '_vendorWizNext()';
+
+  openMo(
+    '<div style="width:100%;max-width:600px;">'
+    +'<div style="font-family:\'Cormorant Garamond\',serif;font-size:24px;font-weight:700;color:var(--gold-h);margin-bottom:3px;">'+(isES?'Plan de Proveedores':'Vendor Plan')+'</div>'
+    +'<div style="font-size:12px;color:var(--light);margin-bottom:22px;letter-spacing:.3px;text-transform:uppercase;">'+(isES?'Paso '+(s+1)+' de 3':'Step '+(s+1)+' of 3')+'</div>'
+    +prog+body
+    +'<div class="mo-foot" style="margin-top:24px;">'+backBtn
+    +'<button class="btn btn-primary btn-create-gradient" onclick="'+nextOnclick+'">'+nextLbl+'</button>'
+    +'</div></div>'
+  );
+}
+
+function _vendorWizStep0(isES){
+  var services = [
+    {key:'needVenue',       label_en:'Venue / Space',       label_es:'Lugar / Espacio'},
+    {key:'needCoordinator', label_en:'Coordinator',          label_es:'Coordinador'},
+    {key:'needCatering',    label_en:'Catering & Food',      label_es:'Catering y Alimentos'},
+    {key:'needBar',         label_en:'Bar Service',          label_es:'Servicio de Bar'},
+    {key:'needDecor',       label_en:'Decor & Florals',      label_es:'Decoracion y Flores'},
+    {key:'needRentals',     label_en:'Furniture Rentals',    label_es:'Alquiler de Mobiliario'},
+    {key:'needAV',          label_en:'AV & Lighting',        label_es:'Audio y Luces'},
+    {key:'needPhoto',       label_en:'Photography',          label_es:'Fotografia'},
+    {key:'needVideo',       label_en:'Videography',          label_es:'Videografia'},
+    {key:'needEntertain',   label_en:'Entertainment / DJ',   label_es:'Entretenimiento / DJ'},
+    {key:'needStaffing',    label_en:'Event Staffing',       label_es:'Personal de Evento'},
+    {key:'needTransport',   label_en:'Transportation',       label_es:'Transporte'},
+    {key:'needPermits',     label_en:'Permits & Security',   label_es:'Permisos y Seguridad'},
+    {key:'needSignage',     label_en:'Signage & Print',      label_es:'Senaletica e Impresos'},
+    {key:'needSeating',     label_en:'Seating Chart',        label_es:'Distribucion de Mesas'}
+  ];
+  var grid = services.map(function(s){
+    var on = !!_vendorWiz[s.key];
+    var lbl = isES ? s.label_es : s.label_en;
+    var ic = _vwIcons[s.key]||'';
+    return '<div onclick="_vendorWizToggle(\''+s.key+'\')" style="cursor:pointer;border:2px solid '+(on?'var(--accent)':'var(--border)')+';border-radius:10px;padding:14px 10px 10px;text-align:center;background:'+(on?'rgba(139,92,246,.12)':'transparent')+';transition:border-color .15s,background .15s">'
+      +'<div style="color:'+(on?'var(--accent)':'var(--muted)')+';display:flex;justify-content:center;margin-bottom:7px;transition:color .15s">'+ic+'</div>'
+      +'<div style="font-size:11px;font-weight:600;color:'+(on?'var(--accent)':'var(--light)')+';line-height:1.3">'+lbl+'</div>'
+      +'</div>';
+  }).join('');
+  return '<h3 style="margin:0 0 4px;font-size:16px;font-weight:600">'+(isES?'Que servicios necesita tu evento?':'What services does your event need?')+'</h3>'
+    +'<p style="margin:0 0 16px;font-size:13px;color:var(--muted)">'+(isES?'Selecciona todos los que apliquen.':'Select all that apply.')+'</p>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;">'+grid+'</div>';
+}
+
+function _vendorWizStep1(isES){
+  var selected = _vendorWizSelectedTemplates();
+  var rows = selected.map(function(tmpl){
+    var on = !!_vendorWiz.confirmed[tmpl.id];
+    var name = isES ? tmpl.name_es : tmpl.name_en;
+    return '<div onclick="_vendorWizToggleConfirmed(\''+tmpl.id+'\')" style="cursor:pointer;display:flex;align-items:center;gap:12px;padding:10px 12px;border:2px solid '+(on?'var(--success)':'var(--border)')+';border-radius:8px;background:'+(on?'rgba(34,197,94,.08)':'transparent')+';transition:border-color .15s,background .15s;margin-bottom:8px">'
+      +'<div style="width:18px;height:18px;border-radius:50%;border:2px solid '+(on?'var(--success)':'var(--border)')+';flex-shrink:0;display:flex;align-items:center;justify-content:center">'
+      +(on?'<svg width="10" height="10" fill="none" stroke="var(--success)" stroke-width="3" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>':'')
+      +'</div>'
+      +'<span style="font-size:13px;font-weight:600;color:var(--text)">'+esc(name)+'</span>'
+      +'<span style="font-size:11px;color:'+(on?'var(--success)':'var(--muted)')+';margin-left:auto;font-weight:'+(on?'600':'400')+'">'+(on?(isES?'Contratado':'Hired'):(isES?'Por contratar':'To hire'))+'</span>'
+      +'</div>';
+  }).join('');
+  return '<h3 style="margin:0 0 4px;font-size:16px;font-weight:600">'+(isES?'Cuales ya tienes confirmados?':'Which are already confirmed?')+'</h3>'
+    +'<p style="margin:0 0 14px;font-size:13px;color:var(--muted)">'+(isES?'Los marcados se crean como "Contratado".':'Marked ones are created as "Hired".')+'</p>'
+    +'<div style="max-height:320px;overflow-y:auto;padding-right:4px">'+rows+'</div>';
+}
+
+function _vendorWizStep2(isES){
+  var selected = _vendorWizSelectedTemplates();
+  var confirmedCount = selected.filter(function(t){ return !!_vendorWiz.confirmed[t.id]; }).length;
+  var pendingCount = selected.length - confirmedCount;
+  var rows = selected.map(function(tmpl){
+    var confirmed = !!_vendorWiz.confirmed[tmpl.id];
+    var name = isES ? tmpl.name_es : tmpl.name_en;
+    var svc  = isES ? tmpl.services_es : tmpl.services_en;
+    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">'
+      +'<div style="width:8px;height:8px;border-radius:50%;flex-shrink:0;background:'+(confirmed?'var(--success)':'var(--accent)')+'"></div>'
+      +'<div><div style="font-size:12px;font-weight:600">'+esc(name)+'</div>'
+      +'<div style="font-size:11px;color:var(--muted)">'+esc(svc)+'</div></div>'
+      +'<div style="margin-left:auto;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;background:'+(confirmed?'rgba(34,197,94,.15)':'rgba(139,92,246,.15)')+';color:'+(confirmed?'var(--success)':'var(--accent)')+'">'+
+        (confirmed?(isES?'Contratado':'Hired'):(isES?'Pendiente':'Pending'))+'</div>'
+      +'</div>';
+  }).join('');
+  return '<h3 style="margin:0 0 4px;font-size:16px;font-weight:600">'+(isES?'Vista previa del plan':'Plan preview')+'</h3>'
+    +'<p style="margin:0 0 14px;font-size:13px;color:var(--muted)">'+(isES?'Se crearan estos proveedores. Puedes editarlos despues.':'These vendors will be created. You can edit them after.')+'</p>'
+    +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">'
+    +'<div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--accent)">'+selected.length+'</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">'+(isES?'Proveedores':'Vendors')+'</div></div>'
+    +'<div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--success)">'+confirmedCount+'</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">'+(isES?'Confirmados':'Confirmed')+'</div></div>'
+    +'<div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:#f59e0b">'+pendingCount+'</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">'+(isES?'Por contratar':'To hire')+'</div></div>'
+    +'</div>'
+    +'<div style="max-height:260px;overflow-y:auto;padding-right:4px">'+rows+'</div>';
+}
+
+function _vendorWizSelectedTemplates(){
+  if(!_vendorWiz) return [];
+  var keyMap = {
+    needVenue:'venue', needCoordinator:'coordinator', needCatering:'catering',
+    needBar:'bar', needDecor:'decor', needRentals:'rentals', needAV:'av',
+    needPhoto:'photo', needVideo:'video', needEntertain:'entertain',
+    needStaffing:'staffing', needTransport:'transport', needPermits:'permits',
+    needSignage:'signage', needSeating:'seating'
+  };
+  var selectedIds = [];
+  Object.keys(keyMap).forEach(function(k){ if(_vendorWiz[k]) selectedIds.push(keyMap[k]); });
+  return VENDOR_TEMPLATES.filter(function(t){ return selectedIds.indexOf(t.id) > -1; });
+}
+
+function _vendorWizToggle(field){
+  if(!_vendorWiz) return;
+  _vendorWiz[field] = !_vendorWiz[field];
+  _renderVendorWiz();
+}
+
+function _vendorWizToggleConfirmed(id){
+  if(!_vendorWiz) return;
+  _vendorWiz.confirmed[id] = !_vendorWiz.confirmed[id];
+  _renderVendorWiz();
+}
+
+function _vendorWizNext(){
+  if(!_vendorWiz) return;
+  _vendorWiz.step = Math.min(_vendorWiz.step + 1, 2);
+  _renderVendorWiz();
+}
+
+function _vendorWizBack(){
+  if(!_vendorWiz) return;
+  _vendorWiz.step = Math.max(_vendorWiz.step - 1, 0);
+  _renderVendorWiz();
+}
+
+function buildVendorWizardVendors(){
+  if(!_vendorWiz) return [];
+  var isES = LANG==='es';
+  return _vendorWizSelectedTemplates().map(function(tmpl){
+    var confirmed = !!_vendorWiz.confirmed[tmpl.id];
+    return {
+      id: 'v'+Date.now()+Math.random().toString(36).slice(2,7),
+      name: isES ? tmpl.name_es : tmpl.name_en,
+      services: isES ? tmpl.services_es : tmpl.services_en,
+      contact: '', phone: '', budget: 0,
+      vendorStatus: confirmed ? 'hired' : 'pending',
+      hired: confirmed,
+      notes: '', payments: []
+    };
+  });
+}
+
+function _vendorWizGenerate(){
+  if(!_vendorWiz) return;
+  if(typeof _libVendorWizTargetGroupId !== 'undefined' && _libVendorWizTargetGroupId){
+    var lib=getLib();
+    var entry=lib.vendors.find(function(e){return e.id===_libVendorWizTargetGroupId;});
+    if(entry){
+      buildVendorWizardVendors().forEach(function(v){
+        v.id='lv'+Date.now()+Math.random().toString(36).slice(2,6);
+        entry.vendors.push(v);
+      });
+      saveLib(lib);
+    }
+    _libVendorWizTargetGroupId=null; _vendorWiz=null; closeMo();
+    toast(LANG==='es'?'Plan guardado en biblioteca':'Plan saved to library','s');
+    if(typeof renderLibrary==='function') renderLibrary();
+    return;
+  }
+  var p = proj();
+  p.vendors = buildVendorWizardVendors();
+  saveProj(p);
+  _vendorWiz = null;
+  closeMo();
+  toast(LANG==='es'?'Plan de proveedores creado':'Vendor plan created', 's');
+  renderBudget();
+}
+
 var vSelectedVendorIds = [];
 function vendorSelectionCount(){ return vSelectedVendorIds.length; }
 function isVendorSelected(id){ return vSelectedVendorIds.indexOf(id) > -1; }
@@ -246,7 +559,7 @@ function dupVendor(id){
   p.vendors.push(copy);
   saveProj(p); renderBudget(); toast(LANG==='es'?'Proveedor duplicado':'Vendor duplicated','s');
 }
-function delPay(vid,pid){const p=proj();const v=p.vendors.find(v=>v.id===vid);if(v){v.payments=v.payments.filter(pay=>pay.id!==pid);saveProj(p);renderBudget();toast('Payment deleted');}}
+function delPay(vid,pid){const p=proj();const v=p.vendors.find(v=>v.id===vid);if(v){var removed=v.payments.find(function(pay){return pay.id===pid;});if(removed&&removed.receiptStorageId){EVENTOS_DATA.deleteFile(removed.receiptStorageId).catch(function(){});}v.payments=v.payments.filter(pay=>pay.id!==pid);saveProj(p);renderBudget();toast('Payment deleted');}}
 function viewReceipt(vid,pid){
   const p=proj();const v=p.vendors.find(v=>v.id===vid);const pay=v?.payments.find(pay=>pay.id===pid);
   if(pay?.receipt)openMo(`<div class="mo-title">Receipt</div><img src="${pay.receipt}" style="width:100%;border-radius:8px"><div class="mo-foot"><button class="btn btn-ghost" onclick="closeMo()">${t('close')}</button></div>`);
@@ -322,15 +635,27 @@ function openPayModal(vid){
     <button class="btn btn-success" onclick="savePay('${vid}')">${t('add_payment_save')}</button>
   </div>`);
 }
+var _payReceiptFile=null;
 function previewPay(input){
   const f=input.files[0];if(!f)return;
+  if(f.size > 5*1024*1024){toast('Receipt too large (max 5MB)','e');return;}
+  _payReceiptFile=f;
   const r=new FileReader();r.onload=e=>{const img=document.getElementById('pay-prev');img.src=e.target.result;img.classList.remove('hidden');};r.readAsDataURL(f);
 }
-function savePay(vid){
+async function savePay(vid){
   const amt=+gv('pay-amt');if(!amt)return toast('Enter a valid amount','e');
   const p=proj();const v=p.vendors.find(v=>v.id===vid);
   const img=document.getElementById('pay-prev');
-  v.payments.push({id:'p'+Date.now(),amount:amt,date:gv('pay-date')||today(),note:gv('pay-note'),receipt:img.classList.contains('hidden')?null:img.src});
+  var receiptUrl=null, receiptStorageId=null;
+  if(!img.classList.contains('hidden') && _payReceiptFile){
+    try{
+      toast('Uploading receipt…');
+      receiptStorageId = await EVENTOS_DATA.uploadFile(_payReceiptFile);
+      receiptUrl = await EVENTOS_DATA.getFileUrl(receiptStorageId);
+    }catch(e){console.error('Receipt upload error:',e);toast('Receipt upload failed','e');}
+  }
+  v.payments.push({id:'p'+Date.now(),amount:amt,date:gv('pay-date')||today(),note:gv('pay-note'),receipt:receiptUrl,receiptStorageId:receiptStorageId});
+  _payReceiptFile=null;
   saveProj(p);closeMo();renderBudget();toast('Payment recorded','s');
 }
 function showVendorDetail(vid){
@@ -390,30 +715,596 @@ function showVendorDetail(vid){
 }
 
 var tView='list';
+// priority: 'critical' | 'important' | 'optional'
+// requiresService: skip task entirely if user says they don't need this service
+//   values: 'venue_search','catering','av','decor','photo','entertainment','transport','permits','seating'
+// completedIfDone: pre-mark task as completed based on setup answer
+//   values: 'venue_booked','venue_contract','save_the_date','invitations',
+//           'guest_list_started','guest_list_finalized','vendor_contracts'
+// skipIfDone: skip task entirely (don't include in plan) based on setup answer
+//   values: 'save_the_date','invitations'
+var TEMPLATE_PLAN_TASKS = [
+  { title:'Define Event Goals', title_es:'Definir Objetivos del Evento', desc:'Establish the purpose, success criteria, guest profile, style, and main priorities of the event.', desc_es:'Establecer el propósito, criterios de éxito, perfil de invitados, estilo y prioridades principales del evento.', durationDays:5, assignee:'Client / Event Lead', assignee_es:'Cliente / Líder de Evento', planningWindow:'12 months before', priority:'critical' },
+  { title:'Set Preliminary Budget', title_es:'Establecer Presupuesto Preliminar', desc:'Define an initial budget range, spending priorities, and contingency allowance.', desc_es:'Definir un rango de presupuesto inicial, prioridades de gasto y margen de contingencia.', durationDays:4, assignee:'Client / Finance Lead', assignee_es:'Cliente / Responsable Financiero', planningWindow:'12 months before', priority:'critical' },
+  { title:'Create Planning Team', title_es:'Formar Equipo de Planificación', desc:'Assign internal stakeholders, decision-makers, and operational support roles.', desc_es:'Asignar partes interesadas, tomadores de decisiones y roles de apoyo operativo.', durationDays:3, assignee:'Event Lead', assignee_es:'Líder de Evento', planningWindow:'12 months before', priority:'important' },
+  { title:'Define Event Scope', title_es:'Definir Alcance del Evento', desc:'Confirm approximate guest count, event format, duration, program needs, and service level.', desc_es:'Confirmar número aproximado de invitados, formato del evento, duración, necesidades del programa y nivel de servicio.', durationDays:5, assignee:'Event Lead / Client', assignee_es:'Líder de Evento / Cliente', planningWindow:'11-12 months before', priority:'critical' },
+  { title:'Build Master Timeline', title_es:'Crear Cronograma General', desc:'Create the overall planning schedule with milestones, dependencies, and deadlines.', desc_es:'Elaborar el calendario de planificación general con hitos, dependencias y fechas clave.', durationDays:3, assignee:'Event Planner', assignee_es:'Organizador de Evento', planningWindow:'11-12 months before', priority:'important' },
+  { title:'Research Venue Options', title_es:'Investigar Opciones de Sede', desc:'Identify and compare venues or host locations that fit capacity, budget, logistics, and style.', desc_es:'Identificar y comparar sedes o lugares que se ajusten a la capacidad, presupuesto, logística y estilo.', durationDays:10, assignee:'Venue Coordinator', assignee_es:'Coordinador de Sede', planningWindow:'11 months before', priority:'critical', requiresService:'venue_search' },
+  { title:'Site Visits / Venue Tours', title_es:'Visitas al Lugar / Recorridos de Sede', desc:'Visit shortlisted venues or review virtual walkthroughs and operational requirements.', desc_es:'Visitar las sedes preseleccionadas o revisar recorridos virtuales y requisitos operativos.', durationDays:7, assignee:'Client / Planner / Venue Coordinator', assignee_es:'Cliente / Organizador / Coordinador de Sede', planningWindow:'11 months before', priority:'important', requiresService:'venue_search' },
+  { title:'Select Venue', title_es:'Seleccionar Sede', desc:'Choose the final venue based on fit, cost, availability, and operational practicality.', desc_es:'Elegir la sede final según adecuación, costo, disponibilidad y practicidad operativa.', durationDays:4, assignee:'Client / Event Lead', assignee_es:'Cliente / Líder de Evento', planningWindow:'10-11 months before', priority:'critical', requiresService:'venue_search' },
+  { title:'Secure Venue Contract', title_es:'Asegurar Contrato de Sede', desc:'Finalize agreement, review terms, and submit deposit or reservation requirements.', desc_es:'Finalizar el acuerdo, revisar términos y presentar depósito o requisitos de reserva.', durationDays:5, assignee:'Client / Finance Lead', assignee_es:'Cliente / Responsable Financiero', planningWindow:'10-11 months before', priority:'critical', completedIfDone:'venue_contract' },
+  { title:'Define Event Theme / Creative Direction', title_es:'Definir Tema / Dirección Creativa', desc:'Establish the visual and experiential direction, mood, branding, and design references.', desc_es:'Establecer la dirección visual y experiencial, ambiente, identidad de marca y referencias de diseño.', durationDays:7, assignee:'Creative Lead / Client', assignee_es:'Líder Creativo / Cliente', planningWindow:'10 months before', priority:'important' },
+  { title:'Create Initial Guest List', title_es:'Crear Lista Inicial de Invitados', desc:'Draft a first-pass attendee list, categories, and target attendance ranges.', desc_es:'Elaborar una primera lista de asistentes, categorías y rangos de asistencia objetivo.', durationDays:6, assignee:'Client / Guest Coordinator', assignee_es:'Cliente / Coordinador de Invitados', planningWindow:'10 months before', priority:'critical', completedIfDone:'guest_list_started' },
+  { title:'Identify Key Vendors', title_es:'Identificar Proveedores Clave', desc:'Build a shortlist of core vendors such as catering, production, decor, AV, entertainment, photography, or staffing.', desc_es:'Crear una lista corta de proveedores principales como catering, producción, decoración, AV, entretenimiento, fotografía o personal.', durationDays:8, assignee:'Event Planner', assignee_es:'Organizador de Evento', planningWindow:'9-10 months before', priority:'critical' },
+  { title:'Request Vendor Proposals', title_es:'Solicitar Propuestas a Proveedores', desc:'Send requirements and obtain quotes, capabilities, and availability from vendors.', desc_es:'Enviar requisitos y obtener cotizaciones, capacidades y disponibilidad de los proveedores.', durationDays:7, assignee:'Event Planner', assignee_es:'Organizador de Evento', planningWindow:'9-10 months before', priority:'important' },
+  { title:'Select Catering / Food Service', title_es:'Seleccionar Catering / Servicio de Alimentos', desc:'Confirm food and beverage partner or service approach for the event.', desc_es:'Confirmar el proveedor de alimentos y bebidas o el enfoque de servicio para el evento.', durationDays:6, assignee:'Client / Catering Coordinator', assignee_es:'Cliente / Coordinador de Catering', planningWindow:'9 months before', priority:'important', requiresService:'catering', completedIfDone:'vendor_contracts' },
+  { title:'Select Production / Technical Vendor', title_es:'Seleccionar Proveedor Técnico / de Producción', desc:'Confirm AV, lighting, staging, power, or technical support provider if needed.', desc_es:'Confirmar proveedor de AV, iluminación, escenario, energía o soporte técnico si es necesario.', durationDays:6, assignee:'Production Lead', assignee_es:'Líder de Producción', planningWindow:'9 months before', priority:'important', requiresService:'av', completedIfDone:'vendor_contracts' },
+  { title:'Select Decor / Design Vendor', title_es:'Seleccionar Proveedor de Decoración / Diseño', desc:'Confirm vendor for florals, decor, furniture, styling, signage, or experience design.', desc_es:'Confirmar proveedor de flores, decoración, mobiliario, estilismo, señalética o diseño de experiencia.', durationDays:6, assignee:'Design Lead', assignee_es:'Líder de Diseño', planningWindow:'9 months before', priority:'important', requiresService:'decor', completedIfDone:'vendor_contracts' },
+  { title:'Select Photo / Video Coverage', title_es:'Seleccionar Fotografía / Cobertura de Video', desc:'Confirm documentation team for photography, videography, or content capture.', desc_es:'Confirmar equipo de documentación para fotografía, videografía o captura de contenido.', durationDays:4, assignee:'Client / Planner', assignee_es:'Cliente / Organizador', planningWindow:'9 months before', priority:'important', requiresService:'photo', completedIfDone:'vendor_contracts' },
+  { title:'Build Event Layout Plan', title_es:'Elaborar Plan de Distribución del Evento', desc:'Draft the event layout including guest flow, focal points, seating zones, vendor areas, and service spaces.', desc_es:'Diseñar la disposición del evento incluyendo flujo de invitados, puntos focales, zonas de mesas, áreas de proveedores y espacios de servicio.', durationDays:7, assignee:'Planner / Layout Designer', assignee_es:'Organizador / Diseñador de Layout', planningWindow:'8-9 months before', priority:'important' },
+  { title:'Launch Branding / Invitations Concept', title_es:'Lanzar Concepto de Marca / Invitaciones', desc:'Develop invitation style, event identity, guest-facing graphics, and communication design.', desc_es:'Desarrollar el estilo de invitación, identidad del evento, gráficos y diseño de comunicación para los invitados.', durationDays:8, assignee:'Creative Lead', assignee_es:'Líder Creativo', planningWindow:'8 months before', priority:'important', skipIfDone:'invitations' },
+  { title:'Confirm Entertainment / Speakers', title_es:'Confirmar Entretenimiento / Ponentes', desc:'Book performers, MC, host, speakers, or presentation participants.', desc_es:'Contratar artistas, MC, presentador, oradores o participantes de presentaciones.', durationDays:5, assignee:'Program Lead', assignee_es:'Líder de Programa', planningWindow:'8 months before', priority:'important', requiresService:'entertainment', completedIfDone:'vendor_contracts' },
+  { title:'Establish Registration / RSVP Method', title_es:'Establecer Método de Registro / RSVP', desc:'Set up RSVP tracking, registration workflow, or attendee data collection process.', desc_es:'Configurar seguimiento de RSVP, flujo de registro o proceso de recopilación de datos de asistentes.', durationDays:4, assignee:'Admin / Guest Coordinator', assignee_es:'Administrador / Coordinador de Invitados', planningWindow:'8 months before', priority:'important' },
+  { title:'Review Logistics Requirements', title_es:'Revisar Requisitos Logísticos', desc:'Identify power, load-in, parking, permits, storage, accessibility, transportation, and venue restrictions.', desc_es:'Identificar energía, carga, estacionamiento, permisos, almacenamiento, accesibilidad, transporte y restricciones de sede.', durationDays:6, assignee:'Operations Lead', assignee_es:'Líder de Operaciones', planningWindow:'7-8 months before', priority:'important' },
+  { title:'Send Save-the-Date / Early Notice', title_es:'Enviar Save-the-Date / Aviso Anticipado', desc:'Notify attendees of the event date early enough to support attendance planning.', desc_es:'Notificar a los asistentes sobre la fecha del evento con suficiente anticipación para apoyar su asistencia.', durationDays:3, assignee:'Guest Coordinator', assignee_es:'Coordinador de Invitados', planningWindow:'7 months before', priority:'important', skipIfDone:'save_the_date' },
+  { title:'Finalize Core Vendor Contracts', title_es:'Finalizar Contratos con Proveedores Clave', desc:'Confirm scope, timing, and payment terms with all major vendors.', desc_es:'Confirmar alcance, tiempos y condiciones de pago con todos los proveedores principales.', durationDays:10, assignee:'Event Planner / Client', assignee_es:'Organizador de Evento / Cliente', planningWindow:'7 months before', priority:'critical', completedIfDone:'vendor_contracts' },
+  { title:'Develop Detailed Budget Tracker', title_es:'Desarrollar Seguimiento de Presupuesto Detallado', desc:'Turn the preliminary budget into a line-by-line tracked budget with committed and projected costs.', desc_es:'Convertir el presupuesto preliminar en un seguimiento detallado línea por línea con costos comprometidos y proyectados.', durationDays:4, assignee:'Finance Lead', assignee_es:'Responsable Financiero', planningWindow:'6-7 months before', priority:'important' },
+  { title:'Create Initial Run of Show', title_es:'Crear Guion de Evento Inicial', desc:'Draft the high-level sequence of the event including arrivals, presentations, meals, activations, and wrap-up.', desc_es:'Elaborar la secuencia general del evento incluyendo llegadas, presentaciones, comidas, activaciones y cierre.', durationDays:5, assignee:'Event Planner / Program Lead', assignee_es:'Organizador de Evento / Líder de Programa', planningWindow:'6 months before', priority:'critical' },
+  { title:'Confirm Rentals / Furniture Needs', title_es:'Confirmar Alquileres / Necesidades de Mobiliario', desc:'Define tables, chairs, lounge pieces, linens, bars, structures, staging, and other rental needs.', desc_es:'Definir mesas, sillas, piezas de lounge, manteles, barras, estructuras, escenario y otros alquileres necesarios.', durationDays:6, assignee:'Design Lead / Planner', assignee_es:'Líder de Diseño / Organizador', planningWindow:'6 months before', priority:'important' },
+  { title:'Start Guest Communication Plan', title_es:'Iniciar Plan de Comunicación con Invitados', desc:'Plan attendee messaging cadence, reminders, information emails, or printed notices.', desc_es:'Planificar la cadencia de mensajes para asistentes, recordatorios, correos informativos o avisos impresos.', durationDays:4, assignee:'Communications Lead', assignee_es:'Líder de Comunicaciones', planningWindow:'6 months before', priority:'important' },
+  { title:'Review Menu / Experience Options', title_es:'Revisar Opciones de Menú / Experiencia', desc:'Evaluate and refine menu selections, service style, dietary considerations, and guest experience details.', desc_es:'Evaluar y refinar selecciones de menú, estilo de servicio, consideraciones dietéticas y detalles de experiencia del invitado.', durationDays:5, assignee:'Client / Catering Coordinator', assignee_es:'Cliente / Coordinador de Catering', planningWindow:'5-6 months before', priority:'optional', requiresService:'catering' },
+  { title:'Begin Permit / Approval Process', title_es:'Iniciar Proceso de Permisos / Aprobaciones', desc:'Obtain any permits, certificates, insurance documents, or venue approvals required.', desc_es:'Obtener los permisos, certificados, documentos de seguro o aprobaciones de sede requeridos.', durationDays:15, assignee:'Operations Lead', assignee_es:'Líder de Operaciones', planningWindow:'5 months before', priority:'important', requiresService:'permits' },
+  { title:'Confirm Accommodation / Travel Needs', title_es:'Confirmar Necesidades de Hospedaje / Traslados', desc:'Coordinate lodging blocks, travel support, parking plans, or transportation logistics as needed.', desc_es:'Coordinar bloques de alojamiento, apoyo de viaje, planes de estacionamiento o logística de transporte según sea necesario.', durationDays:7, assignee:'Logistics Coordinator', assignee_es:'Coordinador Logístico', planningWindow:'5 months before', priority:'optional', requiresService:'transport' },
+  { title:'Finalize Design Concept', title_es:'Finalizar Concepto de Diseño', desc:'Lock in decor, styling, visual details, branded elements, and environmental design direction.', desc_es:'Confirmar decoración, estilismo, detalles visuales, elementos de marca y dirección de diseño ambiental.', durationDays:7, assignee:'Creative Lead / Client', assignee_es:'Líder Creativo / Cliente', planningWindow:'4-5 months before', priority:'important', requiresService:'decor' },
+  { title:'Produce Invitation / Registration Materials', title_es:'Producir Invitaciones / Materiales de Registro', desc:'Prepare final invites, digital registration assets, event website copy, or guest information materials.', desc_es:'Preparar invitaciones finales, recursos digitales de registro, texto del sitio web del evento o materiales informativos para invitados.', durationDays:8, assignee:'Creative Lead / Admin', assignee_es:'Líder Creativo / Administrador', planningWindow:'4 months before', priority:'important', skipIfDone:'invitations' },
+  { title:'Send Invitations / Open Registration', title_es:'Enviar Invitaciones / Abrir Registro', desc:'Launch the formal invitation or registration process and begin response tracking.', desc_es:'Lanzar el proceso formal de invitación o registro y comenzar el seguimiento de respuestas.', durationDays:3, assignee:'Guest Coordinator', assignee_es:'Coordinador de Invitados', planningWindow:'4 months before', priority:'critical', skipIfDone:'invitations' },
+  { title:'Confirm Staffing Requirements', title_es:'Confirmar Necesidades de Personal', desc:'Determine event-day staffing such as coordinators, hosts, registration, security, catering support, and technical crew.', desc_es:'Determinar el personal para el día del evento: coordinadores, anfitriones, registro, seguridad, apoyo de catering y equipo técnico.', durationDays:5, assignee:'Operations Lead', assignee_es:'Líder de Operaciones', planningWindow:'4 months before', priority:'important' },
+  { title:'Refine Guest List', title_es:'Depurar Lista de Invitados', desc:'Update attendee list based on priorities, targets, response expectations, and internal approvals.', desc_es:'Actualizar la lista de asistentes según prioridades, objetivos, expectativas de respuesta y aprobaciones internas.', durationDays:6, assignee:'Client / Guest Coordinator', assignee_es:'Cliente / Coordinador de Invitados', planningWindow:'3-4 months before', priority:'important', completedIfDone:'guest_list_finalized' },
+  { title:'Midpoint Planning Review', title_es:'Revisión de Planificación a Mitad del Proceso', desc:'Review status of budget, RSVPs, vendors, design, and unresolved decisions.', desc_es:'Revisar estado del presupuesto, RSVPs, proveedores, diseño y decisiones pendientes.', durationDays:2, assignee:'Event Lead / Client', assignee_es:'Líder de Evento / Cliente', planningWindow:'3 months before', priority:'important' },
+  { title:'Finalize Program Content', title_es:'Finalizar Contenido del Programa', desc:'Confirm presentations, speeches, entertainment flow, session timing, or key experience moments.', desc_es:'Confirmar presentaciones, discursos, flujo de entretenimiento, tiempos de sesiones o momentos clave de experiencia.', durationDays:7, assignee:'Program Lead', assignee_es:'Líder de Programa', planningWindow:'3 months before', priority:'important' },
+  { title:'Review Layout and Floor Plan', title_es:'Revisar Distribución y Plano del Evento', desc:'Update the floor plan using current attendance projections and vendor requirements.', desc_es:'Actualizar el plano del evento con las proyecciones de asistencia actuales y requisitos de proveedores.', durationDays:5, assignee:'Planner / Layout Designer', assignee_es:'Organizador / Diseñador de Layout', planningWindow:'3 months before', priority:'important' },
+  { title:'Order Signage / Printed Materials', title_es:'Pedir Señalética / Materiales Impresos', desc:'Submit signage, menus, programs, badges, labels, or other printed materials.', desc_es:'Solicitar señalética, menús, programas, credenciales, etiquetas u otros materiales impresos.', durationDays:6, assignee:'Creative Lead', assignee_es:'Líder Creativo', planningWindow:'3 months before', priority:'optional' },
+  { title:'Conduct Vendor Alignment Meeting', title_es:'Realizar Reunión de Alineación con Proveedores', desc:'Bring all main vendors into one planning review to confirm expectations and responsibilities.', desc_es:'Reunir a los proveedores principales en una revisión de planificación para confirmar expectativas y responsabilidades.', durationDays:2, assignee:'Event Planner', assignee_es:'Organizador de Evento', planningWindow:'2-3 months before', priority:'important' },
+  { title:'Track RSVP Progress', title_es:'Seguimiento de RSVPs', desc:'Review open responses, send reminders, and identify attendance gaps or overages.', desc_es:'Revisar respuestas pendientes, enviar recordatorios e identificar brechas o excesos en la asistencia.', durationDays:10, assignee:'Guest Coordinator', assignee_es:'Coordinador de Invitados', planningWindow:'2 months before', priority:'critical' },
+  { title:'Confirm Transportation / Access Plan', title_es:'Confirmar Plan de Transporte / Acceso', desc:'Finalize arrival, unloading, valet, shuttle, parking, and guest movement logistics.', desc_es:'Finalizar logística de llegada, descarga, valet, shuttle, estacionamiento y movimiento de invitados.', durationDays:4, assignee:'Logistics Coordinator', assignee_es:'Coordinador Logístico', planningWindow:'2 months before', priority:'optional', requiresService:'transport' },
+  { title:'Review Risk & Contingency Plans', title_es:'Revisar Planes de Riesgo y Contingencia', desc:'Prepare backup plans for weather, delays, technical issues, staffing problems, and supply gaps.', desc_es:'Preparar planes de respaldo para clima, retrasos, problemas técnicos, dificultades de personal y falta de suministros.', durationDays:4, assignee:'Operations Lead', assignee_es:'Líder de Operaciones', planningWindow:'2 months before', priority:'important' },
+  { title:'Finalize Seating / Zoning Strategy', title_es:'Finalizar Estrategia de Distribución / Zonas', desc:'Assign tables, zones, sections, or attendee placement if the event requires structured placement.', desc_es:'Asignar mesas, zonas, secciones o ubicación de asistentes si el evento requiere distribución estructurada.', durationDays:8, assignee:'Guest Coordinator / Planner', assignee_es:'Coordinador de Invitados / Organizador', planningWindow:'6-8 weeks before', priority:'important', requiresService:'seating' },
+  { title:'Confirm Equipment and Rental Counts', title_es:'Confirmar Cantidades de Equipos y Alquileres', desc:'Lock in updated counts for furniture, AV, decor, tableware, or production equipment.', desc_es:'Confirmar cantidades actualizadas de mobiliario, AV, decoración, vajilla o equipos de producción.', durationDays:5, assignee:'Planner / Production Lead', assignee_es:'Organizador / Líder de Producción', planningWindow:'6 weeks before', priority:'important' },
+  { title:'Finalize Menu Counts / Service Plan', title_es:'Finalizar Conteos de Menú / Plan de Servicio', desc:'Confirm headcount assumptions and service timing with catering or hospitality teams.', desc_es:'Confirmar supuestos de número de personas y tiempos de servicio con los equipos de catering u hospitalidad.', durationDays:4, assignee:'Catering Coordinator', assignee_es:'Coordinador de Catering', planningWindow:'6 weeks before', priority:'important', requiresService:'catering' },
+  { title:'Review Event Script / Cue Sheet', title_es:'Revisar Guion / Hoja de Señales del Evento', desc:'Build a detailed timing document with cues, handoffs, transitions, and responsibilities.', desc_es:'Elaborar un documento detallado con señales, traspasos, transiciones y responsabilidades.', durationDays:5, assignee:'Program Lead / Planner', assignee_es:'Líder de Programa / Organizador', planningWindow:'5-6 weeks before', priority:'important' },
+  { title:'Final Guest List Review', title_es:'Revisión Final de Lista de Invitados', desc:'Reconcile confirmed attendees, VIPs, special accommodations, and no-response follow-up.', desc_es:'Conciliar asistentes confirmados, VIPs, necesidades especiales y seguimiento a quienes no respondieron.', durationDays:5, assignee:'Guest Coordinator', assignee_es:'Coordinador de Invitados', planningWindow:'1 month before', priority:'critical', completedIfDone:'guest_list_finalized' },
+  { title:'Final Venue Walkthrough', title_es:'Recorrido Final de Sede', desc:'Conduct a detailed on-site review with venue and key vendors using the latest plan.', desc_es:'Realizar una revisión detallada en sitio con la sede y los proveedores clave usando el plan más reciente.', durationDays:2, assignee:'Planner / Client / Operations Lead', assignee_es:'Organizador / Cliente / Líder de Operaciones', planningWindow:'1 month before', priority:'critical' },
+  { title:'Confirm Final Vendor Deliverables', title_es:'Confirmar Entregables Finales de Proveedores', desc:'Verify arrival times, setup scope, contact list, production details, and outstanding balances.', desc_es:'Verificar horarios de llegada, alcance de montaje, lista de contactos, detalles de producción y saldos pendientes.', durationDays:5, assignee:'Event Planner', assignee_es:'Organizador de Evento', planningWindow:'1 month before', priority:'critical' },
+  { title:'Prepare Event-Day Materials', title_es:'Preparar Materiales para el Día del Evento', desc:'Assemble checklists, credentials, signage packs, schedules, emergency contacts, and production documents.', desc_es:'Reunir listas de verificación, credenciales, paquetes de señalética, horarios, contactos de emergencia y documentos de producción.', durationDays:6, assignee:'Admin / Planner', assignee_es:'Administrador / Organizador', planningWindow:'3 weeks before', priority:'critical' },
+  { title:'Team Briefing', title_es:'Briefing del Equipo', desc:'Train internal staff or support team on responsibilities, schedules, escalation points, and guest handling.', desc_es:'Capacitar al personal interno o equipo de apoyo sobre responsabilidades, horarios, puntos de escalación y atención a invitados.', durationDays:2, assignee:'Event Lead', assignee_es:'Líder de Evento', planningWindow:'3 weeks before', priority:'critical' },
+  { title:'Confirm Final Payments Schedule', title_es:'Confirmar Calendario de Pagos Finales', desc:'Review due dates, payment methods, approvals, and final vendor invoices.', desc_es:'Revisar fechas de vencimiento, métodos de pago, aprobaciones y facturas finales de proveedores.', durationDays:3, assignee:'Finance Lead', assignee_es:'Responsable Financiero', planningWindow:'2-3 weeks before', priority:'important' },
+  { title:'Lock Final Layout / Seating', title_es:'Cerrar Distribución / Ubicación Final', desc:'Finalize seating chart, room layout, signage placements, and operational zones.', desc_es:'Finalizar el plano de mesas, distribución del salón, ubicaciones de señalética y zonas operativas.', durationDays:4, assignee:'Planner / Guest Coordinator', assignee_es:'Organizador / Coordinador de Invitados', planningWindow:'2 weeks before', priority:'important', requiresService:'seating' },
+  { title:'Send Final Guest Communication', title_es:'Enviar Comunicación Final a Invitados', desc:'Share arrival instructions, schedule details, parking, dress guidance, or participation notes.', desc_es:'Compartir instrucciones de llegada, detalles del programa, estacionamiento, vestimenta o notas de participación.', durationDays:2, assignee:'Communications Lead', assignee_es:'Líder de Comunicaciones', planningWindow:'2 weeks before', priority:'critical' },
+  { title:'Confirm Final Guest Count', title_es:'Confirmar Conteo Final de Invitados', desc:'Submit final attendance count to venue, catering, and applicable vendors.', desc_es:'Enviar el conteo final de asistencia a la sede, catering y proveedores aplicables.', durationDays:2, assignee:'Guest Coordinator', assignee_es:'Coordinador de Invitados', planningWindow:'10 days before', priority:'critical' },
+  { title:'Reconfirm All Vendors', title_es:'Reconfirmar Todos los Proveedores', desc:'Perform final reconfirmation of schedule, contacts, deliveries, and setup timing.', desc_es:'Realizar confirmación final de horarios, contactos, entregas y tiempos de montaje.', durationDays:3, assignee:'Event Planner', assignee_es:'Organizador de Evento', planningWindow:'1 week before', priority:'critical' },
+  { title:'Pack Emergency / Backup Materials', title_es:'Preparar Materiales de Emergencia / Respaldo', desc:'Prepare extra supplies, printed copies, cables, tools, labels, extension cords, first-aid items, and stationery.', desc_es:'Preparar suministros extra, copias impresas, cables, herramientas, etiquetas, extensiones, botiquín y papelería.', durationDays:2, assignee:'Operations Lead', assignee_es:'Líder de Operaciones', planningWindow:'1 week before', priority:'important' },
+  { title:'Final Internal Review', title_es:'Revisión Interna Final', desc:'Review the master checklist, outstanding items, dependencies, and contingency plan readiness.', desc_es:'Revisar la lista maestra de verificación, pendientes, dependencias y preparación del plan de contingencia.', durationDays:2, assignee:'Event Lead', assignee_es:'Líder de Evento', planningWindow:'3-5 days before', priority:'critical' },
+  { title:'Venue Setup / Load-In', title_es:'Montaje de Sede / Carga', desc:'Install production, decor, rentals, signage, registration, and all physical event elements.', desc_es:'Instalar producción, decoración, alquileres, señalética, registro y todos los elementos físicos del evento.', durationDays:2, assignee:'Operations Lead / Vendors', assignee_es:'Líder de Operaciones / Proveedores', planningWindow:'1-2 days before', priority:'critical' },
+  { title:'Event Execution', title_es:'Ejecución del Evento', desc:'Manage guest experience, timeline, vendor coordination, troubleshooting, and live operations.', desc_es:'Gestionar la experiencia de invitados, cronograma, coordinación de proveedores, resolución de problemas y operaciones en vivo.', durationDays:1, assignee:'Event Lead / Full Team', assignee_es:'Líder de Evento / Equipo Completo', planningWindow:'Event day', priority:'critical' },
+  { title:'Breakdown / Load-Out', title_es:'Desmontaje / Desalojo', desc:'Oversee teardown, returns, cleanup, and removal of materials and equipment.', desc_es:'Supervisar el desmontaje, devoluciones, limpieza y retiro de materiales y equipos.', durationDays:1, assignee:'Operations Lead / Vendors', assignee_es:'Líder de Operaciones / Proveedores', planningWindow:'1 day after', priority:'critical' },
+  { title:'Payment Reconciliation', title_es:'Conciliación de Pagos', desc:'Review final invoices, adjustments, reimbursements, and close out event expenses.', desc_es:'Revisar facturas finales, ajustes, reembolsos y cerrar gastos del evento.', durationDays:3, assignee:'Finance Lead', assignee_es:'Responsable Financiero', planningWindow:'1-3 days after', priority:'critical' },
+  { title:'Thank You / Follow-Up Communications', title_es:'Comunicaciones de Agradecimiento / Seguimiento', desc:'Send appreciation messages, post-event notes, or next-step communication to attendees and partners.', desc_es:'Enviar mensajes de agradecimiento, notas post-evento o comunicación de próximos pasos a asistentes y socios.', durationDays:3, assignee:'Communications Lead', assignee_es:'Líder de Comunicaciones', planningWindow:'3-7 days after', priority:'important' },
+  { title:'Collect Photos / Assets / Reports', title_es:'Recopilar Fotos / Archivos / Reportes', desc:'Gather media, vendor deliverables, attendance reports, and other final files.', desc_es:'Reunir medios, entregables de proveedores, reportes de asistencia y otros archivos finales.', durationDays:5, assignee:'Admin / Creative Lead', assignee_es:'Administrador / Líder Creativo', planningWindow:'1 week after', priority:'important', requiresService:'photo' },
+  { title:'Post-Event Review', title_es:'Revisión Post-Evento', desc:'Evaluate what worked, what did not, budget performance, attendance, and lessons learned.', desc_es:'Evaluar qué funcionó, qué no, el desempeño del presupuesto, la asistencia y las lecciones aprendidas.', durationDays:2, assignee:'Event Lead / Client', assignee_es:'Líder de Evento / Cliente', planningWindow:'1-2 weeks after', priority:'important' },
+  { title:'Archive Project Files', title_es:'Archivar Archivos del Proyecto', desc:'Organize final documents, floor plans, contracts, budgets, media, and notes for future use.', desc_es:'Organizar documentos finales, planos, contratos, presupuestos, medios y notas para uso futuro.', durationDays:2, assignee:'Admin', assignee_es:'Administrador', planningWindow:'2 weeks after', priority:'optional' }
+];
+function timelineTemplateDate(d){
+  const dt = d instanceof Date ? new Date(d) : new Date(d+'T12:00:00');
+  dt.setHours(12,0,0,0);
+  return dt;
+}
+function taskStatusValue(tk){
+  if(tk && tk.status) return tk.status;
+  return tk && tk.done ? 'completed' : 'not-started';
+}
+function taskStatusLabel(tk){
+  const status = typeof tk === 'string' ? tk : taskStatusValue(tk);
+  if(status==='completed') return LANG==='es' ? 'Completada' : 'Completed';
+  if(status==='in-progress') return LANG==='es' ? 'En progreso' : 'In progress';
+  return LANG==='es' ? 'No iniciada' : 'Not started';
+}
+function taskIsDone(tk){
+  return taskStatusValue(tk)==='completed';
+}
+function taskPhaseValue(task){
+  const text=((task.title||'')+' '+(task.assignee||'')).toLowerCase();
+  if(/breakdown|load-out|reconciliation|thank you|collect photos|post-event|archive/.test(text)) return 'Post-Event';
+  if(/setup|load-in|execution|briefing|internal review|backup materials/.test(text)) return 'Event Week';
+  if(/walkthrough|deliverables|payment schedule|final payments|final guest count|reconfirm/.test(text)) return 'Final Confirmation';
+  if(/goal|budget|planning team|scope|master timeline|review/.test(text)) return 'Strategy & Budget';
+  if(/venue|vendor|catering|production|photo|video/.test(text)) return 'Venue & Core Vendors';
+  if(/theme|creative|design|decor|branding|signage|menu|experience|speaker|entertainment/.test(text)) return 'Design & Guest Experience';
+  if(/logistics|operations|permit|approval|transport|access|staffing|equipment|rental|risk|contingency/.test(text)) return 'Logistics & Operations';
+  if(/guest|invitation|registration|rsvp|seating|communication/.test(text)) return 'Guest Management';
+  return 'Logistics & Operations';
+}
+function timelineTemplateIso(d){
+  return timelineTemplateDate(d).toISOString().split('T')[0];
+}
+function timelineTemplateAddDays(d, days){
+  const dt = timelineTemplateDate(d);
+  dt.setDate(dt.getDate()+days);
+  return dt;
+}
+function timelineTemplateColor(task){
+  const text = ((task.assignee||'')+' '+(task.title||'')).toLowerCase();
+  if(/finance|budget|payment/.test(text)) return '#c9a84c';
+  if(/guest|invitation|registration|communication|rsvp/.test(text)) return '#f59e0b';
+  if(/creative|design|decor|branding|photo|video|signage/.test(text)) return '#ec4899';
+  if(/operations|logistics|venue|production|catering|vendor|rental|transport/.test(text)) return '#10b981';
+  return '#7c3aed';
+}
+
+// ---- ADAPTIVE PLAN ENGINE --------------------------------------------
+
+// Convert a planningWindow string to approximate days relative to event.
+// Positive = days before event. Negative = days after event. 0 = event day.
+function planningWindowToDays(w){
+  var s = String(w||'').toLowerCase().replace(/[–—]/g,'-').trim();
+  if(!s || s==='event day') return 0;
+  var nums = (s.match(/\d+(?:\.\d+)?/g)||[]).map(Number).filter(Boolean);
+  var avg = nums.length===1 ? nums[0] : nums.length>=2 ? (nums[0]+nums[1])/2 : 0;
+  if(s.indexOf('month')>-1)      avg = avg*30;
+  else if(s.indexOf('week')>-1)  avg = avg*7;
+  if(s.indexOf('before')>-1) return Math.round(avg);
+  if(s.indexOf('after')>-1)  return -Math.round(avg);
+  return 0;
+}
+
+// Return the planning mode based on days remaining until the event.
+function getPlanMode(daysRemaining){
+  if(daysRemaining>=270) return 'full';       // 9+ months
+  if(daysRemaining>=180) return 'reduced';    // 6–9 months
+  if(daysRemaining>=90)  return 'compressed'; // 3–6 months
+  return 'urgent';                             // <3 months
+}
+
+// Returns true if a task should be included in the plan given the user's
+// setup answers and the computed plan mode.
+function _planTaskVisible(task, answers, mode){
+  // Priority gating: critical shows in all modes; important needs ≥compressed;
+  // optional needs ≥reduced.
+  var modeRank = {urgent:0,compressed:1,reduced:2,full:3};
+  var priRank  = {critical:0,important:1,optional:2};
+  if((priRank[task.priority||'important']||0) > (modeRank[mode]||0)) return false;
+
+  // Service gating: skip if user said they don't need this service.
+  var svc = task.requiresService;
+  if(svc==='catering'      && answers.needCatering===false)      return false;
+  if(svc==='av'            && answers.needAV===false)            return false;
+  if(svc==='decor'         && answers.needDecor===false)         return false;
+  if(svc==='photo'         && answers.needPhoto===false)         return false;
+  if(svc==='entertainment' && answers.needEntertainment===false) return false;
+  if(svc==='transport'     && answers.needTransport===false)     return false;
+  if(svc==='permits'       && answers.needPermits===false)       return false;
+  if(svc==='seating'       && answers.needSeating===false)       return false;
+  if(svc==='venue_search'  && answers.venueBooked)               return false;
+
+  // Skip-if-done gating: omit tasks that are no longer needed because the
+  // milestone was completed outside this system.
+  var sid = task.skipIfDone;
+  if(sid==='save_the_date' && answers.saveTheDateSent)  return false;
+  if(sid==='invitations'   && answers.invitationsSent)  return false;
+
+  return true;
+}
+
+// Returns true if a task should be pre-marked as completed based on answers.
+function _planTaskCompleted(task, answers){
+  var c = task.completedIfDone;
+  if(!c) return false;
+  if(c==='venue_booked'         && answers.venueBooked)                           return true;
+  if(c==='venue_contract'       && answers.venueContractDone)                     return true;
+  if(c==='save_the_date'        && answers.saveTheDateSent)                       return true;
+  if(c==='invitations'          && answers.invitationsSent)                       return true;
+  if(c==='guest_list_started'   && answers.guestListStatus!=='not_started')       return true;
+  if(c==='guest_list_finalized' && answers.guestListStatus==='finalized')         return true;
+  if(c==='vendor_contracts'     && answers.vendorContractsDone)                   return true;
+  return false;
+}
+
+// Build the task list, distributing them proportionally across the available
+// window from today to the event date. Never produces past start dates.
+function buildAdaptiveTemplateTasks(eventDate, answers){
+  var today = new Date(); today.setHours(0,0,0,0);
+  var evDate = timelineTemplateDate(eventDate); evDate.setHours(0,0,0,0);
+  var daysRemaining = Math.round((evDate-today)/86400000);
+
+  var mode;
+  if((answers.planScope||'smart')==='essentials')    mode='urgent';
+  else if((answers.planScope||'smart')==='full')     mode='full';
+  else                                               mode=getPlanMode(daysRemaining);
+
+  var MAX_SPAN = 365; // original template spans ~12 months
+
+  var isES = (typeof LANG !== 'undefined' && LANG === 'es');
+  return TEMPLATE_PLAN_TASKS
+    .filter(function(task){ return _planTaskVisible(task,answers,mode); })
+    .map(function(task,index){
+      var daysBefore = planningWindowToDays(task.planningWindow);
+      var startDate;
+      if(daysBefore<0){
+        // Post-event task: keep fixed offset after the event date.
+        startDate = timelineTemplateAddDays(evDate, Math.abs(daysBefore));
+      } else {
+        // Pre-event: map proportionally. ratio=1 → today, ratio=0 → event day.
+        var ratio = Math.min(1, daysBefore/MAX_SPAN);
+        var daysFromToday = Math.round(daysRemaining*(1-ratio));
+        daysFromToday = Math.max(0, Math.min(daysRemaining, daysFromToday));
+        startDate = timelineTemplateAddDays(today, daysFromToday);
+      }
+      // Compress durations for tight timelines so tasks don't overlap badly.
+      var dur = task.durationDays||1;
+      if(mode==='urgent')      dur = Math.min(dur, 2);
+      else if(mode==='compressed') dur = Math.max(1, Math.round(dur*0.6));
+      var endDate = timelineTemplateAddDays(startDate, Math.max(0, dur-1));
+      var completed = _planTaskCompleted(task, answers);
+      return {
+        id:'tpl_'+Date.now()+'_'+index,
+        title: isES ? (task.title_es || task.title) : task.title,
+        desc: isES ? (task.desc_es || task.desc) : task.desc,
+        startDate:timelineTemplateIso(startDate),
+        dueDate:timelineTemplateIso(endDate),
+        endDate:timelineTemplateIso(endDate),
+        durationDays:dur,
+        assignee: isES ? (task.assignee_es || task.assignee) : task.assignee,
+        planningWindow:task.planningWindow,
+        phase:task.phase||taskPhaseValue(task),
+        priority:task.priority||'important',
+        status:completed?'completed':'not-started',
+        done:completed,
+        color:timelineTemplateColor(task)
+      };
+    })
+    .sort(function(a,b){
+      return (a.startDate||a.dueDate).localeCompare(b.startDate||b.dueDate)
+        ||(a.dueDate||a.startDate).localeCompare(b.dueDate||b.startDate)
+        ||a.title.localeCompare(b.title);
+    });
+}
+
+// Compute preview counts without generating the full task objects.
+function _previewAdaptivePlan(eventDate, answers){
+  var today = new Date(); today.setHours(0,0,0,0);
+  var evDate = timelineTemplateDate(eventDate); evDate.setHours(0,0,0,0);
+  var daysRemaining = Math.round((evDate-today)/86400000);
+  var mode;
+  if((answers.planScope||'smart')==='essentials')  mode='urgent';
+  else if((answers.planScope||'smart')==='full')   mode='full';
+  else                                             mode=getPlanMode(daysRemaining);
+  var included=0, skipped=0, completed=0;
+  TEMPLATE_PLAN_TASKS.forEach(function(task){
+    if(!_planTaskVisible(task,answers,mode)){ skipped++; }
+    else{ included++; if(_planTaskCompleted(task,answers)) completed++; }
+  });
+  return {mode:mode, daysRemaining:daysRemaining, included:included, skipped:skipped, completed:completed};
+}
+// ---- PLAN SETUP WIZARD -----------------------------------------------
+
+var _planWiz = null;
+
+function openTemplatePlanWizard(){
+  var p = proj();
+  if(!p) return;
+  if(!p.date) return toast(LANG==='es'?'Primero agrega una fecha al evento para generar el cronograma':'Add an event date first so the template plan can be generated','e');
+  _planWiz = {
+    step:0,
+    // Step 1 — current status
+    venueBooked:false, venueContractDone:false, plannerHired:false,
+    saveTheDateSent:false, invitationsSent:false,
+    guestListStatus:'not_started', vendorContractsDone:false,
+    // Step 2 — services
+    needCatering:true, needAV:true, needDecor:true, needPhoto:true,
+    needEntertainment:false, needTransport:false, needPermits:false, needSeating:true,
+    // Step 3 — scope (set at preview step)
+    planScope:'smart'
+  };
+  _renderPlanWiz();
+}
+
+function _renderPlanWiz(){
+  var isES = LANG==='es';
+  var s    = _planWiz.step;
+  var stepLabels = isES ? ['Estado actual','Servicios','Vista previa'] : ['Current status','Services','Preview'];
+
+  // Progress bar (same style as event creation wizard)
+  var prog = '<div style="display:flex;align-items:flex-start;gap:0;margin-bottom:28px;">';
+  for(var i=0;i<stepLabels.length;i++){
+    var done   = i<s, active = i===s;
+    var circBg  = done?'var(--gold)':active?'var(--gold-l)':'var(--bg)';
+    var circBd  = (done||active)?'var(--gold)':'var(--border)';
+    var circClr = done?'#fff':active?'var(--gold-h)':'var(--light)';
+    var txtClr  = active?'var(--gold-h)':done?'var(--text)':'var(--light)';
+    var inner   = done?'<svg width="11" height="11" fill="none" stroke="#fff" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>':String(i+1);
+    var lineClr = i<=s?'var(--gold)':'var(--border)';
+    var line    = i>0?'<div style="position:absolute;right:50%;top:13px;width:100%;height:1px;background:'+lineClr+'"></div>':'';
+    prog += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;position:relative;">'
+      +line
+      +'<div style="width:26px;height:26px;border-radius:50%;border:1.5px solid '+circBd+';background:'+circBg+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:'+circClr+';position:relative;z-index:1;">'+inner+'</div>'
+      +'<div style="font-size:10px;margin-top:5px;color:'+txtClr+';font-weight:'+(active?'600':'400')+';white-space:nowrap;letter-spacing:.3px;">'+stepLabels[i]+'</div>'
+      +'</div>';
+  }
+  prog += '</div>';
+
+  var body    = s===0?_planWizStep0(isES):s===1?_planWizStep1(isES):_planWizStep2(isES);
+  var backBtn = s>0
+    ?'<button class="btn btn-ghost" onclick="_planWizBack()">'+(isES?'← Atrás':'← Back')+'</button>'
+    :'<button class="btn btn-ghost" onclick="closeMo()">'+(isES?'Cancelar':'Cancel')+'</button>';
+  var nextLbl = s===2?(isES?'Generar plan':'Generate plan'):(isES?'Siguiente →':'Next →');
+
+  openMo(
+    '<div style="width:100%;max-width:580px;">'
+    +'<div style="font-family:\'Cormorant Garamond\',serif;font-size:24px;font-weight:700;color:var(--gold-h);margin-bottom:3px;">'+(isES?'Crear plan de evento':'Create Event Plan')+'</div>'
+    +'<div style="font-size:12px;color:var(--light);margin-bottom:24px;letter-spacing:.3px;text-transform:uppercase;">'+(isES?'Paso '+(s+1)+' de 3':'Step '+(s+1)+' of 3')+'</div>'
+    +prog+body
+    +'<div class="mo-foot" style="margin-top:28px;">'+backBtn
+    +'<button class="btn btn-primary btn-create-gradient" onclick="_planWizNext()">'+nextLbl+'</button>'
+    +'</div></div>'
+  );
+}
+
+// Reusable checkbox row for the wizard
+function _planWizCheck(field, label, sub){
+  var checked = !!_planWiz[field];
+  return '<div onclick="_planWizToggle(\''+field+'\')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:var(--r);border:1.5px solid '+(checked?'var(--gold)':'var(--border)')+';background:'+(checked?'var(--gold-l)':'transparent')+';cursor:pointer;transition:var(--tr);margin-bottom:8px;">'
+    +'<div style="width:18px;height:18px;border-radius:4px;border:1.5px solid '+(checked?'var(--gold)':'var(--border)')+';background:'+(checked?'var(--gold)':'transparent')+';display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
+    +(checked?'<svg width="10" height="10" fill="none" stroke="#fff" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>':'')
+    +'</div>'
+    +'<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:'+(checked?'600':'400')+';color:var(--text);">'+label+'</div>'
+    +(sub?'<div style="font-size:11px;color:var(--muted);margin-top:1px;">'+sub+'</div>':'')
+    +'</div></div>';
+}
+
+// Step 1 — What's already in place?
+function _planWizStep0(isES){
+  var glOptions = [
+    ['not_started', isES?'Aún no iniciada':'Not started yet'],
+    ['started',     isES?'Comenzada':'Started'],
+    ['finalized',   isES?'Finalizada':'Finalized']
+  ];
+  var glRadios = glOptions.map(function(opt){
+    var sel = _planWiz.guestListStatus===opt[0];
+    return '<div onclick="_planWizSetGL(\''+opt[0]+'\')" style="display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border-radius:var(--r);border:1.5px solid '+(sel?'var(--gold)':'var(--border)')+';background:'+(sel?'var(--gold-l)':'transparent')+';cursor:pointer;transition:var(--tr);font-size:13px;font-weight:'+(sel?'600':'400')+';color:var(--text);">'
+      +'<div style="width:14px;height:14px;border-radius:50%;border:1.5px solid '+(sel?'var(--gold)':'var(--border)')+';background:'+(sel?'var(--gold)':'transparent')+'"></div>'
+      +opt[1]+'</div>';
+  }).join('');
+
+  return '<div>'
+    +'<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:4px;">'+(isES?'¿Qué ya está listo?':'What\'s already in place?')+'</div>'
+    +'<div style="font-size:13px;color:var(--muted);margin-bottom:18px;">'+(isES?'Marca lo que ya está resuelto y el plan omitirá o marcará como completadas las tareas correspondientes.':'Check what\'s already handled and the plan will skip or pre-complete those tasks.')+'</div>'
+    +_planWizCheck('venueBooked',       isES?'La sede / lugar ya está reservada':'Venue is already booked',                isES?'Se omitirán las tareas de búsqueda y selección de sede':'Venue search and selection tasks will be skipped')
+    +(_planWiz.venueBooked ? _planWizCheck('venueContractDone', isES?'Contrato / depósito de sede ya firmado':'Venue contract / deposit already signed', null) : '')
+    +_planWizCheck('plannerHired',      isES?'Coordinador / planificador ya contratado':'Event planner / coordinator already hired', null)
+    +_planWizCheck('saveTheDateSent',   isES?'Save-the-date ya enviado':'Save-the-date / early notice already sent',       isES?'Se omitirá la tarea de envío de save-the-date':'Save-the-date task will be skipped')
+    +_planWizCheck('invitationsSent',   isES?'Invitaciones ya enviadas':'Invitations already sent',                        isES?'Se omitirán producción y envío de invitaciones':'Invitation production and sending tasks will be skipped')
+    +_planWizCheck('vendorContractsDone',isES?'Contratos / depósitos de proveedores ya completados':'Vendor contracts / deposits already completed', isES?'Las tareas de selección de proveedor se marcarán como completadas':'Vendor selection tasks will be pre-marked as completed')
+    +'<div style="margin-top:16px;margin-bottom:4px;">'
+    +'<div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:600;color:var(--muted);margin-bottom:10px;">'+(isES?'Estado de la lista de invitados':'Guest list status')+'</div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;">'+glRadios+'</div>'
+    +'</div></div>';
+}
+
+// Step 2 — What does this event need?
+function _planWizStep1(isES){
+  var services = [
+    {id:'needCatering',      en:'Catering / Food service',           es:'Catering / Servicio de alimentos'},
+    {id:'needAV',            en:'AV / Lighting / Production',        es:'Sonido / Iluminación / Producción'},
+    {id:'needDecor',         en:'Décor / Floral design',             es:'Decoración / Diseño floral'},
+    {id:'needPhoto',         en:'Photography / Videography',         es:'Fotografía / Videografía'},
+    {id:'needEntertainment', en:'Entertainment or Speakers',         es:'Entretenimiento o ponentes'},
+    {id:'needTransport',     en:'Guest transport / Accommodations',  es:'Transporte / Alojamiento de invitados'},
+    {id:'needPermits',       en:'Permits / Insurance / Approvals',   es:'Permisos / Seguros / Aprobaciones'},
+    {id:'needSeating',       en:'Seating / Table assignments',       es:'Distribución / Asignación de mesas'}
+  ];
+  var items = services.map(function(svc){
+    var checked = !!_planWiz[svc.id];
+    var lbl = isES?svc.es:svc.en;
+    return '<div onclick="_planWizToggle(\''+svc.id+'\')" style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:var(--r);border:1.5px solid '+(checked?'var(--gold)':'var(--border)')+';background:'+(checked?'var(--gold-l)':'transparent')+';cursor:pointer;transition:var(--tr);margin-bottom:8px;">'
+      +'<div style="width:18px;height:18px;border-radius:4px;border:1.5px solid '+(checked?'var(--gold)':'var(--border)')+';background:'+(checked?'var(--gold)':'transparent')+';display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
+      +(checked?'<svg width="10" height="10" fill="none" stroke="#fff" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>':'')
+      +'</div>'
+      +'<span style="font-size:13px;font-weight:'+(checked?'600':'400')+';color:var(--text);flex:1;">'+lbl+'</span>'
+      +'</div>';
+  }).join('');
+  return '<div>'
+    +'<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:4px;">'+(isES?'¿Qué necesita este evento?':'What does this event need?')+'</div>'
+    +'<div style="font-size:13px;color:var(--muted);margin-bottom:18px;">'+(isES?'Activa solo lo que aplica. Los servicios no seleccionados quedarán fuera del plan.':'Enable only what applies. Unselected services will be removed from the plan.')+'</div>'
+    +items+'</div>';
+}
+
+// Step 3 — Preview + scope choice
+function _planWizStep2(isES){
+  var p = proj();
+  if(!p||!p.date) return '<div style="color:var(--muted);font-size:13px;">'+(isES?'Sin fecha de evento.':'No event date.')+'</div>';
+
+  var prev = _previewAdaptivePlan(p.date, _planWiz);
+  var modeData = {
+    full:       {label_en:'Full plan (9+ months)',              label_es:'Plan completo (9+ meses)',              color:'#10b981', bg:'rgba(16,185,129,.08)',  bd:'rgba(16,185,129,.2)'},
+    reduced:    {label_en:'Reduced plan (6–9 months)',          label_es:'Plan reducido (6–9 meses)',             color:'#7c3aed', bg:'rgba(124,58,237,.08)', bd:'rgba(124,58,237,.2)'},
+    compressed: {label_en:'Compressed plan (3–6 months)',       label_es:'Plan comprimido (3–6 meses)',           color:'#f59e0b', bg:'rgba(245,158,11,.08)', bd:'rgba(245,158,11,.2)'},
+    urgent:     {label_en:'Urgent essentials (<3 months)',      label_es:'Esenciales urgentes (<3 meses)',        color:'#ef4444', bg:'rgba(239,68,68,.08)',  bd:'rgba(239,68,68,.2)'}
+  };
+  var md = modeData[prev.mode]||modeData.full;
+  var modeLabel = isES?md.label_es:md.label_en;
+
+  var hasTasks = Array.isArray(p.tasks)&&p.tasks.length>0;
+
+  // Scope options
+  var scopes = [
+    {id:'smart',      en:'Smart plan (recommended)',  es:'Plan inteligente (recomendado)',  den:'Adapts tasks to time available',                   des:'Adapta las tareas al tiempo disponible'},
+    {id:'full',       en:'Full plan',                 es:'Plan completo',                   den:'Include all applicable tasks regardless of timeline',des:'Incluye todas las tareas aplicables'},
+    {id:'essentials', en:'Essentials only',           es:'Solo esenciales',                  den:'Critical tasks only — minimal setup',               des:'Solo tareas críticas — configuración mínima'}
+  ];
+  var scopeItems = scopes.map(function(sc){
+    var sel = _planWiz.planScope===sc.id;
+    var lbl = isES?sc.es:sc.en;
+    var desc = isES?sc.des:sc.den;
+    return '<div onclick="_planWizSetScope(\''+sc.id+'\')" style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:var(--r);border:1.5px solid '+(sel?'var(--gold)':'var(--border)')+';background:'+(sel?'var(--gold-l)':'transparent')+';cursor:pointer;transition:var(--tr);margin-bottom:8px;">'
+      +'<div style="width:16px;height:16px;border-radius:50%;border:1.5px solid '+(sel?'var(--gold)':'var(--border)')+';background:'+(sel?'var(--gold)':'transparent')+';flex-shrink:0;"></div>'
+      +'<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:'+(sel?'600':'400')+';color:var(--text);">'+lbl+'</div>'
+      +'<div style="font-size:11px;color:var(--muted);">'+desc+'</div></div></div>';
+  }).join('');
+
+  // Summary stat tile
+  function stat(val,lbl,color){
+    return '<div style="text-align:center;padding:14px 8px;border-radius:var(--r);border:1px solid var(--border);background:var(--bg);">'
+      +'<div style="font-size:22px;font-weight:700;color:'+color+';">'+val+'</div>'
+      +'<div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-top:2px;">'+lbl+'</div>'
+      +'</div>';
+  }
+
+  return '<div>'
+    +'<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:4px;">'+(isES?'Vista previa del plan':'Plan preview')+'</div>'
+    +'<div style="font-size:13px;color:var(--muted);margin-bottom:18px;">'+(isES?'Elige el alcance y revisa el resumen antes de generar.':'Choose scope and review the summary before generating.')+'</div>'
+    // Mode indicator
+    +'<div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:var(--r);background:'+md.bg+';border:1px solid '+md.bd+';margin-bottom:14px;">'
+    +'<div style="width:10px;height:10px;border-radius:50%;background:'+md.color+';flex-shrink:0;"></div>'
+    +'<div style="font-size:13px;font-weight:600;color:var(--text);flex:1;">'+modeLabel+'</div>'
+    +'<div style="font-size:11px;color:var(--muted);">'+(isES?'Días disponibles: ':'Days available: ')+Math.max(0,prev.daysRemaining)+'</div>'
+    +'</div>'
+    // Stats
+    +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px;">'
+    +stat(prev.included-prev.completed, isES?'Tareas nuevas':'New tasks',     '#7c3aed')
+    +stat(prev.completed,               isES?'Ya completadas':'Pre-completed', '#10b981')
+    +stat(prev.skipped,                 isES?'Omitidas':'Skipped',             '#94a3b8')
+    +'</div>'
+    // Scope selector
+    +'<div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:600;color:var(--muted);margin-bottom:10px;">'+(isES?'Alcance del plan':'Plan scope')+'</div>'
+    +scopeItems
+    +(hasTasks?'<div style="margin-top:12px;font-size:12px;color:#b45309;padding:10px 14px;background:rgba(180,83,9,.07);border-radius:var(--r);">'+(isES?'⚠ Esto reemplazará las tareas actuales del cronograma.':'⚠ This will replace the current timeline tasks.')+'</div>':'')
+    +'</div>';
+}
+
+function _planWizToggle(field){
+  if(!_planWiz) return;
+  _planWiz[field] = !_planWiz[field];
+  _renderPlanWiz();
+}
+function _planWizSetGL(val){
+  if(!_planWiz) return;
+  _planWiz.guestListStatus = val;
+  _renderPlanWiz();
+}
+function _planWizSetScope(val){
+  if(!_planWiz) return;
+  _planWiz.planScope = val;
+  _renderPlanWiz();
+}
+function _planWizNext(){
+  if(!_planWiz) return;
+  if(_planWiz.step<2){ _planWiz.step++; _renderPlanWiz(); }
+  else { _planWizGenerate(); }
+}
+function _planWizBack(){
+  if(!_planWiz) return;
+  _planWiz.step--;
+  _renderPlanWiz();
+}
+function _planWizGenerate(){
+  if(typeof _libPlanWizTargetGroupId !== 'undefined' && _libPlanWizTargetGroupId){
+    var lib=getLib();
+    var entry=lib.tasks.find(function(e){return e.id===_libPlanWizTargetGroupId;});
+    if(entry){
+      // Use a 1-year-ahead date to drive proportional scheduling, then strip dates
+      var futureDate=new Date(); futureDate.setFullYear(futureDate.getFullYear()+1);
+      var isoDate=futureDate.toISOString().split('T')[0];
+      buildAdaptiveTemplateTasks(isoDate, _planWiz).forEach(function(tk){
+        tk.id='gt'+Date.now()+Math.random().toString(36).slice(2,6);
+        tk.startDate=''; tk.dueDate=''; tk.endDate=''; tk.done=false; tk.status='not-started';
+        entry.tasks.push(tk);
+      });
+      saveLib(lib);
+    }
+    _libPlanWizTargetGroupId=null; _planWiz=null; closeMo();
+    toast(LANG==='es'?'Plan guardado en biblioteca':'Plan saved to library','s');
+    if(typeof renderLibrary==='function') renderLibrary();
+    return;
+  }
+  var p = proj();
+  if(!p||!p.date) return toast(LANG==='es'?'Selecciona una fecha del evento':'Select an event date','e');
+  p.tasks = buildAdaptiveTemplateTasks(p.date, _planWiz);
+  p.tasksInitialized = true;
+  saveProj(p);
+  _planWiz = null;
+  closeMo();
+  renderTimeline();
+  toast(LANG==='es'?'Plan creado':'Plan created','s');
+}
+
+// Keep legacy name working in case called from elsewhere.
+function generateTemplatePlan(){ _planWizGenerate(); }
+
+// Entry point for library context — skips the event-date requirement
+function openTemplatePlanWizardForLib(){
+  _planWiz = {
+    step:0,
+    venueBooked:false, venueContractDone:false, plannerHired:false,
+    saveTheDateSent:false, invitationsSent:false,
+    guestListStatus:'not_started', vendorContractsDone:false,
+    needCatering:true, needAV:true, needDecor:true, needPhoto:true,
+    needEntertainment:false, needTransport:false, needPermits:false, needSeating:true,
+    planScope:'smart'
+  };
+  _renderPlanWiz();
+}
+function renderTimelineEmptyState(){
+  const isES = LANG==='es';
+  return `<section class="ev-empty fade-in">
+    <div class="ev-empty-shell">
+      <div class="ev-empty-aurora" aria-hidden="true"></div>
+      <div class="ev-empty-grid">
+        <div class="ev-empty-copy">
+          <div class="ev-empty-badge">${isES ? 'Cronograma inicial' : 'Timeline starter'}</div>
+          <h2 class="ev-empty-title">${isES ? 'Comienza este evento con un plan maestro listo para trabajar.' : 'Start this event with a master plan that is ready to work from.'}</h2>
+          <p class="ev-empty-subtitle">${isES ? 'Crea una plantilla completa de planificación para eventos sociales, corporativos, galas, celebraciones privadas y recaudaciones. Después podrás editar cada tarea, responsable y fecha como quieras.' : 'Create a full planning template for social events, corporate events, galas, private celebrations, and fundraisers. After that, you can edit every task, assignee, and date however you like.'}</p>
+          <div class="ev-empty-actions">
+            <button class="btn btn-primary btn-create-gradient ev-empty-cta" onclick="openTemplatePlanWizard()">
+              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+              ${isES ? 'Crear Plan de Plantilla' : 'Create Template Plan'}
+            </button>
+            <button class="btn btn-ghost ev-empty-cta" onclick="openTaskModal()">
+              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+              ${t('add_task')}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>`;
+}
 function _libUpdateSectionLabels(){
   var lv=document.getElementById('lib-save-vendor-lbl'); if(lv) lv.textContent=t('lib_save_to');
   var lt=document.getElementById('lib-save-task-lbl');   if(lt) lt.textContent=t('lib_save_to');
   var lvl=document.getElementById('lib-load-vendor-lbl'); if(lvl) lvl.textContent=LANG==='es'?'CARGAR':'LOAD';
-  var ltl=document.getElementById('lib-load-task-lbl');   if(ltl) ltl.textContent=LANG==='es'?'CARGAR':'LOAD';
+  var ltl=document.getElementById('lib-load-task-lbl');   if(ltl) ltl.textContent=LANG==='es'?'Importar Tareas':'Import Tasks';
 }
 function renderTimeline(){
   const p=proj();const el=document.getElementById('tab-timeline');
-  if(ensureDefaultTasks(p)) saveProj(p);
-  const done=p.tasks.filter(tk=>tk.done).length;
-  const ov=p.tasks.filter(tk=>!tk.done&&tk.dueDate<today()).length;
+  if(!Array.isArray(p.tasks)) p.tasks=[];
+  const done=p.tasks.filter(taskIsDone).length;
+  const ov=p.tasks.filter(tk=>!taskIsDone(tk)&&tk.dueDate<today()).length;
   const pct=p.tasks.length?Math.round(done/p.tasks.length*100):0;
   el.innerHTML=`
   <div class="sh">
     <div><div class="sh-title editorial-title" style="color:#7c3aed">${t('timeline')}</div>
     <div class="sh-sub">${t('timeline_sub')}</div></div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="openTemplatePlanWizard()" style="display:flex;align-items:center;gap:5px;font-size:11px">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/><path d="M19 3v4M17 5h4"/></svg>
+        <span>${LANG==='es'?'Crear Plan de Plantilla':'Create Template Plan'}</span>
+      </button>
       <button class="btn btn-ghost btn-sm" onclick="libQuickSaveTasks()" style="display:flex;align-items:center;gap:5px;font-size:11px">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
         <span id="lib-save-task-lbl">${t('lib_save_to')}</span>
       </button>
       <button class="btn btn-ghost btn-sm" onclick="libQuickLoadTasks()" style="display:flex;align-items:center;gap:5px;font-size:11px">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><polyline points="8,10 12,14 16,10"/></svg>
-        <span id="lib-load-task-lbl">${LANG==='es'?'CARGAR':'LOAD'}</span>
+        <span id="lib-load-task-lbl">${LANG==='es'?'Importar Tareas':'Import Tasks'}</span>
       </button>
       <button class="btn btn-primary btn-create-gradient" onclick="openTaskModal()">
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>${t('add_task')}
@@ -444,7 +1335,7 @@ function renderTimeline(){
   </div>
   <div class="timeline-search-wrap" style="position:relative;display:flex;align-items:center;margin-bottom:4px">
     <svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-    <input id="timeline-task-search" class="input" placeholder="${t('search_tasks')}" value="${esc(taskSearchQuery)}" oninput="taskSearchQuery=this.value;renderTimelineView(proj())" style="padding-left:36px;width:100%">
+    <input id="timeline-task-search" class="input" placeholder="${t('search_tasks')}" value="${esc(taskSearchQuery)}" oninput="debouncedTaskSearch(this.value)" style="padding-left:36px;width:100%">
   </div>
   <div id="tview-content" style="margin-top:12px"></div>`;
   renderTimelineView(p);
@@ -462,14 +1353,18 @@ function setTaskListFilter(filter,el){
 function filterTasks(tasks){
   const tod=today();
   let filtered=[...tasks];
-  if(taskListFilter==='overdue') filtered=filtered.filter(tk=>!tk.done&&tk.dueDate&&tk.dueDate<tod);
+  if(taskListFilter==='overdue') filtered=filtered.filter(tk=>!taskIsDone(tk)&&tk.dueDate&&tk.dueDate<tod);
   else if(taskListFilter==='today') filtered=filtered.filter(tk=>tk.dueDate===tod);
-  else if(taskListFilter==='upcoming') filtered=filtered.filter(tk=>tk.dueDate&&tk.dueDate>tod&&!tk.done);
+  else if(taskListFilter==='upcoming') filtered=filtered.filter(tk=>tk.dueDate&&tk.dueDate>tod&&!taskIsDone(tk));
   const q=taskSearchQuery.trim().toLowerCase();
-  if(q) filtered=filtered.filter(tk=>[tk.title,tk.desc,tk.assignee,tk.startDate,tk.dueDate].some(v=>String(v||'').toLowerCase().includes(q)));
+  if(q) filtered=filtered.filter(tk=>[tk.title,tk.desc,tk.assignee,tk.startDate,tk.dueDate,tk.endDate,tk.planningWindow,tk.durationDays,tk.status,tk.phase].some(v=>String(v||'').toLowerCase().includes(q)));
   return filtered;
 }
 function renderTimelineView(p){
+  if(!(p.tasks||[]).length && !taskSearchQuery.trim()){
+    document.getElementById('tview-content').innerHTML=renderTimelineEmptyState();
+    return;
+  }
   if(tView==='list')renderTaskList(p);
   else if(tView==='gantt')renderGantt(p);
   else renderCal(p);
@@ -479,17 +1374,23 @@ function renderTaskList(p){
   const tod=today();
   let sorted=filterTasks([...p.tasks]).sort((a,b)=>(a.dueDate||'').localeCompare(b.dueDate||''));
   el.innerHTML=sorted.map(tk=>{
-    const ov=!tk.done&&tk.dueDate&&tk.dueDate<tod;
+    const status=taskStatusValue(tk);
+    const isDone=taskIsDone(tk);
+    const ov=!isDone&&tk.dueDate&&tk.dueDate<tod;
     return `<div class="task-row">
-      <div class="tchk ${tk.done?'done':''}" onclick="toggleTask('${tk.id}')">
-        ${tk.done?`<svg width="12" height="12" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24"><polyline points="20,6 9,17 4,12"/></svg>`:''}
+      <div class="tchk ${isDone?'done':''}" onclick="toggleTask('${tk.id}')">
+        ${isDone?`<svg width="12" height="12" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24"><polyline points="20,6 9,17 4,12"/></svg>`:''}
       </div>
       <div style="flex:1">
-        <div class="task-title ${tk.done?'done':''}">${tk.title}</div>
+        <div class="task-title ${isDone?'done':''}">${tk.title}</div>
         ${tk.desc?`<div style="font-size:12px;color:var(--muted);margin-top:2px">${tk.desc}</div>`:''}
         <div class="task-meta">
-          <span style="color:${ov?'var(--danger)':'var(--muted)'}">ðŸ“… ${fmtDate(tk.dueDate)}${ov?' ('+t('overdue')+')':''}</span>
-          <span>ðŸ‘¤ ${tk.assignee||t('unassigned')}</span>
+          <span style="color:${ov?'var(--danger)':'var(--muted)'};display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>${fmtDate(tk.startDate||tk.dueDate)}${tk.startDate&&tk.dueDate?' - '+fmtDate(tk.dueDate):''}${ov?' ('+t('overdue')+')':''}</span>
+          <span style="display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>${esc(tk.assignee||t('unassigned'))}</span>
+          <span style="display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>${esc(String(tk.durationDays||1))} ${LANG==='es'?'días':'days'}</span>
+          <span style="display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7h8M8 12h8M8 17h5"/></svg>${esc(tk.phase||taskPhaseValue(tk))}</span>
+          <span style="display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>${esc(taskStatusLabel(status))}</span>
+          ${tk.planningWindow?`<span style="display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18"/><path d="M12 3v18"/></svg>${esc(tk.planningWindow)}</span>`:''}
         </div>
       </div>
       <div style="display:flex;gap:6px">
@@ -543,16 +1444,20 @@ function renderGantt(p){
     // Reduce width by how much was clipped on the left
     const clippedDays=tks<minD?Math.round((minD-tks)/86400000):0;
     const w=Math.max(4,fullW-clippedDays*pxPerDay);
-    const clr=tk.done?'#10b981':(tk.dueDate&&tk.dueDate<today())?'#ef4444':(tk.color||'#7c3aed');
+    const isDone=taskIsDone(tk);
+    const clr=isDone?'#10b981':(tk.dueDate&&tk.dueDate<today())?'#ef4444':(tk.color||'#7c3aed');
     return `<div class="g-row">
       <div class="g-tl">
-        <div class="tchk ${tk.done?'done':''}" style="width:16px;height:16px;flex-shrink:0" onclick="toggleTask('${tk.id}')">
-          ${tk.done?`<svg width="10" height="10" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24"><polyline points="20,6 9,17 4,12"/></svg>`:''}
+        <div class="tchk ${isDone?'done':''}" style="width:16px;height:16px;flex-shrink:0" onclick="toggleTask('${tk.id}')">
+          ${isDone?`<svg width="10" height="10" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24"><polyline points="20,6 9,17 4,12"/></svg>`:''}
         </div>
-        <div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${tk.title}">${tk.title}</div>
+        <div style="display:flex;flex-direction:column;min-width:0">
+          <div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${tk.title}">${tk.title}</div>
+          <div style="font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(tk.phase||taskPhaseValue(tk))}</div>
+        </div>
       </div>
       <div class="g-bars" style="position:relative">
-        <div class="g-bar" style="left:${l}px;width:${w}px;background:${clr};overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px;color:#fff;font-weight:600;padding:0 8px;box-sizing:border-box;display:flex;align-items:center;min-width:4px;position:absolute" title="${tk.title} â€” ${tk.startDate||''}â†’${tk.dueDate||''}" onclick="openTaskModal('${tk.id}')">${tk.title}</div>
+        <div class="g-bar" style="left:${l}px;width:${w}px;background:${clr};overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px;color:#fff;font-weight:600;padding:0 8px;box-sizing:border-box;display:flex;align-items:center;min-width:4px;position:absolute" title="${tk.title} â€” ${tk.startDate||''}â†’${tk.dueDate||''} â€” ${tk.phase||taskPhaseValue(tk)} â€” ${taskStatusLabel(tk)}" onclick="openTaskModal('${tk.id}')">${tk.title}</div>
       </div>
     </div>`;
   }).join('');
@@ -563,7 +1468,7 @@ function renderGantt(p){
       <button class="btn btn-ghost btn-sm" onclick="_ganttOffset++;renderGantt(proj())" title="${isES?'Siguiente':'Next'}">&#8594;</button>
       <div style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6M8 11h6"/></svg>
-        <button class="btn btn-ghost btn-sm" onclick="_ganttZoom=Math.max(2,_ganttZoom-4);renderGantt(proj())" title="${isES?'Alejar':'Zoom out'}">âˆ’</button>
+        <button class="btn btn-ghost btn-sm" onclick="_ganttZoom=Math.max(2,_ganttZoom-4);renderGantt(proj())" title="${isES?'Alejar':'Zoom out'}">-</button>
         <span style="font-size:11px;color:var(--muted);min-width:40px;text-align:center">${isES?'Zoom':'Zoom'}</span>
         <button class="btn btn-ghost btn-sm" onclick="_ganttZoom=Math.min(60,_ganttZoom+4);renderGantt(proj())" title="${isES?'Acercar':'Zoom in'}">+</button>
       </div>
@@ -578,6 +1483,18 @@ function renderGantt(p){
       </div>
       ${rows}
     </div></div></div>`;
+  // Allow simultaneous horizontal (gantt) and vertical (page) scrolling.
+  // Without this the browser locks to one axis for the entire wheel gesture.
+  var gs = el.querySelector('.gantt-scroll');
+  if(gs){
+    gs.addEventListener('wheel', function(e){
+      if(e.deltaX !== 0){
+        gs.scrollLeft += e.deltaX;
+        if(e.deltaY !== 0) window.scrollBy(0, e.deltaY);
+        e.preventDefault();
+      }
+    }, {passive:false});
+  }
 }
 function dupTask(id){
   const p=proj(); const tk=p.tasks.find(function(t){ return t.id===id; }); if(!tk) return;
@@ -602,7 +1519,7 @@ function renderCal(p){
   for(let i=1;i<=dim;i++){
     const ds=`${yr}-${String(mo+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
     const tks=tbd[ds]||[];
-    cells+=`<div class="cal-cell"><div class="cal-date ${ds===tod?'today':''}">${i}</div>${tks.map(tk=>`<div class="cal-ev" style="background:${tk.done?'#10b981':tk.color||'#c9a84c'};cursor:pointer" title="${tk.title}" onclick="openTaskModal('${tk.id}')">${tk.title}</div>`).join('')}</div>`;
+    cells+=`<div class="cal-cell"><div class="cal-date ${ds===tod?'today':''}">${i}</div>${tks.map(tk=>`<div class="cal-ev" style="background:${taskIsDone(tk)?'#10b981':tk.color||'#c9a84c'};cursor:pointer" title="${tk.title}" onclick="openTaskModal('${tk.id}')">${tk.title}</div>`).join('')}</div>`;
   }
   const rem=42-fd-dim;for(let i=0;i<rem;i++)cells+=`<div class="cal-cell"><div class="cal-date om"></div></div>`;
   el.innerHTML=`<div class="cal-wrap">
@@ -617,7 +1534,7 @@ function renderCal(p){
     <div class="cal-cells">${cells}</div>
   </div>`;
 }
-function toggleTask(tid){const p=proj();const tk=p.tasks.find(tk=>tk.id===tid);if(tk){tk.done=!tk.done;saveProj(p);renderTimeline();}}
+function toggleTask(tid){const p=proj();const tk=p.tasks.find(tk=>tk.id===tid);if(tk){const nextDone=!taskIsDone(tk);tk.done=nextDone;tk.status=nextDone?'completed':'not-started';saveProj(p);renderTimeline();}}
 function delTask(tid){
   if(!confirm('Delete task?'))return;
   const p=proj();p.tasks=p.tasks.filter(tk=>tk.id!==tid);saveProj(p);renderTimeline();
@@ -648,7 +1565,17 @@ function openTaskModal(tid){
   </div>
   <div class="form-grid" style="margin-bottom:12px">
     <div class="ig"><label>${t('assignee')}</label><input class="input" id="tk-who" value="${esc(tk?.assignee||'')}" placeholder="Event Coordinator"></div>
+    <div class="ig"><label>${LANG==='es'?'Duración (días)':'Duration (days)'}</label><input class="input" id="tk-duration" type="number" min="1" value="${esc(String(tk?.durationDays||''))}" placeholder="5"></div>
   </div>
+  <div class="form-grid" style="margin-bottom:12px">
+    <div class="ig"><label>${LANG==='es'?'Fase':'Phase'}</label><input class="input" id="tk-phase" value="${esc(tk?.phase||'')}" placeholder="Strategy & Budget"></div>
+    <div class="ig"><label>${LANG==='es'?'Estado':'Status'}</label><select class="select" id="tk-status">
+      <option value="not-started"${taskStatusValue(tk)==='not-started'?' selected':''}>${LANG==='es'?'No iniciada':'Not started'}</option>
+      <option value="in-progress"${taskStatusValue(tk)==='in-progress'?' selected':''}>${LANG==='es'?'En progreso':'In progress'}</option>
+      <option value="completed"${taskStatusValue(tk)==='completed'?' selected':''}>${LANG==='es'?'Completada':'Completed'}</option>
+    </select></div>
+  </div>
+  <div class="ig" style="margin-bottom:12px"><label>${LANG==='es'?'Ventana recomendada':'Recommended planning window'}</label><input class="input" id="tk-window" value="${esc(tk?.planningWindow||'')}" placeholder="${LANG==='es'?'6 meses antes':'6 months before'}"></div>
   <div class="ig" style="margin-bottom:4px"><label>${t('color_label_lbl')}</label></div>
   <div style="display:flex;gap:10px;margin-bottom:16px">
     ${colors.map(cl=>`<div onclick="pickColor(this,'${cl}')" data-color="${cl}" style="width:28px;height:28px;border-radius:50%;background:${cl};cursor:pointer;border:3px solid ${(tk?.color||colors[0])===cl?'#000':'transparent'};transition:all .15s"></div>`).join('')}
@@ -663,24 +1590,72 @@ function pickColor(el,c){document.querySelectorAll('#mo-body [data-color]').forE
 function saveTask(tid){
   const title=gv('tk-title');const due=parseUserDate(gv('tk-due'));const start=parseUserDate(gv('tk-start'));
   if(!title||!start||!due)return toast(LANG==='es'?'TÃ­tulo, fecha de inicio y fecha lÃ­mite son requeridos':'Title, start date and due date required','e');
+  const durationInput=parseInt(gv('tk-duration'),10);
+  const durationDays=Number.isFinite(durationInput)&&durationInput>0 ? durationInput : Math.max(1, Math.round((timelineTemplateDate(due)-timelineTemplateDate(start))/86400000)+1);
+  const status=gv('tk-status')||'not-started';
   const p=proj();
-  const data={title,desc:gv('tk-desc'),startDate:start,dueDate:due,assignee:gv('tk-who'),color:gv('tk-color')};
+  const data={title,desc:gv('tk-desc'),startDate:start,dueDate:due,endDate:due,durationDays:durationDays,assignee:gv('tk-who'),phase:gv('tk-phase').trim()||taskPhaseValue({title:title,assignee:gv('tk-who')}),planningWindow:gv('tk-window').trim(),status:status,done:status==='completed',color:gv('tk-color')};
   if(tid){const tk=p.tasks.find(tk=>tk.id===tid);Object.assign(tk,data);}
-  else{p.tasks.push({id:'t'+Date.now(),done:false,...data});}
+  else{p.tasks.push({id:'t'+Date.now(),...data});}
   saveProj(p);closeMo();renderTimeline();toast(tid?'Task updated':'Task added','s');
 }
 
 var gView='list',gSort='name',gAsc=true,gFilter='';
+var _gFilterTimer=null, _seatingFilterTimer=null, _tSearchTimer=null;
+function _guestMatchesFilter(g,q){ return [g.name,g.email,g.phone,g.category,g.rsvp,g.table,g.notes,g.meal].some(function(f){return f&&String(f).toLowerCase().indexOf(q)!==-1;}); }
+function debouncedGuestFilter(val){ gFilter=val; clearTimeout(_gFilterTimer); _gFilterTimer=setTimeout(function(){ renderGuestRows(proj()); },250); }
+function debouncedSeatingFilter(val){ gFilter=val; clearTimeout(_seatingFilterTimer); _seatingFilterTimer=setTimeout(function(){ renderSeating(proj()); var el=document.getElementById('seating-search-input'); if(el){el.focus();el.value=val;try{el.setSelectionRange(val.length,val.length);}catch(e){}} },250); }
+function debouncedTaskSearch(val){ taskSearchQuery=val; clearTimeout(_tSearchTimer); _tSearchTimer=setTimeout(function(){ renderTimelineView(proj()); },250); }
+function renderGuestEmptyState(){
+  const isES=LANG==='es';
+  return `<section class="ev-empty fade-in">
+    <div class="ev-empty-shell">
+      <div class="ev-empty-aurora" aria-hidden="true"></div>
+      <div class="ev-empty-grid">
+        <div class="ev-empty-copy">
+          <div class="ev-empty-badge">${isES?'Lista de invitados':'Guest list'}</div>
+          <h2 class="ev-empty-title">${isES?'Construye tu lista de invitados en minutos.':'Build your guest list in minutes.'}</h2>
+          <p class="ev-empty-subtitle">${isES?'Descarga la plantilla de Excel, llénala con tus invitados e impórtala de vuelta. También puedes agregar invitados manualmente uno a uno.':'Download the Excel template, fill it in with your guests, and import it back. You can also add guests one by one manually.'}</p>
+          <div class="ev-empty-actions">
+            <button class="btn btn-primary btn-create-gradient ev-empty-cta" onclick="downloadGuestTemplate()">
+              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              ${isES?'Descargar Plantilla':'Download Template'}
+            </button>
+            <label class="btn btn-ghost ev-empty-cta" style="cursor:pointer">
+              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              ${isES?'Importar Invitados':'Import Guests'}
+              <input type="file" accept=".csv,.xlsx" multiple class="hidden" onchange="importCSV(this)">
+            </label>
+            <button class="btn btn-ghost ev-empty-cta" onclick="openGuestModal()">
+              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+              ${isES?'Agregar Manualmente':'Add Manually'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>`;
+}
 function renderGuests(){
   const p=proj();const el=document.getElementById('tab-guests');
-  const confirmed=p.guests.filter(g=>g.rsvp==='confirmed').length;
-  const declined=p.guests.filter(g=>g.rsvp==='declined').length;
-  const pending=p.guests.filter(g=>!g.rsvp||g.rsvp==='pending').length;
+  if(!p.guests.length){el.innerHTML=renderGuestEmptyState();return;}
+  const guestCount=p.guests.length;
+  const plusOnes=p.guests.filter(g=>g.plusOne).length;
+  const totalGuests=guestCount+plusOnes;
+  const confirmedGuests=p.guests.filter(g=>g.rsvp==='confirmed').length;
+  const confirmedPlusOnes=p.guests.filter(g=>g.rsvp==='confirmed'&&g.plusOne).length;
+  const confirmed=confirmedGuests+confirmedPlusOnes;
+  const declinedGuests=p.guests.filter(g=>g.rsvp==='declined').length;
+  const declinedPlusOnes=p.guests.filter(g=>g.rsvp==='declined'&&g.plusOne).length;
+  const declined=declinedGuests+declinedPlusOnes;
+  const pendingGuests=p.guests.filter(g=>!g.rsvp||g.rsvp==='pending').length;
+  const pendingPlusOnes=p.guests.filter(g=>(!g.rsvp||g.rsvp==='pending')&&g.plusOne).length;
+  const pending=pendingGuests+pendingPlusOnes;
   const tables=[...new Set(p.guests.filter(g=>g.table).map(g=>g.table))].length;
   el.innerHTML=`
   <div class="sh">
     <div><div class="sh-title" style="color:#10b981">${t('guest_management')}</div>
-    <div class="sh-sub">${p.guests.length} ${t('total')} Â· ${confirmed} ${t('confirmed_guests')} Â· ${pending} ${t('pending_guests')}</div></div>
+    <div class="sh-sub">${totalGuests} ${t('total')} &middot; ${confirmed} ${t('confirmed_guests')} &middot; ${pending} ${t('pending_guests')}</div></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-ghost btn-sm" onclick="downloadGuestTemplate()">
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -700,28 +1675,45 @@ function renderGuests(){
     </div>
   </div>
   <div class="gs-stats">
-    <div class="gs-stat"><div class="gs-val">${p.guests.length}</div><div class="gs-lbl">${t('total_guests')}</div></div>
-    <div class="gs-stat"><div class="gs-val" style="color:var(--success)">${confirmed}</div><div class="gs-lbl">${t('confirmed_guests')}</div></div>
-    <div class="gs-stat"><div class="gs-val" style="color:var(--warn)">${pending}</div><div class="gs-lbl">${t('pending')}</div></div>
-    <div class="gs-stat"><div class="gs-val" style="color:var(--danger)">${declined}</div><div class="gs-lbl">${t('declined')}</div></div>
-    <div class="gs-stat"><div class="gs-val" style="color:var(--gold-h)">${tables}</div><div class="gs-lbl">${t('tables')}</div></div>
+    <div class="gs-stat" title="${LANG==='es'?'Invitados principales en la lista, sin acompañantes.':'Primary guests on the list, excluding plus ones.'}"><div class="gs-val">${guestCount}</div><div class="gs-lbl">${LANG==='es'?'Invitados':'Guests'}</div></div>
+    <div class="gs-stat" title="${LANG==='es'?'Acompañantes marcados como +1 en la lista.':'Guests marked as plus ones on the list.'}"><div class="gs-val">${plusOnes}</div><div class="gs-lbl">${LANG==='es'?'Plus Ones':'Plus Ones'}</div></div>
+    <div class="gs-stat" title="${LANG==='es'?'Total de asistentes previstos: invitados ('+guestCount+') + plus ones ('+plusOnes+').':'Total expected attendees: guests ('+guestCount+') + plus ones ('+plusOnes+').'}"><div class="gs-val">${totalGuests}</div><div class="gs-lbl">${t('total_guests')}</div></div>
+    <div class="gs-stat" title="${LANG==='es'?'Confirmados: invitados ('+confirmedGuests+') + plus ones ('+confirmedPlusOnes+').':'Confirmed: guests ('+confirmedGuests+') + plus ones ('+confirmedPlusOnes+').'}"><div class="gs-val" style="color:var(--success)">${confirmed}</div><div class="gs-lbl">${t('confirmed_guests')}</div></div>
+    <div class="gs-stat" title="${LANG==='es'?'Pendientes: invitados ('+pendingGuests+') + plus ones ('+pendingPlusOnes+').':'Pending: guests ('+pendingGuests+') + plus ones ('+pendingPlusOnes+').'}"><div class="gs-val" style="color:var(--warn)">${pending}</div><div class="gs-lbl">${t('pending')}</div></div>
+    <div class="gs-stat" title="${LANG==='es'?'Rechazados: invitados ('+declinedGuests+') + plus ones ('+declinedPlusOnes+').':'Declined: guests ('+declinedGuests+') + plus ones ('+declinedPlusOnes+').'}"><div class="gs-val" style="color:var(--danger)">${declined}</div><div class="gs-lbl">${t('declined')}</div></div>
+    <div class="gs-stat" title="${LANG==='es'?'Número de mesas asignadas actualmente en la lista de invitados.':'Number of tables currently assigned in the guest list.'}"><div class="gs-val" style="color:var(--gold-h)">${tables}</div><div class="gs-lbl">${t('tables')}</div></div>
   </div>
   <div class="tbar">
     <button class="tb ${gView==='list'?'active':''}" onclick="gView='list';renderGuests()">${LANG==='es'?'Todos los Invitados':'All Guests'}</button>
-    <button class="tb ${gView==='seating'?'active':''}" onclick="gView='seating';renderGuests()">${LANG==='es'?'AsignaciÃ³n por Mesas':'Table Assignments'}</button>
+    <button class="tb ${gView==='seating'?'active':''}" onclick="gView='seating';renderGuests()">${LANG==='es'?'Asignación por Mesas':'Table Assignments'}</button>
   </div>
   <div id="gview"></div>`;
   gView==='list'?renderGuestList(p):renderSeating(p);
 }
+function guestText(v){
+  return esc(fixMojibake(String(v == null ? '' : v)));
+}
+function guestValueOrDash(v){
+  var fixed = fixMojibake(String(v == null ? '' : v)).trim();
+  return fixed ? esc(fixed) : '&mdash;';
+}
+function guestRsvpValue(v){
+  var fixed = fixMojibake(String(v == null ? '' : v)).trim().toLowerCase();
+  return fixed || 'pending';
+}
+function guestRsvpClass(v){
+  var value = guestRsvpValue(v);
+  return value === 'confirmed' ? 'rb-c' : value === 'declined' ? 'rb-d' : 'rb-p';
+}
 function renderGuestList(p){
   let guests=[...p.guests];
-  if(gFilter)guests=guests.filter(g=>JSON.stringify(g).toLowerCase().includes(gFilter.toLowerCase()));
+  if(gFilter){var _gfq=gFilter.toLowerCase();guests=guests.filter(function(g){return _guestMatchesFilter(g,_gfq);});}
   guests.sort((a,b)=>{const va=String(a[gSort]||''),vb=String(b[gSort]||'');return gAsc?va.localeCompare(vb,undefined,{numeric:true}):vb.localeCompare(va,undefined,{numeric:true});});
-  const si=k=>gSort===k?(gAsc?'â†‘':'â†“'):'â†•';
+  const si=k=>gSort===k?(gAsc?'&uarr;':'&darr;'):'&harr;';
   document.getElementById('gview').innerHTML=`
   <div style="background:#fff;border-radius:var(--r);border:1px solid var(--border);overflow:hidden">
     <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#fafafa">
-      <input class="input" style="flex:1;min-width:200px" placeholder="${t('search_guests')}" value="${esc(gFilter)}" oninput="gFilter=this.value;renderGuestRows(proj())">
+      <input class="input" style="flex:1;min-width:200px" placeholder="${t('search_guests')}" value="${esc(gFilter)}" oninput="debouncedGuestFilter(this.value)">
       <select class="select" style="width:auto" onchange="gSort=this.value;renderGuestList(proj())">
         <option value="name" ${gSort==='name'?'selected':''}>${t('sort_name')}</option>
         <option value="rsvp" ${gSort==='rsvp'?'selected':''}>${t('sort_rsvp')}</option>
@@ -742,14 +1734,14 @@ function renderGuestList(p){
       </tr></thead>
       <tbody id="guest-rows-body">
         ${guests.map(g=>`<tr>
-          <td style="font-weight:600">${g.name}</td>
-          <td style="font-size:12px;color:var(--muted)">${g.email||''}${g.phone?'<br>'+g.phone:''}</td>
-          <td><span class="badge b-gray">${g.category||'â€”'}</span></td>
-          <td><span class="rb ${g.rsvp==='confirmed'?'rb-c':g.rsvp==='declined'?'rb-d':'rb-p'}">${g.rsvp||'pending'}</span></td>
-          <td>${g.table||'â€”'}</td>
-          <td>${g.plusOne?'âœ“':''}</td>
-          <td style="font-size:12px">${g.meal||'â€”'}</td>
-          <td style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.notes||''}</td>
+          <td style="font-weight:600">${guestText(g.name)}</td>
+          <td style="font-size:12px;color:var(--muted)">${guestText(g.email)}${g.phone?'<br>'+guestText(g.phone):''}</td>
+          <td><span class="badge b-gray">${guestValueOrDash(g.category)}</span></td>
+          <td><span class="rb ${guestRsvpClass(g.rsvp)}">${guestText(guestRsvpValue(g.rsvp))}</span></td>
+          <td>${guestValueOrDash(g.table)}</td>
+          <td>${g.plusOne?'&#10003;':''}</td>
+          <td style="font-size:12px">${guestValueOrDash(g.meal)}</td>
+          <td style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${guestText(g.notes)}</td>
           <td><div style="display:flex;gap:4px">
             <button class="btn btn-ghost btn-sm btn-icon" onclick="openGuestModal('${g.id}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>
             <button class="btn btn-danger btn-sm btn-icon" onclick="delGuest('${g.id}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
@@ -772,14 +1764,14 @@ function renderGuestRows(p){
     return;
   }
   tbody.innerHTML=guests.map(g=>`<tr>
-    <td style="font-weight:600">${g.name}</td>
-    <td style="font-size:12px;color:var(--muted)">${g.email||''}${g.phone?'<br>'+g.phone:''}</td>
-    <td><span class="badge b-gray">${g.category||'â€”'}</span></td>
-    <td><span class="rb ${g.rsvp==='confirmed'?'rb-c':g.rsvp==='declined'?'rb-d':'rb-p'}">${g.rsvp||'pending'}</span></td>
-    <td>${g.table||'â€”'}</td>
-    <td>${g.plusOne?'âœ“':''}</td>
-    <td style="font-size:12px">${g.meal||'â€”'}</td>
-    <td style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.notes||''}</td>
+    <td style="font-weight:600">${guestText(g.name)}</td>
+    <td style="font-size:12px;color:var(--muted)">${guestText(g.email)}${g.phone?'<br>'+guestText(g.phone):''}</td>
+    <td><span class="badge b-gray">${guestValueOrDash(g.category)}</span></td>
+    <td><span class="rb ${guestRsvpClass(g.rsvp)}">${guestText(guestRsvpValue(g.rsvp))}</span></td>
+    <td>${guestValueOrDash(g.table)}</td>
+    <td>${g.plusOne?'&#10003;':''}</td>
+    <td style="font-size:12px">${guestValueOrDash(g.meal)}</td>
+    <td style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${guestText(g.notes)}</td>
     <td><div style="display:flex;gap:4px">
       <button class="btn btn-ghost btn-sm btn-icon" onclick="openGuestModal('${g.id}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>
       <button class="btn btn-danger btn-sm btn-icon" onclick="delGuest('${g.id}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
@@ -793,12 +1785,12 @@ function renderSeating(p){
   document.getElementById('gview').innerHTML=tables.length?tables.map(tb=>{
     const gs=seated.filter(g=>g.table===tb);
     return `<div style="margin-bottom:20px">
-      <div class="seating-th">${t('table_header')} ${tb} Â· ${gs.length} ${t('guests_lbl')}</div>
+      <div class="seating-th">${t('table_header')} ${guestText(tb)} &middot; ${gs.length} ${t('guests_lbl')}</div>
       ${gs.map(g=>`<div class="seating-row">
-        <div><strong>${g.name}</strong>${g.plusOne?' <span class="s-sm">+1</span>':''}</div>
+        <div><strong>${guestText(g.name)}</strong>${g.plusOne?' <span class="s-sm">+1</span>':''}</div>
         <div style="display:flex;gap:12px;font-size:12px;color:var(--muted)">
-          <span>${g.meal||'â€”'}</span>
-          <span class="rb ${g.rsvp==='confirmed'?'rb-c':g.rsvp==='declined'?'rb-d':'rb-p'}">${g.rsvp||'pending'}</span>
+          <span>${guestValueOrDash(g.meal)}</span>
+          <span class="rb ${guestRsvpClass(g.rsvp)}">${guestText(guestRsvpValue(g.rsvp))}</span>
         </div>
       </div>`).join('')}
     </div>`;
@@ -827,22 +1819,22 @@ function openGuestModal(gid){
 
 function renderSeating(p){
   let seated = p.guests.filter(g => g.table);
-  if(gFilter) seated = seated.filter(g => JSON.stringify(g).toLowerCase().includes(gFilter.toLowerCase()));
+  if(gFilter){var _sfq=gFilter.toLowerCase();seated=seated.filter(function(g){return _guestMatchesFilter(g,_sfq);});}
   seated = seated.sort((a,b) => a.table.localeCompare(b.table, undefined, { numeric:true }));
   const tables = [...new Set(seated.map(g => g.table))];
   document.getElementById('gview').innerHTML = `<div style="background:#fff;border-radius:var(--r);border:1px solid var(--border);overflow:hidden">
     <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#fafafa">
-      <input class="input" id="seating-search-input" style="flex:1;min-width:200px" placeholder="${t('search_guests')}" value="${esc(gFilter)}" oninput="var v=this.value;gFilter=v;renderSeating(proj());var el=document.getElementById('seating-search-input');if(el){el.focus();el.value=v;try{el.setSelectionRange(v.length,v.length);}catch(e){}}">
+      <input class="input" id="seating-search-input" style="flex:1;min-width:200px" placeholder="${t('search_guests')}" value="${esc(gFilter)}" oninput="debouncedSeatingFilter(this.value)">
     </div>
     <div style="padding:16px">
       ${tables.length ? tables.map(tb => {
         const gs = seated.filter(g => g.table === tb);
         return `<div style="margin-bottom:20px">
-          <div class="seating-th">${t('table_header')} ${tb} Â· ${gs.length} ${t('guests_lbl')}</div>
+          <div class="seating-th">${t('table_header')} ${tb} &middot; ${gs.length} ${t('guests_lbl')}</div>
           ${gs.map(g => `<div class="seating-row">
             <div><strong>${g.name}</strong>${g.plusOne ? ' <span class="s-sm">+1</span>' : ''}</div>
             <div style="display:flex;gap:12px;font-size:12px;color:var(--muted)">
-              <span>${g.meal || 'â€”'}</span>
+              <span>${g.meal || '&mdash;'}</span>
               <span class="rb ${g.rsvp==='confirmed'?'rb-c':g.rsvp==='declined'?'rb-d':'rb-p'}">${g.rsvp||'pending'}</span>
             </div>
           </div>`).join('')}
@@ -1011,7 +2003,7 @@ function applyBulkGuestEdit(){
 }
 function bulkDeleteGuests(){
   if(!guestSelectionCount()) return;
-  if(!confirm(LANG==='es'?'Â¿Eliminar los invitados seleccionados?':'Delete selected guests?')) return;
+  if(!confirm(LANG==='es'?'¿Eliminar los invitados seleccionados?':'Delete selected guests?')) return;
   const p = proj();
   p.guests = p.guests.filter(function(g){ return !isGuestSelected(g.id); });
   saveProj(p);
@@ -1031,11 +2023,11 @@ function renderGuestList(p){
   let guests=[...p.guests];
   if(gFilter) guests=guests.filter(g=>JSON.stringify(g).toLowerCase().includes(gFilter.toLowerCase()));
   guests.sort((a,b)=>{const va=String(a[gSort]||''),vb=String(b[gSort]||'');return gAsc?va.localeCompare(vb,undefined,{numeric:true}):vb.localeCompare(va,undefined,{numeric:true});});
-  const si=k=>gSort===k?(gAsc?'â†‘':'â†“'):'â†•';
+  const si=k=>gSort===k?(gAsc?'&uarr;':'&darr;'):'&harr;';
   document.getElementById('gview').innerHTML=`
   <div style="background:#fff;border-radius:var(--r);border:1px solid var(--border);overflow:hidden">
     <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#fafafa">
-      <input class="input" style="flex:1;min-width:200px" placeholder="${t('search_guests')}" value="${esc(gFilter)}" oninput="gFilter=this.value;renderGuestRows(proj())">
+      <input class="input" style="flex:1;min-width:200px" placeholder="${t('search_guests')}" value="${esc(gFilter)}" oninput="debouncedGuestFilter(this.value)">
       <select class="select" style="width:auto" onchange="gSort=this.value;renderGuestList(proj())">
         <option value="name" ${gSort==='name'?'selected':''}>${t('sort_name')}</option>
         <option value="rsvp" ${gSort==='rsvp'?'selected':''}>${t('sort_rsvp')}</option>
@@ -1048,7 +2040,7 @@ function renderGuestList(p){
       <span id="guest-bulk-count" style="font-size:12px;font-weight:600;color:var(--gold-h)">${guestSelectionCount()} ${LANG==='es'?'seleccionado(s)':'selected'}</span>
       <button class="btn btn-ghost btn-sm" onclick="openBulkGuestEditModal()">${LANG==='es'?'Editar seleccionados':'Edit selected'}</button>
       <button class="btn btn-danger btn-sm" onclick="bulkDeleteGuests()">${LANG==='es'?'Eliminar seleccionados':'Delete selected'}</button>
-      <button class="btn btn-ghost btn-sm" onclick="clearGuestSelection()">${LANG==='es'?'Limpiar selecciÃ³n':'Clear selection'}</button>
+      <button class="btn btn-ghost btn-sm" onclick="clearGuestSelection()">${LANG==='es'?'Limpiar selección':'Clear selection'}</button>
     </div>
     <div style="overflow-x:auto">
     <table>
@@ -1073,14 +2065,14 @@ function buildGuestRows(guests){
   if(!guests.length) return `<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--muted)">${t('no_guests_found')}</td></tr>`;
   return guests.map(g=>`<tr>
     <td><input type="checkbox" class="guest-sel" data-gid="${g.id}" ${isGuestSelected(g.id)?'checked':''} style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="toggleGuestSelection('${g.id}',this.checked)"></td>
-    <td style="font-weight:600">${g.name}</td>
-    <td style="font-size:12px;color:var(--muted)">${g.email||''}${g.phone?'<br>'+g.phone:''}</td>
-    <td><span class="badge b-gray">${g.category||'â€”'}</span></td>
-    <td><span class="rb ${g.rsvp==='confirmed'?'rb-c':g.rsvp==='declined'?'rb-d':'rb-p'}">${g.rsvp||'pending'}</span></td>
-    <td>${g.table||'â€”'}</td>
-    <td>${g.plusOne?'âœ“':''}</td>
-    <td style="font-size:12px">${g.meal||'â€”'}</td>
-    <td style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.notes||''}</td>
+    <td style="font-weight:600">${guestText(g.name)}</td>
+    <td style="font-size:12px;color:var(--muted)">${guestText(g.email)}${g.phone?'<br>'+guestText(g.phone):''}</td>
+    <td><span class="badge b-gray">${guestValueOrDash(g.category)}</span></td>
+    <td><span class="rb ${guestRsvpClass(g.rsvp)}">${guestText(guestRsvpValue(g.rsvp))}</span></td>
+    <td>${guestValueOrDash(g.table)}</td>
+    <td>${g.plusOne?'&#10003;':''}</td>
+    <td style="font-size:12px">${guestValueOrDash(g.meal)}</td>
+    <td style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${guestText(g.notes)}</td>
     <td><div style="display:flex;gap:4px">
       <button class="btn btn-ghost btn-sm btn-icon" onclick="openGuestModal('${g.id}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>
       <button class="btn btn-danger btn-sm btn-icon" onclick="delGuest('${g.id}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
@@ -1136,21 +2128,21 @@ function normalizeHeader(h){
 }
 
 function rowToGuest(obj,filename){
-  const name=obj.full_name||obj.name||obj.guest_name||obj.nombre||obj.nombre_completo||'';
+  const name=fixMojibake(obj.full_name||obj.name||obj.guest_name||obj.nombre||obj.nombre_completo||'');
   if(!name||String(name).trim().length<2)return null;
-  const rsvpRaw=obj.rsvp_status||obj.rsvp||obj.status||obj.estado||'pending';
+  const rsvpRaw=fixMojibake(obj.rsvp_status||obj.rsvp||obj.status||obj.estado||'pending');
   return{
     _src:filename,
     name:String(name).trim(),
-    email:String(obj.email||obj.correo||'').trim(),
-    phone:String(obj.phone||obj.telefono||obj.mobile||'').trim(),
-    category:String(obj.category||obj.categoria||obj.group||obj.grupo||'').trim(),
-    rsvp:String(rsvpRaw).trim().toLowerCase()||'pending',
-    table:String(obj.table_number||obj.table||obj.mesa||'').trim(),
-    plusOne:['yes','1','true','sÃ­','si'].includes(String(obj.plus_one||obj.plusone||obj.acompanante||'').toLowerCase().trim()),
-    meal:String(obj.meal_preference||obj.meal||obj.menu||obj.comida||'').trim(),
-    dietary:String(obj.dietary_restrictions||obj.dietary||obj.restricciones||'').trim(),
-    notes:String(obj.notes||obj.notas||obj.comments||'').trim()
+    email:fixMojibake(String(obj.email||obj.correo||'')).trim(),
+    phone:fixMojibake(String(obj.phone||obj.telefono||obj.mobile||'')).trim(),
+    category:fixMojibake(String(obj.category||obj.categoria||obj.group||obj.grupo||'')).trim(),
+    rsvp:fixMojibake(String(rsvpRaw)).trim().toLowerCase()||'pending',
+    table:fixMojibake(String(obj.table_number||obj.table||obj.mesa||'')).trim(),
+    plusOne:['yes','1','true','sí','si'].includes(fixMojibake(String(obj.plus_one||obj.plusone||obj.acompanante||'')).toLowerCase().trim()),
+    meal:fixMojibake(String(obj.meal_preference||obj.meal||obj.menu||obj.comida||'')).trim(),
+    dietary:fixMojibake(String(obj.dietary_restrictions||obj.dietary||obj.restricciones||'')).trim(),
+    notes:fixMojibake(String(obj.notes||obj.notas||obj.comments||'')).trim()
   };
 }
 
@@ -1292,6 +2284,7 @@ var LSHAPES_M={
   'gift-table':   {wm:1.8, hm:0.6, bg:'#f0d8e8',bdClr:'#7a3060',radius:'0px', label:'Gift Table',   chairs:0},
   'photo-booth':  {wm:2.0, hm:2.0, bg:'#cce8f5',bdClr:'#1a5580',radius:'0px', label:'Photo Booth',  chairs:0},
   'custom-elem':  {wm:2.0, hm:2.0, bg:'#e0e0e0',bdClr:'#888888',radius:'0px', label:'Custom',       chairs:0},
+  's-table':      {wm:4.0, hm:1.5, bg:'#f0ece0',bdClr:'#8a6820',radius:'0px', label:'S-Table',     chairs:14, _isCustomTable:true},
 };
 var CHAIR_SIZE_M = 0.40;
 
@@ -1308,51 +2301,12 @@ var LSHAPES=getLSHAPES();
 
 function defaultChairTypes(){
   return {
-    'default':          { label: 'Default',               fill: '#f5f4f0',              stroke: '#bbb',     costPerChair: 0 },
-    'elisa':            { label: 'Elisa',           fill: '#c9a84c',              stroke: '#8a6820',  costPerChair: 150 },
-    'oval-chair':       { label: 'Oval',            fill: '#e07b54',              stroke: '#a04020',  costPerChair: 150 },
-    'hoffman':          { label: 'Hoffman',         fill: '#c44d58',              stroke: '#8a2030',  costPerChair: 140 },
-    'florencia':        { label: 'Florencia',       fill: '#7c5cbf',              stroke: '#4a2a8a',  costPerChair: 220 },
-    'elena':            { label: 'Elena',           fill: '#4a90d9',              stroke: '#1a5090',  costPerChair: 260 },
-    'regina':           { label: 'Regina',          fill: '#3aaa72',              stroke: '#1a7040',  costPerChair: 180 },
-    'camila':           { label: 'Camila',          fill: '#e8a030',              stroke: '#a06010',  costPerChair: 180 },
-    'basket':           { label: 'Basket',          fill: '#6abcd4',              stroke: '#2a7090',  costPerChair: 175 },
-    'sara':             { label: 'Sara',            fill: '#d45e8a',              stroke: '#903060',  costPerChair: 150 },
-    'lucia':            { label: 'LucÃ­a',           fill: '#5baa5b',              stroke: '#2a6a2a',  costPerChair: 190 },
-    'valentina':        { label: 'Valentina',       fill: '#e06060',              stroke: '#a02020',  costPerChair: 230 },
-    'frida':            { label: 'Frida',           fill: '#3d8b8b',              stroke: '#1a5555',  costPerChair: 190 },
-    'dapa':             { label: 'Dapa',            fill: '#b87333',              stroke: '#7a4010',  costPerChair: 180 },
-    'contempo':         { label: 'Contempo',        fill: '#8b5e8b',              stroke: '#5a2a5a',  costPerChair: 170 },
-    'luis-xv':          { label: 'Luis XV',         fill: '#d4af37',              stroke: '#906020',  costPerChair: 190 },
-    'chanel':           { label: 'Chanel',          fill: '#f0f0f0',              stroke: '#909090',  costPerChair: 60 },
-    'lucca':            { label: 'Lucca',           fill: '#a0c4e0',              stroke: '#4a7090',  costPerChair: 70 },
-    'phoenix':          { label: 'Phoenix',         fill: '#ff8c42',              stroke: '#c05010',  costPerChair: 60 },
-    'napoleon':         { label: 'NapoleÃ³n',        fill: '#2c3e7a',              stroke: '#101840',  costPerChair: 60 },
-    'mirage':           { label: 'Mirage',          fill: 'rgba(180,210,240,0.9)',stroke: '#5080b0',  costPerChair: 90 },
-    'peineta':          { label: 'Peineta',         fill: '#b5d5b5',              stroke: '#507050',  costPerChair: 38 },
-    'tiffany':          { label: 'Tiffany',         fill: '#81c8c8',              stroke: '#307878',  costPerChair: 38 },
-    'plegable-adulto':  { label: 'Plegable (adulto)',fill: '#7f8c8d',             stroke: '#3a4a4a',  costPerChair: 25 },
-    'plegable-infantil':{ label: 'Plegable Infantil',fill: '#ffb3c1',            stroke: '#c06070',  costPerChair: 20 },
-    'infantil-mono':    { label: 'Infantil MoÃ±o',   fill: '#ff6b9d',              stroke: '#c02060',  costPerChair: 60 },
-    'infantil-wishbone':{ label: 'Infantil Wishbone',fill: '#6bcb77',            stroke: '#2a8040',  costPerChair: 60 },
-    'acrilico-novios':  { label: 'AcrÃ­lico Novios', fill: 'rgba(200,225,255,0.7)',stroke: '#3060c0',  costPerChair: 850 },
-    'deco':             { label: 'Deco',            fill: '#2d2d2d',              stroke: '#000000',  costPerChair: 380 },
-    'lino':             { label: 'Lino',            fill: '#e8d5a3',              stroke: '#a08030',  costPerChair: 130 },
-    'lino-novios':      { label: 'Lino Novios',     fill: '#f5e6c8',              stroke: '#c09040',  costPerChair: 430 },
-    'lux':              { label: 'Lux',             fill: '#d4b896',              stroke: '#806040',  costPerChair: 330 },
+    'default': { label: LANG==='es'?'Predeterminada':'Default', fill: '#e8e2d8', stroke: '#b0a898', costPerChair: 0 }
   };
 }
 function defaultCenterpieceTypes(){
   return {
-    'none':    { label: 'None',      color: null,      cost: 0 },
-    'roses':   { label: 'Roses',     color: '#e05080', cost: 0 },
-    'orchids': { label: 'Orchids',   color: '#9b59b6', cost: 0 },
-    'tulips':  { label: 'Tulips',    color: '#e8874a', cost: 0 },
-    'peonies': { label: 'Peonies',   color: '#f4a0b5', cost: 0 },
-    'greenery':{ label: 'Greenery',  color: '#2d8a4e', cost: 0 },
-    'candles': { label: 'Candles',   color: '#f0c040', cost: 0 },
-    'custom1': { label: 'Custom A',  color: '#5b8dd9', cost: 0 },
-    'custom2': { label: 'Custom B',  color: '#c0392b', cost: 0 },
+    'none': { label: LANG==='es'?'Ninguno':'None', color: null, cost: 0 }
   };
 }
 
@@ -1363,20 +2317,23 @@ var CHAIR_IMAGES = {"elisa":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGMAA
 
 
 function syncLayoutStyles(p){
+  // Start with just the built-in defaults, then layer project-saved types on top
+  CHAIR_TYPES = defaultChairTypes();
   if(p.chairTypes){
-    const defaults=defaultChairTypes();
-    CHAIR_TYPES=Object.assign({},defaults);
     Object.keys(p.chairTypes).forEach(k=>{
-      CHAIR_TYPES[k]=Object.assign({},defaults[k]||{},p.chairTypes[k]);
+      CHAIR_TYPES[k] = Object.assign({}, CHAIR_TYPES[k]||{}, p.chairTypes[k]);
     });
-  } else CHAIR_TYPES=defaultChairTypes();
+  }
+  if(!CHAIR_TYPES['default']) CHAIR_TYPES['default'] = defaultChairTypes()['default'];
+
+  CENTERPIECE_TYPES = defaultCenterpieceTypes();
   if(p.centerpieceTypes){
-    const defaults=defaultCenterpieceTypes();
-    CENTERPIECE_TYPES=Object.assign({},defaults);
     Object.keys(p.centerpieceTypes).forEach(k=>{
-      CENTERPIECE_TYPES[k]=Object.assign({},defaults[k]||{},p.centerpieceTypes[k]);
+      CENTERPIECE_TYPES[k] = Object.assign({}, CENTERPIECE_TYPES[k]||{}, p.centerpieceTypes[k]);
     });
-  } else CENTERPIECE_TYPES=defaultCenterpieceTypes();
+  }
+  if(!CENTERPIECE_TYPES['none']) CENTERPIECE_TYPES['none'] = defaultCenterpieceTypes()['none'];
+
   if(p.customShapes){
     Object.keys(p.customShapes).forEach(k=>{ LSHAPES_M[k]=p.customShapes[k]; });
     LSHAPES=getLSHAPES();
