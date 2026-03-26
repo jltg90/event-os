@@ -347,6 +347,7 @@ async function saveEvent(id){
 }
 
 function renderEvents(){
+  if(typeof isPhoneViewport === 'function' && isPhoneViewport()) _evView='grid';
   updateEvSortLabel();
   updateEvFilterLabels();
   const esEl=document.getElementById('event-search');
@@ -358,6 +359,8 @@ function renderEvents(){
   if(efBtn) efBtn.classList.toggle('active',_efAt);
   const evGridBtn=document.getElementById('ev-view-grid');
   const evListBtn=document.getElementById('ev-view-list');
+  if(evGridBtn) evGridBtn.style.display = '';
+  if(evListBtn) evListBtn.style.display = (typeof isPhoneViewport === 'function' && isPhoneViewport()) ? 'none' : '';
   if(evGridBtn) evGridBtn.classList.toggle('active',_evView==='grid');
   if(evListBtn) evListBtn.classList.toggle('active',_evView==='list');
 
@@ -1128,5 +1131,4 @@ function renderAppDash(){
     </div>`;
 
   }
-
 

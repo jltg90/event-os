@@ -870,6 +870,7 @@ function closeMenu(){ document.getElementById('umenu').classList.add('hidden'); 
 document.addEventListener('click',e=>{ if(!e.target.closest('#upill')&&!e.target.closest('#umenu')) closeMenu(); });
 
 function showPage(p){
+  if(p !== 'project' && typeof closeProjectTabMenu === 'function') closeProjectTabMenu();
   // If the user navigates away from the library while the layout editor is open,
   // clean up its state so stale data doesn't bleed into other views.
   if(p !== 'library' && typeof libCancelLayoutEditor === 'function' && typeof _libEditingLayoutId !== 'undefined' && _libEditingLayoutId){
@@ -909,11 +910,57 @@ async function openProject(id){
   showPage('project');
 }
 
+function projectTabLabel(tab){
+  var keyMap = {
+    dashboard: 'tab_dashboard',
+    budget: 'tab_budget',
+    timeline: 'tab_timeline',
+    guests: 'tab_guests',
+    layout: 'tab_layout',
+    moodboard: 'tab_moodboard'
+  };
+  return t(keyMap[tab] || 'tab_dashboard');
+}
+
+function syncProjectTabMenu(){
+  var trigger = document.getElementById('pnav-menu-trigger');
+  var label = document.getElementById('pnav-menu-label');
+  var menu = document.getElementById('pnav-mobile-menu');
+  if(label) label.textContent = projectTabLabel(CTAB);
+  if(trigger){
+    var shouldShow = typeof isPhoneViewport === 'function' && isPhoneViewport();
+    trigger.classList.toggle('hidden', !shouldShow);
+    trigger.setAttribute('aria-expanded', menu && !menu.classList.contains('hidden') ? 'true' : 'false');
+  }
+  document.querySelectorAll('.pnav-mobile-item[data-tab]').forEach(function(btn){
+    btn.classList.toggle('active', btn.dataset.tab === CTAB);
+  });
+}
+
+function closeProjectTabMenu(){
+  var menu = document.getElementById('pnav-mobile-menu');
+  var trigger = document.getElementById('pnav-menu-trigger');
+  if(menu) menu.classList.add('hidden');
+  if(trigger) trigger.setAttribute('aria-expanded', 'false');
+}
+
+function toggleProjectTabMenu(event){
+  if(event) event.stopPropagation();
+  if(typeof isPhoneViewport === 'function' && !isPhoneViewport()) return;
+  var menu = document.getElementById('pnav-mobile-menu');
+  var trigger = document.getElementById('pnav-menu-trigger');
+  if(!menu || !trigger) return;
+  var willOpen = menu.classList.contains('hidden');
+  menu.classList.toggle('hidden', !willOpen);
+  trigger.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+}
+
 function renderPNav(){
   const p=proj();if(!p)return;
   document.getElementById('pnav-name').textContent=p.name;
   const tl={social:t('social_private')||'Social / Private',corporate:t('corporate')||'Corporate',community:t('community')||'Community',government:t('government')||'Government',education:t('education')||'Education'};
   document.getElementById('pnav-type').textContent=tl[p.type]||p.type;
+  syncProjectTabMenu();
 }
 function switchTab(tab){
   CTAB=tab;
@@ -921,9 +968,18 @@ function switchTab(tab){
     document.getElementById('tab-'+tabId).classList.toggle('hidden',tabId!==tab);
   });
   document.querySelectorAll('.ptab').forEach(el=>el.classList.toggle('active',el.dataset.tab===tab));
+  syncProjectTabMenu();
   ({dashboard:renderDash,budget:renderBudget,timeline:renderTimeline,guests:renderGuests,layout:renderLayout,moodboard:renderMoodboard})[tab]?.();
   if(tab==='layout'){ setTimeout(function(){ lZoom(0,'fit'); },120); }
 }
+
+document.addEventListener('click', function(e){
+  if(!e.target.closest('#pnav-menu-trigger') && !e.target.closest('#pnav-mobile-menu')) closeProjectTabMenu();
+});
+window.addEventListener('resize', function(){
+  if(typeof isPhoneViewport === 'function' && !isPhoneViewport()) closeProjectTabMenu();
+  syncProjectTabMenu();
+});
 
 function uproj(){ return DB.projects[DB.cur]||{}; }
 function proj(){ return uproj()[CID]||null; }
@@ -1173,11 +1229,11 @@ function setEvSort(s){
 }
 function toggleEvSortDir(){ _evSortDir*=-1; const b=document.getElementById('ev-sort-dir');if(b)b.textContent=_evSortDir===1?'↑':'↓'; saveEvPrefs(); renderEvents(); }
 function setEvView(v){
+  if(typeof isPhoneViewport === 'function' && isPhoneViewport()) v='grid';
   _evView=v;
   document.getElementById('ev-view-grid').classList.toggle('active',v==='grid');
   document.getElementById('ev-view-list').classList.toggle('active',v==='list');
   saveEvPrefs(); renderEvents();
 }
-
 
 
