@@ -93,7 +93,11 @@ function renderBudget(){
     <svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
     <input id="vendor-search" class="input" placeholder="${LANG==='es'?'Buscar proveedores...':'Search vendors...'}" oninput="filterVendors(this.value)" style="padding-left:36px;width:100%">
   </div>
-  <div id="vlist">${renderVendorTable(allVendors, '')}</div>`;
+  <div id="vlist">${renderVendorTable(allVendors, '')}</div>
+  ${renderMobileStickyActionBar(`
+    <button class="btn btn-ghost" onclick="libQuickLoadVendors()">${LANG==='es'?'Importar':'Import'}</button>
+    <button class="btn btn-primary btn-create-gradient" onclick="openVendorModal()">${t('add_vendor')}</button>
+  `)}`;
 }
 
 function renderVendorEmptyState(){
@@ -434,39 +438,9 @@ function filterVendors(query){
   document.getElementById('vlist').innerHTML = renderVendorTable(vendors, '');
   syncVendorSelectionToVisible();
 }
-function renderVendorCards(vendors, tab){
-  const isES = LANG==='es';
-  var cards = vendors.map(function(v){
-    var paid = v.payments.reduce(function(a,p){return a+Number(p.amount);},0);
-    var si = vendorStatusInfo(v);
-    return '<div class="vendor-mob-card" onclick="showVendorDetail(\''+v.id+'\')">'
-      +'<div class="vendor-mob-card-head">'
-        +'<div style="min-width:0;flex:1">'
-          +'<div class="vendor-mob-card-name">'+esc(v.name)+'</div>'
-          +'<div class="vendor-mob-card-cat">'+esc(v.category||'')+(v.subcategory?' · '+esc(v.subcategory):'')+'</div>'
-        +'</div>'
-        +'<select class="select vendor-mob-status" style="background:'+si.bg+';color:'+si.clr+'" onclick="event.stopPropagation()" onchange="setVendorStatus(\''+v.id+'\',this.value)">'
-          +['pending','hired','in-progress','paid','cancelled'].map(function(s){return '<option value="'+s+'"'+((v.vendorStatus||(v.hired?'hired':'pending'))===s?' selected':'')+'>'
-            +{pending:isES?'Pendiente':'Pending',hired:isES?'Contratado':'Hired','in-progress':isES?'En Progreso':'In Progress',paid:isES?'Pagado':'Paid',cancelled:isES?'Cancelado':'Cancelled'}[s]+'</option>';}).join('')
-        +'</select>'
-      +'</div>'
-      +'<div class="vendor-mob-card-row">'
-        +'<div><span class="vendor-mob-label">'+(isES?'Presupuesto':'Budget')+'</span><span class="vendor-mob-value">'+fmtMoney(v.budget)+'</span></div>'
-        +'<div><span class="vendor-mob-label">'+(isES?'Pagado':'Paid')+'</span><span class="vendor-mob-value" style="color:var(--success)">'+fmtMoney(paid)+'</span></div>'
-      +'</div>'
-      +'<div class="vendor-mob-card-foot" onclick="event.stopPropagation()">'
-        +(v.payments.length?'<span class="vendor-mob-payments">'+v.payments.length+' '+(isES?'pago(s)':'payment(s)')+'</span>':'')
-        +'<div style="flex:1"></div>'
-        +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar':'Edit')+'" onclick="openVendorModal(\''+v.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
-        +'<button class="btn btn-danger btn-sm btn-icon" title="'+(isES?'Eliminar':'Delete')+'" onclick="delV(\''+v.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
-      +'</div>'
-    +'</div>';
-  }).join('');
-  return '<div class="vendor-mob-list">'+cards+'</div>';
-}
 function renderVendorTable(vendors, tab){
   if(!vendors.length) return `<div class="card" style="text-align:center;padding:40px;color:var(--muted)">${t(tab==='hired'?'no_hired_vendors':'no_comparison_vendors')}<br><br><button class="btn btn-primary btn-create-gradient btn-sm" onclick="openVendorModal()">Add Vendor</button></div>`;
-  if(window.innerWidth<=768) return renderVendorCards(vendors, tab);
+  if(isPhoneViewport()) return renderVendorMobileCards(vendors, tab);
   const isES = LANG==='es';
   const rows = vendors.map(v=>{
     const paid = v.payments.reduce((a,p)=>a+Number(p.amount),0);
@@ -517,6 +491,61 @@ function renderVendorTable(vendors, tab){
       <tbody>${rows}</tbody>
     </table>
   </div>`;
+}
+function renderVendorMobileCards(vendors, tab){
+  const isES = LANG==='es';
+  if(!vendors.length) return `<div class="card" style="text-align:center;padding:40px;color:var(--muted)">${t(tab==='hired'?'no_hired_vendors':'no_comparison_vendors')}</div>`;
+  return `<div class="mobile-section-toolbar">
+      <div id="vendor-bulk-bar" class="mobile-inline-actions" style="display:${vendorSelectionCount()?'flex':'none'};padding:12px 14px;border:1px solid rgba(201,168,76,.28);border-radius:16px;background:var(--gold-l)">
+        <span id="vendor-bulk-count" style="font-size:12px;font-weight:700;color:var(--gold-h)">${vendorSelectionCount()} ${isES?'seleccionado(s)':'selected'}</span>
+        <button class="btn btn-ghost btn-sm" onclick="openBulkVendorEditModal()">${isES?'Editar':'Edit'}</button>
+        <button class="btn btn-danger btn-sm" onclick="bulkDeleteVendors()">${isES?'Eliminar':'Delete'}</button>
+        <button class="btn btn-ghost btn-sm" onclick="clearVendorSelection()">${isES?'Limpiar':'Clear'}</button>
+      </div>
+      <div class="mobile-inline-actions">
+        <label class="btn btn-ghost btn-sm" style="display:inline-flex;align-items:center;gap:8px">
+          <input type="checkbox" id="vendor-chk-all" onchange="toggleAllVisibleVendors(this.checked)" style="width:16px;height:16px;accent-color:var(--gold-h);cursor:pointer">
+          <span>${isES?'Seleccionar visibles':'Select visible'}</span>
+        </label>
+      </div>
+    </div>
+    <div class="mobile-card-list">
+      ${vendors.map(function(v){
+        var paid = v.payments.reduce(function(a,p){ return a+Number(p.amount); },0);
+        var si = vendorStatusInfo(v);
+        return `<article class="mobile-record-card" onclick="showVendorDetail('${v.id}')">
+          <div class="mobile-record-card-head">
+            <label onclick="event.stopPropagation()" style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;margin-top:1px">
+              <input class="vendor-sel" type="checkbox" data-vid="${v.id}" ${isVendorSelected(v.id)?'checked':''} onchange="toggleVendorSelection('${v.id}', this.checked)" style="width:16px;height:16px;accent-color:var(--gold-h);cursor:pointer">
+            </label>
+            <div style="flex:1;min-width:0">
+              <div class="mobile-record-title">${esc(v.name)}</div>
+              <div class="mobile-record-subtitle">${esc(v.category||'')}${v.subcategory?' · '+esc(v.subcategory):''}</div>
+            </div>
+            <span class="badge" style="background:${si.bg};color:${si.clr}">${si.label}</span>
+          </div>
+          <div class="mobile-meta-grid">
+            ${renderMobileActionChip(isES?'Contacto':'Contact', esc(v.contact||'—'))}
+            ${renderMobileActionChip(isES?'Presupuesto':'Budget', fmtMoney(v.budget))}
+            ${renderMobileActionChip(isES?'Pagado':'Paid', fmtMoney(paid), paid>0?'success':'')}
+            ${renderMobileActionChip(isES?'Pagos':'Payments', v.payments.length?`${v.payments.length} ${isES?'pagos':'payments'}`:'—')}
+          </div>
+          <div style="margin-top:12px" onclick="event.stopPropagation()">
+            <select class="select" style="width:100%;min-height:44px;background:${si.bg};color:${si.clr};border:none;font-weight:700;border-radius:14px;cursor:pointer" onchange="setVendorStatus('${v.id}',this.value)">
+              ${['pending','hired','in-progress','paid','cancelled'].map(function(s){
+                return `<option value="${s}"${(v.vendorStatus||(v.hired?'hired':'pending'))===s?' selected':''}>${{pending:isES?'Pendiente':'Pending',hired:isES?'Contratado':'Hired','in-progress':isES?'En Progreso':'In Progress',paid:isES?'Pagado':'Paid',cancelled:isES?'Cancelado':'Cancelled'}[s]}</option>`;
+              }).join('')}
+            </select>
+          </div>
+          <div class="mobile-record-card-actions" onclick="event.stopPropagation()">
+            <button class="btn btn-ghost btn-sm" onclick="showVendorDetail('${v.id}')">${isES?'Ver':'View'}</button>
+            <button class="btn btn-ghost btn-sm" onclick="openVendorModal('${v.id}')">${isES?'Editar':'Edit'}</button>
+            <button class="btn btn-ghost btn-sm" onclick="dupVendor('${v.id}')">${isES?'Duplicar':'Duplicate'}</button>
+            <button class="btn btn-danger btn-sm" onclick="delV('${v.id}')">${isES?'Eliminar':'Delete'}</button>
+          </div>
+        </article>`;
+      }).join('')}
+    </div>`;
 }
 function setVendorStatus(id, status){
   const p=proj(); const v=p.vendors.find(v=>v.id===id); if(!v) return;
@@ -1383,7 +1412,11 @@ function renderTimeline(){
     <svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
     <input id="timeline-task-search" class="input" placeholder="${t('search_tasks')}" value="${esc(taskSearchQuery)}" oninput="debouncedTaskSearch(this.value)" style="padding-left:36px;width:100%">
   </div>
-  <div id="tview-content" style="margin-top:12px"></div>`;
+  <div id="tview-content" style="margin-top:12px"></div>
+  ${renderMobileStickyActionBar(`
+    <button class="btn btn-ghost" onclick="libQuickLoadTasks()">${LANG==='es'?'Importar':'Import'}</button>
+    <button class="btn btn-primary btn-create-gradient" onclick="openTaskModal()">${t('add_task')}</button>
+  `)}`;
   renderTimelineView(p);
 }
 var taskListFilter='all';
@@ -1733,7 +1766,13 @@ function renderGuests(){
     <button class="tb ${gView==='list'?'active':''}" onclick="gView='list';renderGuests()">${LANG==='es'?'Todos los Invitados':'All Guests'}</button>
     <button class="tb ${gView==='seating'?'active':''}" onclick="gView='seating';renderGuests()">${LANG==='es'?'Asignación por Mesas':'Table Assignments'}</button>
   </div>
-  <div id="gview"></div>`;
+  <div id="gview"></div>
+  ${renderMobileStickyActionBar(`
+    <label class="btn btn-ghost" style="cursor:pointer">
+      ${LANG==='es'?'Importar':'Import'}<input type="file" accept=".csv,.xlsx" multiple class="hidden" onchange="importCSV(this)">
+    </label>
+    <button class="btn btn-primary btn-create-gradient" onclick="openGuestModal()">${t('add_guest')}</button>
+  `)}`;
   gView==='list'?renderGuestList(p):renderSeating(p);
 }
 function guestText(v){
@@ -1772,22 +1811,22 @@ function renderGuestList(p){
     <table>
       <thead><tr>
         <th onclick="gSort='name';gAsc=gSort==='name'?!gAsc:true;renderGuestList(proj())">${t('col_name')} ${si('name')}</th>
-        <th class="guest-col-contact">${t('col_contact')}</th>
+        <th>${t('col_contact')}</th>
         <th onclick="gSort='category';gAsc=gSort==='category'?!gAsc:true;renderGuestList(proj())">${t('col_category')} ${si('category')}</th>
         <th onclick="gSort='rsvp';gAsc=gSort==='rsvp'?!gAsc:true;renderGuestList(proj())">${t('col_rsvp')} ${si('rsvp')}</th>
-        <th class="guest-col-table" onclick="gSort='table';gAsc=gSort==='table'?!gAsc:true;renderGuestList(proj())">${t('col_table')} ${si('table')}</th>
-        <th class="guest-col-plusone">${t('col_plus_one')}</th><th class="guest-col-meal">${t('col_meal')}</th><th class="guest-col-notes">${t('col_notes')}</th><th>${t('col_actions')}</th>
+        <th onclick="gSort='table';gAsc=gSort==='table'?!gAsc:true;renderGuestList(proj())">${t('col_table')} ${si('table')}</th>
+        <th>${t('col_plus_one')}</th><th>${t('col_meal')}</th><th>${t('col_notes')}</th><th>${t('col_actions')}</th>
       </tr></thead>
       <tbody id="guest-rows-body">
         ${guests.map(g=>`<tr>
           <td style="font-weight:600">${guestText(g.name)}</td>
-          <td class="guest-col-contact" style="font-size:12px;color:var(--muted)">${guestText(g.email)}${g.phone?'<br>'+guestText(g.phone):''}</td>
+          <td style="font-size:12px;color:var(--muted)">${guestText(g.email)}${g.phone?'<br>'+guestText(g.phone):''}</td>
           <td><span class="badge b-gray">${guestValueOrDash(g.category)}</span></td>
           <td><span class="rb ${guestRsvpClass(g.rsvp)}">${guestText(guestRsvpValue(g.rsvp))}</span></td>
-          <td class="guest-col-table">${guestValueOrDash(g.table)}</td>
-          <td class="guest-col-plusone">${g.plusOne?'&#10003;':''}</td>
-          <td class="guest-col-meal" style="font-size:12px">${guestValueOrDash(g.meal)}</td>
-          <td class="guest-col-notes" style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${guestText(g.notes)}</td>
+          <td>${guestValueOrDash(g.table)}</td>
+          <td>${g.plusOne?'&#10003;':''}</td>
+          <td style="font-size:12px">${guestValueOrDash(g.meal)}</td>
+          <td style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${guestText(g.notes)}</td>
           <td><div style="display:flex;gap:4px">
             <button class="btn btn-ghost btn-sm btn-icon" onclick="openGuestModal('${g.id}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>
             <button class="btn btn-danger btn-sm btn-icon" onclick="delGuest('${g.id}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
@@ -2069,6 +2108,11 @@ function renderGuestList(p){
   let guests=[...p.guests];
   if(gFilter) guests=guests.filter(g=>JSON.stringify(g).toLowerCase().includes(gFilter.toLowerCase()));
   guests.sort((a,b)=>{const va=String(a[gSort]||''),vb=String(b[gSort]||'');return gAsc?va.localeCompare(vb,undefined,{numeric:true}):vb.localeCompare(va,undefined,{numeric:true});});
+  if(isPhoneViewport()){
+    document.getElementById('gview').innerHTML = renderGuestMobileCards(guests);
+    updateGuestBulkBar();
+    return;
+  }
   const si=k=>gSort===k?(gAsc?'&uarr;':'&darr;'):'&harr;';
   document.getElementById('gview').innerHTML=`
   <div style="background:#fff;border-radius:var(--r);border:1px solid var(--border);overflow:hidden">
@@ -2093,11 +2137,11 @@ function renderGuestList(p){
       <thead><tr>
         <th style="width:36px"><input type="checkbox" id="guest-chk-all" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="toggleAllVisibleGuests(this.checked)"></th>
         <th onclick="gSort='name';gAsc=gSort==='name'?!gAsc:true;renderGuestList(proj())">${t('col_name')} ${si('name')}</th>
-        <th class="guest-col-contact">${t('col_contact')}</th>
+        <th>${t('col_contact')}</th>
         <th onclick="gSort='category';gAsc=gSort==='category'?!gAsc:true;renderGuestList(proj())">${t('col_category')} ${si('category')}</th>
         <th onclick="gSort='rsvp';gAsc=gSort==='rsvp'?!gAsc:true;renderGuestList(proj())">${t('col_rsvp')} ${si('rsvp')}</th>
-        <th class="guest-col-table" onclick="gSort='table';gAsc=gSort==='table'?!gAsc:true;renderGuestList(proj())">${t('col_table')} ${si('table')}</th>
-        <th class="guest-col-plusone">${t('col_plus_one')}</th><th class="guest-col-meal">${t('col_meal')}</th><th class="guest-col-notes">${t('col_notes')}</th><th>${t('col_actions')}</th>
+        <th onclick="gSort='table';gAsc=gSort==='table'?!gAsc:true;renderGuestList(proj())">${t('col_table')} ${si('table')}</th>
+        <th>${t('col_plus_one')}</th><th>${t('col_meal')}</th><th>${t('col_notes')}</th><th>${t('col_actions')}</th>
       </tr></thead>
       <tbody id="guest-rows-body">
         ${buildGuestRows(guests)}
@@ -2107,18 +2151,74 @@ function renderGuestList(p){
   </div>`;
   updateGuestBulkBar();
 }
+function renderGuestMobileCards(guests){
+  const isES = LANG==='es';
+  const empty = `<div class="mobile-record-card" style="text-align:center;color:var(--muted)">${t('no_guests_found')}</div>`;
+  return `<div class="mobile-section-toolbar">
+      <div style="display:grid;gap:10px">
+        <input class="input" placeholder="${t('search_guests')}" value="${esc(gFilter)}" oninput="debouncedGuestFilter(this.value)">
+        <div class="mobile-inline-actions">
+          <select class="select" style="flex:1;min-width:0" onchange="gSort=this.value;renderGuestList(proj())">
+            <option value="name" ${gSort==='name'?'selected':''}>${t('sort_name')}</option>
+            <option value="rsvp" ${gSort==='rsvp'?'selected':''}>${t('sort_rsvp')}</option>
+            <option value="table" ${gSort==='table'?'selected':''}>${t('sort_table')}</option>
+            <option value="category" ${gSort==='category'?'selected':''}>${t('sort_category')}</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="gAsc=!gAsc;renderGuestList(proj())">${gAsc?t('asc'):t('desc')}</button>
+          <label class="btn btn-ghost btn-sm" style="display:inline-flex;align-items:center;gap:8px">
+            <input type="checkbox" id="guest-chk-all" style="width:16px;height:16px;accent-color:var(--gold-h);cursor:pointer" onchange="toggleAllVisibleGuests(this.checked)">
+            <span>${isES?'Todos':'All'}</span>
+          </label>
+        </div>
+      </div>
+      <div id="guest-bulk-bar" class="mobile-inline-actions" style="display:${guestSelectionCount()?'flex':'none'};padding:12px 14px;border:1px solid rgba(201,168,76,.28);border-radius:16px;background:var(--gold-l)">
+        <span id="guest-bulk-count" style="font-size:12px;font-weight:700;color:var(--gold-h)">${guestSelectionCount()} ${isES?'seleccionado(s)':'selected'}</span>
+        <button class="btn btn-ghost btn-sm" onclick="openBulkGuestEditModal()">${isES?'Editar':'Edit'}</button>
+        <button class="btn btn-danger btn-sm" onclick="bulkDeleteGuests()">${isES?'Eliminar':'Delete'}</button>
+        <button class="btn btn-ghost btn-sm" onclick="clearGuestSelection()">${isES?'Limpiar':'Clear'}</button>
+      </div>
+    </div>
+    <div id="guest-mobile-list" class="mobile-card-list">
+      ${guests.length ? guests.map(function(g){
+        var contact = guestText(g.email);
+        if(g.phone) contact += '<br>'+guestText(g.phone);
+        return `<article class="mobile-record-card" onclick="openGuestModal('${g.id}')">
+          <div class="mobile-record-card-head">
+            <label onclick="event.stopPropagation()" style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;margin-top:1px">
+              <input type="checkbox" class="guest-sel" data-gid="${g.id}" ${isGuestSelected(g.id)?'checked':''} style="width:16px;height:16px;accent-color:var(--gold-h);cursor:pointer" onchange="toggleGuestSelection('${g.id}',this.checked)">
+            </label>
+            <div style="flex:1;min-width:0">
+              <div class="mobile-record-title">${guestText(g.name)}</div>
+              <div class="mobile-record-subtitle">${guestValueOrDash(g.category)}${g.plusOne?' · +1':''}</div>
+            </div>
+            <span class="rb ${guestRsvpClass(g.rsvp)}">${guestText(guestRsvpValue(g.rsvp))}</span>
+          </div>
+          <div class="mobile-meta-grid">
+            ${renderMobileActionChip(isES?'Contacto':'Contact', contact)}
+            ${renderMobileActionChip(isES?'Mesa':'Table', guestValueOrDash(g.table))}
+            ${renderMobileActionChip(isES?'Comida':'Meal', guestValueOrDash(g.meal))}
+            ${renderMobileActionChip(isES?'Notas':'Notes', guestText(g.notes||'—'))}
+          </div>
+          <div class="mobile-record-card-actions" onclick="event.stopPropagation()">
+            <button class="btn btn-ghost btn-sm" onclick="openGuestModal('${g.id}')">${isES?'Editar':'Edit'}</button>
+            <button class="btn btn-danger btn-sm" onclick="delGuest('${g.id}')">${isES?'Eliminar':'Delete'}</button>
+          </div>
+        </article>`;
+      }).join('') : empty}
+    </div>`;
+}
 function buildGuestRows(guests){
   if(!guests.length) return `<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--muted)">${t('no_guests_found')}</td></tr>`;
   return guests.map(g=>`<tr>
     <td><input type="checkbox" class="guest-sel" data-gid="${g.id}" ${isGuestSelected(g.id)?'checked':''} style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="toggleGuestSelection('${g.id}',this.checked)"></td>
     <td style="font-weight:600">${guestText(g.name)}</td>
-    <td class="guest-col-contact" style="font-size:12px;color:var(--muted)">${guestText(g.email)}${g.phone?'<br>'+guestText(g.phone):''}</td>
+    <td style="font-size:12px;color:var(--muted)">${guestText(g.email)}${g.phone?'<br>'+guestText(g.phone):''}</td>
     <td><span class="badge b-gray">${guestValueOrDash(g.category)}</span></td>
     <td><span class="rb ${guestRsvpClass(g.rsvp)}">${guestText(guestRsvpValue(g.rsvp))}</span></td>
-    <td class="guest-col-table">${guestValueOrDash(g.table)}</td>
-    <td class="guest-col-plusone">${g.plusOne?'&#10003;':''}</td>
-    <td class="guest-col-meal" style="font-size:12px">${guestValueOrDash(g.meal)}</td>
-    <td class="guest-col-notes" style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${guestText(g.notes)}</td>
+    <td>${guestValueOrDash(g.table)}</td>
+    <td>${g.plusOne?'&#10003;':''}</td>
+    <td style="font-size:12px">${guestValueOrDash(g.meal)}</td>
+    <td style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${guestText(g.notes)}</td>
     <td><div style="display:flex;gap:4px">
       <button class="btn btn-ghost btn-sm btn-icon" onclick="openGuestModal('${g.id}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>
       <button class="btn btn-danger btn-sm btn-icon" onclick="delGuest('${g.id}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
@@ -2126,6 +2226,7 @@ function buildGuestRows(guests){
   </tr>`).join('');
 }
 function renderGuestRows(p){
+  if(isPhoneViewport()){ renderGuestList(p); return; }
   var tbody = document.getElementById('guest-rows-body');
   if(!tbody){ renderGuestList(p); return; }
   var guests=[...p.guests];
@@ -2432,4 +2533,3 @@ function calcLayoutBudget(items){
   });
   return {total, breakdown};
 }
-

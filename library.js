@@ -1825,6 +1825,34 @@ function libLayoutRow(entry, isES){
     +'</div></td>'
     +'</tr>';
 }
+function libLayoutCard(entry, isES){
+  var tables=entry.items.filter(function(i){return i.shape&&i.shape.includes('table');}).length;
+  var seats=entry.items.reduce(function(s,i){return s+(i.chairs||0);},0);
+  return `<article class="mobile-record-card">
+    <div class="mobile-record-card-head">
+      <label onclick="event.stopPropagation()" style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;margin-top:1px">
+        <input type="checkbox" class="lib-ly-sel" data-lid="${entry.id}" style="width:16px;height:16px;accent-color:var(--gold-h);cursor:pointer" onchange="libUpdateLayoutBulkBtn()">
+      </label>
+      <div style="flex:1;min-width:0">
+        <div class="mobile-record-title">${esc(entry.name)}</div>
+        <div class="mobile-record-subtitle">${esc(entry.location||'—')}</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="libOpenLayoutEditor('${entry.id}')">${isES?'Abrir':'Open'}</button>
+    </div>
+    <div class="mobile-meta-grid">
+      ${renderMobileActionChip(isES?'Invitados':'Guests', entry.guests||seats||'—')}
+      ${renderMobileActionChip(isES?'Mesas':'Tables', tables||'—')}
+      ${renderMobileActionChip(isES?'Ubicación':'Location', esc(entry.location||'—'))}
+      ${renderMobileActionChip(isES?'Notas':'Notes', esc(entry.notes||'—'))}
+    </div>
+    <div class="mobile-record-card-actions">
+      <button class="btn btn-ghost btn-sm" onclick="libLoadLayoutToEvent('${entry.id}')">${isES?'Cargar':'Load'}</button>
+      <button class="btn btn-ghost btn-sm" onclick="libOpenLayoutEditor('${entry.id}')">${isES?'Editar':'Edit'}</button>
+      <button class="btn btn-ghost btn-sm" onclick="libDuplicateLayout('${entry.id}')">${isES?'Duplicar':'Duplicate'}</button>
+      <button class="btn btn-danger btn-sm" onclick="libDelete('layouts','${entry.id}')">${isES?'Eliminar':'Delete'}</button>
+    </div>
+  </article>`;
+}
 function renderLibLayouts(lib){
   if(!lib.layouts.length){
     var isES=LANG==='es';
@@ -1840,6 +1868,22 @@ function renderLibLayouts(lib){
       +'</div>';
   }
   var isES=LANG==='es';
+  if(isPhoneViewport()){
+    var cards=lib.layouts.map(function(entry){ return libLayoutCard(entry,isES); }).join('');
+    return '<div class="mobile-section-toolbar">'
+      +'<div style="display:grid;gap:10px">'
+      +'<input class="input" placeholder="'+(isES?'Buscar planos...':'Search layouts...')+'" oninput="libFilterLayouts(this.value)">'
+      +'<div class="mobile-inline-actions">'
+      +'<label class="btn btn-ghost btn-sm" style="display:inline-flex;align-items:center;gap:8px">'
+      +'<input type="checkbox" id="lib-layout-chk-all" style="width:16px;height:16px;accent-color:var(--gold-h);cursor:pointer" onchange="libToggleAllLayouts(this.checked)">'
+      +'<span>'+(isES?'Seleccionar visibles':'Select visible')+'</span></label>'
+      +'<button id="lib-layout-bulk-btn" class="btn btn-primary btn-sm" style="display:none" onclick="libBulkLoadLayoutsToEvent()">'+(isES?'Cargar':'Load')+'</button>'
+      +'<button id="lib-layout-bulk-del" class="btn btn-danger btn-sm" style="display:none" onclick="libBulkDeleteLayouts()">'+(isES?'Eliminar':'Delete')+'</button>'
+      +'</div></div>'
+      +'</div>'
+      +'<div id="lib-layout-rows" class="mobile-card-list">'+cards+'</div>'
+      +renderMobileStickyActionBar('<button class="btn btn-primary btn-create-gradient" onclick="libOpenLayoutWizard()">'+(isES?'Nuevo Layout':'New Layout')+'</button>');
+  }
   var rows=lib.layouts.map(function(entry){ return libLayoutRow(entry,isES); }).join('');
   return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
     +'<div style="position:relative;flex:1;display:flex;align-items:center">'
@@ -1872,7 +1916,9 @@ function libFilterLayouts(q){
     var tables=String(e.items?e.items.filter(function(i){return i.shape&&i.shape.includes('table');}).length:'');
     return [e.name,e.location,e.notes,e.guests,tables].some(function(f){return f&&String(f).toLowerCase().includes(s);});
   });
-  var rows=filtered.map(function(e){ return libLayoutRow(e,isES); }).join('');
+  var rows=isPhoneViewport()
+    ? (filtered.length?filtered.map(function(e){ return libLayoutCard(e,isES); }).join(''):'<div class="mobile-record-card" style="text-align:center;color:var(--muted)">'+(isES?'Sin resultados':'No results')+'</div>')
+    : filtered.map(function(e){ return libLayoutRow(e,isES); }).join('');
   var tb=document.getElementById('lib-layout-rows'); if(tb) tb.innerHTML=rows;
 }
 function libUpdateLayoutBulkBtn(){
@@ -1880,7 +1926,7 @@ function libUpdateLayoutBulkBtn(){
   var btn=document.getElementById('lib-layout-bulk-btn');
   if(btn) btn.style.display=checked>0?'':'none';
   var delBtn=document.getElementById('lib-layout-bulk-del');
-  if(delBtn) delBtn.style.display=checked>1?'':'none';
+  if(delBtn) delBtn.style.display=checked>0?'':'none';
   var all=document.getElementById('lib-layout-chk-all');
   if(all) all.checked=(checked>0&&checked===document.querySelectorAll('.lib-ly-sel').length);
 }
@@ -2038,8 +2084,10 @@ function libFilterMoodboards(q){
   var s=q.trim().toLowerCase();
   var filtered=s===''?lib.moodboards:lib.moodboards.filter(function(e){return e.name.toLowerCase().includes(s);});
   var el=document.getElementById('lib-mb-rows'); if(!el) return;
-  el.innerHTML=filtered.length?filtered.map(function(e){ return _libMbRow(e,isES); }).join('')
-    :'<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--muted);font-size:13px">'+(isES?'Sin resultados':'No results')+'</td></tr>';
+  el.innerHTML=isPhoneViewport()
+    ? (filtered.length?filtered.map(function(e){ return libMoodboardCard(e,isES); }).join(''):'<div class="mobile-record-card" style="text-align:center;color:var(--muted)">'+(isES?'Sin resultados':'No results')+'</div>')
+    : (filtered.length?filtered.map(function(e){ return _libMbRow(e,isES); }).join('')
+      :'<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--muted);font-size:13px">'+(isES?'Sin resultados':'No results')+'</td></tr>');
   libUpdateMoodboardBulkBtn();
 }
 
@@ -2493,6 +2541,37 @@ function _libMbRow(entry, isES){
     +'</div></td>'
     +'</tr>';
 }
+function libMoodboardCard(entry, isES){
+  var images = entry.images || [];
+  var imgCnt = images.length;
+  var folderCount = (entry.folders||[]).length + ((entry.uncategorized||[]).length ? 1 : 0) + (images.length ? 1 : 0);
+  var cover = images[0] || '';
+  return `<article class="mobile-record-card">
+    <div class="mobile-record-card-head">
+      <label onclick="event.stopPropagation()" style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;margin-top:1px">
+        <input type="checkbox" class="lib-mb-sel" data-id="${entry.id}" style="width:16px;height:16px;accent-color:var(--gold-h);cursor:pointer" onchange="libUpdateMoodboardBulkBtn()">
+      </label>
+      <div style="flex:1;min-width:0">
+        <div class="mobile-record-title">${esc(entry.name)}</div>
+        <div class="mobile-record-subtitle">${esc(entry.date||'—')}</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="libOpenMoodboardFolder('${entry.id}')">${isES?'Abrir':'Open'}</button>
+    </div>
+    ${cover?`<div style="margin-top:12px;border-radius:14px;overflow:hidden;aspect-ratio:1.35;background:var(--bg2)"><img src="${cover}" alt="${esc(entry.name)}" style="width:100%;height:100%;object-fit:cover;display:block"></div>`:''}
+    <div class="mobile-meta-grid">
+      ${renderMobileActionChip(isES?'Imágenes':'Images', imgCnt)}
+      ${renderMobileActionChip(isES?'Carpetas':'Folders', folderCount)}
+      ${renderMobileActionChip(isES?'Fecha':'Date', esc(entry.date||'—'))}
+      ${renderMobileActionChip(isES?'Estado':'Status', imgCnt?(isES?'Listo':'Ready'):(isES?'Vacío':'Empty'))}
+    </div>
+    <div class="mobile-record-card-actions">
+      <button class="btn btn-ghost btn-sm" onclick="libOpenMoodboardFolder('${entry.id}')">${isES?'Ver':'View'}</button>
+      <button class="btn btn-ghost btn-sm" onclick="libLoadMoodboard('${entry.id}')">${isES?'Cargar':'Load'}</button>
+      <button class="btn btn-ghost btn-sm" onclick="libEditMoodboardFolder('${entry.id}')">${isES?'Editar':'Edit'}</button>
+      <button class="btn btn-danger btn-sm" onclick="libDelete('moodboards','${entry.id}')">${isES?'Eliminar':'Delete'}</button>
+    </div>
+  </article>`;
+}
 
 function libUpdateMoodboardBulkBtn(){
   var n=document.querySelectorAll('.lib-mb-sel:checked').length;
@@ -2570,7 +2649,8 @@ function renderLibMoodboards(lib){
           +'<svg width="10" height="10" fill="none" stroke="#fff" stroke-width="2.5" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>'
           +'</div></div>';
       }).join('')
-      +'</div>';
+      +'</div>'
+      +renderMobileStickyActionBar('<button class="btn btn-primary" onclick="libMoodboardUploadImages(\''+_mbOpenFolderId+'\')">'+(isES?'Subir imágenes':'Upload images')+'</button>');
   }
 
   if(!lib.moodboards.length){
@@ -2583,6 +2663,22 @@ function renderLibMoodboards(lib){
       +'<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="margin-right:8px"><path d="M12 5v14M5 12h14"/></svg>'
       +(isES?'Crear primer moodboard':'Create First Moodboard')+'</button>'
       +'</div>';
+  }
+  if(isPhoneViewport()){
+    var cards=lib.moodboards.map(function(e){ return libMoodboardCard(e,isES); }).join('');
+    return '<div class="mobile-section-toolbar">'
+      +'<div style="display:grid;gap:10px">'
+      +'<input class="input" placeholder="'+(isES?'Buscar moodboards...':'Search moodboards...')+'" oninput="libFilterMoodboards(this.value)">'
+      +'<div class="mobile-inline-actions">'
+      +'<label class="btn btn-ghost btn-sm" style="display:inline-flex;align-items:center;gap:8px">'
+      +'<input type="checkbox" id="lib-mb-chk-all" style="width:16px;height:16px;accent-color:var(--gold-h);cursor:pointer" onchange="libToggleAllMoodboards(this.checked)">'
+      +'<span>'+(isES?'Seleccionar visibles':'Select visible')+'</span></label>'
+      +'<button id="lib-mb-bulk-load-btn" class="btn btn-primary btn-sm" style="display:none" onclick="libLoadSelectedMoodboards()">'+(isES?'Cargar':'Load')+'</button>'
+      +'<button id="lib-mb-bulk-del-btn" class="btn btn-danger btn-sm" style="display:none" onclick="libDeleteSelectedMoodboards()">'+(isES?'Eliminar':'Delete')+'</button>'
+      +'</div></div>'
+      +'</div>'
+      +'<div id="lib-mb-rows" class="mobile-card-list">'+cards+'</div>'
+      +renderMobileStickyActionBar('<button class="btn btn-primary btn-create-gradient" onclick="libCreateMoodboardFolder()">'+(isES?'Nuevo Moodboard':'New Moodboard')+'</button>');
   }
   var rows=lib.moodboards.map(function(e){ return _libMbRow(e,isES); }).join('');
   return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
@@ -4003,8 +4099,6 @@ window.libCloseLayoutEditor = libCloseLayoutEditor;
 window.updateLibraryLabels = updateLibraryLabels;
 window.renderLibrary = renderLibrary;
 // placeholder to prevent old duplicate
-
-
 
 
 

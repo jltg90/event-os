@@ -393,6 +393,12 @@ function renderEvents(){
   });
 
   const g=document.getElementById('evgrid');
+  let mobileActions=document.getElementById('events-mobile-actions');
+  if(!mobileActions && g && g.parentElement){
+    mobileActions=document.createElement('div');
+    mobileActions.id='events-mobile-actions';
+    g.parentElement.appendChild(mobileActions);
+  }
   g.className=_evView==='list'?'evgrid ev-list':'evgrid';
 
   const evHeader = document.getElementById('ev-header');
@@ -409,6 +415,7 @@ function renderEvents(){
       if (evHeader) evHeader.style.marginBottom = '0';
       g.className = 'ev-empty-host';
       g.innerHTML = renderEventsEmptyState();
+      if (mobileActions) mobileActions.innerHTML = renderEventsMobileActionBar();
       updateEvBulkBar();
       return;
     }
@@ -419,6 +426,7 @@ function renderEvents(){
     if (evHeader) evHeader.style.marginBottom = '';
     g.className = 'ev-empty-host';
     g.innerHTML = renderEventsNoResultsState();
+    if (mobileActions) mobileActions.innerHTML = renderEventsMobileActionBar();
     updateEvBulkBar();
     return;
   }
@@ -514,7 +522,12 @@ function renderEvents(){
     }).join('');
   }
   setupEventCardHoverEffects();
+  if(mobileActions) mobileActions.innerHTML = renderEventsMobileActionBar();
   updateEvBulkBar();
+}
+
+function renderEventsMobileActionBar(){
+  return renderMobileStickyActionBar(`<button class="btn btn-primary btn-create-gradient" onclick="openEventModal()">${t('create_event')}</button>`);
 }
 
 function setupEventCardHoverEffects(){
@@ -1115,6 +1128,5 @@ function renderAppDash(){
     </div>`;
 
   }
-
 
 

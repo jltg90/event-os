@@ -677,6 +677,7 @@ var LState={
 var LDragOffset={};
 var _canvasPad=2000;
 var _layoutQuoteCollapsed=true;
+var _layoutMobilePane='items';
 
 function openLayoutImportModal(){
   var lib=getLib();
@@ -743,19 +744,6 @@ function renderLayout(){
       return;
     }
     renderEventLayoutViewer(p);
-    return;
-  }
-  /* ── Mobile guard: block editing on small screens ── */
-  if(window.innerWidth<=768){
-    var el=_layoutEl();
-    if(el){
-      var isES=LANG==='es';
-      el.innerHTML='<div class="layout-mobile-block">'
-        +'<svg width="48" height="48" fill="none" stroke="var(--gold-h)" stroke-width="1.5" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>'
-        +'<div class="layout-mobile-block-title">'+(isES?'Usa un escritorio':'Use a Desktop')+'</div>'
-        +'<div class="layout-mobile-block-text">'+(isES?'El editor de layout requiere una pantalla más grande. Abre EventOS en una computadora para diseñar tu plano.':'The layout editor requires a larger screen. Open EventOS on a computer to design your floor plan.')+'</div>'
-        +'</div>';
-    }
     return;
   }
   LState.items=p.layoutItems||[];
@@ -827,6 +815,7 @@ function renderLayout(){
     el.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;min-height:60vh;padding:24px"><div style="max-width:520px;width:100%;text-align:center;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:36px 28px;box-shadow:0 18px 44px rgba(0,0,0,.08)"><div style="width:76px;height:76px;border-radius:50%;background:var(--gold-l);display:flex;align-items:center;justify-content:center;margin:0 auto 22px"><svg width="34" height="34" fill="none" stroke="var(--gold-h)" stroke-width="1.7" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div><div style="font-family:Cormorant Garamond,serif;font-size:30px;font-weight:700;margin-bottom:10px">'+(LANG==='es'?'Crea tu primer layout':'Create your first layout')+'</div><div style="color:var(--muted);font-size:14px;line-height:1.6;max-width:420px;margin:0 auto 24px">'+(LANG==='es'?'Empieza desde cero o importa un layout guardado de tu biblioteca para este evento.':'Start from scratch or import a saved library layout into this event.')+'</div><div style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap"><button class="btn btn-primary" style="padding:14px 26px;font-size:14px;font-weight:700" onclick="openLayoutLibraryAndCreate()">+ '+(LANG==='es'?'Crear primer layout':'Create First Layout')+'</button><button class="btn btn-ghost" style="padding:14px 22px;font-size:14px;font-weight:700" onclick="openLayoutImportModal()">'+(LANG==='es'?'Importa tu layout':'Import your layout')+'</button></div></div></div>';
     return;
   }
+  var isPhone=isPhoneViewport();
   el.innerHTML=`
   <div class="layout-shell">
     <input id="layout-floorplan-input" type="file" accept="image/*" style="display:none" onchange="handleFloorplanUpload(event)">
@@ -915,7 +904,8 @@ function renderLayout(){
         </div>
         <button id="lbtn-export" class="btn btn-ghost btn-sm" onclick="exportLayoutFull()">${t('export')}</button>
       </div>
-      ${renderLayoutQuoteWorkspace(p)}
+      ${isPhone?renderLayoutMobileQuickBar():''}
+      ${isPhone?'':renderLayoutQuoteWorkspace(p)}
       <!-- Canvas -->
       <div class="layout-canvas-outer" id="lcanvas-outer"
         onmousedown="lCanvasDown(event)"
@@ -987,6 +977,7 @@ function renderLayout(){
         <button class="btn btn-ghost btn-sm" onclick="cancelScaleMode()" style="width:100%;justify-content:center;margin-top:2px">${LANG==='es'?'Cancelar':'Cancel'}</button>
       </div>`:''}
       </div>
+      ${isPhone?renderLayoutMobileInspector(p):''}
       <div style="padding:5px 16px;background:var(--card);border-top:1px solid var(--border);font-size:10.5px;color:var(--muted);display:flex;gap:16px;align-items:center;flex-wrap:wrap">
         <span>${t('scroll_zoom')}</span>
         <span>${t('space_pan')}</span>
@@ -1015,10 +1006,123 @@ function renderLayout(){
       co.scrollTop=_canvasPad;
     }
   }
+  syncLayoutMobileInspector();
 }
 
 function renderLayoutUI(){
   renderLayout();
+}
+
+function setLayoutMobilePane(pane){
+  _layoutMobilePane=pane||'items';
+  if(_layoutMobilePane==='quote') _layoutQuoteCollapsed=false;
+  syncLayoutMobileInspector();
+}
+
+function renderLayoutMobileQuickBar(){
+  var hasFloorplan=!!(LState.floorplan&&LState.floorplan.img);
+  return `<div class="layout-mobile-quickbar">
+    <div class="layout-mobile-quickrow">
+      <button class="layout-mobile-btn" onclick="toggleAddElementMenu()">${LANG==='es'?'Agregar':'Add'}</button>
+      <button class="layout-mobile-btn" onclick="lZoom(0,'fit')">${LANG==='es'?'Ajustar':'Fit'}</button>
+      <button class="layout-mobile-btn" onclick="lZoom(-0.1)">-</button>
+      <button class="layout-mobile-btn" onclick="lZoom(0.1)">+</button>
+      <button class="layout-mobile-btn" onclick="setLayoutMobilePane('items')">${LANG==='es'?'Items':'Items'}</button>
+      <button class="layout-mobile-btn" onclick="setLayoutMobilePane('quote')">${LANG==='es'?'Cotización':'Quote'}</button>
+      <button class="layout-mobile-btn" onclick="setLayoutMobilePane('properties')">${LANG==='es'?'Propiedades':'Properties'}</button>
+      <button class="layout-mobile-btn" onclick="${hasFloorplan?'startScaleMode()':'triggerFloorplanUpload()'}">${hasFloorplan?(LANG==='es'?'Escalar':'Scale'):(LANG==='es'?'Plano':'Floorplan')}</button>
+    </div>
+  </div>`;
+}
+
+function renderLayoutMobileInspector(p){
+  var panes=[
+    {key:'items',label:LANG==='es'?'Items':'Items'},
+    {key:'selection',label:LANG==='es'?'Selección':'Selection'},
+    {key:'properties',label:LANG==='es'?'Propiedades':'Properties'},
+    {key:'quote',label:LANG==='es'?'Cotización':'Quote'}
+  ];
+  return `<div class="layout-mobile-inspector" id="layout-mobile-inspector">
+    <div class="layout-mobile-tabs">
+      ${panes.map(function(pane){
+        return `<button class="layout-mobile-tab ${_layoutMobilePane===pane.key?'active':''}" data-pane="${pane.key}" onclick="setLayoutMobilePane('${pane.key}')">${pane.label}</button>`;
+      }).join('')}
+    </div>
+    <div class="layout-mobile-pane" id="layout-mobile-pane">${renderLayoutMobileInspectorBody(p)}</div>
+  </div>`;
+}
+
+function renderLayoutMobileInspectorBody(p){
+  var items=LState.items||[];
+  var selected=LState.items.filter(function(item){ return LState.sel.includes(item.id); });
+  if(_layoutMobilePane==='selection'){
+    if(!selected.length) return `<div class="layout-mobile-empty">${LANG==='es'?'Selecciona un elemento en el canvas para rotarlo, duplicarlo o eliminarlo.':'Select an item on the canvas to rotate, duplicate, or delete it.'}</div>`;
+    return `<div class="mobile-meta-grid">
+        ${renderMobileActionChip(LANG==='es'?'Seleccionados':'Selected', selected.length)}
+        ${renderMobileActionChip(LANG==='es'?'Mesas':'Tables', selected.filter(function(item){ return String(item.shape||'').includes('table'); }).length)}
+        ${renderMobileActionChip(LANG==='es'?'Sillas':'Chairs', selected.reduce(function(sum,item){ return sum+Number(item.chairs||0); },0))}
+        ${renderMobileActionChip(LANG==='es'?'Rotación':'Rotation', selected.length===1?`${Math.round(selected[0].rotation||0)}°`:(LANG==='es'?'Múltiple':'Multiple'))}
+      </div>
+      <div class="layout-mobile-actions">
+        <button class="btn btn-ghost btn-sm" onclick="lZoom(0,'sel')">${LANG==='es'?'Enfocar':'Focus'}</button>
+        <button class="btn btn-ghost btn-sm" onclick="openSelectedLayoutItemModal()">${LANG==='es'?'Editar':'Edit'}</button>
+        <button class="btn btn-ghost btn-sm" onclick="duplicateSelectedLayoutItems('copy')">${LANG==='es'?'Copiar':'Copy'}</button>
+        <button class="btn btn-ghost btn-sm" onclick="duplicateSelectedLayoutItems('instance')">${LANG==='es'?'Instancia':'Instance'}</button>
+        <button class="btn btn-ghost btn-sm" onclick="doRotate(-getRotateStep())">${LANG==='es'?'Girar -':'Rotate -'}</button>
+        <button class="btn btn-ghost btn-sm" onclick="doRotate(getRotateStep())">${LANG==='es'?'Girar +':'Rotate +'}</button>
+        <button class="btn btn-danger btn-sm" onclick="delSelected()">${LANG==='es'?'Eliminar':'Delete'}</button>
+      </div>`;
+  }
+  if(_layoutMobilePane==='properties'){
+    if(LState.sel.length!==1) return `<div class="layout-mobile-empty">${LANG==='es'?'Selecciona un solo elemento para editar sus propiedades.':'Select a single item to edit its properties.'}</div>`;
+    return `<div id="lsb-props"><div id="lsb-props-inner"></div></div>`;
+  }
+  if(_layoutMobilePane==='quote'){
+    return renderLayoutQuoteWorkspace(p);
+  }
+  if(!items.length) return `<div class="layout-mobile-empty">${LANG==='es'?'Tu layout aún no tiene elementos. Usa Agregar para empezar.':'Your layout has no elements yet. Use Add to get started.'}</div>`;
+  return items.map(function(item){
+    return `<button class="litem-list-row ${LState.sel.includes(item.id)?'sel-row':''}" data-id="${item.id}" style="width:100%;justify-content:space-between;border:1px solid var(--border);background:transparent" onclick="selectLayoutMobileItem('${item.id}')">
+      <span style="display:flex;flex-direction:column;align-items:flex-start;min-width:0">
+        <span style="font-weight:700;color:var(--text)">${esc(item.label||getLayoutShapeLabel(item.shape))}</span>
+        <span style="font-size:11px;color:var(--muted)">${esc(getLayoutShapeLabel(item.shape))}${item.chairs?` · ${item.chairs} ${LANG==='es'?'sillas':'chairs'}`:''}</span>
+      </span>
+      <span style="font-size:11px;color:var(--gold-h);font-weight:700">${Math.round(item.rotation||0)}°</span>
+    </button>`;
+  }).join('');
+}
+
+function syncLayoutMobileInspector(){
+  var root=document.getElementById('layout-mobile-inspector');
+  var pane=document.getElementById('layout-mobile-pane');
+  if(!root || !pane) return;
+  root.querySelectorAll('.layout-mobile-tab').forEach(function(tab){
+    tab.classList.toggle('active', tab.dataset.pane===_layoutMobilePane);
+  });
+  pane.innerHTML=renderLayoutMobileInspectorBody(proj());
+  if(_layoutMobilePane==='properties'&&LState.sel.length===1) renderLPropsPanel();
+}
+
+function selectLayoutMobileItem(id){
+  LState.sel=[id];
+  _layoutMobilePane='selection';
+  updateSelUI();
+  setTimeout(function(){ lZoom(0,'sel'); },30);
+}
+
+function duplicateSelectedLayoutItems(mode){
+  if(!LState.sel.length) return;
+  if(LState.sel.length===1){
+    makeLayoutDuplicate(LState.sel[0], mode||'copy');
+    return;
+  }
+  window.LClipboard=LState.items.filter(function(item){ return LState.sel.includes(item.id); }).map(function(item){ return JSON.parse(JSON.stringify(item)); });
+  lPaste(mode==='instance'?'instance':'copy');
+}
+
+function openSelectedLayoutItemModal(){
+  if(LState.sel.length!==1) return;
+  openLItemModal(LState.sel[0]);
 }
 
 function ensureLayoutQuoteState(p){
@@ -2706,6 +2810,7 @@ function updateSelUI(){
     delBtn.style.display=LState.sel.length?'':'none';
   }
   updateFontSizeUI();
+  syncLayoutMobileInspector();
 }
 
 function lSelectOnly(e,id){
