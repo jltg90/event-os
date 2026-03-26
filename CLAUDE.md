@@ -62,6 +62,13 @@ Single table `projects` with a denormalized JSON blob (`data: v.any()`). The ent
 - `window.EVENTOS_CONFIG` — deployment URLs (defined in `app-config.js`)
 - Per-user preferences are persisted to `localStorage` keyed by user ID
 
+## Deployment & Data Safety Rules
+
+- **Cache-busting**: When deploying, bump the `?v=` query string on all `<script>`/`<link>` tags in `index.html` AND update `buildVersion` in `app-config.js`. This forces browsers to fetch fresh files.
+- **Backend backward compatibility**: Never add required fields to Convex mutations that the current frontend doesn't send. New fields must be optional with sensible defaults. Never rename or remove an existing Convex function — add a new one and deprecate the old.
+- **Deploy order**: Deploy backend first (must be backward-compatible), then frontend with cache-busting bump.
+- **Data versioning**: Projects carry a `_dataVersion` field (stamped by `prepareProjectForSave` in `app-data.js`). When changing the project data shape, increment `CURRENT_DATA_VERSION` and add migration logic in `core.js` (see `migrateBase64Images` for the pattern).
+
 ## Additional Documentation
 
 Check these files when working on the relevant areas:

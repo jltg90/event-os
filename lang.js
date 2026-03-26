@@ -1,5 +1,9 @@
 var LANG = 'es';
 var CURRENCY={code:'USD',symbol:'$',name:'US Dollar'};
+var DATE_FORMAT = 'DMY';
+var WEEK_START = 0;
+var DEFAULT_OUTLINE_OFFSET = 0.90;
+var THEME = 'light';
 var CURRENCIES=[
   {code:'USD',symbol:'$',  name:'US Dollar'},
   {code:'EUR',symbol:'\u20AC',  name:'Euro'},
@@ -144,14 +148,15 @@ var TRANSLATIONS = {
     'analytics_by_status': 'Events by Status',
     'analytics_timeline': 'Event Timeline',
     'analytics_no_data': 'No events in this period',
-    'export_pdf_title': 'Export Presentation PDF',
+    'export_pdf_title': 'Export Event PDF',
     'export_pdf_select': 'Select sections to include:',
     'export_pdf_generate': 'Generate PDF',
     'export_pdf_cancel': 'Cancel',
     'section_dashboard': 'Overview & Details',
-    'section_budget': 'Budget Summary',
+    'section_budget': 'Budget & Vendors',
     'section_timeline': 'Task Timeline',
     'section_guests': 'Guest List',
+    'section_layout': 'Event Layouts',
     'section_moodboard': 'Moodboard',
     'guests_confirmed': 'Guests Confirmed',
     'vendors_hired': 'Vendors Hired',
@@ -487,7 +492,7 @@ var TRANSLATIONS = {
     'new_folder_btn': 'New Folder',
     'add_to_root_btn': 'Add to Root',
     'main_menu_btn': 'Hide Menu',
-    'export_pdf_btn': 'Export Project PDF',
+    'export_pdf_btn': 'Export Event PDF',
     'create_folder_btn': 'Create Folder',
     'upload_images_btn': 'Upload Images',
     'no_images_yet': 'No images yet',
@@ -498,6 +503,29 @@ var TRANSLATIONS = {
     'deleted': 'Deleted',
     'error': 'Error',
     'updated': 'Updated',
+    'settings': 'Settings',
+    'settings_display': 'Display',
+    'settings_defaults': 'Defaults',
+    'settings_data': 'Data',
+    'settings_language': 'Language',
+    'settings_date_format': 'Date Format',
+    'settings_theme': 'Theme',
+    'settings_theme_light': 'Light',
+    'settings_theme_dark': 'Dark',
+    'settings_default_event_type': 'Default Event Type',
+    'settings_default_event_type_none': 'None',
+    'settings_default_guide_line': 'Default Guide Line (m)',
+    'settings_export_data': 'Export Backup',
+    'settings_export_data_desc': 'Download all your events as a single backup file.',
+    'settings_import_data': 'Restore Backup',
+    'settings_import_data_desc': 'Restore events from a previously exported backup file.',
+    'settings_import_confirm': 'This will merge the backup data with your current events. Projects with the same ID will be overwritten. Continue?',
+    'settings_import_success': 'Backup restored successfully!',
+    'settings_about': 'About',
+    'settings_version': 'Version',
+    'settings_week_start': 'Week Starts On',
+    'settings_sunday': 'Sunday',
+    'settings_monday': 'Monday',
   },
   es: {
     'back_to_events': 'Volver a Eventos',
@@ -607,14 +635,15 @@ var TRANSLATIONS = {
     'analytics_by_status': 'Eventos por Estado',
     'analytics_timeline': 'Línea de Tiempo de Eventos',
     'analytics_no_data': 'Sin eventos en este período',
-    'export_pdf_title': 'Exportar Presentación PDF',
+    'export_pdf_title': 'Exportar PDF del Evento',
     'export_pdf_select': 'Seleccionar secciones a incluir:',
     'export_pdf_generate': 'Generar PDF',
     'export_pdf_cancel': 'Cancelar',
     'section_dashboard': 'Resumen y Detalles',
-    'section_budget': 'Resumen de Presupuesto',
+    'section_budget': 'Presupuesto y Proveedores',
     'section_timeline': 'Cronograma de Tareas',
     'section_guests': 'Lista de Invitados',
+    'section_layout': 'Planos del Evento',
     'section_moodboard': 'Tablero de Inspiración',
     'guests_confirmed': 'Invitados Confirmados',
     'vendors_hired': 'Proveedores Contratados',
@@ -950,7 +979,7 @@ var TRANSLATIONS = {
     'new_folder_btn': 'Nueva Carpeta',
     'add_to_root_btn': 'Agregar aquí',
     'main_menu_btn': 'Ocultar Menú',
-    'export_pdf_btn': 'Exportar PDF del Proyecto',
+    'export_pdf_btn': 'Exportar PDF del Evento',
     'create_folder_btn': 'Crear Carpeta',
     'upload_images_btn': 'Subir Imágenes',
     'no_images_yet': 'Sin imágenes aún',
@@ -961,5 +990,272 @@ var TRANSLATIONS = {
     'deleted': 'Eliminado',
     'error': 'Error',
     'updated': 'Actualizado',
+    'settings': 'Ajustes',
+    'settings_display': 'Pantalla',
+    'settings_defaults': 'Por defecto',
+    'settings_data': 'Datos',
+    'settings_language': 'Idioma',
+    'settings_date_format': 'Formato de Fecha',
+    'settings_theme': 'Tema',
+    'settings_theme_light': 'Claro',
+    'settings_theme_dark': 'Oscuro',
+    'settings_default_event_type': 'Tipo de evento por defecto',
+    'settings_default_event_type_none': 'Ninguno',
+    'settings_default_guide_line': 'Línea guía por defecto (m)',
+    'settings_export_data': 'Exportar respaldo',
+    'settings_export_data_desc': 'Descarga todos tus eventos como un archivo de respaldo.',
+    'settings_import_data': 'Restaurar respaldo',
+    'settings_import_data_desc': 'Restaura eventos desde un archivo de respaldo previamente exportado.',
+    'settings_import_confirm': 'Esto combinará los datos del respaldo con tus eventos actuales. Los proyectos con el mismo ID serán sobrescritos. ¿Continuar?',
+    'settings_import_success': '¡Respaldo restaurado exitosamente!',
+    'settings_about': 'Acerca de',
+    'settings_version': 'Versión',
+    'settings_week_start': 'Semana comienza en',
+    'settings_sunday': 'Domingo',
+    'settings_monday': 'Lunes',
   }
 };
+
+/* ═══════════════════════════════════════════════════════════════
+   SETTINGS — load / save / modal / export / import
+   ═══════════════════════════════════════════════════════════════ */
+
+function _settingsKey(){ return 'eventos_settings_'+(DB.cur||'local'); }
+
+function loadSettings(){
+  try{
+    var raw = localStorage.getItem(_settingsKey());
+    if(raw){
+      var s = JSON.parse(raw);
+      if(s.lang==='en'||s.lang==='es') LANG = s.lang;
+      if(s.dateFormat==='DMY'||s.dateFormat==='MDY') DATE_FORMAT = s.dateFormat;
+      if(s.theme==='light'||s.theme==='dark') THEME = s.theme;
+      if(typeof s.defaultEventType==='string') window._settingsDefaultEventType = s.defaultEventType;
+      if(typeof s.defaultOutlineOffset==='number'&&s.defaultOutlineOffset>=0) DEFAULT_OUTLINE_OFFSET = s.defaultOutlineOffset;
+      if(s.weekStart===0||s.weekStart===1) WEEK_START = s.weekStart;
+    } else {
+      // Migrate legacy lang key
+      try{
+        var legacyLang = localStorage.getItem('eventos_lang_'+(DB.cur||'local'));
+        if(legacyLang==='en'||legacyLang==='es') LANG = legacyLang;
+      }catch(e2){}
+    }
+  }catch(e){}
+  _applyThemeClass();
+}
+
+function saveSettings(){
+  try{
+    localStorage.setItem(_settingsKey(), JSON.stringify({
+      lang: LANG,
+      dateFormat: DATE_FORMAT,
+      theme: THEME,
+      defaultEventType: window._settingsDefaultEventType||'',
+      defaultOutlineOffset: DEFAULT_OUTLINE_OFFSET,
+      weekStart: WEEK_START
+    }));
+  }catch(e){}
+}
+
+function _applyThemeClass(){
+  if(THEME==='dark') document.documentElement.classList.add('dark');
+  else document.documentElement.classList.remove('dark');
+}
+
+function _settingsTab(name){
+  ['display','defaults','data'].forEach(function(tab){
+    var el=document.getElementById('stab-'+tab);
+    var btn=document.getElementById('stab-btn-'+tab);
+    if(el) el.style.display = tab===name?'block':'none';
+    if(btn){ btn.classList.toggle('active',tab===name); }
+  });
+}
+
+function openSettings(){
+  var isES=LANG==='es';
+  var langOpts='<option value="en" '+(LANG==='en'?'selected':'')+'>English</option>'
+    +'<option value="es" '+(LANG==='es'?'selected':'')+'>Español</option>';
+  var dfOpts='<option value="DMY" '+(DATE_FORMAT==='DMY'?'selected':'')+'>DD/MM/YYYY</option>'
+    +'<option value="MDY" '+(DATE_FORMAT==='MDY'?'selected':'')+'>MM/DD/YYYY</option>';
+  var themeLight=t('settings_theme_light'), themeDark=t('settings_theme_dark');
+  var evTypes=[
+    {v:'',l:t('settings_default_event_type_none')},
+    {v:'social',l:t('type_social')},
+    {v:'corporate',l:t('type_corporate')},
+    {v:'community',l:t('type_community')},
+    {v:'government',l:t('type_government')},
+    {v:'education',l:t('type_education')}
+  ];
+  var defET=window._settingsDefaultEventType||'';
+  var etOpts=evTypes.map(function(o){return '<option value="'+o.v+'" '+(defET===o.v?'selected':'')+'>'+o.l+'</option>';}).join('');
+  var wsOpts='<option value="0" '+(WEEK_START===0?'selected':'')+'>'+t('settings_sunday')+'</option>'
+    +'<option value="1" '+(WEEK_START===1?'selected':'')+'>'+t('settings_monday')+'</option>';
+  var ver=(window.EVENTOS_CONFIG&&window.EVENTOS_CONFIG.buildVersion)||'—';
+
+  var html='<div class="mo-title">'+t('settings')+'</div>'
+    +'<div class="settings-tabs">'
+    +'<button id="stab-btn-display" class="settings-tab active" onclick="_settingsTab(\'display\')">'+t('settings_display')+'</button>'
+    +'<button id="stab-btn-defaults" class="settings-tab" onclick="_settingsTab(\'defaults\')">'+t('settings_defaults')+'</button>'
+    +'<button id="stab-btn-data" class="settings-tab" onclick="_settingsTab(\'data\')">'+t('settings_data')+'</button>'
+    +'</div>'
+
+    // — Display tab —
+    +'<div id="stab-display">'
+    +'<div class="settings-row"><label>'+t('settings_language')+'</label><select class="input settings-control" id="set-lang" onchange="_setLang(this.value)">'+langOpts+'</select></div>'
+    +'<div class="settings-row"><label>'+t('settings_date_format')+'</label><select class="input settings-control" id="set-df" onchange="_setDateFormat(this.value)">'+dfOpts+'</select></div>'
+    +'<div class="settings-row"><label>'+t('settings_theme')+'</label>'
+    +'<div class="theme-toggle">'
+    +'<button class="theme-opt'+(THEME==='light'?' active':'')+'" onclick="_setTheme(\'light\')">'+themeLight+'</button>'
+    +'<button class="theme-opt'+(THEME==='dark'?' active':'')+'" onclick="_setTheme(\'dark\')">'+themeDark+'</button>'
+    +'</div></div>'
+    +'</div>'
+
+    // — Defaults tab —
+    +'<div id="stab-defaults" style="display:none">'
+    +'<div class="settings-row"><label>'+t('settings_default_event_type')+'</label><select class="input settings-control" id="set-et" onchange="_setDefaultEventType(this.value)">'+etOpts+'</select></div>'
+    +'<div class="settings-row"><label>'+t('settings_default_guide_line')+'</label><input type="number" class="input settings-control" id="set-gl" value="'+DEFAULT_OUTLINE_OFFSET+'" min="0" max="3" step="0.05" onchange="_setDefaultGuideLine(this.value)"></div>'
+    +'<div class="settings-row"><label>'+t('settings_week_start')+'</label><select class="input settings-control" id="set-ws" onchange="_setWeekStart(this.value)">'+wsOpts+'</select></div>'
+    +'</div>'
+
+    // — Data tab —
+    +'<div id="stab-data" style="display:none">'
+    +'<div class="settings-action">'
+    +'<div><div class="settings-action-title">'+t('settings_export_data')+'</div>'
+    +'<div class="settings-action-desc">'+t('settings_export_data_desc')+'</div></div>'
+    +'<button class="btn btn-primary btn-sm" onclick="exportBackup()">'+t('settings_export_data')+'</button>'
+    +'</div>'
+    +'<div class="settings-action">'
+    +'<div><div class="settings-action-title">'+t('settings_import_data')+'</div>'
+    +'<div class="settings-action-desc">'+t('settings_import_data_desc')+'</div></div>'
+    +'<button class="btn btn-ghost btn-sm" onclick="importBackup()">'+t('settings_import_data')+'</button>'
+    +'</div>'
+    +'<div class="settings-about">'
+    +'<div style="font-size:12px;color:var(--muted)">'+t('settings_version')+': <strong>'+ver+'</strong></div>'
+    +'<div style="font-size:11px;color:var(--light);margin-top:4px">EventOS &copy; '+(new Date().getFullYear())+'</div>'
+    +'</div>'
+    +'</div>'
+
+    +'<div class="mo-foot"><button class="btn btn-ghost" onclick="closeMo()">'+t('close')+'</button></div>';
+
+  openMo(html);
+}
+
+/* ── Setting change handlers ── */
+
+function _setLang(val){
+  if(val!=='en'&&val!=='es') return;
+  LANG=val;
+  saveSettings();
+  saveLangPref();
+  var btn=document.getElementById('lang-label'); if(btn) btn.textContent=LANG==='es'?'EN':'ES';
+  applyTranslations();
+  toast(LANG==='es'?'Idioma: Español':'Language: English','s');
+  closeMo(); setTimeout(openSettings,150);
+}
+
+function _setDateFormat(val){
+  if(val!=='DMY'&&val!=='MDY') return;
+  DATE_FORMAT=val;
+  saveSettings();
+  toast(val==='DMY'?'DD/MM/YYYY':'MM/DD/YYYY','s');
+}
+
+function _setTheme(val){
+  if(val!=='light'&&val!=='dark') return;
+  THEME=val;
+  _applyThemeClass();
+  saveSettings();
+  document.querySelectorAll('.theme-opt').forEach(function(b){
+    b.classList.toggle('active',b.textContent.trim()===(val==='light'?t('settings_theme_light'):t('settings_theme_dark')));
+  });
+}
+
+function _setDefaultEventType(val){
+  window._settingsDefaultEventType=val;
+  saveSettings();
+}
+
+function _setDefaultGuideLine(val){
+  var n=parseFloat(val);
+  if(isNaN(n)||n<0) n=0.90;
+  DEFAULT_OUTLINE_OFFSET=n;
+  saveSettings();
+}
+
+function _setWeekStart(val){
+  WEEK_START=parseInt(val,10)||0;
+  saveSettings();
+}
+
+/* ── Export / Import backup ── */
+
+function exportBackup(){
+  try{
+    var projects = DB.projects && DB.projects[DB.cur];
+    if(!projects||!Object.keys(projects).length){
+      toast(LANG==='es'?'No hay eventos para exportar':'No events to export','e');
+      return;
+    }
+    var backup={
+      _type:'eventos_backup',
+      _version:1,
+      _exportedAt:new Date().toISOString(),
+      _userId:DB.cur||'unknown',
+      projects: JSON.parse(JSON.stringify(projects))
+    };
+    var blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;
+    a.download='EventOS-Backup-'+new Date().toISOString().slice(0,10)+'.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast(LANG==='es'?'Respaldo descargado':'Backup downloaded','s');
+  }catch(e){
+    console.error('exportBackup',e);
+    toast(LANG==='es'?'Error al exportar':'Export failed','e');
+  }
+}
+
+function importBackup(){
+  var inp=document.createElement('input');
+  inp.type='file';
+  inp.accept='.json';
+  inp.onchange=function(){
+    var file=inp.files&&inp.files[0];
+    if(!file) return;
+    var reader=new FileReader();
+    reader.onload=function(){
+      try{
+        var data=JSON.parse(reader.result);
+        if(!data||data._type!=='eventos_backup'||!data.projects){
+          toast(LANG==='es'?'Archivo no válido':'Invalid backup file','e');
+          return;
+        }
+        if(!confirm(t('settings_import_confirm'))) return;
+        if(!DB.projects) DB.projects={};
+        if(!DB.projects[DB.cur]) DB.projects[DB.cur]={};
+        var imported=0;
+        Object.keys(data.projects).forEach(function(pid){
+          DB.projects[DB.cur][pid]=data.projects[pid];
+          imported++;
+        });
+        // Save each imported project to the backend
+        Object.keys(data.projects).forEach(function(pid){
+          var p=DB.projects[DB.cur][pid];
+          if(p&&typeof saveProj==='function') saveProj(p);
+        });
+        toast(t('settings_import_success')+' ('+imported+')','s');
+        closeMo();
+        if(typeof showPage==='function') showPage('events');
+      }catch(e2){
+        console.error('importBackup',e2);
+        toast(LANG==='es'?'Error al restaurar':'Restore failed','e');
+      }
+    };
+    reader.readAsText(file);
+  };
+  inp.click();
+}

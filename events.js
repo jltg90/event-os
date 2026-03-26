@@ -57,7 +57,7 @@ var _WIZ_GOALS = [
 function openEventModal(id) {
   var p = id ? uproj()[id] : null;
   if (p) { _openEditModal(id, p); return; }
-  _wiz = { step:0, type:'', name:'', clientName:'', description:'', date:'', location:'', budget:'', goals:[], otherLabel:'' };
+  _wiz = { step:0, type:window._settingsDefaultEventType||'', name:'', clientName:'', description:'', date:'', location:'', budget:'', goals:[], otherLabel:'' };
   _renderWizard();
 }
 
@@ -498,9 +498,6 @@ function renderEvents(){
           <div style="display:flex;align-items:center;gap:10px">
             <span style="font-size:12px;font-weight:600;color:${isPast?'var(--light)':'var(--accent)'}">${dLabel}</span>
             <div style="display:flex;gap:6px" onclick="event.stopPropagation()">
-              <button class="btn btn-ghost btn-sm btn-icon" title="Share" onclick="openShareForProject('${p.id}')" style="color:var(--gold-h);border-color:rgba(201,168,76,.3)">
-                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-              </button>
               <button class="btn btn-ghost btn-sm btn-icon" title="Duplicate" onclick="dupProj('${p.id}')">
                 <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
               </button>
@@ -756,12 +753,12 @@ function _dashRing(pct, color, size){
     +'<text x="'+cx+'" y="'+cy+'" text-anchor="middle" dominant-baseline="central" fill="'+color+'" font-size="'+(size*0.22)+'" font-weight="700" font-family="Jost,sans-serif">'+pct+'%</text>'
     +'</svg>';
 }
-function _dashKPI(label, value, sub, color){
-  return '<div class="card" style="padding:14px 10px;text-align:center">'
-    +'<div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--light);font-weight:600;margin-bottom:6px">'+label+'</div>'
-    +'<div style="font-size:22px;font-weight:700;color:'+color+';font-family:\'Cormorant Garamond\',serif;line-height:1.1">'+value+'</div>'
-    +'<div style="font-size:10px;color:var(--muted);margin-top:3px">'+sub+'</div>'
-    +'</div>';
+function _dashKPI(label, value, sub, color, tooltip){
+  return '<div class="card" style="padding:14px 10px;text-align:center'+(tooltip?';cursor:default':'')+'"'+(tooltip?' title="'+tooltip+'"':'')+'>'+
+    '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--light);font-weight:600;margin-bottom:6px">'+label+'</div>'+
+    '<div style="font-size:22px;font-weight:700;color:'+color+';font-family:\'Cormorant Garamond\',serif;line-height:1.1">'+value+'</div>'+
+    '<div style="font-size:10px;color:var(--muted);margin-top:3px">'+sub+'</div>'+
+    '</div>';
 }
 function dismissOnboarding(pid){
   localStorage.setItem('eventos_onb_'+pid,'1');
@@ -854,9 +851,19 @@ function renderDash(){
   var overdue=p.tasks.filter(function(tk){return !tk.done&&tk.dueDate&&tk.dueDate<today;}).length;
   // Layout
   var litems=p.layoutItems||[];
-  var tables=litems.filter(function(i){return i.shape&&i.shape.includes('table');}).length;
+  if(!litems.length&&p.layoutExport&&p.layoutExport.layoutId&&typeof getLib==='function'){
+    var _dashLibE=getLib().layouts.find(function(e){return e.id===p.layoutExport.layoutId;});
+    if(_dashLibE) litems=_dashLibE.items||[];
+  }
   var chairs=litems.reduce(function(s,i){return s+(i.chairs||0);},0);
+  var assignedGuestTables=p.guests.filter(function(g){return g.table;});
+  var tables=[...new Set(assignedGuestTables.map(function(g){return g.table;}))].length;
+  var guestsWithTable=assignedGuestTables.length;
+  var guestsWithoutTable=guestTotal-guestsWithTable;
   var layoutName=(p.layoutExport&&p.layoutExport.layoutName)||'';
+  // Budget per guest
+  var totalWithPlusOnes=guestTotal+plusOnes;
+  var budgetPerGuest=totalWithPlusOnes>0&&tb>0?Math.ceil(tb/totalWithPlusOnes):0;
   // Date
   var dl=daysAway(p.date);
   var dlBadge=dl===0?'b-gold':dl>0?(dl<=7?'b-orange':'b-green'):'b-pink';
@@ -882,12 +889,13 @@ function renderDash(){
   // KPI ROW
   +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:20px">'
     +_dashKPI(t('dash_total_budget'), tb>0?formatCost(tb):'—', t('dash_event_budget'), 'var(--gold-h)')
+    +(totalWithPlusOnes>0&&tb>0?_dashKPI(LANG==='es'?'Presupuesto p/Inv.':'Budget / Guest', formatCost(budgetPerGuest), totalWithPlusOnes+' '+(LANG==='es'?'invitados':'guests'), 'var(--gold-h)', LANG==='es'?'Presupuesto ('+formatCost(tb)+') ÷ '+totalWithPlusOnes+' invitados (incl. acompañantes)':'Budget ('+formatCost(tb)+') ÷ '+totalWithPlusOnes+' guests (incl. plus-ones)'):'')
     +_dashKPI(t('dash_paid'), formatCost(paid), tb>0?budgetPct+'% '+t('dash_of_budget'):'', '#ef4444')
     +_dashKPI(t('dash_remaining'), formatCost(remaining), tb>0?t('dash_left'):'', remaining>=0?'#10b981':'#ef4444')
     +_dashKPI(t('dash_guests_total'), guestTotal+(plusOnes?'<span style="font-size:14px;color:var(--muted);font-weight:400"> +'+plusOnes+'</span>':''), confirmed+' '+t('dash_confirmed'), '#10b981')
     +_dashKPI(t('dash_vendors_hired'), hired.length+'<span style="font-size:14px;color:var(--muted);font-weight:400">/'+p.vendors.length+'</span>', t('dash_hired'), '#f59e0b')
     +_dashKPI(t('dash_tasks_progress'), done+'<span style="font-size:14px;color:var(--muted);font-weight:400">/'+p.tasks.length+'</span>', tpct+'% '+t('dash_complete'), '#7c3aed')
-    +_dashKPI(t('dash_tables'), tables||'0', chairs+' '+t('dash_chairs'), 'var(--navy)')
+    +_dashKPI(t('dash_tables'), tables||'0', chairs+' '+t('dash_chairs'), 'var(--navy)', LANG==='es'?'Total: '+guestTotal+' | Con mesa: '+guestsWithTable+' | Sin mesa: '+guestsWithoutTable:'Total: '+guestTotal+' | Assigned: '+guestsWithTable+' | Unassigned: '+guestsWithoutTable)
   +'</div>'
   // DETAIL GRID
   +'<div class="dash-grid">'

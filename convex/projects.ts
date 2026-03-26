@@ -2,14 +2,6 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "./auth";
 
-function getShareMeta(project: any) {
-  const share = project && project.share ? project.share : null;
-  return {
-    shareToken: share && share.token ? String(share.token) : "",
-    shareEnabled: !!(share && share.enabled && share.token),
-  };
-}
-
 export const getProjectsByWixUserId = query({
   args: {
     sessionToken: v.string(),
@@ -52,7 +44,6 @@ export const upsertProject = mutation({
     }
 
     const now = Date.now();
-    const shareMeta = getShareMeta(args.project);
     const existing = await ctx.db
       .query("projects")
       .withIndex("by_wix_user_project", (q) =>
@@ -64,8 +55,6 @@ export const upsertProject = mutation({
       await ctx.db.patch(existing._id, {
         data: args.project,
         updatedAt: now,
-        shareToken: shareMeta.shareToken,
-        shareEnabled: shareMeta.shareEnabled,
       });
     } else {
       await ctx.db.insert("projects", {
@@ -73,8 +62,6 @@ export const upsertProject = mutation({
         projectId,
         data: args.project,
         updatedAt: now,
-        shareToken: shareMeta.shareToken,
-        shareEnabled: shareMeta.shareEnabled,
       });
     }
 
@@ -202,36 +189,6 @@ export const getProjectById = query({
   },
 });
 
-// Save from a share-link viewer — authenticates via the share token, not a session.
-export const upsertProjectByShareToken = mutation({
-  args: {
-    shareToken: v.string(),
-    project: v.any(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    if (!args.shareToken) throw new Error("Unauthorized: missing share token");
-
-    const doc = await ctx.db
-      .query("projects")
-      .withIndex("by_share_token", (q) => q.eq("shareToken", args.shareToken))
-      .first();
-
-    if (!doc || !doc.shareEnabled) throw new Error("Unauthorized: invalid or disabled share token");
-
-    const now = Date.now();
-    const shareMeta = getShareMeta(args.project);
-    await ctx.db.patch(doc._id, {
-      data: args.project,
-      updatedAt: now,
-      shareToken: shareMeta.shareToken,
-      shareEnabled: shareMeta.shareEnabled,
-    });
-
-    return null;
-  },
-});
-
 // ─── Project extras (companion documents for large projects) ─────────────────
 
 export const getProjectExtras = query({
@@ -309,31 +266,3 @@ export const upsertProjectExtras = mutation({
   },
 });
 
-// Public — no session required (accessed via share link)
-export const getSharedProjectByToken = query({
-  args: {
-    token: v.string(),
-  },
-  returns: v.union(
-    v.null(),
-    v.object({
-      wixUserId: v.string(),
-      project: v.any(),
-    }),
-  ),
-  handler: async (ctx, args) => {
-    if (!args.token) return null;
-
-    const doc = await ctx.db
-      .query("projects")
-      .withIndex("by_share_token", (q) => q.eq("shareToken", args.token))
-      .first();
-
-    if (!doc || !doc.shareEnabled) return null;
-
-    return {
-      wixUserId: doc.wixUserId,
-      project: doc.data,
-    };
-  },
-});

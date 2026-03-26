@@ -97,8 +97,13 @@
 
   // Strip resolved URLs / base64 from objects that have a storageId before saving to Convex.
   // The in-memory project keeps URLs for display; only the saved copy is cleaned.
+  // Increment this when the project data shape changes and a migration is needed.
+  var CURRENT_DATA_VERSION = 1;
+
   function prepareProjectForSave(p){
     var copy = JSON.parse(JSON.stringify(p));
+    // Stamp the current data format version so future code can detect and migrate old projects
+    copy._dataVersion = CURRENT_DATA_VERSION;
     // Transient in-memory flags — never persist to Convex
     delete copy._extrasLoaded;
     var mb = copy.moodboard;
@@ -211,12 +216,12 @@
         cleaned.savedLayouts = [];
         cleaned._hasExtras = true;
 
-        // Fire-and-forget alongside the main save; errors are logged but don't block the save
-        callConvex("mutation", "projects:upsertProjectExtras", {
+        // Save extras BEFORE the main document — both must succeed for data integrity
+        await callConvex("mutation", "projects:upsertProjectExtras", {
           sessionToken: _sessionToken,
           projectId: String(cleaned.id || ""),
           extras: extras
-        }).catch(function(e){ console.error("EventOS: upsertProjectExtras failed:", e); });
+        });
       } else {
         cleaned._hasExtras = false;
       }
@@ -244,19 +249,6 @@
         projectId: projectId
       }, options);
     },
-    upsertProjectByShareToken: async function(shareToken, project, options){
-      var cleaned = prepareProjectForSave(project);
-      return await callConvex("mutation", "projects:upsertProjectByShareToken", {
-        shareToken: shareToken,
-        project: cleaned
-      }, options);
-    },
-    getSharedProjectByToken: async function(token, options){
-      return await callConvex("query", "projects:getSharedProjectByToken", {
-        token: token
-      }, options);
-    },
-
     // --- File Storage API ---
     generateUploadUrl: async function(options){
       return await callConvex("mutation", "files:generateUploadUrl", {}, options);

@@ -33,6 +33,10 @@ function renderBudget(){
   const paid=hired.reduce((s,v)=>s+v.payments.reduce((a,pay)=>a+Number(pay.amount),0),0);
   const projBudget = p.budget||0;
   const diff = projBudget - estimatedTotal;
+  const guestTotalB=(p.guests||[]).length;
+  const plusOnesB=(p.guests||[]).filter(g=>g.plusOne).length;
+  const totalWithPlusOnesB=guestTotalB+plusOnesB;
+  const budgetPerGuestB=totalWithPlusOnesB>0&&projBudget>0?Math.ceil(projBudget/totalWithPlusOnesB):0;
   const diffClr = diff>=0?'var(--success)':'var(--danger)';
   const budgetPct = projBudget>0?Math.min(100,Math.round(estimatedTotal/projBudget*100)):0;
   el.innerHTML=`
@@ -60,6 +64,12 @@ function renderBudget(){
       <div style="font-size:22px;font-weight:700;color:var(--gold-h)">${fmtMoney(projBudget)}</div>
       <div style="font-size:11px;color:var(--muted);margin-top:2px">${t('approved_budget')}</div>
     </div>
+    ${totalWithPlusOnesB>0&&projBudget>0?`<div class="card" style="padding:18px;cursor:default" title="${LANG==='es'?'Presupuesto ('+fmtMoney(projBudget)+') ÷ '+totalWithPlusOnesB+' invitados (incl. acompañantes)':'Budget ('+fmtMoney(projBudget)+') ÷ '+totalWithPlusOnesB+' guests (incl. plus-ones)'}">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--light);font-weight:600;margin-bottom:6px">${LANG==='es'?'Presupuesto p/Inv.':'Budget / Guest'}</div>
+      <div style="font-size:22px;font-weight:700;color:var(--gold-h)">${fmtMoney(budgetPerGuestB)}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">${totalWithPlusOnesB} ${LANG==='es'?'invitados':'guests'}</div>
+    </div>`:''}
+
     <div class="card" style="padding:18px">
       <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--light);font-weight:600;margin-bottom:6px">${t('estimated_cost')}</div>
       <div style="font-size:22px;font-weight:700;color:#f59e0b">${fmtMoney(estimatedTotal)}</div>
@@ -424,8 +434,39 @@ function filterVendors(query){
   document.getElementById('vlist').innerHTML = renderVendorTable(vendors, '');
   syncVendorSelectionToVisible();
 }
+function renderVendorCards(vendors, tab){
+  const isES = LANG==='es';
+  var cards = vendors.map(function(v){
+    var paid = v.payments.reduce(function(a,p){return a+Number(p.amount);},0);
+    var si = vendorStatusInfo(v);
+    return '<div class="vendor-mob-card" onclick="showVendorDetail(\''+v.id+'\')">'
+      +'<div class="vendor-mob-card-head">'
+        +'<div style="min-width:0;flex:1">'
+          +'<div class="vendor-mob-card-name">'+esc(v.name)+'</div>'
+          +'<div class="vendor-mob-card-cat">'+esc(v.category||'')+(v.subcategory?' · '+esc(v.subcategory):'')+'</div>'
+        +'</div>'
+        +'<select class="select vendor-mob-status" style="background:'+si.bg+';color:'+si.clr+'" onclick="event.stopPropagation()" onchange="setVendorStatus(\''+v.id+'\',this.value)">'
+          +['pending','hired','in-progress','paid','cancelled'].map(function(s){return '<option value="'+s+'"'+((v.vendorStatus||(v.hired?'hired':'pending'))===s?' selected':'')+'>'
+            +{pending:isES?'Pendiente':'Pending',hired:isES?'Contratado':'Hired','in-progress':isES?'En Progreso':'In Progress',paid:isES?'Pagado':'Paid',cancelled:isES?'Cancelado':'Cancelled'}[s]+'</option>';}).join('')
+        +'</select>'
+      +'</div>'
+      +'<div class="vendor-mob-card-row">'
+        +'<div><span class="vendor-mob-label">'+(isES?'Presupuesto':'Budget')+'</span><span class="vendor-mob-value">'+fmtMoney(v.budget)+'</span></div>'
+        +'<div><span class="vendor-mob-label">'+(isES?'Pagado':'Paid')+'</span><span class="vendor-mob-value" style="color:var(--success)">'+fmtMoney(paid)+'</span></div>'
+      +'</div>'
+      +'<div class="vendor-mob-card-foot" onclick="event.stopPropagation()">'
+        +(v.payments.length?'<span class="vendor-mob-payments">'+v.payments.length+' '+(isES?'pago(s)':'payment(s)')+'</span>':'')
+        +'<div style="flex:1"></div>'
+        +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar':'Edit')+'" onclick="openVendorModal(\''+v.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
+        +'<button class="btn btn-danger btn-sm btn-icon" title="'+(isES?'Eliminar':'Delete')+'" onclick="delV(\''+v.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
+      +'</div>'
+    +'</div>';
+  }).join('');
+  return '<div class="vendor-mob-list">'+cards+'</div>';
+}
 function renderVendorTable(vendors, tab){
   if(!vendors.length) return `<div class="card" style="text-align:center;padding:40px;color:var(--muted)">${t(tab==='hired'?'no_hired_vendors':'no_comparison_vendors')}<br><br><button class="btn btn-primary btn-create-gradient btn-sm" onclick="openVendorModal()">Add Vendor</button></div>`;
+  if(window.innerWidth<=768) return renderVendorCards(vendors, tab);
   const isES = LANG==='es';
   const rows = vendors.map(v=>{
     const paid = v.payments.reduce((a,p)=>a+Number(p.amount),0);
@@ -619,7 +660,12 @@ function autoSyncVendorToGlobal(v){
 function openPayModal(vid){
   openMo(`<div class="mo-title">${t('add_payment')}</div>
   <div class="ig" style="margin-bottom:12px"><label>${t('amount_field')} *</label><input class="input" id="pay-amt" type="number" placeholder="0.00"></div>
-  <div class="ig" style="margin-bottom:12px"><label>${t('date_field')}</label><input class="input" id="pay-date" type="date" value="${today()}"></div>
+  <div class="ig" style="margin-bottom:12px"><label>${t('date_field')}</label>
+    <div class="date-field">
+      <input class="input date-field-input" type="text" id="pay-date" value="${formatDMY(today())}" placeholder="DD/MM/YYYY" readonly onclick="openCalendarPicker('pay-date')" onfocus="openCalendarPicker('pay-date')">
+      <button type="button" class="date-field-btn" onclick="openCalendarPicker('pay-date')" aria-label="${t('date_field')}"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></button>
+    </div>
+  </div>
   <div class="ig" style="margin-bottom:12px"><label>${t('note_field')}</label><input class="input" id="pay-note" placeholder="e.g. Deposit, Final payment"></div>
   <div class="ig" style="margin-bottom:12px">
     <label>Receipt / Proof of Payment</label>
@@ -654,7 +700,7 @@ async function savePay(vid){
       receiptUrl = await EVENTOS_DATA.getFileUrl(receiptStorageId);
     }catch(e){console.error('Receipt upload error:',e);toast('Receipt upload failed','e');}
   }
-  v.payments.push({id:'p'+Date.now(),amount:amt,date:gv('pay-date')||today(),note:gv('pay-note'),receipt:receiptUrl,receiptStorageId:receiptStorageId});
+  v.payments.push({id:'p'+Date.now(),amount:amt,date:parseUserDate(gv('pay-date'))||today(),note:gv('pay-note'),receipt:receiptUrl,receiptStorageId:receiptStorageId});
   _payReceiptFile=null;
   saveProj(p);closeMo();renderBudget();toast('Payment recorded','s');
 }
@@ -668,7 +714,7 @@ function showVendorDetail(vid){
     <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--bg)">
       <div>
         <div style="font-size:13px;font-weight:600">${fmtMoney(pay.amount)}</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px">${pay.note||''} Â· ${pay.date||''}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${pay.note||''} · ${pay.date?fmtDate(pay.date):''}</div>
       </div>
       <div style="display:flex;gap:6px;align-items:center">
         ${pay.receipt?`<button class="btn btn-ghost btn-sm" onclick="viewReceipt('${v.id}','${pay.id}')">${t('receipt_btn')}</button>`:''}
@@ -1726,22 +1772,22 @@ function renderGuestList(p){
     <table>
       <thead><tr>
         <th onclick="gSort='name';gAsc=gSort==='name'?!gAsc:true;renderGuestList(proj())">${t('col_name')} ${si('name')}</th>
-        <th>${t('col_contact')}</th>
+        <th class="guest-col-contact">${t('col_contact')}</th>
         <th onclick="gSort='category';gAsc=gSort==='category'?!gAsc:true;renderGuestList(proj())">${t('col_category')} ${si('category')}</th>
         <th onclick="gSort='rsvp';gAsc=gSort==='rsvp'?!gAsc:true;renderGuestList(proj())">${t('col_rsvp')} ${si('rsvp')}</th>
-        <th onclick="gSort='table';gAsc=gSort==='table'?!gAsc:true;renderGuestList(proj())">${t('col_table')} ${si('table')}</th>
-        <th>${t('col_plus_one')}</th><th>${t('col_meal')}</th><th>${t('col_notes')}</th><th>${t('col_actions')}</th>
+        <th class="guest-col-table" onclick="gSort='table';gAsc=gSort==='table'?!gAsc:true;renderGuestList(proj())">${t('col_table')} ${si('table')}</th>
+        <th class="guest-col-plusone">${t('col_plus_one')}</th><th class="guest-col-meal">${t('col_meal')}</th><th class="guest-col-notes">${t('col_notes')}</th><th>${t('col_actions')}</th>
       </tr></thead>
       <tbody id="guest-rows-body">
         ${guests.map(g=>`<tr>
           <td style="font-weight:600">${guestText(g.name)}</td>
-          <td style="font-size:12px;color:var(--muted)">${guestText(g.email)}${g.phone?'<br>'+guestText(g.phone):''}</td>
+          <td class="guest-col-contact" style="font-size:12px;color:var(--muted)">${guestText(g.email)}${g.phone?'<br>'+guestText(g.phone):''}</td>
           <td><span class="badge b-gray">${guestValueOrDash(g.category)}</span></td>
           <td><span class="rb ${guestRsvpClass(g.rsvp)}">${guestText(guestRsvpValue(g.rsvp))}</span></td>
-          <td>${guestValueOrDash(g.table)}</td>
-          <td>${g.plusOne?'&#10003;':''}</td>
-          <td style="font-size:12px">${guestValueOrDash(g.meal)}</td>
-          <td style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${guestText(g.notes)}</td>
+          <td class="guest-col-table">${guestValueOrDash(g.table)}</td>
+          <td class="guest-col-plusone">${g.plusOne?'&#10003;':''}</td>
+          <td class="guest-col-meal" style="font-size:12px">${guestValueOrDash(g.meal)}</td>
+          <td class="guest-col-notes" style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${guestText(g.notes)}</td>
           <td><div style="display:flex;gap:4px">
             <button class="btn btn-ghost btn-sm btn-icon" onclick="openGuestModal('${g.id}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>
             <button class="btn btn-danger btn-sm btn-icon" onclick="delGuest('${g.id}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
@@ -2047,11 +2093,11 @@ function renderGuestList(p){
       <thead><tr>
         <th style="width:36px"><input type="checkbox" id="guest-chk-all" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="toggleAllVisibleGuests(this.checked)"></th>
         <th onclick="gSort='name';gAsc=gSort==='name'?!gAsc:true;renderGuestList(proj())">${t('col_name')} ${si('name')}</th>
-        <th>${t('col_contact')}</th>
+        <th class="guest-col-contact">${t('col_contact')}</th>
         <th onclick="gSort='category';gAsc=gSort==='category'?!gAsc:true;renderGuestList(proj())">${t('col_category')} ${si('category')}</th>
         <th onclick="gSort='rsvp';gAsc=gSort==='rsvp'?!gAsc:true;renderGuestList(proj())">${t('col_rsvp')} ${si('rsvp')}</th>
-        <th onclick="gSort='table';gAsc=gSort==='table'?!gAsc:true;renderGuestList(proj())">${t('col_table')} ${si('table')}</th>
-        <th>${t('col_plus_one')}</th><th>${t('col_meal')}</th><th>${t('col_notes')}</th><th>${t('col_actions')}</th>
+        <th class="guest-col-table" onclick="gSort='table';gAsc=gSort==='table'?!gAsc:true;renderGuestList(proj())">${t('col_table')} ${si('table')}</th>
+        <th class="guest-col-plusone">${t('col_plus_one')}</th><th class="guest-col-meal">${t('col_meal')}</th><th class="guest-col-notes">${t('col_notes')}</th><th>${t('col_actions')}</th>
       </tr></thead>
       <tbody id="guest-rows-body">
         ${buildGuestRows(guests)}
@@ -2066,13 +2112,13 @@ function buildGuestRows(guests){
   return guests.map(g=>`<tr>
     <td><input type="checkbox" class="guest-sel" data-gid="${g.id}" ${isGuestSelected(g.id)?'checked':''} style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="toggleGuestSelection('${g.id}',this.checked)"></td>
     <td style="font-weight:600">${guestText(g.name)}</td>
-    <td style="font-size:12px;color:var(--muted)">${guestText(g.email)}${g.phone?'<br>'+guestText(g.phone):''}</td>
+    <td class="guest-col-contact" style="font-size:12px;color:var(--muted)">${guestText(g.email)}${g.phone?'<br>'+guestText(g.phone):''}</td>
     <td><span class="badge b-gray">${guestValueOrDash(g.category)}</span></td>
     <td><span class="rb ${guestRsvpClass(g.rsvp)}">${guestText(guestRsvpValue(g.rsvp))}</span></td>
-    <td>${guestValueOrDash(g.table)}</td>
-    <td>${g.plusOne?'&#10003;':''}</td>
-    <td style="font-size:12px">${guestValueOrDash(g.meal)}</td>
-    <td style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${guestText(g.notes)}</td>
+    <td class="guest-col-table">${guestValueOrDash(g.table)}</td>
+    <td class="guest-col-plusone">${g.plusOne?'&#10003;':''}</td>
+    <td class="guest-col-meal" style="font-size:12px">${guestValueOrDash(g.meal)}</td>
+    <td class="guest-col-notes" style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${guestText(g.notes)}</td>
     <td><div style="display:flex;gap:4px">
       <button class="btn btn-ghost btn-sm btn-icon" onclick="openGuestModal('${g.id}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>
       <button class="btn btn-danger btn-sm btn-icon" onclick="delGuest('${g.id}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
@@ -2274,8 +2320,8 @@ function mToPx(m){ return Math.round(m*getPPM()); }
 function pxToM(px){ return px/getPPM(); }
 
 var LSHAPES_M={
-  'round-table':  {wm:1.8, hm:1.8, bg:'#e8d5c4',bdClr:'#8a5e3c',radius:'50%', label:'Round Table',  chairs:10, price:150},
-  'rect-table':   {wm:2.4, hm:1.21,bg:'#d4e0f0',bdClr:'#2d4a7a',radius:'0px', label:'Rect Table',   chairs:12, price:1750},
+  'round-table':  {wm:1.8, hm:1.8, bg:'#e8d5c4',bdClr:'#8a5e3c',radius:'50%', label:'Round Table',  chairs:8, price:150},
+  'rect-table':   {wm:2.44, hm:1.20,bg:'#d4e0f0',bdClr:'#2d4a7a',radius:'0px', label:'Rect Table',   chairs:8, price:1750},
   'square-table': {wm:1.5, hm:1.5, bg:'#d4e8d4',bdClr:'#2d6040',radius:'0px', label:'Square Table', chairs:8, price:1700},
   'dance-floor':  {wm:7.32,hm:7.32,bg:'#ddd0f0',bdClr:'#5a3d8a',radius:'0px', label:'Dance Floor',  chairs:0},
   'bar':          {wm:7.32,hm:0.4, bg:'#f5e8c0',bdClr:'#8a6820',radius:'0px', label:'Shot Bar',      chairs:0},
@@ -2286,7 +2332,7 @@ var LSHAPES_M={
   'custom-elem':  {wm:2.0, hm:2.0, bg:'#e0e0e0',bdClr:'#888888',radius:'0px', label:'Custom',       chairs:0},
   's-table':      {wm:4.0, hm:1.5, bg:'#f0ece0',bdClr:'#8a6820',radius:'0px', label:'S-Table',     chairs:14, _isCustomTable:true},
 };
-var CHAIR_SIZE_M = 0.40;
+var CHAIR_SIZE_M = 0.45;
 
 function getLSHAPES(){
   var ppm=getPPM();

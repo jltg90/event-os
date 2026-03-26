@@ -498,36 +498,51 @@ function renderLibVendorSets(lib){
       +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
       +(isES?' Nuevo Grupo de Proveedores':' New Vendor Group')+'</button></div>';
   }
-  var cards=lib.vendors.map(function(e){ return libVendorGroupCard(e,isES); }).join('');
+  var rows=lib.vendors.map(function(e){ return libVendorGroupRow(e,isES); }).join('');
   return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
-    +'<div style="position:relative;flex:1">'
-    +'<svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>'
+    +'<div style="position:relative;flex:1;display:flex;align-items:center">'
+    +'<svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>'
     +'<input class="input" id="lib-vg-search" placeholder="'+(isES?'Buscar grupos o proveedores...':'Search groups or vendors...')+'" oninput="libSearchVendorGroups(this.value)" style="padding-left:36px;width:100%">'
     +'</div>'
+    +'<button id="lib-vg-bulk-load-btn" class="btn btn-primary btn-sm" style="display:none;white-space:nowrap" onclick="libLoadSelectedVendorGroups()">'
+    +(isES?'CARGAR':'LOAD')+'</button>'
     +'<button id="lib-vg-bulk-del-btn" class="btn btn-danger btn-sm" style="display:none;white-space:nowrap" onclick="libDeleteSelectedVendorGroups()">'
     +(isES?'Eliminar':'Delete Selected')+'</button>'
     +'</div>'
-    +'<div id="lib-vg-list">'+cards+'</div>';
+    +'<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm)">'
+    +'<table style="width:100%;border-collapse:collapse">'
+    +'<thead><tr style="background:var(--bg2);border-bottom:1px solid var(--border)">'
+    +'<th style="padding:9px 12px;width:36px"><input type="checkbox" id="lib-vg-chk-all" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libToggleAllVendorGroups(this.checked)"></th>'
+    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Nombre':'Name')+'</th>'
+    +'<th style="padding:9px 14px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Proveedores':'Vendors')+'</th>'
+    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Categorías':'Categories')+'</th>'
+    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Fecha':'Date')+'</th>'
+    +'<th style="padding:9px 14px"></th>'
+    +'</tr></thead>'
+    +'<tbody id="lib-vg-rows">'+rows+'</tbody>'
+    +'</table></div>';
 }
-function libVendorGroupCard(entry,isES){
-  var sub=entry.vendors.length+' '+(isES?'proveedor(es)':'vendor(s)')+' · '+entry.date;
+function libVendorGroupRow(entry,isES){
+  var vCount=(entry.vendors||[]).length;
   var cats={};
   (entry.vendors||[]).forEach(function(v){ if(v.category) cats[v.category]=true; });
   var catNames=Object.keys(cats);
-  var badge=catNames.length?'<span class="badge b-gold">'+esc(catNames.slice(0,2).join(' · '))+(catNames.length>2?' +'+(catNames.length-2):'')+'</span>':'';
-  return '<div style="display:flex;align-items:flex-start;gap:10px;padding:16px 18px;background:#fff;border:1.5px solid var(--border);border-radius:var(--r-lg);margin-bottom:10px">'
-    +'<input type="checkbox" class="lib-vg-sel" data-id="'+entry.id+'" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer;flex-shrink:0;margin-top:3px" onchange="libUpdateVendorGroupBulkBtn()">'
-    +'<div style="flex:1;min-width:0;cursor:pointer" onclick="libOpenVendorGroup(\''+entry.id+'\')">'
-    +'<div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px;display:flex;align-items:center;gap:6px">'+esc(entry.name)
-    +'<svg width="12" height="12" fill="none" stroke="var(--muted)" stroke-width="2.5" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>'
-    +'<div style="font-size:12px;color:var(--muted)">'+sub+'</div>'
-    +(badge?'<div style="margin-top:6px">'+badge+'</div>':'')
-    +'</div>'
-    +'<div style="display:flex;gap:6px;flex-shrink:0;align-items:center">'
-    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar nombre':'Edit name')+'" onclick="event.stopPropagation();libRenameVendorGroup(\''+entry.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
-    +'<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();libLoadVendors(\''+entry.id+'\')">'+(isES?'CARGAR':'LOAD')+'</button>'
-    +'<button class="btn btn-danger btn-sm btn-icon" onclick="event.stopPropagation();libDelete(\'vendors\',\''+entry.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
-    +'</div></div>';
+  var catText=catNames.length?esc(catNames.slice(0,2).join(', '))+(catNames.length>2?' +'+(catNames.length-2):''):'—';
+  return '<tr onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
+    +'<td style="padding:11px 12px;width:36px" onclick="event.stopPropagation()">'
+    +'<input type="checkbox" class="lib-vg-sel" data-id="'+entry.id+'" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libUpdateVendorGroupBulkBtn()">'
+    +'</td>'
+    +'<td style="padding:11px 14px;font-weight:600;font-size:13px;vertical-align:middle"><a href="javascript:void(0)" onclick="event.stopPropagation();libOpenVendorGroup(\''+entry.id+'\')" style="color:inherit;text-decoration:none;cursor:pointer" onmouseover="this.style.color=\'var(--gold)\'" onmouseout="this.style.color=\'inherit\'">'+esc(entry.name)+'</a></td>'
+    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);text-align:center">'+vCount+'</td>'
+    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+catText+'</td>'
+    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted)">'+esc(entry.date||'—')+'</td>'
+    +'<td style="padding:11px 14px;text-align:right" onclick="event.stopPropagation()">'
+    +'<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">'
+    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadVendors(\''+entry.id+'\')">'+(isES?'CARGAR':'LOAD')+'</button>'
+    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar nombre':'Edit name')+'" onclick="libRenameVendorGroup(\''+entry.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
+    +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDelete(\'vendors\',\''+entry.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
+    +'</div></td>'
+    +'</tr>';
 }
 function renderLibVendorGroupDetail(lib,entry,isES){
   var vendors=entry.vendors||[];
@@ -581,8 +596,29 @@ function libOpenVendorGroup(id){ _libOpenVendorGroupId=id; renderLibrary(); }
 function libBackToVendorGroups(){ _libOpenVendorGroupId=null; renderLibrary(); }
 function libUpdateVendorGroupBulkBtn(){
   var n=document.querySelectorAll('.lib-vg-sel:checked').length;
+  var total=document.querySelectorAll('.lib-vg-sel').length;
   var btn=document.getElementById('lib-vg-bulk-del-btn');
   if(btn) btn.style.display=n>0?'':'none';
+  var loadBtn=document.getElementById('lib-vg-bulk-load-btn');
+  if(loadBtn) loadBtn.style.display=n>0?'':'none';
+  var all=document.getElementById('lib-vg-chk-all');
+  if(all) all.checked=(n>0&&n===total);
+}
+function libToggleAllVendorGroups(checked){
+  document.querySelectorAll('.lib-vg-sel').forEach(function(c){c.checked=checked;});
+  libUpdateVendorGroupBulkBtn();
+}
+function libLoadSelectedVendorGroups(){
+  var lib=getLib();
+  var ids=Array.from(document.querySelectorAll('.lib-vg-sel:checked')).map(function(c){return c.dataset.id;});
+  if(!ids.length) return;
+  var vendors=[];
+  ids.forEach(function(id){
+    var entry=lib.vendors.find(function(e){return e.id===id;});
+    if(entry)(entry.vendors||[]).forEach(function(v){vendors.push(v);});
+  });
+  if(!vendors.length) return toast(LANG==='es'?'Los grupos seleccionados están vacíos':'Selected groups are empty','e');
+  libOpenEventPickerModal(vendors);
 }
 function libDeleteSelectedVendorGroups(){
   var ids=Array.from(document.querySelectorAll('.lib-vg-sel:checked')).map(function(c){return c.dataset.id;});
@@ -600,9 +636,10 @@ function libSearchVendorGroups(q){
     if(entry.name.toLowerCase().includes(s)) return true;
     return (entry.vendors||[]).some(function(v){ return [v.name,v.services,v.contact,v.category].some(function(f){return f&&f.toLowerCase().includes(s);}); });
   });
-  var el=document.getElementById('lib-vg-list');
-  if(el) el.innerHTML=filtered.length?filtered.map(function(e){ return libVendorGroupCard(e,isES); }).join('')
-    :'<div style="text-align:center;padding:30px;color:var(--muted);font-size:13px">'+(isES?'Sin resultados':'No results')+'</div>';
+  var el=document.getElementById('lib-vg-rows');
+  if(el) el.innerHTML=filtered.length?filtered.map(function(e){ return libVendorGroupRow(e,isES); }).join('')
+    :'<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--muted);font-size:13px">'+(isES?'Sin resultados':'No results')+'</td></tr>';
+  libUpdateVendorGroupBulkBtn();
 }
 function libNewVendorGroupModal(){
   var isES=LANG==='es';
@@ -1150,35 +1187,48 @@ function renderLibTaskGroups(lib){
       +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
       +(isES?' Nuevo Grupo de Tareas':' New Task Group')+'</button></div>';
   }
-  var cards=groups.map(function(e){ return libTaskGroupCard(e,isES); }).join('');
+  var rows=groups.map(function(e){ return libTaskGroupRow(e,isES); }).join('');
   return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
-    +'<div style="position:relative;flex:1">'
-    +'<svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>'
+    +'<div style="position:relative;flex:1;display:flex;align-items:center">'
+    +'<svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>'
     +'<input class="input" id="lib-tg-search" placeholder="'+(isES?'Buscar grupos o tareas...':'Search groups or tasks...')+'" oninput="libSearchTaskGroups(this.value)" style="padding-left:36px;width:100%">'
     +'</div>'
+    +'<button id="lib-tg-bulk-load-btn" class="btn btn-primary btn-sm" style="display:none;white-space:nowrap" onclick="libLoadSelectedTaskGroups()">'
+    +(isES?'CARGAR':'LOAD')+'</button>'
     +'<button id="lib-tg-bulk-del-btn" class="btn btn-danger btn-sm" style="display:none;white-space:nowrap" onclick="libDeleteSelectedTaskGroups()">'
     +(isES?'Eliminar':'Delete Selected')+'</button>'
     +'</div>'
-    +'<div id="lib-tg-list">'+cards+'</div>';
+    +'<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm)">'
+    +'<table style="width:100%;border-collapse:collapse">'
+    +'<thead><tr style="background:var(--bg2);border-bottom:1px solid var(--border)">'
+    +'<th style="padding:9px 12px;width:36px"><input type="checkbox" id="lib-tg-chk-all" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libToggleAllTaskGroups(this.checked)"></th>'
+    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Nombre':'Name')+'</th>'
+    +'<th style="padding:9px 14px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Tareas':'Tasks')+'</th>'
+    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Vista previa':'Preview')+'</th>'
+    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Fecha':'Date')+'</th>'
+    +'<th style="padding:9px 14px"></th>'
+    +'</tr></thead>'
+    +'<tbody id="lib-tg-rows">'+rows+'</tbody>'
+    +'</table></div>';
 }
-function libTaskGroupCard(entry,isES){
+function libTaskGroupRow(entry,isES){
   var taskCount=(entry.tasks||[]).length;
-  var sub=taskCount+' '+(isES?'tarea(s)':'task(s)')+' · '+entry.date;
   var preview=(entry.tasks||[]).slice(0,3).map(function(tk){return esc(tk.title||'');}).join(', ')+(taskCount>3?' +'+(taskCount-3):'');
-  var badge=preview?'<span class="badge b-gold" style="font-size:10px;white-space:normal;max-width:340px;display:inline-block">'+preview+'</span>':'';
-  return '<div style="display:flex;align-items:flex-start;gap:10px;padding:16px 18px;background:#fff;border:1.5px solid var(--border);border-radius:var(--r-lg);margin-bottom:10px">'
-    +'<input type="checkbox" class="lib-tg-sel" data-id="'+entry.id+'" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer;flex-shrink:0;margin-top:3px" onchange="libUpdateTaskGroupBulkBtn()">'
-    +'<div style="flex:1;min-width:0;cursor:pointer" onclick="libOpenTaskGroup(\''+entry.id+'\')">'
-    +'<div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px;display:flex;align-items:center;gap:6px">'+esc(entry.name)
-    +'<svg width="12" height="12" fill="none" stroke="var(--muted)" stroke-width="2.5" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>'
-    +'<div style="font-size:12px;color:var(--muted)">'+sub+'</div>'
-    +(badge?'<div style="margin-top:6px">'+badge+'</div>':'')
-    +'</div>'
-    +'<div style="display:flex;gap:6px;flex-shrink:0;align-items:center">'
-    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar nombre':'Edit name')+'" onclick="event.stopPropagation();libRenameTaskGroup(\''+entry.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
-    +'<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();libLoadTasks(\''+entry.id+'\')">'+(isES?'CARGAR':'LOAD')+'</button>'
-    +'<button class="btn btn-danger btn-sm btn-icon" onclick="event.stopPropagation();libDelete(\'tasks\',\''+entry.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
-    +'</div></div>';
+  return '<tr onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
+    +'<td style="padding:11px 12px;width:36px" onclick="event.stopPropagation()">'
+    +'<input type="checkbox" class="lib-tg-sel" data-id="'+entry.id+'" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libUpdateTaskGroupBulkBtn()">'
+    +'</td>'
+    +'<td style="padding:11px 14px;font-weight:600;font-size:13px;vertical-align:middle"><a href="javascript:void(0)" onclick="event.stopPropagation();libOpenTaskGroup(\''+entry.id+'\')" style="color:inherit;text-decoration:none;cursor:pointer" onmouseover="this.style.color=\'var(--gold)\'" onmouseout="this.style.color=\'inherit\'">'+esc(entry.name)+'</a></td>'
+    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);text-align:center">'+taskCount+'</td>'
+    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(preview||'—')+'</td>'
+    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted)">'+esc(entry.date||'—')+'</td>'
+    +'<td style="padding:11px 14px;text-align:right" onclick="event.stopPropagation()">'
+    +'<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">'
+    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadTasks(\''+entry.id+'\')">'+(isES?'CARGAR':'LOAD')+'</button>'
+    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar nombre':'Edit name')+'" onclick="libRenameTaskGroup(\''+entry.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
+    +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDelete(\'tasks\',\''+entry.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
+    +'</div></td>'
+    +'</tr>';
 }
 function renderLibTaskGroupDetail(lib,entry,isES){
   var tasks=entry.tasks||[];
@@ -1252,8 +1302,29 @@ function libOpenTaskGroup(id){ _libOpenTaskGroupId=id; renderLibrary(); }
 function libBackToTaskGroups(){ _libOpenTaskGroupId=null; renderLibrary(); }
 function libUpdateTaskGroupBulkBtn(){
   var n=document.querySelectorAll('.lib-tg-sel:checked').length;
+  var total=document.querySelectorAll('.lib-tg-sel').length;
   var btn=document.getElementById('lib-tg-bulk-del-btn');
   if(btn) btn.style.display=n>0?'':'none';
+  var loadBtn=document.getElementById('lib-tg-bulk-load-btn');
+  if(loadBtn) loadBtn.style.display=n>0?'':'none';
+  var all=document.getElementById('lib-tg-chk-all');
+  if(all) all.checked=(n>0&&n===total);
+}
+function libToggleAllTaskGroups(checked){
+  document.querySelectorAll('.lib-tg-sel').forEach(function(c){c.checked=checked;});
+  libUpdateTaskGroupBulkBtn();
+}
+function libLoadSelectedTaskGroups(){
+  var lib=getLib();
+  var ids=Array.from(document.querySelectorAll('.lib-tg-sel:checked')).map(function(c){return c.dataset.id;});
+  if(!ids.length) return;
+  var tasks=[];
+  ids.forEach(function(id){
+    var entry=(lib.tasks||[]).find(function(e){return e.id===id;});
+    if(entry)(entry.tasks||[]).forEach(function(tk){tasks.push(tk);});
+  });
+  if(!tasks.length) return toast(LANG==='es'?'Los grupos seleccionados están vacíos':'Selected groups are empty','e');
+  libOpenTaskEventPickerModal(tasks);
 }
 function libUpdateGroupTaskBulkBtn(){
   var n=document.querySelectorAll('.lib-gtg-sel:checked').length;
@@ -1282,9 +1353,10 @@ function libSearchTaskGroups(q){
     if(entry.name.toLowerCase().includes(s)) return true;
     return (entry.tasks||[]).some(function(tk){ return [tk.title,tk.desc,tk.assignee].some(function(f){return f&&f.toLowerCase().includes(s);}); });
   });
-  var el=document.getElementById('lib-tg-list');
-  if(el) el.innerHTML=filtered.length?filtered.map(function(e){ return libTaskGroupCard(e,isES); }).join('')
-    :'<div style="text-align:center;padding:30px;color:var(--muted);font-size:13px">'+(isES?'Sin resultados':'No results')+'</div>';
+  var el=document.getElementById('lib-tg-rows');
+  if(el) el.innerHTML=filtered.length?filtered.map(function(e){ return libTaskGroupRow(e,isES); }).join('')
+    :'<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--muted);font-size:13px">'+(isES?'Sin resultados':'No results')+'</td></tr>';
+  libUpdateTaskGroupBulkBtn();
 }
 function libNewTaskGroupModal(){
   var isES=LANG==='es';
@@ -1965,8 +2037,10 @@ function libFilterMoodboards(q){
   var lib=getLib(); var isES=LANG==='es';
   var s=q.trim().toLowerCase();
   var filtered=s===''?lib.moodboards:lib.moodboards.filter(function(e){return e.name.toLowerCase().includes(s);});
-  var grid=document.getElementById('lib-moodboard-grid'); if(!grid) return;
-  grid.innerHTML=filtered.map(function(e){ return _libMbFolderCard(e,isES); }).join('');
+  var el=document.getElementById('lib-mb-rows'); if(!el) return;
+  el.innerHTML=filtered.length?filtered.map(function(e){ return _libMbRow(e,isES); }).join('')
+    :'<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--muted);font-size:13px">'+(isES?'Sin resultados':'No results')+'</td></tr>';
+  libUpdateMoodboardBulkBtn();
 }
 
 function libMbBackToFolders(){ _mbOpenFolderId=null; renderLibrary(); }
@@ -2398,33 +2472,67 @@ function libMoodboardDeleteImage(id, idx){
   renderLibrary();
 }
 
-function _libMbFolderCard(entry, isES){
-  var editIco='<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg>';
-  var dupIco='<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-  var delIco='<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg>';
+function _libMbRow(entry, isES){
   var images = entry.images || [];
   var imgCnt = images.length;
-  var preview = images.length
-    ? '<div class="lib-mb-folder-preview">'
-      +images.slice(0,4).map(function(src, idx){
-        return '<div class="lib-mb-folder-tile lib-mb-folder-tile-'+idx+'"><img src="'+src+'" alt="'+esc(entry.name)+'"></div>';
-      }).join('')
-      +(images.length===1?'<div class="lib-mb-folder-tile lib-mb-folder-tile-fill"><img src="'+images[0]+'" alt="'+esc(entry.name)+'"></div>':'')
-      +'</div>'
-    : '<div class="lib-mb-folder-preview lib-mb-folder-preview-empty"><svg width="32" height="32" fill="none" stroke="var(--muted)" stroke-width="1.5" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>';
-  return '<div class="mb-card lib-mb-folder-card" onclick="libOpenMoodboardFolder(\''+entry.id+'\')">'
-    +preview
-    +'<div style="padding:14px 14px 0">'
-    +'<div style="font-size:13px;font-weight:700;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(entry.name)+'</div>'
-    +'<div style="font-size:11px;color:var(--muted);margin-bottom:10px">'+imgCnt+' '+(isES?'imagen(es)':'image(s)')+' · '+entry.date+'</div>'
-    +'</div>'
-    +'<div style="display:flex;gap:5px;padding:0 14px 14px" onclick="event.stopPropagation()">'
-    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar':'Edit')+'" onclick="libEditMoodboardFolder(\''+entry.id+'\')">'+editIco+'</button>'
-    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Duplicar':'Duplicate')+'" onclick="libDuplicateMoodboardFolder(\''+entry.id+'\')">'+dupIco+'</button>'
-    +'<button class="btn btn-danger btn-sm btn-icon" title="'+(isES?'Eliminar':'Delete')+'" onclick="libDelete(\'moodboards\',\''+entry.id+'\')">'+delIco+'</button>'
-    +'</div></div>';
+  var folderCount = (entry.folders||[]).length + ((entry.uncategorized||[]).length ? 1 : 0) + (images.length ? 1 : 0);
+  return '<tr onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
+    +'<td style="padding:11px 12px;width:36px" onclick="event.stopPropagation()">'
+    +'<input type="checkbox" class="lib-mb-sel" data-id="'+entry.id+'" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libUpdateMoodboardBulkBtn()">'
+    +'</td>'
+    +'<td style="padding:11px 14px;font-weight:600;font-size:13px;vertical-align:middle"><a href="javascript:void(0)" onclick="event.stopPropagation();libOpenMoodboardFolder(\''+entry.id+'\')" style="color:inherit;text-decoration:none;cursor:pointer" onmouseover="this.style.color=\'var(--gold)\'" onmouseout="this.style.color=\'inherit\'">'+esc(entry.name)+'</a></td>'
+    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);text-align:center">'+imgCnt+'</td>'
+    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);text-align:center">'+folderCount+'</td>'
+    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted)">'+esc(entry.date||'—')+'</td>'
+    +'<td style="padding:11px 14px;text-align:right" onclick="event.stopPropagation()">'
+    +'<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">'
+    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadMoodboard(\''+entry.id+'\')">'+(isES?'CARGAR':'LOAD')+'</button>'
+    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar':'Edit')+'" onclick="libEditMoodboardFolder(\''+entry.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
+    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Duplicar':'Duplicate')+'" onclick="libDuplicateMoodboardFolder(\''+entry.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>'
+    +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDelete(\'moodboards\',\''+entry.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
+    +'</div></td>'
+    +'</tr>';
 }
 
+function libUpdateMoodboardBulkBtn(){
+  var n=document.querySelectorAll('.lib-mb-sel:checked').length;
+  var total=document.querySelectorAll('.lib-mb-sel').length;
+  var loadBtn=document.getElementById('lib-mb-bulk-load-btn');
+  if(loadBtn) loadBtn.style.display=n>0?'':'none';
+  var delBtn=document.getElementById('lib-mb-bulk-del-btn');
+  if(delBtn) delBtn.style.display=n>0?'':'none';
+  var all=document.getElementById('lib-mb-chk-all');
+  if(all) all.checked=(n>0&&n===total);
+}
+function libToggleAllMoodboards(checked){
+  document.querySelectorAll('.lib-mb-sel').forEach(function(c){c.checked=checked;});
+  libUpdateMoodboardBulkBtn();
+}
+function libLoadSelectedMoodboards(){
+  var lib=getLib();
+  var ids=Array.from(document.querySelectorAll('.lib-mb-sel:checked')).map(function(c){return c.dataset.id;});
+  if(!ids.length) return;
+  if(!proj()) return toast(LANG==='es'?'Abre un proyecto primero':'Open a project first','e');
+  var entries=[];
+  ids.forEach(function(id){
+    var entry=(lib.moodboards||[]).find(function(e){return e.id===id;});
+    if(entry) entries.push(entry);
+  });
+  if(!entries.length) return;
+  var added=libMergeMoodboardsToCurrentProject(entries);
+  toast((LANG==='es'?added+' imagen(es) importadas de '+entries.length+' moodboard(s)':added+' image(s) imported from '+entries.length+' moodboard(s)'),'s');
+  if(typeof renderMoodboard==='function' && typeof CTAB!=='undefined' && CTAB==='moodboard') renderMoodboard();
+}
+function libDeleteSelectedMoodboards(){
+  var ids=Array.from(document.querySelectorAll('.lib-mb-sel:checked')).map(function(c){return c.dataset.id;});
+  if(!ids.length) return;
+  var isES=LANG==='es';
+  if(!confirm(isES?'¿Eliminar '+ids.length+' moodboard(s) seleccionado(s)?':'Delete '+ids.length+' selected moodboard(s)?')) return;
+  var lib=getLib();
+  lib.moodboards=lib.moodboards.filter(function(e){return ids.indexOf(e.id)===-1;});
+  saveLib(lib); renderLibrary();
+  toast(isES?'Moodboards eliminados':'Moodboards deleted');
+}
 function renderLibMoodboards(lib){
   var isES=LANG==='es';
   if(_mbOpenFolderId){
@@ -2476,14 +2584,29 @@ function renderLibMoodboards(lib){
       +(isES?'Crear primer moodboard':'Create First Moodboard')+'</button>'
       +'</div>';
   }
-  var searchBar='<div style="position:relative;display:flex;align-items:center;margin-bottom:14px">'
+  var rows=lib.moodboards.map(function(e){ return _libMbRow(e,isES); }).join('');
+  return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
+    +'<div style="position:relative;flex:1;display:flex;align-items:center">'
     +'<svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>'
     +'<input class="input" placeholder="'+(isES?'Buscar moodboards...':'Search moodboards...')+'" oninput="libFilterMoodboards(this.value)" style="padding-left:36px;width:100%">'
-    +'</div>';
-  return searchBar
-    +'<div id="lib-moodboard-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px">'
-    +lib.moodboards.map(function(e){ return _libMbFolderCard(e,isES); }).join('')
-    +'</div>';
+    +'</div>'
+    +'<button id="lib-mb-bulk-load-btn" class="btn btn-primary btn-sm" style="display:none;white-space:nowrap" onclick="libLoadSelectedMoodboards()">'
+    +(isES?'CARGAR':'LOAD')+'</button>'
+    +'<button id="lib-mb-bulk-del-btn" class="btn btn-danger btn-sm" style="display:none;white-space:nowrap" onclick="libDeleteSelectedMoodboards()">'
+    +(isES?'Eliminar':'Delete Selected')+'</button>'
+    +'</div>'
+    +'<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm)">'
+    +'<table style="width:100%;border-collapse:collapse">'
+    +'<thead><tr style="background:var(--bg2);border-bottom:1px solid var(--border)">'
+    +'<th style="padding:9px 12px;width:36px"><input type="checkbox" id="lib-mb-chk-all" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libToggleAllMoodboards(this.checked)"></th>'
+    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Nombre':'Name')+'</th>'
+    +'<th style="padding:9px 14px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Imágenes':'Images')+'</th>'
+    +'<th style="padding:9px 14px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Carpetas':'Folders')+'</th>'
+    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Fecha':'Date')+'</th>'
+    +'<th style="padding:9px 14px"></th>'
+    +'</tr></thead>'
+    +'<tbody id="lib-mb-rows">'+rows+'</tbody>'
+    +'</table></div>';
 }
 
 var _mbLightboxId = null;
@@ -3047,21 +3170,14 @@ function _libRenderLayoutWizard(){
     // Catalogue: matches layout editor's Add Table modal format
     var catalogue=[
       // Round — ordered by seating capacity
-      {key:'round-0.8', cat:'round',label:'4 seats',dim:'0.8m',wM:0.8,hM:0.8,chairs:4,cols:6},
-      {key:'round-1.0', cat:'round',label:'6 seats',dim:'1.0m',wM:1.0,hM:1.0,chairs:6,cols:5},
-      {key:'round-1.2', cat:'round',label:'8 seats',dim:'1.2m',wM:1.2,hM:1.2,chairs:8,cols:5},
-      {key:'round-1.5', cat:'round',label:'10 seats',dim:'1.5m',wM:1.5,hM:1.5,chairs:10,cols:5},
-      {key:'round-1.6', cat:'round',label:'12 seats',dim:'1.6m',wM:1.6,hM:1.6,chairs:12,cols:4},
-      {key:'round-1.8', cat:'round',label:'14 seats',dim:'1.8m',wM:1.8,hM:1.8,chairs:14,cols:4},
-      {key:'round-2.0', cat:'round',label:'16 seats',dim:'2.0m',wM:2.0,hM:2.0,chairs:16,cols:4},
+      {key:'round-1.2', cat:'round',label:'4 seats',dim:'1.2m',wM:1.2,hM:1.2,chairs:4,cols:5},
+      {key:'round-1.5', cat:'round',label:'6 seats',dim:'1.5m',wM:1.5,hM:1.5,chairs:6,cols:5},
+      {key:'round-1.8', cat:'round',label:'8 seats',dim:'1.8m',wM:1.8,hM:1.8,chairs:8,cols:4},
+      {key:'round-2.0', cat:'round',label:'10 seats',dim:'2.0m',wM:2.0,hM:2.0,chairs:10,cols:4},
       // Rectangular — ordered by seating capacity
-      {key:'rect-1.2x0.8',cat:'rect',label:'4 seats',dim:'1.2 x 0.8m',wM:1.2,hM:0.8,chairs:4,cols:4},
-      {key:'rect-1.8x0.8',cat:'rect',label:'6 seats',dim:'1.8 x 0.8m',wM:1.8,hM:0.8,chairs:6,cols:4},
-      {key:'rect-2.0x1.0',cat:'rect',label:'8 seats',dim:'2.0 x 1.0m',wM:2.0,hM:1.0,chairs:8,cols:4},
-      {key:'rect-2.4x1.2',cat:'rect',label:'10 seats',dim:'2.4 x 1.2m',wM:2.4,hM:1.2,chairs:10,cols:4},
-      {key:'rect-2.8x1.2',cat:'rect',label:'12 seats',dim:'2.8 x 1.2m',wM:2.8,hM:1.2,chairs:12,cols:4},
-      {key:'rect-3.2x1.2',cat:'rect',label:'14 seats',dim:'3.2 x 1.2m',wM:3.2,hM:1.2,chairs:14,cols:3},
-      {key:'rect-3.6x1.2',cat:'rect',label:'16 seats',dim:'3.6 x 1.2m',wM:3.6,hM:1.2,chairs:16,cols:3},
+      {key:'rect-2.44x1.20',cat:'rect',label:'8 seats',dim:'2.44 x 1.20m',wM:2.44,hM:1.20,chairs:8,cols:4,chairSides:{top:4,bottom:4,left:0,right:0}},
+      {key:'rect-4.88x1.80-12',cat:'rect',label:'12 seats',dim:'4.88 x 1.80m',wM:4.88,hM:1.80,chairs:12,cols:3,chairSides:{top:6,bottom:6,left:0,right:0}},
+      {key:'rect-4.88x1.80-16',cat:'rect',label:'16 seats',dim:'4.88 x 1.80m',wM:4.88,hM:1.80,chairs:16,cols:3,chairSides:{top:6,bottom:6,left:2,right:2}},
       // Special — S-shaped tables
       {key:'s-table-14',cat:'s-table',label:'14 seats',dim:'4.0 x 1.5m',wM:4.0,hM:1.5,chairs:14,cols:2},
       {key:'s-table-16',cat:'s-table',label:'16 seats',dim:'4.5 x 1.5m',wM:4.5,hM:1.5,chairs:16,cols:2},
@@ -3089,19 +3205,22 @@ function _libRenderLayoutWizard(){
         }
         chairs+='<circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="'+r.toFixed(1)+'" fill="'+tableFill+'"/>';
       } else {
-        var sideN=2;
-        var topN=Math.ceil((n-sideN*2)/2); var botN=Math.floor((n-sideN*2)/2);
-        for(var ci=0;ci<topN;ci++){
-          var cx2=tx+(ci+0.5)*(tw/topN); var cy2=ty-CG-CS/2;
+        var _cs=item.chairSides||{top:Math.ceil(n/2),bottom:Math.floor(n/2),left:0,right:0};
+        var _t=_cs.top||0, _b=_cs.bottom||0, _l=_cs.left||0, _r=_cs.right||0;
+        for(var ci=0;ci<_t;ci++){
+          var cx2=tx+(ci+0.5)*(tw/_t); var cy2=ty-CG-CS/2;
           chairs+='<circle cx="'+cx2.toFixed(1)+'" cy="'+cy2.toFixed(1)+'" r="'+(CS/2).toFixed(1)+'" fill="'+chairFill+'"/>';
         }
-        for(var ci=0;ci<botN;ci++){
-          var cx2=tx+(ci+0.5)*(tw/botN); var cy2=ty+th+CG+CS/2;
+        for(var ci=0;ci<_b;ci++){
+          var cx2=tx+(ci+0.5)*(tw/_b); var cy2=ty+th+CG+CS/2;
           chairs+='<circle cx="'+cx2.toFixed(1)+'" cy="'+cy2.toFixed(1)+'" r="'+(CS/2).toFixed(1)+'" fill="'+chairFill+'"/>';
         }
-        for(var ci=0;ci<sideN;ci++){
-          var cy3=ty+(ci+0.5)*(th/sideN);
+        for(var ci=0;ci<_l;ci++){
+          var cy3=ty+(ci+0.5)*(th/_l);
           chairs+='<circle cx="'+(tx-CG-CS/2).toFixed(1)+'" cy="'+cy3.toFixed(1)+'" r="'+(CS/2).toFixed(1)+'" fill="'+chairFill+'"/>';
+        }
+        for(var ci=0;ci<_r;ci++){
+          var cy3=ty+(ci+0.5)*(th/_r);
           chairs+='<circle cx="'+(tx+tw+CG+CS/2).toFixed(1)+'" cy="'+cy3.toFixed(1)+'" r="'+(CS/2).toFixed(1)+'" fill="'+chairFill+'"/>';
         }
         chairs+='<rect x="'+tx.toFixed(1)+'" y="'+ty.toFixed(1)+'" width="'+tw.toFixed(1)+'" height="'+th.toFixed(1)+'" rx="2" fill="'+tableFill+'"/>';
@@ -3246,7 +3365,7 @@ function _libRenderLayoutWizard(){
   var stickyFooter='';
   if(s===3){
     var tt2=0; var tc2=0;
-    Object.keys(w.tables||{}).forEach(function(k){var e=w.tables[k];if(e&&e.n){tt2+=e.n;var allCats=[{key:'rect-2x1.2',chairs:6},{key:'rect-2.4x1.2',chairs:8},{key:'rect-2.6x1.2',chairs:8},{key:'rect-2.8x1.2',chairs:10},{key:'rect-3x1.2',chairs:10},{key:'rect-3.2x1.2',chairs:12},{key:'rect-3.4x1.2',chairs:12},{key:'rect-3.6x1.2',chairs:14},{key:'rect-3.8x1.2',chairs:14},{key:'rect-4x1.2',chairs:16},{key:'dend-2x1.2',chairs:6},{key:'dend-2.4x1.2',chairs:8},{key:'dend-2.6x1.2',chairs:8},{key:'dend-2.8x1.2',chairs:10},{key:'dend-3x1.2',chairs:10},{key:'dend-3.2x1.2',chairs:12},{key:'dend-3.4x1.2',chairs:12},{key:'dend-3.6x1.2',chairs:14},{key:'dend-3.8x1.2',chairs:14},{key:'dend-4x1.2',chairs:16},{key:'oval-2x1.2',chairs:6},{key:'oval-2.4x1.2',chairs:8},{key:'oval-2.6x1.2',chairs:8},{key:'oval-2.8x1.2',chairs:10},{key:'oval-3x1.2',chairs:10},{key:'oval-3.2x1.2',chairs:12},{key:'oval-3.4x1.2',chairs:12},{key:'oval-3.6x1.2',chairs:14},{key:'oval-3.8x1.2',chairs:14},{key:'oval-4x1.2',chairs:16},{key:'round-0.8',chairs:4},{key:'round-1.0',chairs:6},{key:'round-1.2',chairs:8},{key:'round-1.4',chairs:10},{key:'round-1.5',chairs:10},{key:'round-1.6',chairs:12},{key:'round-1.7',chairs:12},{key:'round-1.8',chairs:14},{key:'round-1.9',chairs:14},{key:'round-2.0',chairs:16}];var cat=allCats.find(function(c){return c.key===k;});if(cat)tc2+=e.n*cat.chairs;}});
+    Object.keys(w.tables||{}).forEach(function(k){var e=w.tables[k];if(e&&e.n){tt2+=e.n;var allCats=[{key:'round-1.2',chairs:4},{key:'round-1.5',chairs:6},{key:'round-1.8',chairs:8},{key:'round-2.0',chairs:10},{key:'rect-2.44x1.20',chairs:8},{key:'rect-4.88x1.80-12',chairs:12},{key:'rect-4.88x1.80-16',chairs:16},{key:'s-table-14',chairs:14},{key:'s-table-16',chairs:16}];var cat=allCats.find(function(c){return c.key===k;});if(cat)tc2+=e.n*cat.chairs;}});
     stickyFooter='<div style="border-top:1px solid var(--border);padding:10px 0 0;margin-top:8px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">'
       +'<span style="font-size:13px">⬛ <strong>'+tt2+'</strong> '+(isES?'mesas':'tables')+'</span>'
       +'<span style="font-size:13px">🪑 <strong>'+tc2+'</strong> '+(isES?'sillas':'chairs')+'</span>'
@@ -3274,7 +3393,7 @@ function _libWizToggleTable(key){
   if(!_libLayoutWiz.tables) _libLayoutWiz.tables={};
   var catalogue=[
     {key:'round-0.8',chairs:4,cols:6},{key:'round-1.0',chairs:6,cols:5},{key:'round-1.2',chairs:8,cols:5},{key:'round-1.5',chairs:10,cols:5},{key:'round-1.6',chairs:12,cols:4},{key:'round-1.8',chairs:14,cols:4},{key:'round-2.0',chairs:16,cols:4},
-    {key:'rect-1.2x0.8',chairs:4,cols:4},{key:'rect-1.8x0.8',chairs:6,cols:4},{key:'rect-2.0x1.0',chairs:8,cols:4},{key:'rect-2.4x1.2',chairs:10,cols:4},{key:'rect-2.8x1.2',chairs:12,cols:4},{key:'rect-3.2x1.2',chairs:14,cols:3},{key:'rect-3.6x1.2',chairs:16,cols:3},
+    {key:'rect-2.44x1.20',chairs:8,cols:4,chairSides:{top:4,bottom:4,left:0,right:0}},{key:'rect-4.88x1.80-12',chairs:12,cols:3,chairSides:{top:6,bottom:6,left:0,right:0}},{key:'rect-4.88x1.80-16',chairs:16,cols:3,chairSides:{top:6,bottom:6,left:2,right:2}},
     {key:'s-table-14',chairs:14,cols:2},{key:'s-table-16',chairs:16,cols:2},
   ];
   var cat=catalogue.find(function(c){return c.key===key;});
@@ -3386,7 +3505,7 @@ function _libLayoutWizNext(){
     w.dfW=sq.w; w.dfH=sq.h; w.dfD=rd.d; w.barW=Math.min(sq.w,sq.h);
   }
   if(w.step===2 && !Object.keys(w.tables).length){
-    w.tables['round-1.5']={n:Math.ceil(w.guests/10), chairs:10, cols:5, chairType:'default', cp:'none'};
+    w.tables['round-1.8']={n:Math.ceil(w.guests/8), chairs:8, cols:4, chairType:'default', cp:'none'};
   }
   w.step++;
   _libRenderLayoutWizard();
@@ -3401,7 +3520,7 @@ function _libLayoutWizGenerate(){
   var items=[];
   var idGen=function(){return 'li'+Date.now()+Math.random().toString(36).slice(2,6);};
   var spacing=Math.round(1.2*ppm);       // structural gaps (margins, block separators)
-  var tableSpacing=Math.round(0.1*ppm); // inter-table gap → 2.5m center-to-center for 1.5m table
+  var tableSpacing=Math.round(0.25*ppm); // gap between table edges
   var originX=spacing*2, originY=spacing*2;
   var tableCount=0;
   var maxTableW=0;
@@ -3409,8 +3528,8 @@ function _libLayoutWizGenerate(){
 
   // Table catalogue key -> shape/size info
   var catalogueMap={
-    'round-0.8':{shape:'round-table',wM:0.8,hM:0.8,round:true},'round-1.0':{shape:'round-table',wM:1.0,hM:1.0,round:true},'round-1.2':{shape:'round-table',wM:1.2,hM:1.2,round:true},'round-1.5':{shape:'round-table',wM:1.5,hM:1.5,round:true},'round-1.6':{shape:'round-table',wM:1.6,hM:1.6,round:true},'round-1.8':{shape:'round-table',wM:1.8,hM:1.8,round:true},'round-2.0':{shape:'round-table',wM:2.0,hM:2.0,round:true},
-    'rect-1.2x0.8':{shape:'rect-table',wM:1.2,hM:0.8,round:false},'rect-1.8x0.8':{shape:'rect-table',wM:1.8,hM:0.8,round:false},'rect-2.0x1.0':{shape:'rect-table',wM:2.0,hM:1.0,round:false},'rect-2.4x1.2':{shape:'rect-table',wM:2.4,hM:1.2,round:false},'rect-2.8x1.2':{shape:'rect-table',wM:2.8,hM:1.2,round:false},'rect-3.2x1.2':{shape:'rect-table',wM:3.2,hM:1.2,round:false},'rect-3.6x1.2':{shape:'rect-table',wM:3.6,hM:1.2,round:false},
+    'round-1.2':{shape:'round-table',wM:1.2,hM:1.2,round:true},'round-1.5':{shape:'round-table',wM:1.5,hM:1.5,round:true},'round-1.8':{shape:'round-table',wM:1.8,hM:1.8,round:true},'round-2.0':{shape:'round-table',wM:2.0,hM:2.0,round:true},
+    'rect-2.44x1.20':{shape:'rect-table',wM:2.44,hM:1.20,round:false,chairSides:{top:4,bottom:4,left:0,right:0}},'rect-4.88x1.80-12':{shape:'rect-table',wM:4.88,hM:1.80,round:false,chairSides:{top:6,bottom:6,left:0,right:0}},'rect-4.88x1.80-16':{shape:'rect-table',wM:4.88,hM:1.80,round:false,chairSides:{top:6,bottom:6,left:2,right:2}},
     's-table-14':{shape:'s-table',wM:4.0,hM:1.5,round:false},'s-table-16':{shape:'s-table',wM:4.5,hM:1.5,round:false},
   };
   var tables=Array.isArray(w.tables)?{}:w.tables;
@@ -3420,12 +3539,12 @@ function _libLayoutWizGenerate(){
     var tw=Math.round(cm.wM*ppm); var th=Math.round(cm.hM*ppm);
     var defBg=cm.round?'#f0ece0':'#f0ece0'; var defBd='#c9a84c';
     var defShape=SHAPES&&SHAPES[cm.shape]?SHAPES[cm.shape]:{w:tw,h:th,bg:defBg,bdClr:defBd};
-    var pad=tg.chairs?Math.round(0.4*ppm)+Math.round(0.05*ppm):0;
+    var pad=tg.chairs?Math.round(CHAIR_SIZE_M*ppm)+Math.round(0.05*ppm):0;
     var cellW=tw+pad*2+tableSpacing; var cellH=th+pad*2+tableSpacing;
     var cols=tg.cols||5; var row=0; var col=0;
     for(var i=0;i<tg.n;i++){
       var tx=originX+col*cellW+pad; var ty=curY+row*cellH+pad;
-      items.push({id:idGen(),shape:cm.shape,x:tx,y:ty,w:tw,h:th,bg:defShape.bg||defBg,bdClr:defShape.bdClr||defBd,radius:cm.round?'50%':'0px',label:String(tableCount+1),chairs:tg.chairs,chairType:tg.chairType||'default',centerpiece:tg.cp||'none',cost:0,rotation:0,_typeKey:key});
+      items.push({id:idGen(),shape:cm.shape,x:tx,y:ty,w:tw,h:th,bg:defShape.bg||defBg,bdClr:defShape.bdClr||defBd,radius:cm.round?'50%':'0px',label:String(tableCount+1),chairs:tg.chairs,chairSides:cm.chairSides||null,chairType:tg.chairType||'default',centerpiece:tg.cp||'none',cost:0,rotation:0,_typeKey:key});
       tableCount++;col++;
       if(col>=cols){col=0;row++;}
     }
@@ -3602,6 +3721,8 @@ function libOpenLayoutEditor(entryId, _unused, isNew){
   }
   var lp=all['__lib_layout__'];
   lp.layoutItems=JSON.parse(JSON.stringify(entry.items));
+  if(entry.chairTypes) lp.chairTypes=JSON.parse(JSON.stringify(entry.chairTypes));
+  if(entry.centerpieceTypes) lp.centerpieceTypes=JSON.parse(JSON.stringify(entry.centerpieceTypes));
   lp.floorplan=entry.floorplan?JSON.parse(JSON.stringify(entry.floorplan)):{img:null,pxPerMeter:null};
   if(entry.pxPerMeter && (!lp.floorplan.pxPerMeter)) lp.floorplan.pxPerMeter=entry.pxPerMeter;
   if(lp.floorplan && lp.floorplan.img==='__idb__' && lp.floorplan._idb){
@@ -3658,6 +3779,8 @@ function libOpenLayoutEditor(entryId, _unused, isNew){
     if(entry2){
       var lp2=typeof uproj==='function'?uproj()['__lib_layout__']:null;
       if(lp2&&lp2.layoutItems) entry2.items=JSON.parse(JSON.stringify(lp2.layoutItems));
+      if(lp2&&lp2.chairTypes) entry2.chairTypes=JSON.parse(JSON.stringify(lp2.chairTypes));
+      if(lp2&&lp2.centerpieceTypes) entry2.centerpieceTypes=JSON.parse(JSON.stringify(lp2.centerpieceTypes));
       if(lp2&&lp2.floorplan){
         var _asFp=JSON.parse(JSON.stringify(lp2.floorplan));
         if(_asFp.img&&_asFp.img!=='__idb__') _asFp.img='__idb__';
@@ -3682,6 +3805,8 @@ function libCloseLayoutEditor(entryId, prevCID){
   var lp=typeof uproj==='function'?uproj()['__lib_layout__']:null;
   if(entry && lp){
     entry.items=JSON.parse(JSON.stringify(lp.layoutItems||[]));
+    if(lp.chairTypes) entry.chairTypes=JSON.parse(JSON.stringify(lp.chairTypes));
+    if(lp.centerpieceTypes) entry.centerpieceTypes=JSON.parse(JSON.stringify(lp.centerpieceTypes));
     if(lp.floorplan){
       var closeFp=JSON.parse(JSON.stringify(lp.floorplan));
       if(closeFp.img&&closeFp.img!=='__idb__') closeFp.img='__idb__';
@@ -3729,6 +3854,8 @@ function libCancelLayoutEditor(){
   var lp=typeof uproj==='function'?uproj()['__lib_layout__']:null;
   if(entry && lp){
     entry.items=JSON.parse(JSON.stringify(lp.layoutItems||[]));
+    if(lp.chairTypes) entry.chairTypes=JSON.parse(JSON.stringify(lp.chairTypes));
+    if(lp.centerpieceTypes) entry.centerpieceTypes=JSON.parse(JSON.stringify(lp.centerpieceTypes));
     entry.updatedAt=new Date().toISOString();
     saveLib(lib);
   }

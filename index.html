@@ -6,10 +6,11 @@
 <title>EventOS</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Jost:wght@300;400;500;600;700&family=Raleway:wght@200;300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<link rel="stylesheet" href="styles.css">
+<script>try{var k=Object.keys(localStorage).find(function(k){return k.indexOf('eventos_settings_')===0;});if(k){var s=JSON.parse(localStorage.getItem(k));if(s&&s.theme==='dark')document.documentElement.classList.add('dark');}}catch(e){}</script>
+<link rel="stylesheet" href="styles.css?v=20260325-1">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="app-config.js"></script>
-<script src="app-data.js"></script>
+<script src="app-config.js?v=20260325-1"></script>
+<script src="app-data.js?v=20260325-1"></script>
 </head>
 <body>
 <div id="toast-c"></div>
@@ -35,10 +36,6 @@
       <div class="tnav-logo" onclick="showPage('events')">Event<span>OS</span></div>
     </div>
     <div style="flex:1"></div>
-    <button id="share-nav-btn" class="nav-pill" onclick="openShareFromNav()" title="Share project with client">
-      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-      <span class="share-btn-label">Share</span>
-    </button>
   </nav>
 
   <div id="app-body" class="app-body">
@@ -95,6 +92,12 @@
             <path d="M7 16.5c1.4-.6 3.1-.9 5-.9s3.6.3 5 .9"/>
           </svg>
           <span id="lang-label">EN</span>
+        </button>
+        <button id="settings-btn" class="nav-pill sidebar-footer-pill" onclick="openSettings()" title="Settings / Ajustes">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          <span data-i18n="settings">Settings</span>
         </button>
         <div id="sync-btn" class="nav-pill nav-status-pill sidebar-footer-pill" onclick="manualSync()" title="Click to sync now">
           <div id="sync-dot" class="nav-dot"></div>
@@ -272,13 +275,9 @@
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;margin-left:auto;padding-right:8px">
-        <button class="btn btn-ghost btn-sm" onclick="openShareFromNav()" title="Share project with client" style="display:flex;align-items:center;gap:5px;font-size:11px">
-          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-          <span>Share</span>
-        </button>
         <button class="btn btn-ghost btn-sm" onclick="openExportPDFModal()" title="Export Presentation PDF" style="display:flex;align-items:center;gap:5px;font-size:11px">
           <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
-          <span id="export-pdf-btn-lbl" data-i18n="export_pdf_btn">Export Project PDF</span>
+          <span id="export-pdf-btn-lbl" data-i18n="export_pdf_btn">Export Event PDF</span>
         </button>
       </div>
       <div class="ptabs" id="ptabs">
@@ -341,19 +340,15 @@
   </div>
 </div>
 
-<script src="lang.js"></script>
-<script src="core.js"></script>
-<script src="events.js"></script>
-<script src="budget-timeline-guests.js"></script>
-<script src="layout.js"></script>
-<script src="misc.js"></script>
-<script src="analytics.js"></script>
-<script src="library.js"></script>
+<script src="lang.js?v=20260325-1"></script>
+<script src="core.js?v=20260325-1"></script>
+<script src="events.js?v=20260325-1"></script>
+<script src="budget-timeline-guests.js?v=20260325-1"></script>
+<script src="layout.js?v=20260325-1"></script>
+<script src="misc.js?v=20260325-1"></script>
+<script src="analytics.js?v=20260325-1"></script>
+<script src="library.js?v=20260325-1"></script>
 
-<!-- -- CLIENT PORTAL (share link target) ------------------- -->
-<div id="pg-client" class="hidden">
-  <div id="client-portal-content"></div>
-</div>
 <!-- -- MOBILE DRAWER -------------------------------------------- -->
 <div id="mob-drawer" class="mob-drawer hidden" onclick="closeMobDrawerIfOverlay(event)">
   <div class="mob-drawer-overlay"></div>
@@ -417,22 +412,12 @@
 
     <!-- Settings -->
     <div class="mob-drawer-section">Settings</div>
-    <button class="mob-drawer-item" onclick="toggleLang();closeMobDrawer()">
+    <button class="mob-drawer-item" onclick="openSettings();closeMobDrawer()">
       <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="9"/>
-        <path d="M3 12h18"/>
-        <path d="M12 3a13.5 13.5 0 0 1 0 18"/>
-        <path d="M12 3a13.5 13.5 0 0 0 0 18"/>
-        <path d="M7 7.5c1.4.6 3.1.9 5 .9s3.6-.3 5-.9"/>
-        <path d="M7 16.5c1.4-.6 3.1-.9 5-.9s3.6.3 5 .9"/>
+        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
       </svg>
-      <span id="mob-lang-label">English / Inglés</span>
+      <span data-i18n="settings">Settings</span>
     </button>
-    <button class="mob-drawer-item" onclick="openShareFromNav();closeMobDrawer()">
-      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-      Share Project
-    </button>
-
     <div style="flex:1"></div>
     <div class="mob-drawer-divider"></div>
     <button class="mob-drawer-item" style="color:var(--danger)" onclick="doLogout()">

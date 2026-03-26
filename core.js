@@ -565,6 +565,11 @@ async function saveProj(p){
     console.warn('EventOS: skipped saveProj for meta-only stub', p.id, '— full data not yet loaded');
     return;
   }
+  // Guard against saving when user is not authenticated (e.g. session expired mid-edit)
+  if(!DB.cur){
+    console.warn('EventOS: skipped saveProj — no authenticated user (DB.cur is null)');
+    return;
+  }
   if(!DB.projects[DB.cur]) DB.projects[DB.cur] = {};
   DB.projects[DB.cur][p.id] = p;
   cacheDB();
@@ -574,19 +579,29 @@ async function saveProj(p){
   setSyncStatus('saving');
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(async function(){
-    try{
-      await EVENTOS_DATA.upsertProject(p);
-      // Advance _lastSyncTime so our own save doesn't appear as "changed" on the next delta poll
-      _lastSyncTime = Date.now();
-      setSyncStatus('ok');
-    }catch(e){
-      setSyncStatus('error');
-      if(e && e.message && e.message.indexOf('__oversize__') !== -1){
-        console.error('EventOS: project', p.id, 'is too large to save even after splitting extras');
-        toast('This event has too much data to save even after optimization. Archive old payments or remove unused layout items to continue.', 'e');
-      } else {
-        console.error('saveProj:', e);
-        setSyncStatus('offline');
+    var maxRetries = 3;
+    for(var attempt = 1; attempt <= maxRetries; attempt++){
+      try{
+        await EVENTOS_DATA.upsertProject(p);
+        // Advance _lastSyncTime so our own save doesn't appear as "changed" on the next delta poll
+        _lastSyncTime = Date.now();
+        setSyncStatus('ok');
+        return;
+      }catch(e){
+        if(e && e.message && e.message.indexOf('__oversize__') !== -1){
+          console.error('EventOS: project', p.id, 'is too large to save even after splitting extras');
+          toast('This event has too much data to save even after optimization. Archive old payments or remove unused layout items to continue.', 'e');
+          setSyncStatus('error');
+          return;
+        }
+        console.error('saveProj attempt', attempt + '/' + maxRetries + ':', e);
+        if(attempt < maxRetries){
+          // Exponential backoff: 2s, 4s
+          await new Promise(function(r){ setTimeout(r, Math.pow(2, attempt) * 1000); });
+        } else {
+          setSyncStatus('offline');
+          toast('Could not save changes. Please check your connection.', 'e');
+        }
       }
     }
   }, 1500);
@@ -675,10 +690,27 @@ async function manualSync(){
 
     _lastSyncTime = Date.now();
     setSyncStatus('ok');
+
+    // Check if a newer version of the app has been deployed
+    _checkForNewVersion();
   }catch(e){
     console.error('manualSync:', e);
     setSyncStatus('offline');
   }
+}
+
+var _versionBannerShown = false;
+function _checkForNewVersion(){
+  if(_versionBannerShown) return;
+  var myVersion = (window.EVENTOS_CONFIG && window.EVENTOS_CONFIG.buildVersion) || '';
+  if(!myVersion) return;
+  fetch('app-config.js?_t=' + Date.now()).then(function(r){ return r.text(); }).then(function(txt){
+    var m = txt.match(/buildVersion\s*:\s*['"]([^'"]+)['"]/);
+    if(m && m[1] && m[1] !== myVersion){
+      _versionBannerShown = true;
+      toast('A new version of EventOS is available. Please refresh your browser.', 'e');
+    }
+  }).catch(function(){});
 }
 
 var _syncPollTimer = null;
@@ -692,7 +724,6 @@ function startSyncPoll(){
 }
 
 window.addEventListener('message', function(event){
-  if(window._shareMode) return;
   if(!event.data || event.data.type !== 'WIX_USER') return;
   var d = event.data;
   if(!d.userId) return;
@@ -720,8 +751,6 @@ window.addEventListener('message', function(event){
 window.parent.postMessage('EVENTOS_READY', '*');
 
 setTimeout(function(){
-  if(window._shareMode) return;
-
   if(!WIX_USER){
     console.warn('EventOS: no WIX_USER received after 3s — using dev fallback');
     WIX_USER = { userId: 'dev_user_local', email: 'dev@local.test', displayName: 'Dev User', token: '' };
@@ -778,6 +807,7 @@ function doLogout(){
 }
 
 function enterApp(){
+  if(typeof loadSettings==='function') loadSettings();
   loadLangPref();
   loadEvPrefs();
   applyTranslations();
@@ -849,7 +879,6 @@ function showPage(p){
     const el=document.getElementById(id);if(el)el.classList.add('hidden');
   });
   const pg=document.getElementById('pg-'+p);if(pg)pg.classList.remove('hidden');
-  const snb=document.getElementById('share-nav-btn');if(snb)snb.style.display='none';
   document.querySelectorAll('.sidebar-item').forEach(el=>el.classList.remove('active'));
   const smap={dashboard:'snav-dashboard',events:'snav-events',analytics:'snav-analytics',library:'snav-library'};
   const sid=smap[p]||null; if(sid){const se=document.getElementById(sid);if(se)se.classList.add('active');}

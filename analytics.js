@@ -254,10 +254,18 @@ function renderAnalytics(){
 function openExportPDFModal(){
   const p = proj();
   if(!p) return toast(LANG==='es'?'Abre un proyecto primero':'Open a project first','e');
+  const sections = [
+    ['sec_dash','section_dashboard',true],
+    ['sec_budget','section_budget',true],
+    ['sec_timeline','section_timeline',true],
+    ['sec_guests','section_guests',true],
+    ['sec_layout','section_layout',true],
+    ['sec_moodboard','section_moodboard',true]
+  ];
   openMo(`<div class="mo-title">${t('export_pdf_title')}</div>
   <div style="margin-bottom:16px;font-size:13px;color:var(--muted)">${t('export_pdf_select')}</div>
   <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">
-    ${[['sec_dash','section_dashboard',true],['sec_budget','section_budget',true],['sec_timeline','section_timeline',true],['sec_guests','section_guests',true],['sec_moodboard','section_moodboard',false]].map(([id,key,checked])=>`
+    ${sections.map(([id,key,checked])=>`
     <label class="option-check">
       <input type="checkbox" id="${id}" ${checked?'checked':''} style="width:16px;height:16px;accent-color:var(--gold-h)">
       <span style="font-weight:600;font-size:13px">${t(key)}</span>
@@ -274,170 +282,391 @@ function openExportPDFModal(){
 
 function generateExportPDF(){
   const p = proj(); if(!p) return;
-  const incDash = document.getElementById('sec_dash')?.checked;
-  const incBudget = document.getElementById('sec_budget')?.checked;
+  const incDash     = document.getElementById('sec_dash')?.checked;
+  const incBudget   = document.getElementById('sec_budget')?.checked;
   const incTimeline = document.getElementById('sec_timeline')?.checked;
-  const incGuests = document.getElementById('sec_guests')?.checked;
-  const incMoodboard = document.getElementById('sec_moodboard')?.checked;
+  const incGuests   = document.getElementById('sec_guests')?.checked;
+  const incLayout   = document.getElementById('sec_layout')?.checked;
+  const incMoodboard= document.getElementById('sec_moodboard')?.checked;
   closeMo();
 
-  const hired = p.vendors.filter(v=>v.hired);
-  const paid = hired.reduce((s,v)=>s+v.payments.reduce((a,py)=>a+Number(py.amount),0),0);
-  const tb = hired.reduce((s,v)=>s+Number(v.budget),0);
-  const done = p.tasks.filter(t=>t.done).length;
+  const isES = LANG === 'es';
+  const hired   = p.vendors.filter(v=>v.hired);
+  const paid    = hired.reduce((s,v)=>s+v.payments.reduce((a,py)=>a+Number(py.amount),0),0);
+  const tb      = hired.reduce((s,v)=>s+Number(v.budget),0);
+  const done    = p.tasks.filter(tk=>tk.done).length;
   const confirmed = p.guests.filter(g=>g.rsvp==='confirmed').length;
-  const tl={social:t('type_social'),corporate:t('type_corporate'),community:t('type_community'),government:t('type_government'),education:t('type_education')};
+  const typeLabels = {social:t('type_social'),corporate:t('type_corporate'),community:t('type_community'),government:t('type_government'),education:t('type_education')};
+  const eventType  = typeLabels[p.type] || (p.type?p.type.replace(/^other:/,''):'') || '—';
+  const genDate    = new Date().toLocaleDateString(isES?'es-MX':'en-US',{year:'numeric',month:'long',day:'numeric'});
+  const statusLabels = {
+    'confirmed':isES?'Confirmado':'Confirmed',
+    'to-be-confirmed':isES?'Por confirmar':'To be confirmed',
+    'in-progress':isES?'En progreso':'In progress',
+    'completed':isES?'Completado':'Completed',
+    'cancelled':isES?'Cancelado':'Cancelled'
+  };
 
-  const sec = (title,body) => `
-    <div class="pdf-section">
-      <div class="pdf-sec-title">${title}</div>
+  function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  function sec(title, countLabel, body){
+    const cl = countLabel!=null?`<span style="font-size:11px;color:#b0a898;margin-left:auto;font-weight:500">${countLabel}</span>`:'';
+    return `<div class="sec">
+      <div class="sec-hd"><div class="sec-bar"></div><div class="sec-title">${title}</div>${cl}</div>
       ${body}
     </div>`;
+  }
+  function kv(label,val){
+    return `<div class="kv"><span class="kv-l">${label}</span><span class="kv-v">${val}</span></div>`;
+  }
+  function badge(text,cls){
+    return `<span class="badge ${cls}">${text}</span>`;
+  }
+  function prog(label,pct,color){
+    return `<div class="prog">
+      <div class="prog-hd"><span>${label}</span><span>${pct}%</span></div>
+      <div class="prog-track"><div class="prog-fill" style="width:${pct}%;background:${color}"></div></div>
+    </div>`;
+  }
 
-  const kv = (label,val) => `<div class="pdf-kv"><span class="pdf-kl">${label}</span><span class="pdf-kv-val">${val}</span></div>`;
+  const css = `
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',system-ui,Arial,sans-serif;color:#241f17;background:#f6f1e8;font-size:13px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    a{color:inherit;text-decoration:none}
+
+    .cover{background:#fff;padding:60px 56px 48px;border-bottom:4px solid #c9a84c;page-break-after:always;break-after:page}
+    .cover-brand{font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#c9a84c;margin-bottom:36px}
+    .cover-name{font-size:40px;font-weight:700;letter-spacing:-.5px;line-height:1.1;color:#241f17;margin-bottom:8px}
+    .cover-sub{font-size:16px;color:#6f665c;margin-bottom:24px}
+    .cover-rule{width:56px;height:3px;background:#c9a84c;border-radius:2px;margin-bottom:28px}
+    .cover-facts{display:flex;flex-wrap:wrap;gap:28px}
+    .cover-fact-l{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#b0a898;margin-bottom:3px}
+    .cover-fact-v{font-size:13px;font-weight:600;color:#241f17}
+    .cover-foot{margin-top:36px;font-size:10px;color:#b0a898}
+
+    .body{padding:40px 48px;background:#f6f1e8}
+
+    .sec{margin-bottom:44px;break-inside:avoid}
+    .sec-hd{display:flex;align-items:center;gap:10px;margin-bottom:20px}
+    .sec-bar{width:4px;height:20px;background:#c9a84c;border-radius:2px;flex-shrink:0}
+    .sec-title{font-size:15px;font-weight:700;color:#241f17;letter-spacing:-.2px}
+
+    .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:18px}
+    .stats-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .stat{background:#fff;border:1px solid #e7dccb;border-radius:12px;padding:14px 16px}
+    .stat-v{font-size:22px;font-weight:700;color:#8a6a1d;line-height:1}
+    .stat-l{font-size:10px;color:#b0a898;text-transform:uppercase;letter-spacing:.07em;margin-top:5px}
+    .stat-green .stat-v{color:#1f7a4a}
+    .stat-red .stat-v{color:#b5403a}
+    .stat-muted .stat-v{color:#6f665c}
+
+    .kvbox{background:#fff;border:1px solid #e7dccb;border-radius:12px;overflow:hidden;margin-bottom:16px}
+    .kv{display:flex;justify-content:space-between;align-items:baseline;padding:9px 16px;border-bottom:1px solid #f2ece0;font-size:12px}
+    .kv:last-child{border-bottom:none}
+    .kv-l{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#b0a898;flex-shrink:0;margin-right:12px}
+    .kv-v{color:#241f17;font-weight:500;text-align:right}
+
+    .prog{margin-bottom:10px}
+    .prog-hd{display:flex;justify-content:space-between;font-size:11px;color:#6f665c;margin-bottom:4px}
+    .prog-track{height:7px;background:#e7dccb;border-radius:4px;overflow:hidden}
+    .prog-fill{height:100%;border-radius:4px}
+
+    .tbl-wrap{background:#fff;border:1px solid #e7dccb;border-radius:12px;overflow:hidden;margin-top:6px}
+    table{width:100%;border-collapse:collapse;font-size:11px}
+    th{background:#f6f1e8;color:#6f665c;padding:9px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #e7dccb}
+    td{padding:9px 12px;border-bottom:1px solid #f2ece0;color:#241f17;vertical-align:middle}
+    tr:last-child td{border-bottom:none}
+    tr:nth-child(even) td{background:#fdfaf5}
+
+    .badge{padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;display:inline-block;white-space:nowrap}
+    .badge-g{background:#e6f5ee;color:#1f7a4a}
+    .badge-r{background:#fbeaea;color:#b5403a}
+    .badge-y{background:#fef3c7;color:#92400e}
+    .badge-b{background:#eff6ff;color:#1e40af}
+    .badge-d{background:#f0ece0;color:#6f665c}
+
+    .warn{margin-top:10px;padding:10px 14px;background:#fbeaea;border-radius:8px;font-size:11px;color:#b5403a;font-weight:600}
+
+    .layouts-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+    .layout-card{background:#fff;border:1px solid #e7dccb;border-radius:12px;overflow:hidden;break-inside:avoid}
+    .layout-img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:#f2ece0}
+    .layout-meta{padding:10px 14px;border-top:1px solid #f2ece0}
+    .layout-name{font-size:12px;font-weight:600;color:#241f17}
+    .layout-date{font-size:10px;color:#b0a898;margin-top:2px}
+
+    .mb-folder{margin-bottom:28px;break-inside:avoid}
+    .mb-fhd{display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:8px 12px;background:#fff;border:1px solid #e7dccb;border-radius:8px}
+    .mb-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+    .mb-fname{font-size:12px;font-weight:700;color:#241f17}
+    .mb-fcount{font-size:10px;color:#b0a898;margin-left:auto}
+    .mb-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    .mb-cell{break-inside:avoid}
+    .mb-img-box{border-radius:8px;overflow:hidden;aspect-ratio:4/3;background:#e7dccb}
+    .mb-img{width:100%;height:100%;object-fit:cover;display:block}
+    .mb-cap{font-size:9px;color:#b0a898;margin-top:3px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .mb-theme{background:#fff;border:1px solid #e7dccb;border-radius:10px;overflow:hidden;margin-bottom:16px}
+    .palette-dot{display:inline-block;width:10px;height:10px;border-radius:50%;border:1px solid rgba(0,0,0,.08);vertical-align:middle;margin-right:4px}
+
+    .empty{padding:18px;color:#b0a898;font-size:12px;font-style:italic}
+
+    @media print{
+      body{background:#fff}
+      .body{background:#fff;padding:28px 36px}
+      .cover{border-bottom:3px solid #c9a84c}
+      .sec,.layout-card,.mb-folder{break-inside:avoid}
+    }
+  `;
 
   let html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-  <title>${esc(p.name)}</title>
-  <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Segoe UI',Arial,sans-serif;color:#222;background:#fff;font-size:13px}
-    .pdf-cover{background:linear-gradient(135deg,#1a2235 0%,#2d3f5e 60%,#3a4f6e 100%);color:#fff;padding:60px 50px;min-height:220px;display:flex;flex-direction:column;justify-content:flex-end}
-    .pdf-cover-title{font-size:36px;font-weight:700;letter-spacing:-.5px;margin-bottom:8px;font-family:Georgia,serif;color:#c9a84c}
-    .pdf-cover-sub{font-size:15px;opacity:.7;margin-bottom:6px}
-    .pdf-cover-meta{font-size:12px;opacity:.5;margin-top:16px}
-    .pdf-body{padding:32px 40px}
-    .pdf-section{margin-bottom:36px;break-inside:avoid}
-    .pdf-sec-title{font-size:17px;font-weight:700;color:#1a2235;border-bottom:2px solid #c9a84c;padding-bottom:6px;margin-bottom:16px;font-family:Georgia,serif}
-    .pdf-kv{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0ece0;font-size:12px}
-    .pdf-kl{color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.4px;font-size:10px;padding-top:2px}
-    .pdf-kv-val{color:#222;font-weight:500;text-align:right;max-width:60%}
-    .pdf-stat-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px}
-    .pdf-stat{flex:1;min-width:120px;background:#f9f6ee;border-radius:8px;padding:14px;text-align:center}
-    .pdf-stat-val{font-size:22px;font-weight:700;color:#c9a84c;font-family:Georgia,serif}
-    .pdf-stat-lbl{font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-top:4px}
-    .pdf-prog-wrap{margin:8px 0}
-    .pdf-prog-label{display:flex;justify-content:space-between;font-size:10px;color:#888;margin-bottom:3px}
-    .pdf-prog-bar{height:8px;background:#f0ece0;border-radius:4px;overflow:hidden}
-    .pdf-prog-fill{height:100%;border-radius:4px}
-    table{width:100%;border-collapse:collapse;font-size:11px}
-    th{background:#1a2235;color:#c9a84c;padding:7px 10px;text-align:left;font-weight:600;text-transform:uppercase;letter-spacing:.4px;font-size:10px}
-    td{padding:7px 10px;border-bottom:1px solid #f0ece0}
-    tr:last-child td{border-bottom:none}
-    .badge-g{background:#e8f5ef;color:#2d7a5e;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600}
-    .badge-r{background:#fbeaea;color:#b5403a;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600}
-    .badge-y{background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600}
-    .badge-b{background:#eff6ff;color:#1e40af;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600}
-    .mood-grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
-    .mood-img{width:100px;height:80px;object-fit:cover;border-radius:6px}
-    @media print{body{font-size:12px}.pdf-body{padding:20px 24px}}
-  </style></head><body>
+<title>${_esc(p.name)} — ${isES?'Resumen del Evento':'Event Summary'}</title>
+<style>${css}</style></head><body>
 
-  <div class="pdf-cover">
-    <div class="pdf-cover-title">${esc(p.name)}</div>
-    <div class="pdf-cover-sub">${p.clientName} · ${tl[p.type]||p.type}</div>
-    <div class="pdf-cover-sub">${p.location||'TBD'} · ${fmtDate(p.date)}</div>
-    <div class="pdf-cover-meta">${LANG==='es'?'Generado el':'Generated on'} ${new Date().toLocaleDateString(LANG==='es'?'es-MX':'en-US',{year:'numeric',month:'long',day:'numeric'})}</div>
+<div class="cover">
+  <div class="cover-brand">EventOS &nbsp;·&nbsp; ${isES?'Resumen del Evento':'Event Summary'}</div>
+  <div class="cover-name">${_esc(p.name)}</div>
+  <div class="cover-sub">${p.clientName?_esc(p.clientName)+' &nbsp;·&nbsp; ':''} ${_esc(eventType)}</div>
+  <div class="cover-rule"></div>
+  <div class="cover-facts">
+    <div><div class="cover-fact-l">${isES?'Fecha':'Date'}</div><div class="cover-fact-v">${fmtDate(p.date)||'—'}</div></div>
+    <div><div class="cover-fact-l">${isES?'Lugar':'Venue'}</div><div class="cover-fact-v">${_esc(p.location||'—')}</div></div>
+    <div><div class="cover-fact-l">${t('status')}</div><div class="cover-fact-v">${statusLabels[p.status]||_esc(p.status||'—')}</div></div>
+    ${p.budget?`<div><div class="cover-fact-l">${t('total_budget')}</div><div class="cover-fact-v">${fmtMoney(p.budget)}</div></div>`:''}
+    <div><div class="cover-fact-l">${isES?'Invitados':'Guests'}</div><div class="cover-fact-v">${p.guests.length}</div></div>
   </div>
-  <div class="pdf-body">`;
+  <div class="cover-foot">${isES?'Generado el':'Generated on'} ${genDate}</div>
+</div>
 
+<div class="body">`;
+
+  // ── Overview & Details ────────────────────────────────────────────────────
   if(incDash){
-    const pct = tb>0?Math.min(100,Math.round(paid/tb*100)):0;
-    const tpct = p.tasks.length?Math.round(done/p.tasks.length*100):0;
-    html += sec(t('section_dashboard'),`
-      <div class="pdf-stat-row">
-        <div class="pdf-stat"><div class="pdf-stat-val">${fmtMoney(p.budget)}</div><div class="pdf-stat-lbl">${t('total_budget')}</div></div>
-        <div class="pdf-stat"><div class="pdf-stat-val">${p.guests.length}</div><div class="pdf-stat-lbl">${t('stat_guests')}</div></div>
-        <div class="pdf-stat"><div class="pdf-stat-val">${confirmed}</div><div class="pdf-stat-lbl">${t('rsvp_confirmed')}</div></div>
-        <div class="pdf-stat"><div class="pdf-stat-val">${done}/${p.tasks.length}</div><div class="pdf-stat-lbl">${t('tasks_completed')}</div></div>
+    const pct  = tb>0 ? Math.min(100,Math.round(paid/tb*100)) : 0;
+    const tpct = p.tasks.length ? Math.round(done/p.tasks.length*100) : 0;
+    const overdueCt = p.tasks.filter(tk=>!tk.done&&tk.dueDate&&new Date(tk.dueDate)<new Date()).length;
+
+    html += sec(t('section_dashboard'), null, `
+      <div class="stats">
+        <div class="stat"><div class="stat-v">${fmtMoney(p.budget||0)}</div><div class="stat-l">${t('total_budget')}</div></div>
+        <div class="stat"><div class="stat-v">${p.guests.length}</div><div class="stat-l">${t('stat_guests')}</div></div>
+        <div class="stat stat-green"><div class="stat-v">${confirmed}</div><div class="stat-l">${t('rsvp_confirmed')}</div></div>
+        <div class="stat"><div class="stat-v">${done}/${p.tasks.length}</div><div class="stat-l">${t('tasks_completed')}</div></div>
       </div>
-      ${kv(t('event_name'), p.name)}
-      ${kv(t('client_name'), p.clientName)}
-      ${kv(t('event_type'), tl[p.type]||p.type)}
-      ${kv(t('event_date'), fmtDate(p.date))}
-      ${kv(t('location'), p.location||'TBD')}
-      ${kv(t('status'), p.status?t('status_'+p.status.replace('-','_'))||p.status:'')}
-      ${p.description?kv(t('description'),p.description):''}
-      <div class="pdf-prog-wrap" style="margin-top:12px">
-        <div class="pdf-prog-label"><span>${t('tasks_completed')}</span><span>${tpct}%</span></div>
-        <div class="pdf-prog-bar"><div class="pdf-prog-fill" style="width:${tpct}%;background:#7c3aed"></div></div>
+      <div class="kvbox">
+        ${kv(t('event_name'), _esc(p.name))}
+        ${p.clientName ? kv(t('client_name'), _esc(p.clientName)) : ''}
+        ${kv(t('event_type'), _esc(eventType))}
+        ${kv(t('event_date'), fmtDate(p.date)||'—')}
+        ${kv(t('location'), _esc(p.location||'—'))}
+        ${kv(t('status'), statusLabels[p.status]||_esc(p.status||'—'))}
+        ${p.description ? kv(t('description'), _esc(p.description)) : ''}
       </div>
-      <div class="pdf-prog-wrap">
-        <div class="pdf-prog-label"><span>${t('budget_used')}</span><span>${pct}%</span></div>
-        <div class="pdf-prog-bar"><div class="pdf-prog-fill" style="width:${pct}%;background:${pct>90?'#ef4444':pct>70?'#f59e0b':'#10b981'}"></div></div>
-      </div>`);
+      ${p.tasks.length ? prog(t('tasks_completed'), tpct, '#7c3aed') : ''}
+      ${tb>0 ? prog(t('budget_used'), pct, pct>90?'#ef4444':pct>70?'#f59e0b':'#2a7a56') : ''}
+      ${overdueCt ? `<div class="warn">${overdueCt} ${isES?'tarea(s) vencida(s)':'overdue task(s)'}</div>` : ''}
+    `);
   }
 
+  // ── Budget & Vendors ──────────────────────────────────────────────────────
   if(incBudget){
     const allEst = p.vendors.reduce((s,v)=>s+Number(v.budget),0);
-    const diff = (p.budget||0) - allEst;
-    html += sec(t('section_budget'),`
-      <div class="pdf-stat-row">
-        <div class="pdf-stat"><div class="pdf-stat-val">${fmtMoney(p.budget||0)}</div><div class="pdf-stat-lbl">${t('event_total_budget')}</div></div>
-        <div class="pdf-stat"><div class="pdf-stat-val">${fmtMoney(allEst)}</div><div class="pdf-stat-lbl">${t('estimated_cost')}</div></div>
-        <div class="pdf-stat"><div class="pdf-stat-val">${fmtMoney(paid)}</div><div class="pdf-stat-lbl">${t('actual_paid')}</div></div>
-        <div class="pdf-stat" style="background:${diff>=0?'#e8f5ef':'#fbeaea'}"><div class="pdf-stat-val" style="color:${diff>=0?'#2d7a5e':'#b5403a'}">${diff>=0?'+':''}${fmtMoney(diff)}</div><div class="pdf-stat-lbl">${t('budget_variance')}</div></div>
+    const diff   = (p.budget||0) - allEst;
+    const diffClr = diff>=0 ? '#1f7a4a' : '#b5403a';
+
+    html += sec(t('section_budget'), hired.length ? hired.length+' '+(isES?'proveedores contratados':'hired vendors') : null, `
+      <div class="stats">
+        <div class="stat"><div class="stat-v">${fmtMoney(p.budget||0)}</div><div class="stat-l">${t('event_total_budget')}</div></div>
+        <div class="stat"><div class="stat-v">${fmtMoney(allEst)}</div><div class="stat-l">${t('estimated_cost')}</div></div>
+        <div class="stat stat-green"><div class="stat-v">${fmtMoney(paid)}</div><div class="stat-l">${t('actual_paid')}</div></div>
+        <div class="stat"><div class="stat-v" style="color:${diffClr}">${diff>=0?'+':''}${fmtMoney(diff)}</div><div class="stat-l">${t('budget_variance')}</div></div>
       </div>
-      ${hired.length?`<table style="margin-top:12px">
-        <tr><th>${t('vendor_name_lbl')}</th><th>${t('category')}</th><th>${t('budget_label')}</th><th>${t('paid')}</th><th>%</th></tr>
-        ${hired.map(v=>{
-          const vpaid=v.payments.reduce((s,py)=>s+Number(py.amount),0);
-          const vpct=v.budget>0?Math.min(100,Math.round(vpaid/v.budget*100)):0;
-          return `<tr><td>${esc(v.name)}</td><td>${esc(v.category)}</td><td>${fmtMoney(v.budget)}</td><td>${fmtMoney(vpaid)}</td><td>${vpct}%</td></tr>`;
-        }).join('')}
-      </table>`:`<div style="color:#999;font-size:12px">${t('no_hired_vendors')}</div>`}`);
+      ${tb>0 ? prog(t('budget_used'), Math.min(100,Math.round(paid/tb*100)), paid/tb>0.9?'#ef4444':paid/tb>0.7?'#f59e0b':'#2a7a56') : ''}
+      ${hired.length ? `<div class="tbl-wrap"><table>
+        <thead><tr>
+          <th>${t('vendor_name_lbl')}</th><th>${t('category')}</th>
+          <th style="text-align:right">${t('budget_label')}</th>
+          <th style="text-align:right">${t('paid')}</th>
+          <th style="text-align:right">${isES?'Pagado %':'Paid %'}</th>
+          <th>${t('status')}</th>
+        </tr></thead>
+        <tbody>${hired.map(v=>{
+          const vp   = v.payments.reduce((s,py)=>s+Number(py.amount),0);
+          const vpct = v.budget>0 ? Math.min(100,Math.round(vp/v.budget*100)) : 0;
+          const vClr = vpct>=100?'#1f7a4a':vpct>50?'#92400e':'#b0a898';
+          return `<tr>
+            <td style="font-weight:600">${_esc(v.name)}</td>
+            <td>${_esc(v.category)}</td>
+            <td style="text-align:right">${fmtMoney(v.budget)}</td>
+            <td style="text-align:right">${fmtMoney(vp)}</td>
+            <td style="text-align:right;font-weight:600;color:${vClr}">${vpct}%</td>
+            <td>${badge(vpct>=100?(isES?'Pagado':'Paid'):(isES?'Pendiente':'Pending'),vpct>=100?'badge-g':'badge-y')}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>` : `<div class="empty">${t('no_hired_vendors')}</div>`}
+    `);
   }
 
+  // ── Task Timeline ─────────────────────────────────────────────────────────
   if(incTimeline){
-    const overdue = p.tasks.filter(tk=>!tk.done&&tk.dueDate&&new Date(tk.dueDate)<new Date());
-    html += sec(t('section_timeline'),`
-      <div class="pdf-stat-row" style="margin-bottom:12px">
-        <div class="pdf-stat"><div class="pdf-stat-val">${p.tasks.length}</div><div class="pdf-stat-lbl">${t('total_tasks')}</div></div>
-        <div class="pdf-stat"><div class="pdf-stat-val" style="color:#2d7a5e">${done}</div><div class="pdf-stat-lbl">${t('completed_tasks')}</div></div>
-        <div class="pdf-stat"><div class="pdf-stat-val" style="color:#b5403a">${overdue.length}</div><div class="pdf-stat-lbl">${t('overdue_tasks')}</div></div>
+    const overdue  = p.tasks.filter(tk=>!tk.done&&tk.dueDate&&new Date(tk.dueDate)<new Date());
+    const pending  = p.tasks.filter(tk=>!tk.done&&(!tk.dueDate||new Date(tk.dueDate)>=new Date()));
+    const sorted   = [...overdue, ...pending, ...p.tasks.filter(tk=>tk.done)];
+
+    html += sec(t('section_timeline'), p.tasks.length+' '+(isES?'tareas':'tasks'), `
+      <div class="stats stats-3">
+        <div class="stat"><div class="stat-v">${p.tasks.length}</div><div class="stat-l">${t('total_tasks')}</div></div>
+        <div class="stat stat-green"><div class="stat-v">${done}</div><div class="stat-l">${t('completed_tasks')}</div></div>
+        <div class="stat stat-red"><div class="stat-v">${overdue.length}</div><div class="stat-l">${t('overdue_tasks')}</div></div>
       </div>
-      ${p.tasks.length?`<table>
-        <tr><th>${t('task_title_lbl')}</th><th>${t('due_date_lbl')}</th><th>${t('assigned_to')||'Assigned'}</th><th>${t('status')}</th></tr>
-        ${p.tasks.map(tk=>{
-          const isOv=!tk.done&&tk.dueDate&&new Date(tk.dueDate)<new Date();
-          return `<tr><td>${esc(tk.title)}</td><td>${tk.dueDate||'—'}</td><td>${esc(tk.assignee||'—')}</td>
-            <td>${tk.done?`<span class="badge-g">${t('completed_tasks').split(' ')[0]||'Done'}</span>`:isOv?`<span class="badge-r">${t('overdue_lbl')}</span>`:`<span class="badge-y">${t('status_in_progress')}</span>`}</td></tr>`;
-        }).join('')}
-      </table>`:`<div style="color:#999;font-size:12px">—</div>`}`);
+      ${sorted.length ? `<div class="tbl-wrap"><table>
+        <thead><tr>
+          <th>${t('task_title_lbl')}</th>
+          <th>${t('due_date_lbl')}</th>
+          <th>${t('assigned_to')||'Assigned'}</th>
+          <th>${t('status')}</th>
+        </tr></thead>
+        <tbody>${sorted.map(tk=>{
+          const isOv = !tk.done&&tk.dueDate&&new Date(tk.dueDate)<new Date();
+          const st   = tk.done ? badge(isES?'Completo':'Done','badge-g')
+                     : isOv    ? badge(isES?'Vencida':'Overdue','badge-r')
+                               : badge(isES?'Pendiente':'Pending','badge-y');
+          return `<tr>
+            <td style="font-weight:600">${_esc(tk.title)}</td>
+            <td style="white-space:nowrap">${tk.dueDate||'—'}</td>
+            <td>${_esc(tk.assignee||'—')}</td>
+            <td>${st}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>` : `<div class="empty">—</div>`}
+    `);
   }
 
+  // ── Guest List ────────────────────────────────────────────────────────────
   if(incGuests){
-    html += sec(t('section_guests'),`
-      <div class="pdf-stat-row" style="margin-bottom:12px">
-        <div class="pdf-stat"><div class="pdf-stat-val">${p.guests.length}</div><div class="pdf-stat-lbl">${t('total_guests')}</div></div>
-        <div class="pdf-stat"><div class="pdf-stat-val" style="color:#2d7a5e">${confirmed}</div><div class="pdf-stat-lbl">${t('rsvp_confirmed')}</div></div>
-        <div class="pdf-stat"><div class="pdf-stat-val" style="color:#b5403a">${p.guests.filter(g=>g.rsvp==='declined').length}</div><div class="pdf-stat-lbl">${t('rsvp_declined')}</div></div>
-        <div class="pdf-stat"><div class="pdf-stat-val" style="color:#888">${p.guests.filter(g=>!g.rsvp||g.rsvp==='pending').length}</div><div class="pdf-stat-lbl">${t('pending_guests')}</div></div>
+    const declined = p.guests.filter(g=>g.rsvp==='declined').length;
+    const pending  = p.guests.filter(g=>!g.rsvp||g.rsvp==='pending').length;
+    const hasPlusOne = p.guests.some(g=>g.plusOne);
+    const sorted   = [...p.guests].sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+
+    html += sec(t('section_guests'), p.guests.length+' '+(isES?'invitados':'guests'), `
+      <div class="stats">
+        <div class="stat"><div class="stat-v">${p.guests.length}</div><div class="stat-l">${t('total_guests')}</div></div>
+        <div class="stat stat-green"><div class="stat-v">${confirmed}</div><div class="stat-l">${t('rsvp_confirmed')}</div></div>
+        <div class="stat stat-red"><div class="stat-v">${declined}</div><div class="stat-l">${t('rsvp_declined')}</div></div>
+        <div class="stat stat-muted"><div class="stat-v">${pending}</div><div class="stat-l">${t('pending_guests')}</div></div>
       </div>
-      ${p.guests.length?`<table>
-        <tr><th>${t('col_name')}</th><th>${t('rsvp_status')}</th><th>${t('table_number')}</th><th>${t('meal_pref')}</th></tr>
-        ${p.guests.map(g=>{
-          const rBadge=g.rsvp==='confirmed'?'badge-g':g.rsvp==='declined'?'badge-r':'badge-y';
-          return `<tr><td>${esc(g.name)}</td><td><span class="${rBadge}">${g.rsvp||'pending'}</span></td><td>${g.table||'—'}</td><td>${esc(g.meal||'—')}</td></tr>`;
-        }).join('')}
-      </table>`:`<div style="color:#999;font-size:12px">—</div>`}`);
+      ${sorted.length ? `<div class="tbl-wrap"><table>
+        <thead><tr>
+          <th>${t('col_name')}</th>
+          <th>${t('rsvp_status')}</th>
+          <th>${t('table_number')}</th>
+          <th>${t('meal_pref')}</th>
+          ${hasPlusOne ? `<th>+1</th>` : ''}
+        </tr></thead>
+        <tbody>${sorted.map(g=>{
+          const rl  = g.rsvp==='confirmed'?(isES?'Confirmado':'Confirmed'):g.rsvp==='declined'?(isES?'Declinó':'Declined'):(isES?'Pendiente':'Pending');
+          const rc  = g.rsvp==='confirmed'?'badge-g':g.rsvp==='declined'?'badge-r':'badge-y';
+          return `<tr>
+            <td style="font-weight:600">${_esc(g.name)}</td>
+            <td>${badge(rl,rc)}</td>
+            <td>${_esc(g.table||'—')}</td>
+            <td>${_esc(g.meal||'—')}</td>
+            ${hasPlusOne ? `<td>${g.plusOne ? badge('+1','badge-b') : ''}</td>` : ''}
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>` : `<div class="empty">—</div>`}
+    `);
   }
 
-  if(incMoodboard && p.moodboard && p.moodboard.length){
-    const imgs = p.moodboard.filter(item=>item.url||item.src).slice(0,12);
-    html += sec(t('section_moodboard'),`
-      ${p.aiTheme?kv(LANG==='es'?'Tema':'Theme', p.aiTheme):''}
-      ${p.aiPalette?kv(LANG==='es'?'Paleta':'Palette', Array.isArray(p.aiPalette)?p.aiPalette.join(', '):p.aiPalette):''}
-      ${imgs.length?`<div class="mood-grid">${imgs.map(item=>`<img src="${item.url||item.src}" class="mood-img" onerror="this.style.display='none'">`).join('')}</div>`:''}`);
+  // ── Event Layouts ─────────────────────────────────────────────────────────
+  if(incLayout){
+    const rawLayouts = (p.eventLayouts||[]).filter(e=>e.layoutExport&&e.layoutExport.image);
+    const layoutList = rawLayouts.length
+      ? rawLayouts
+      : (p.layoutExport&&p.layoutExport.image ? [{layoutExport:p.layoutExport,addedAt:p.layoutExport.exportedAt}] : []);
+
+    if(layoutList.length){
+      html += sec(t('section_layout'), layoutList.length, `
+        <div class="layouts-grid">${layoutList.map(entry=>{
+          const ex = entry.layoutExport||{};
+          const nm = ex.layoutName||(isES?'Plano':'Layout');
+          const dt = entry.addedAt ? new Date(entry.addedAt).toLocaleDateString(isES?'es-MX':'en-US',{year:'numeric',month:'short',day:'numeric'}) : '';
+          return `<div class="layout-card">
+            <img class="layout-img" src="${ex.image}" alt="${_esc(nm)}" onerror="this.style.display='none'">
+            <div class="layout-meta">
+              <div class="layout-name">${_esc(nm)}</div>
+              ${dt?`<div class="layout-date">${dt}</div>`:''}
+            </div>
+          </div>`;
+        }).join('')}</div>
+      `);
+    }
+  }
+
+  // ── Moodboard ─────────────────────────────────────────────────────────────
+  if(incMoodboard){
+    const rawMb = p.moodboard||{};
+    const mb    = Array.isArray(rawMb) ? {folders:[],uncategorized:rawMb} : rawMb;
+    const folders    = (mb.folders||[]).filter(f=>f.images&&f.images.length);
+    const uncatImgs  = (mb.uncategorized||[]).filter(img=>img.url||img.src);
+    const hasContent = folders.length||uncatImgs.length;
+
+    if(hasContent){
+      const palette = p.aiPalette;
+      const hasMeta = p.aiTheme||(Array.isArray(palette)&&palette.length);
+      const metaHtml = hasMeta ? `<div class="mb-theme">
+        ${p.aiTheme ? kv(isES?'Tema':'Theme', _esc(p.aiTheme)) : ''}
+        ${Array.isArray(palette)&&palette.length ? kv(isES?'Paleta':'Palette',
+          palette.map(c=>{
+            const hex = typeof c==='object'?(c.hex||''):c;
+            const name= typeof c==='object'?(c.name||hex):c;
+            return `<span style="white-space:nowrap;margin-right:8px"><span class="palette-dot" style="background:${_esc(hex)}"></span>${_esc(name)}</span>`;
+          }).join('')
+        ) : ''}
+      </div>` : '';
+
+      const folderHtml = folders.map(folder=>{
+        const imgs = folder.images.filter(img=>img.url||img.src);
+        return `<div class="mb-folder">
+          <div class="mb-fhd">
+            <div class="mb-dot" style="background:${_esc(folder.color||'#c9a84c')}"></div>
+            <div class="mb-fname">${_esc(folder.name)}</div>
+            <div class="mb-fcount">${imgs.length} ${isES?'imágenes':'images'}</div>
+          </div>
+          <div class="mb-grid">${imgs.map(img=>`
+            <div class="mb-cell">
+              <div class="mb-img-box"><img class="mb-img" src="${img.url||img.src}" onerror="this.style.display='none'"></div>
+              ${img.name?`<div class="mb-cap">${_esc(img.name)}</div>`:''}
+            </div>`).join('')}
+          </div>
+        </div>`;
+      }).join('');
+
+      const uncatHtml = uncatImgs.length ? `<div class="mb-folder">
+        <div class="mb-fhd">
+          <div class="mb-dot" style="background:#b0a898"></div>
+          <div class="mb-fname">${isES?'Sin clasificar':'Uncategorized'}</div>
+          <div class="mb-fcount">${uncatImgs.length} ${isES?'imágenes':'images'}</div>
+        </div>
+        <div class="mb-grid">${uncatImgs.map(img=>`
+          <div class="mb-cell">
+            <div class="mb-img-box"><img class="mb-img" src="${img.url||img.src}" onerror="this.style.display='none'"></div>
+            ${img.name?`<div class="mb-cap">${_esc(img.name)}</div>`:''}
+          </div>`).join('')}
+        </div>
+      </div>` : '';
+
+      html += sec(t('section_moodboard'), null, metaHtml + folderHtml + uncatHtml);
+    }
   }
 
   html += `</div></body></html>`;
 
-  const win = window.open('','_blank','width=900,height=700');
-  if(!win){ toast(LANG==='es'?'Permite ventanas emergentes para exportar':'Allow popups to export PDF','e'); return; }
+  const win = window.open('','_blank','width=960,height=760');
+  if(!win){ toast(isES?'Permite ventanas emergentes para exportar':'Allow popups to export PDF','e'); return; }
   win.document.write(html);
   win.document.close();
   win.focus();
-  setTimeout(()=>win.print(), 800);
+  setTimeout(()=>win.print(), 900);
 }
 
 document.addEventListener('click',function(e){

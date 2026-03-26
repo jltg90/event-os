@@ -328,13 +328,16 @@ function buildLayoutSnapshotGraphic(opts){
           positions.push({x:w/2+(w/2+cs/2+gap)*Math.cos(angle), y:h/2+(h/2+cs/2+gap)*Math.sin(angle)});
         }
       } else if(item.shape==='rect-table'){
-        // Mirror editor: 2 chairs per short side, remainder split top/bottom
-        var sideN=2;
-        var topN=Math.ceil((n-sideN*2)/2), botN=Math.floor((n-sideN*2)/2);
-        for(var j=0;j<topN;j++) positions.push({x:(j+1)*w/(topN+1), y:-(cs/2+gap)});
-        for(var k=0;k<botN;k++) positions.push({x:(k+1)*w/(botN+1), y:h+cs/2+gap});
-        for(var l=0;l<sideN;l++) positions.push({x:-(cs/2+gap), y:(l+1)*h/(sideN+1)});
-        for(var m=0;m<sideN;m++) positions.push({x:w+cs/2+gap, y:(m+1)*h/(sideN+1)});
+        var _sides=item.chairSides||_defaultRectChairSides(n);
+        var _topN=_sides.top||0, _botN=_sides.bottom||0, _leftN=_sides.left||0, _rightN=_sides.right||0;
+        var _sgTop=_getRectSideGapPx(item,'top',item.w,_topN)*scale;
+        var _sgBot=_getRectSideGapPx(item,'bottom',item.w,_botN)*scale;
+        var _sgLeft=_getRectSideGapPx(item,'left',item.h,_leftN)*scale;
+        var _sgRight=_getRectSideGapPx(item,'right',item.h,_rightN)*scale;
+        if(_topN){var _tw=_topN*cs+(_topN-1)*_sgTop;var _sx=(w-_tw)/2+cs/2;for(var j=0;j<_topN;j++) positions.push({x:_sx+j*(cs+_sgTop), y:-(cs/2+gap)});}
+        if(_botN){var _bw=_botN*cs+(_botN-1)*_sgBot;var _sbx=(w-_bw)/2+cs/2;for(var k=0;k<_botN;k++) positions.push({x:_sbx+k*(cs+_sgBot), y:h+cs/2+gap});}
+        if(_leftN){var _lh=_leftN*cs+(_leftN-1)*_sgLeft;var _sly=(h-_lh)/2+cs/2;for(var l=0;l<_leftN;l++) positions.push({x:-(cs/2+gap), y:_sly+l*(cs+_sgLeft)});}
+        if(_rightN){var _rh=_rightN*cs+(_rightN-1)*_sgRight;var _sry=(h-_rh)/2+cs/2;for(var m=0;m<_rightN;m++) positions.push({x:w+cs/2+gap, y:_sry+m*(cs+_sgRight)});}
       } else {
         var chairSlot=cs+5;
         var longCap=Math.max(1,Math.floor(w/chairSlot));
@@ -350,6 +353,19 @@ function buildLayoutSnapshotGraphic(opts){
       positions.forEach(function(pos){
         inner += '<ellipse cx="'+Math.round(pos.x)+'" cy="'+Math.round(pos.y)+'" rx="'+Math.round(cs/2)+'" ry="'+Math.round(cs/2)+'" fill="'+cfill+'" stroke="none"/>';
       });
+    }
+
+    // ── Dotted outline ──
+    var _isOlTable=['round-table','rect-table','square-table'].includes(item.shape)||(LSHAPES_M[item.shape]&&LSHAPES_M[item.shape]._isCustomTable);
+    var _olOff=item.outlineOffset!=null?item.outlineOffset:0.90;
+    if(_olOff>0 && !isSTable && _isOlTable){
+      var _olPx=Math.round(_olOff*PPM*scale);
+      if(isRound){
+        var _olRx=(iw/2)+_olPx, _olRy=(ih/2)+_olPx;
+        inner += '<ellipse cx="'+(iw/2)+'" cy="'+(ih/2)+'" rx="'+_olRx+'" ry="'+_olRy+'" fill="none" stroke="'+(item.bdClr||'#999')+'" stroke-width="1" stroke-dasharray="4 3" opacity="0.45"/>';
+      } else {
+        inner += '<rect x="'+(-_olPx)+'" y="'+(-_olPx)+'" width="'+(iw+_olPx*2)+'" height="'+(ih+_olPx*2)+'" rx="0" fill="none" stroke="'+(item.bdClr||'#999')+'" stroke-width="1" stroke-dasharray="4 3" opacity="0.45"/>';
+      }
     }
 
     // ── Table body ──
@@ -517,7 +533,7 @@ function renderEventLayoutViewer(p){
 
   var summaryRows = summary && summary.elements && summary.elements.length
     ? summary.elements.map(function(row){
-        var labels = row.labels && row.labels.length ? row.labels.slice(0,3).join(', ') : '?';
+        var labels = row.labels && row.labels.length ? row.labels.join(', ') : '?';
         return '<tr><td style="padding:10px 12px;font-weight:600">'+esc(row.type)+'</td><td style="padding:10px 12px;color:var(--muted)">'+esc(row.dimensions)+'</td><td style="padding:10px 12px;text-align:center">'+row.qty+'</td><td style="padding:10px 12px;color:var(--muted)">'+esc(labels)+'</td></tr>';
       }).join('')
     : '<tr><td colspan="4" style="padding:14px 12px;color:var(--muted);text-align:center">'+(LANG==='es'?'No hay elementos en este layout':'No elements in this layout')+'</td></tr>';
@@ -535,7 +551,7 @@ function renderEventLayoutViewer(p){
       +'</div>'
     : '<div style="padding:44px;text-align:center;color:var(--muted)">'+(isES?'No se pudo generar la imagen del layout':'Could not generate the layout image')+'</div>';
 
-  el.innerHTML = '<div style="max-width:1180px;margin:0 auto;padding:24px;width:100%"><div style="display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start;margin-bottom:20px"><div style="flex:1;min-width:260px"><div style="font-family:Cormorant Garamond,serif;font-size:32px;font-weight:700;margin-bottom:6px">'+esc(exp.layoutName || (isES?'Layout exportado':'Exported layout'))+'</div><div style="font-size:13px;color:var(--muted);line-height:1.6">'+(isES?'Vista de solo lectura del layout exportado desde la Biblioteca.':'Read-only view of the layout exported from the Library.')+(dateLabel?(' '+(isES?'Exportado el ':'Exported on ')+dateLabel+'.'):'')+'</div>'+(missingSource?'<div style="margin-top:12px;padding:10px 12px;border:1px solid rgba(239,68,68,.25);background:rgba(239,68,68,.08);border-radius:10px;font-size:12px;color:var(--danger)">'+(isES?'El layout fuente ya no existe en la Biblioteca. Puedes ver esta exportacion, pero no actualizarla.':'The source layout no longer exists in the Library. You can still view this export, but you cannot refresh it.')+'</div>':'')+'</div><div style="display:flex;flex-wrap:wrap;gap:8px">'+(missingSource?'':'<button class="btn btn-ghost" onclick="openEventLayoutInLibrary()">'+(isES?'Editar en Biblioteca':'Edit in Library')+'</button>')+'<div id="ev-layouts-wrap" style="position:relative"><button id="ev-layouts-btn" class="btn btn-ghost" onclick="openEventLayoutsPanel()" style="display:flex;align-items:center;gap:6px"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>'+(isES?'Layouts':'Layouts')+' ('+layouts.length+')</button></div></div></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px"><div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">'+(isES?'Mesas':'Tables')+'</div><div style="font-size:24px;font-weight:700">'+((summary&&summary.tables)||0)+'</div></div><div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">'+(isES?'Invitados':'Guests')+'</div><div style="font-size:24px;font-weight:700">'+((summary&&summary.guests)||'-')+'</div></div></div><div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;box-shadow:var(--sh-sm);margin-bottom:18px">'+imgSection+'</div><div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;box-shadow:var(--sh-sm)"><div style="font-family:Cormorant Garamond,serif;font-size:24px;font-weight:700;margin-bottom:12px">'+(isES?'Resumen de Elementos':'Element Summary')+'</div><div style="overflow:auto"><table style="width:100%;border-collapse:collapse"><thead><tr style="background:var(--bg2)"><th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--muted)">'+(isES?'Elemento':'Element')+'</th><th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--muted)">'+(isES?'Dimensiones':'Dimensions')+'</th><th style="padding:10px 12px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--muted)">'+(isES?'Cantidad':'Qty')+'</th><th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--muted)">'+(isES?'Etiquetas':'Labels')+'</th></tr></thead><tbody>'+summaryRows+'</tbody></table></div></div></div>';
+  el.innerHTML = '<div style="max-width:1180px;margin:0 auto;padding:24px;width:100%"><div style="display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start;margin-bottom:20px"><div style="flex:1;min-width:260px"><div style="font-family:Cormorant Garamond,serif;font-size:32px;font-weight:700;margin-bottom:6px">'+esc(exp.layoutName || (isES?'Layout exportado':'Exported layout'))+'</div><div style="font-size:13px;color:var(--muted);line-height:1.6">'+(isES?'Vista de solo lectura del layout exportado desde la Biblioteca.':'Read-only view of the layout exported from the Library.')+(dateLabel?(' '+(isES?'Exportado el ':'Exported on ')+dateLabel+'.'):'')+'</div>'+(missingSource?'<div style="margin-top:12px;padding:10px 12px;border:1px solid rgba(239,68,68,.25);background:rgba(239,68,68,.08);border-radius:10px;font-size:12px;color:var(--danger)">'+(isES?'El layout fuente ya no existe en la Biblioteca. Puedes ver esta exportacion, pero no actualizarla.':'The source layout no longer exists in the Library. You can still view this export, but you cannot refresh it.')+'</div>':'')+'</div><div style="display:flex;flex-wrap:wrap;gap:8px">'+(missingSource?'':'<button class="btn btn-ghost" onclick="openEventLayoutInLibrary()">'+(isES?'Editar en Biblioteca':'Edit in Library')+'</button>')+'<button class="btn btn-ghost" onclick="exportEventLayoutSnapshot()" style="display:flex;align-items:center;gap:5px"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>'+(isES?'Exportar PDF':'Export PDF')+'</button>'+'<div id="ev-layouts-wrap" style="position:relative"><button id="ev-layouts-btn" class="btn btn-ghost" onclick="openEventLayoutsPanel()" style="display:flex;align-items:center;gap:6px"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>'+(isES?'Layouts':'Layouts')+' ('+layouts.length+')</button></div></div></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px"><div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">'+(isES?'Mesas':'Tables')+'</div><div style="font-size:24px;font-weight:700">'+((summary&&summary.tables)||0)+'</div></div><div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">'+(isES?'Invitados':'Guests')+'</div><div style="font-size:24px;font-weight:700">'+((summary&&summary.guests)||'-')+'</div></div></div><div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;box-shadow:var(--sh-sm);margin-bottom:18px">'+imgSection+'</div><div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;box-shadow:var(--sh-sm)"><div style="font-family:Cormorant Garamond,serif;font-size:24px;font-weight:700;margin-bottom:12px">'+(isES?'Resumen de Elementos':'Element Summary')+'</div><div style="overflow:auto"><table style="width:100%;border-collapse:collapse"><thead><tr style="background:var(--bg2)"><th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--muted)">'+(isES?'Elemento':'Element')+'</th><th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--muted)">'+(isES?'Dimensiones':'Dimensions')+'</th><th style="padding:10px 12px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--muted)">'+(isES?'Cantidad':'Qty')+'</th><th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--muted)">'+(isES?'Etiquetas':'Labels')+'</th></tr></thead><tbody>'+summaryRows+'</tbody></table></div></div>'+renderEventLayoutQuoteSection(p)+'</div>';
 
   var lv = document.getElementById('lv-viewport');
   if(lv){
@@ -727,6 +743,19 @@ function renderLayout(){
       return;
     }
     renderEventLayoutViewer(p);
+    return;
+  }
+  /* ── Mobile guard: block editing on small screens ── */
+  if(window.innerWidth<=768){
+    var el=_layoutEl();
+    if(el){
+      var isES=LANG==='es';
+      el.innerHTML='<div class="layout-mobile-block">'
+        +'<svg width="48" height="48" fill="none" stroke="var(--gold-h)" stroke-width="1.5" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>'
+        +'<div class="layout-mobile-block-title">'+(isES?'Usa un escritorio':'Use a Desktop')+'</div>'
+        +'<div class="layout-mobile-block-text">'+(isES?'El editor de layout requiere una pantalla más grande. Abre EventOS en una computadora para diseñar tu plano.':'The layout editor requires a larger screen. Open EventOS on a computer to design your floor plan.')+'</div>'
+        +'</div>';
+    }
     return;
   }
   LState.items=p.layoutItems||[];
@@ -999,7 +1028,16 @@ function ensureLayoutQuoteState(p){
 }
 
 function getLayoutQuoteGroupKey(item){
-  return [item.shape||'', item.chairType||'default', item.centerpiece||'none'].join('||');
+  return [
+    item.shape||'',
+    Math.round(item.w||0),
+    Math.round(item.h||0),
+    item.chairs||0,
+    item.bg||'',
+    item.bdClr||'',
+    item.chairType||'default',
+    item.centerpiece||'none'
+  ].join('||');
 }
 
 function getLayoutShapeLabel(shape){
@@ -1012,78 +1050,109 @@ function getLayoutQuoteSummary(items, extras){
   extras = extras || [];
   if(typeof LSHAPES_M==='undefined' || !LSHAPES_M) LSHAPES_M=getLSHAPES();
 
-  var groups={};
+  var elemGroups={};
+  var chairCounts={};
+  var cpCounts={};
+
   items.forEach(function(item){
     var key=getLayoutQuoteGroupKey(item);
-    var chairType=item.chairType||'default';
-    var chairDef=CHAIR_TYPES[chairType] || CHAIR_TYPES.default || {label:chairType,costPerChair:0};
-    var cpKey=item.centerpiece||'none';
-    var cpDef=CENTERPIECE_TYPES[cpKey] || {label:cpKey,cost:0};
     var shapeDef=LSHAPES_M[item.shape] || null;
-    if(!groups[key]){
-      groups[key]={
+    var isRound=item.shape==='round-table'||String(item.radius||'').indexOf('50')>=0||(shapeDef&&shapeDef.radius==='50%');
+    if(!elemGroups[key]){
+      var chairType=item.chairType||'default';
+      var cpKey=item.centerpiece||'none';
+      var chairDef=CHAIR_TYPES[chairType]||CHAIR_TYPES['default']||{label:chairType};
+      var cpDef=CENTERPIECE_TYPES[cpKey]||{label:cpKey};
+      elemGroups[key]={
         key:key,
         shape:item.shape,
         label:getLayoutShapeLabel(item.shape),
+        w:item.w||0,
+        h:item.h||0,
+        bg:item.bg||'#e8e2d8',
+        bdClr:item.bdClr||'#b0a898',
+        isRound:isRound,
+        chairs:Number(item.chairs||0),
         chairType:chairType,
-        chairStyle:chairType!=='default' ? (chairDef.label||chairType) : (LANG==='es'?'Predeterminada':'Default'),
+        chairLabel:chairDef.label||chairType,
         centerpieceKey:cpKey,
-        centerpiece:cpKey!=='none' ? (cpDef.label||cpKey) : (LANG==='es'?'Ninguno':'None'),
-        chairsPerUnit:Number(item.chairs||0),
-        unitElementPrice:Number(item.cost||0),
-        qty:0,
-        isTable:!!(item.shape && (item.shape.indexOf('table')>=0 || (shapeDef && shapeDef._isCustomTable)))
+        centerpieceLabel:cpKey!=='none'?(cpDef.label||cpKey):null,
+        cost:Number(item.cost||0),
+        qty:0
       };
     }
-    groups[key].qty++;
-  });
+    elemGroups[key].qty++;
 
-  var autoRows=Object.keys(groups).map(function(key){
-    var row=groups[key];
-    var chairDef=CHAIR_TYPES[row.chairType] || CHAIR_TYPES.default || {costPerChair:0,label:row.chairType};
-    var cpDef=CENTERPIECE_TYPES[row.centerpieceKey] || {cost:0,label:row.centerpieceKey};
-    row.unitChairPriceTotal = Number(row.chairsPerUnit||0) * Number(chairDef.costPerChair||0);
-    row.unitCenterpiecePrice = row.centerpieceKey!=='none' ? Number(cpDef.cost||0) : 0;
-    row.unitTotal = Number(row.unitElementPrice||0) + row.unitChairPriceTotal + row.unitCenterpiecePrice;
-    row.rowTotal = row.unitTotal * Number(row.qty||0);
-    return row;
-  }).sort(function(a,b){
-    if(a.label===b.label){
-      if(a.chairStyle===b.chairStyle) return a.centerpiece.localeCompare(b.centerpiece);
-      return a.chairStyle.localeCompare(b.chairStyle);
+    var _chairType=item.chairType||'default';
+    var nChairs=Number(item.chairs||0);
+    if(nChairs>0){
+      chairCounts[_chairType]=(chairCounts[_chairType]||0)+nChairs;
     }
-    return a.label.localeCompare(b.label);
+
+    var _cpKey=item.centerpiece||'none';
+    if(_cpKey!=='none'){
+      cpCounts[_cpKey]=(cpCounts[_cpKey]||0)+1;
+    }
   });
 
-  var extraRows=extras.map(function(extra, index){
-    var qty=Math.max(0, parseInt(extra.quantity,10) || 0);
+  var elementRows=Object.keys(elemGroups).map(function(key){
+    var row=elemGroups[key];
+    row.rowTotal=row.cost*row.qty;
+    return row;
+  }).sort(function(a,b){ return a.label.localeCompare(b.label); });
+
+  var chairRows=Object.keys(chairCounts).map(function(chairType){
+    var def=CHAIR_TYPES[chairType]||CHAIR_TYPES['default']||{label:chairType,fill:'#e8e2d8',costPerChair:0};
+    var qty=chairCounts[chairType];
+    var unitPrice=Number(def.costPerChair||0);
+    return {key:chairType, label:def.label||chairType, fill:def.fill||'#e8e2d8', qty:qty, unitPrice:unitPrice, rowTotal:qty*unitPrice};
+  }).sort(function(a,b){ return a.label.localeCompare(b.label); });
+
+  var centerpieceRows=Object.keys(cpCounts).map(function(cpKey){
+    var def=CENTERPIECE_TYPES[cpKey]||{label:cpKey,color:'#c9a84c',cost:0};
+    var qty=cpCounts[cpKey];
+    var unitPrice=Number(def.cost||0);
+    return {key:cpKey, label:def.label||cpKey, color:def.color||'#c9a84c', qty:qty, unitPrice:unitPrice, rowTotal:qty*unitPrice};
+  }).sort(function(a,b){ return a.label.localeCompare(b.label); });
+
+  var extraRows=extras.map(function(extra,index){
+    var qty=Math.max(0,parseInt(extra.quantity,10)||0);
     var unitPrice=Number(extra.unitPrice||0);
     return {
-      id: extra.id || ('lqe_'+index),
-      name: String(extra.name||'').trim(),
-      category: String(extra.category||'').trim(),
-      quantity: qty,
-      unitPrice: unitPrice,
-      notes: String(extra.notes||''),
-      rowTotal: qty * unitPrice
+      id:extra.id||('lqe_'+index),
+      name:String(extra.name||'').trim(),
+      category:String(extra.category||'').trim(),
+      quantity:qty,
+      unitPrice:unitPrice,
+      notes:String(extra.notes||''),
+      rowTotal:qty*unitPrice
     };
   });
 
-  var autoTotal=autoRows.reduce(function(sum,row){ return sum + row.rowTotal; },0);
-  var extrasTotal=extraRows.reduce(function(sum,row){ return sum + row.rowTotal; },0);
-  var totalSeats=items.reduce(function(sum,item){ return sum + Number(item.chairs||0); },0);
-  var extraQtyTotal=extraRows.reduce(function(sum,row){ return sum + row.quantity; },0);
+  var elementsTotal=elementRows.reduce(function(s,r){ return s+r.rowTotal; },0);
+  var chairsTotal=chairRows.reduce(function(s,r){ return s+r.rowTotal; },0);
+  var centerpiecesTotal=centerpieceRows.reduce(function(s,r){ return s+r.rowTotal; },0);
+  var extrasTotal=extraRows.reduce(function(s,r){ return s+r.rowTotal; },0);
+  var totalSeats=items.reduce(function(s,item){ return s+Number(item.chairs||0); },0);
+  var extraQtyTotal=extraRows.reduce(function(s,r){ return s+r.quantity; },0);
+  var autoTotal=elementsTotal+chairsTotal+centerpiecesTotal;
 
   return {
-    autoRows:autoRows,
+    elementRows:elementRows,
+    chairRows:chairRows,
+    centerpieceRows:centerpieceRows,
     extraRows:extraRows,
-    autoTotal:autoTotal,
+    elementsTotal:elementsTotal,
+    chairsTotal:chairsTotal,
+    centerpiecesTotal:centerpiecesTotal,
     extrasTotal:extrasTotal,
-    total:autoTotal + extrasTotal,
+    autoTotal:autoTotal,
+    autoRows:elementRows,
+    total:autoTotal+extrasTotal,
     totalSeats:totalSeats,
     layoutItemCount:items.length,
     extraQtyTotal:extraQtyTotal,
-    totalElements:items.length + extraQtyTotal
+    totalElements:items.length+extraQtyTotal
   };
 }
 
@@ -1093,7 +1162,7 @@ function renderLayoutQuoteWorkspace(p){
   var quote=getLayoutQuoteSummary(LState.items, extras);
   var isES=LANG==='es';
   var hiddenBody=_layoutQuoteCollapsed ? 'display:none;' : '';
-  var empty = !quote.autoRows.length && !quote.extraRows.length;
+  var empty = !quote.elementRows.length && !quote.chairRows.length && !quote.centerpieceRows.length && !quote.extraRows.length;
   return `
     <div id="layout-quote-workspace" style="margin:0 12px 12px;background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:0 8px 24px rgba(15,23,42,.06);overflow:hidden">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
@@ -1133,61 +1202,103 @@ function renderLayoutQuoteWorkspace(p){
     </div>`;
 }
 
-function renderLayoutQuoteAutoTable(quote){
-  if(!quote.autoRows.length) return '';
+function renderLayoutQuoteAutoTable(quote, prefix, readOnly){
+  var pfx=prefix||'lQuote';
   var isES=LANG==='es';
-  var rows=quote.autoRows.map(function(row){
-    var chairDef=CHAIR_TYPES[row.chairType]||CHAIR_TYPES['default']||{costPerChair:0};
-    var cpDef=CENTERPIECE_TYPES[row.centerpieceKey]||{cost:0};
-    var chairOpts=Object.keys(CHAIR_TYPES).map(function(key){
-      return '<option value="'+key+'"'+(row.chairType===key?' selected':'')+'>'+esc(CHAIR_TYPES[key].label)+'</option>';
+  var hasElements=quote.elementRows.length>0;
+  var hasChairs=quote.chairRows.length>0;
+  var hasCenterpieces=quote.centerpieceRows.length>0;
+  if(!hasElements&&!hasChairs&&!hasCenterpieces) return '';
+
+  var ppm=typeof getPPM==='function'?getPPM():100;
+
+  function elemSvg(row){
+    var fill=row.bg||'#e8e2d8';
+    var stroke=row.bdClr||'#b0a898';
+    if(row.isRound){
+      return '<svg width="34" height="34" viewBox="0 0 34 34"><circle cx="17" cy="17" r="13" fill="'+fill+'" stroke="'+stroke+'" stroke-width="1.5"/></svg>';
+    }
+    return '<svg width="34" height="34" viewBox="0 0 34 34"><rect x="3" y="7" width="28" height="20" rx="3" fill="'+fill+'" stroke="'+stroke+'" stroke-width="1.5"/></svg>';
+  }
+
+  function colorDot(color){
+    return '<svg width="26" height="26" viewBox="0 0 26 26"><circle cx="13" cy="13" r="10" fill="'+(color||'#e8e2d8')+'" stroke="#c0b8ac" stroke-width="1"/></svg>';
+  }
+
+  function secHeader(label){
+    return '<tr style="background:var(--bg2)"><td colspan="6" style="padding:7px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)">'+label+'</td></tr>';
+  }
+
+  var body='';
+
+  if(hasElements){
+    body+=secHeader(isES?'Elementos':'Elements');
+    body+=quote.elementRows.map(function(row){
+      var wM=(row.w/ppm).toFixed(1);
+      var hM=(row.h/ppm).toFixed(1);
+      var dims=row.w&&row.h?wM+' \xd7 '+hM+' m':'-';
+      var tags=[];
+      if(row.chairs>0) tags.push(row.chairs+(isES?' sillas':' chairs')+' \xb7 '+esc(row.chairLabel));
+      if(row.centerpieceLabel) tags.push(esc(row.centerpieceLabel));
+      var subLabel=tags.length?'<div style="font-size:10px;color:var(--muted);margin-top:2px;font-weight:400">'+tags.join(' \xb7 ')+'</div>':'';
+      return '<tr style="border-bottom:1px solid var(--bg2)">'+
+        '<td style="padding:9px 10px"><div style="font-size:12px;font-weight:600">'+esc(row.label)+'</div>'+subLabel+'</td>'+
+        '<td style="padding:5px 10px;text-align:center">'+elemSvg(row)+'</td>'+
+        '<td style="padding:9px 10px;font-size:11px;color:var(--muted);white-space:nowrap">'+dims+'</td>'+
+        '<td style="padding:9px 10px;text-align:center;font-size:12px">'+row.qty+'</td>'+
+        (readOnly?'<td style="padding:9px 10px;font-size:12px">'+formatCost(row.cost)+'</td>':'<td style="padding:6px 8px"><input class="input" type="number" min="0" step="0.01" value="'+row.cost+'" style="font-size:11px;padding:5px 6px;width:90px" onchange="'+pfx+'UpdateGroupCost(\''+row.key+'\',this.value)"></td>')+
+        '<td style="padding:9px 10px;text-align:right;font-size:12px;font-weight:700;color:var(--gold-h)">'+formatCost(row.rowTotal)+'</td>'+
+      '</tr>';
     }).join('');
-    var cpOpts=Object.keys(CENTERPIECE_TYPES).map(function(key){
-      return '<option value="'+key+'"'+(row.centerpieceKey===key?' selected':'')+'>'+esc(CENTERPIECE_TYPES[key].label)+'</option>';
+  }
+
+  if(hasChairs){
+    body+=secHeader(isES?'Sillas':'Chairs');
+    body+=quote.chairRows.map(function(row){
+      return '<tr style="border-bottom:1px solid var(--bg2)">'+
+        '<td style="padding:9px 10px;font-size:12px;font-weight:600">'+esc(row.label)+'</td>'+
+        '<td style="padding:5px 10px;text-align:center">'+colorDot(row.fill)+'</td>'+
+        '<td style="padding:9px 10px;font-size:11px;color:var(--muted)">-</td>'+
+        '<td style="padding:9px 10px;text-align:center;font-size:12px">'+row.qty+'</td>'+
+        (readOnly?'<td style="padding:9px 10px;font-size:12px">'+formatCost(row.unitPrice)+'</td>':'<td style="padding:6px 8px"><input class="input" type="number" min="0" step="0.01" value="'+row.unitPrice+'" style="font-size:11px;padding:5px 6px;width:90px" title="'+(isES?'Precio por silla':'Price per chair')+'" onchange="'+pfx+'UpdateChairTypeCost(\''+row.key+'\',this.value)"></td>')+
+        '<td style="padding:9px 10px;text-align:right;font-size:12px;font-weight:700;color:var(--gold-h)">'+formatCost(row.rowTotal)+'</td>'+
+      '</tr>';
     }).join('');
-    var chairPriceCell=row.isTable&&row.chairsPerUnit>0
-      ? '<input class="input" type="number" min="0" step="0.01" value="'+(chairDef.costPerChair||0)+'" style="font-size:11px;padding:5px 6px;width:80px" title="'+(isES?'Precio por silla':'Price per chair')+'" onchange="lQuoteUpdateChairTypeCost(\''+row.chairType+'\',this.value)">'
-      : '<span style="font-size:11px;color:var(--muted)">-</span>';
-    var cpPriceCell=row.isTable&&row.centerpieceKey!=='none'
-      ? '<input class="input" type="number" min="0" step="0.01" value="'+(cpDef.cost||0)+'" style="font-size:11px;padding:5px 6px;width:80px" title="'+(isES?'Precio por centro':'Price per piece')+'" onchange="lQuoteUpdateCenterpieceTypeCost(\''+row.centerpieceKey+'\',this.value)">'
-      : '<span style="font-size:11px;color:var(--muted)">-</span>';
-    return '<tr style="border-bottom:1px solid var(--bg2)">'+
-      '<td style="padding:9px 10px;font-size:12px;font-weight:600">'+esc(row.label)+'</td>'+
-      '<td style="padding:9px 10px;text-align:center;font-size:12px">'+row.qty+'</td>'+
-      '<td style="padding:6px 8px">'+(row.isTable?'<select class="input" style="font-size:11px;padding:5px 6px" onchange="lQuoteUpdateGroupChairType(\''+row.key+'\',this.value)">'+chairOpts+'</select>':'<span style="font-size:11px;color:var(--muted)">-</span>')+'</td>'+
-      '<td style="padding:6px 8px">'+(row.isTable?'<select class="input" style="font-size:11px;padding:5px 6px" onchange="lQuoteUpdateGroupCenterpiece(\''+row.key+'\',this.value)">'+cpOpts+'</select>':'<span style="font-size:11px;color:var(--muted)">-</span>')+'</td>'+
-      '<td style="padding:9px 10px;text-align:center;font-size:12px">'+(row.chairsPerUnit||'-')+'</td>'+
-      '<td style="padding:6px 8px"><input class="input" type="number" min="0" step="0.01" value="'+row.unitElementPrice+'" style="font-size:11px;padding:5px 6px;width:80px" onchange="lQuoteUpdateGroupCost(\''+row.key+'\',this.value)"></td>'+
-      '<td style="padding:6px 8px">'+chairPriceCell+'</td>'+
-      '<td style="padding:9px 10px;text-align:right;font-size:12px">'+formatCost(row.unitChairPriceTotal)+'</td>'+
-      '<td style="padding:6px 8px">'+cpPriceCell+'</td>'+
-      '<td style="padding:9px 10px;text-align:right;font-size:12px">'+formatCost(row.unitCenterpiecePrice)+'</td>'+
-      '<td style="padding:9px 10px;text-align:right;font-size:12px;font-weight:600">'+formatCost(row.unitTotal)+'</td>'+
-      '<td style="padding:9px 10px;text-align:right;font-size:12px;font-weight:700;color:var(--gold-h)">'+formatCost(row.rowTotal)+'</td>'+
-    '</tr>';
-  }).join('');
+  }
+
+  if(hasCenterpieces){
+    body+=secHeader(isES?'Centros de mesa':'Centerpieces');
+    body+=quote.centerpieceRows.map(function(row){
+      return '<tr style="border-bottom:1px solid var(--bg2)">'+
+        '<td style="padding:9px 10px;font-size:12px;font-weight:600">'+esc(row.label)+'</td>'+
+        '<td style="padding:5px 10px;text-align:center">'+colorDot(row.color)+'</td>'+
+        '<td style="padding:9px 10px;font-size:11px;color:var(--muted)">-</td>'+
+        '<td style="padding:9px 10px;text-align:center;font-size:12px">'+row.qty+'</td>'+
+        (readOnly?'<td style="padding:9px 10px;font-size:12px">'+formatCost(row.unitPrice)+'</td>':'<td style="padding:6px 8px"><input class="input" type="number" min="0" step="0.01" value="'+row.unitPrice+'" style="font-size:11px;padding:5px 6px;width:90px" title="'+(isES?'Precio por centro':'Price per piece')+'" onchange="'+pfx+'UpdateCenterpieceTypeCost(\''+row.key+'\',this.value)"></td>')+
+        '<td style="padding:9px 10px;text-align:right;font-size:12px;font-weight:700;color:var(--gold-h)">'+formatCost(row.rowTotal)+'</td>'+
+      '</tr>';
+    }).join('');
+  }
+
+  var layoutSubtotal=quote.elementsTotal+quote.chairsTotal+quote.centerpiecesTotal;
+
   return '<div style="padding:16px 16px 0">'+
-    '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;flex-wrap:wrap">'+
-      '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">'+t('layout_quote_auto')+'</div>'+
-      '<div style="font-size:12px;color:var(--muted)">'+formatCost(quote.autoTotal)+'</div>'+
-    '</div>'+
     '<div style="overflow:auto;border:1px solid var(--border);border-radius:10px">'+
       '<table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff">'+
         '<thead><tr style="background:var(--bg2)">'+
-          '<th style="padding:8px 10px;text-align:left">'+t('layout_quote_item')+'</th>'+
+          '<th style="padding:8px 10px;text-align:left">'+(isES?'Elemento':'Item')+'</th>'+
+          '<th style="padding:8px 10px;text-align:center">'+(isES?'Vista':'Preview')+'</th>'+
+          '<th style="padding:8px 10px;text-align:left">'+(isES?'Dimensiones':'Dimensions')+'</th>'+
           '<th style="padding:8px 10px;text-align:center">'+t('layout_quote_quantity')+'</th>'+
-          '<th style="padding:8px 10px;text-align:left">'+t('chair_style')+'</th>'+
-          '<th style="padding:8px 10px;text-align:left">'+t('centerpiece')+'</th>'+
-          '<th style="padding:8px 10px;text-align:center">'+t('layout_quote_seats_unit')+'</th>'+
           '<th style="padding:8px 10px;text-align:left">'+t('layout_quote_base')+'</th>'+
-          '<th style="padding:8px 10px;text-align:left">'+(isES?'$/Silla':'$/Chair')+'</th>'+
-          '<th style="padding:8px 10px;text-align:right">'+t('layout_quote_chair_cost')+'</th>'+
-          '<th style="padding:8px 10px;text-align:left">'+(isES?'$/Centro':'$/Centerpiece')+'</th>'+
-          '<th style="padding:8px 10px;text-align:right">'+t('layout_quote_centerpiece_cost')+'</th>'+
-          '<th style="padding:8px 10px;text-align:right">'+t('layout_quote_unit_total')+'</th>'+
           '<th style="padding:8px 10px;text-align:right">'+t('layout_quote_row_total')+'</th>'+
         '</tr></thead>'+
-        '<tbody>'+rows+'</tbody>'+
+        '<tbody>'+body+
+          '<tr style="background:var(--gold-l)">'+
+            '<td colspan="5" style="padding:9px 12px;font-size:12px;font-weight:700">'+(isES?'Subtotal layout':'Layout subtotal')+'</td>'+
+            '<td style="padding:9px 10px;text-align:right;font-size:12px;font-weight:700;color:var(--gold-h)">'+formatCost(layoutSubtotal)+'</td>'+
+          '</tr>'+
+        '</tbody>'+
       '</table>'+
     '</div>'+
   '</div>';
@@ -1207,16 +1318,18 @@ function lQuoteUpdateCenterpieceTypeCost(cpKey, val){
   renderLayoutUI();
 }
 
-function renderLayoutQuoteExtrasTable(quote){
+function renderLayoutQuoteExtrasTable(quote, prefix){
+  var pfx=prefix||'lQuote';
+  if(!quote.extraRows.length) return '';
   var rows=quote.extraRows.map(function(row){
     return '<tr style="border-bottom:1px solid var(--bg2)">'+
-      '<td style="padding:6px 8px"><input class="input" value="'+esc(row.name)+'" style="font-size:11px;padding:5px 6px;min-width:160px" onchange="lQuoteUpdateExtraField(\''+row.id+'\',\'name\',this.value)"></td>'+
-      '<td style="padding:6px 8px"><input class="input" value="'+esc(row.category)+'" style="font-size:11px;padding:5px 6px;min-width:120px" onchange="lQuoteUpdateExtraField(\''+row.id+'\',\'category\',this.value)"></td>'+
-      '<td style="padding:6px 8px"><input class="input" type="number" min="0" step="1" value="'+row.quantity+'" style="font-size:11px;padding:5px 6px;min-width:70px" onchange="lQuoteUpdateExtraField(\''+row.id+'\',\'quantity\',this.value)"></td>'+
-      '<td style="padding:6px 8px"><input class="input" type="number" min="0" step="0.01" value="'+row.unitPrice+'" style="font-size:11px;padding:5px 6px;min-width:90px" onchange="lQuoteUpdateExtraField(\''+row.id+'\',\'unitPrice\',this.value)"></td>'+
-      '<td style="padding:6px 8px"><input class="input" value="'+esc(row.notes)+'" style="font-size:11px;padding:5px 6px;min-width:180px" onchange="lQuoteUpdateExtraField(\''+row.id+'\',\'notes\',this.value)"></td>'+
+      '<td style="padding:6px 8px"><input class="input" value="'+esc(row.name)+'" style="font-size:11px;padding:5px 6px;min-width:160px" onchange="'+pfx+'UpdateExtraField(\''+row.id+'\',\'name\',this.value)"></td>'+
+      '<td style="padding:6px 8px"><input class="input" value="'+esc(row.category)+'" style="font-size:11px;padding:5px 6px;min-width:120px" onchange="'+pfx+'UpdateExtraField(\''+row.id+'\',\'category\',this.value)"></td>'+
+      '<td style="padding:6px 8px"><input class="input" type="number" min="0" step="1" value="'+row.quantity+'" style="font-size:11px;padding:5px 6px;min-width:70px" onchange="'+pfx+'UpdateExtraField(\''+row.id+'\',\'quantity\',this.value)"></td>'+
+      '<td style="padding:6px 8px"><input class="input" type="number" min="0" step="0.01" value="'+row.unitPrice+'" style="font-size:11px;padding:5px 6px;min-width:90px" onchange="'+pfx+'UpdateExtraField(\''+row.id+'\',\'unitPrice\',this.value)"></td>'+
+      '<td style="padding:6px 8px"><input class="input" value="'+esc(row.notes)+'" style="font-size:11px;padding:5px 6px;min-width:180px" onchange="'+pfx+'UpdateExtraField(\''+row.id+'\',\'notes\',this.value)"></td>'+
       '<td style="padding:9px 10px;text-align:right;font-size:12px;font-weight:700;color:var(--gold-h)">'+formatCost(row.rowTotal)+'</td>'+
-      '<td style="padding:6px 8px;text-align:center"><button class="btn btn-danger btn-sm btn-icon" onclick="lQuoteDeleteExtra(\''+row.id+'\')" title="'+t('delete')+'"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg></button></td>'+
+      '<td style="padding:6px 8px;text-align:center"><button class="btn btn-danger btn-sm btn-icon" onclick="'+pfx+'DeleteExtra(\''+row.id+'\')" title="'+t('delete')+'"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg></button></td>'+
     '</tr>';
   }).join('');
   return '<div style="padding:16px">'+
@@ -1319,14 +1432,58 @@ function lQuoteDeleteExtra(id){
   saveProj(p);
   renderLayoutUI();
 }
- 
+
+function renderEventLayoutQuoteSection(p){
+  if(!p) return '';
+  // Resolve items from the library entry (p.layoutItems is emptied on library import)
+  var items=p.layoutItems||[];
+  if(p.layoutExport && p.layoutExport.layoutId && typeof getLib==='function'){
+    var _libE=getLib().layouts.find(function(e){ return e.id===p.layoutExport.layoutId; });
+    if(_libE) items=_libE.items||[];
+  }
+  // Apply library entry's chair/centerpiece costs for quote calculation, then restore
+  var _savedCT, _savedCP, _didSwap=false;
+  if(_libE && (_libE.chairTypes || _libE.centerpieceTypes)){
+    _savedCT=CHAIR_TYPES; _savedCP=CENTERPIECE_TYPES; _didSwap=true;
+    syncLayoutStyles({chairTypes:_libE.chairTypes||{}, centerpieceTypes:_libE.centerpieceTypes||{}, customShapes:{}});
+  }
+  var quote=getLayoutQuoteSummary(items, []);
+  if(_didSwap){ CHAIR_TYPES=_savedCT; CENTERPIECE_TYPES=_savedCP; }
+  var isES=LANG==='es';
+  var empty=!quote.elementRows.length&&!quote.chairRows.length&&!quote.centerpieceRows.length;
+  return '<div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;box-shadow:var(--sh-sm);margin-top:18px">'
+    +'<div style="margin-bottom:14px">'
+      +'<div style="font-family:Cormorant Garamond,serif;font-size:24px;font-weight:700">'+(isES?'Cotización de Layout':'Layout Quote')+'</div>'
+      +'<div style="font-size:12px;color:var(--muted)">'+(isES?'Precios definidos en el editor de layout de la Biblioteca':'Prices are defined in the Library layout editor')+'</div>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px">'
+      +'<div style="background:var(--bg2);border-radius:10px;padding:12px 14px">'
+        +'<div style="font-size:20px;font-weight:700;color:var(--gold-h)">'+quote.totalElements+'</div>'
+        +'<div style="font-size:11px;color:var(--muted)">'+(isES?'Elementos cotizados':'Quoted elements')+'</div>'
+      +'</div>'
+      +'<div style="background:var(--bg2);border-radius:10px;padding:12px 14px">'
+        +'<div style="font-size:20px;font-weight:700">'+quote.totalSeats+'</div>'
+        +'<div style="font-size:11px;color:var(--muted)">'+(isES?'Asientos totales':'Total seats')+'</div>'
+      +'</div>'
+      +'<div style="background:var(--gold-l);border-radius:10px;padding:12px 14px">'
+        +'<div style="font-size:20px;font-weight:700;color:var(--gold-h)">'+formatCost(quote.total)+'</div>'
+        +'<div style="font-size:11px;color:var(--muted)">'+(isES?'Total estimado':'Estimated total')+'</div>'
+      +'</div>'
+    +'</div>'
+    +(empty
+      ?'<div style="padding:28px 18px;text-align:center">'
+        +'<div style="font-size:15px;font-weight:700;margin-bottom:6px">'+(isES?'Sin elementos que cotizar':'No items to quote')+'</div>'
+        +'<div style="font-size:12px;color:var(--muted)">'+(isES?'Los precios se definen en el editor de la Biblioteca':'Prices are set in the Library editor')+'</div>'
+        +'</div>'
+      :renderLayoutQuoteAutoTable(quote, null, true))
+    +'</div>';
+}
+
 function getChairPx(item){
-  var minSide = Math.min(item.w, item.h);
-  return Math.max(8, Math.round(minSide * 0.22));
+  return Math.max(8, Math.round(CHAIR_SIZE_M * getPPM()));
 }
 function getChairGap(item){
-  var minSide = Math.min(item.w, item.h);
-  return Math.max(1, Math.round(minSide * 0.04));
+  return Math.max(2, Math.round(0.05 * getPPM()));
 }
 function getChairPad(item){
   if(!item.chairs) return 0;
@@ -1358,6 +1515,7 @@ function renderLItem(item){
     style="left:${item.x}px;top:${item.y}px;width:${item.w+pad*2}px;height:${item.h+pad*2}px;padding:${pad}px;transform:rotate(${item.rotation||0}deg);transform-origin:center center"
     ondblclick="openLItemModal('${item.id}')">
     <div style="position:relative;width:100%;height:100%">
+      ${renderOutline(item)}
       ${chairsHTML}
       ${bodyHTML}
     </div>
@@ -1390,6 +1548,21 @@ function _renderSTableBody(item){
     +'</div></div>';
 }
 
+function renderOutline(item){
+  var isTable=['round-table','rect-table','square-table'].includes(item.shape)||(LSHAPES_M[item.shape]&&LSHAPES_M[item.shape]._isCustomTable);
+  if(!isTable) return '';
+  var off=item.outlineOffset;
+  if(off==null) off=(typeof DEFAULT_OUTLINE_OFFSET!=='undefined'?DEFAULT_OUTLINE_OFFSET:0.90);
+  if(off<=0) return '';
+  var ppm=getPPM();
+  var offPx=Math.round(off*ppm);
+  var isRound=item.shape==='round-table'||item.radius==='50%'||(LSHAPES_M[item.shape]&&LSHAPES_M[item.shape].radius==='50%');
+  var isSTable=item.shape==='s-table';
+  if(isSTable) return '';
+  var br=isRound?'50%':(item.radius||'0px');
+  return '<div style="position:absolute;left:'+ -offPx+'px;top:'+ -offPx+'px;width:'+(item.w+offPx*2)+'px;height:'+(item.h+offPx*2)+'px;border:1.5px dashed '+(item.bdClr||'#999')+';border-radius:'+br+';pointer-events:none;opacity:0.45;z-index:0"></div>';
+}
+
 function renderCenterpiece(item){
   if(!item.centerpiece || item.centerpiece==='none') return '';
   const ct = CENTERPIECE_TYPES[item.centerpiece];
@@ -1403,6 +1576,37 @@ function renderCenterpiece(item){
     pointer-events:none;z-index:1;flex-shrink:0"></div>`;
 }
 
+
+function _updateRectChairTotal(){
+  var top=+(document.getElementById('li-cs-top')||{}).value||0;
+  var bot=+(document.getElementById('li-cs-bottom')||{}).value||0;
+  var left=+(document.getElementById('li-cs-left')||{}).value||0;
+  var right=+(document.getElementById('li-cs-right')||{}).value||0;
+  var total=top+bot+left+right;
+  var el=document.getElementById('li-chairs-total'); if(el) el.textContent=total;
+  var hid=document.getElementById('li-chairs'); if(hid) hid.value=total;
+}
+
+// Returns per-side chair gap in px for a rect table.
+// item.chairGaps stores {top,bottom,left,right} in meters; defaults to auto-fit.
+function _getRectSideGapPx(item, side, sideLength, chairCount){
+  var ppm=getPPM();
+  if(item.chairGaps && item.chairGaps[side]!=null){
+    return Math.round(item.chairGaps[side]*ppm);
+  }
+  // Auto: evenly distribute chairs along the side
+  if(!chairCount) return 0;
+  var cs=Math.max(8,Math.round(CHAIR_SIZE_M*ppm));
+  var totalChair=chairCount*cs;
+  var free=sideLength-totalChair;
+  return chairCount>1?Math.max(0,free/(chairCount+1)):Math.max(0,free/2);
+}
+
+function _defaultRectChairSides(n){
+  // Default: split evenly top/bottom, no short sides
+  var top=Math.ceil(n/2), bot=Math.floor(n/2);
+  return {top:top, bottom:bot, left:0, right:0};
+}
 
 function renderChairs(item){
   if(!item.chairs) return '';
@@ -1435,12 +1639,37 @@ function renderChairs(item){
       positions.push({x:w/2+(w/2+cs/2+gap)*Math.cos(angle), y:h/2+(h/2+cs/2+gap)*Math.sin(angle)});
     }
   } else if(item.shape==='rect-table'){
-    const sideN=2;
-    const topN=Math.ceil((n-sideN*2)/2), botN=Math.floor((n-sideN*2)/2);
-    for(let i=0;i<topN;i++)   positions.push({x:(i+1)*w/(topN+1),  y:-(cs/2+gap)});
-    for(let i=0;i<botN;i++)   positions.push({x:(i+1)*w/(botN+1),  y:h+cs/2+gap});
-    for(let i=0;i<sideN;i++)  positions.push({x:-(cs/2+gap),       y:(i+1)*h/(sideN+1)});
-    for(let i=0;i<sideN;i++)  positions.push({x:w+cs/2+gap,        y:(i+1)*h/(sideN+1)});
+    const sides=item.chairSides||_defaultRectChairSides(n);
+    const topN=sides.top||0, botN=sides.bottom||0, leftN=sides.left||0, rightN=sides.right||0;
+    // Per-side gap: spacing between chairs along each side (in px)
+    const gapTop=_getRectSideGapPx(item,'top',w,topN);
+    const gapBot=_getRectSideGapPx(item,'bottom',w,botN);
+    const gapLeft=_getRectSideGapPx(item,'left',h,leftN);
+    const gapRight=_getRectSideGapPx(item,'right',h,rightN);
+    // Top side — centered, chairs separated by gapTop
+    if(topN){
+      const totalW=topN*cs+(topN-1)*gapTop;
+      const startX=(w-totalW)/2+cs/2;
+      for(let i=0;i<topN;i++) positions.push({x:startX+i*(cs+gapTop), y:-(cs/2+gap)});
+    }
+    // Bottom side
+    if(botN){
+      const totalW=botN*cs+(botN-1)*gapBot;
+      const startX=(w-totalW)/2+cs/2;
+      for(let i=0;i<botN;i++) positions.push({x:startX+i*(cs+gapBot), y:h+cs/2+gap});
+    }
+    // Left side
+    if(leftN){
+      const totalH=leftN*cs+(leftN-1)*gapLeft;
+      const startY=(h-totalH)/2+cs/2;
+      for(let i=0;i<leftN;i++) positions.push({x:-(cs/2+gap), y:startY+i*(cs+gapLeft)});
+    }
+    // Right side
+    if(rightN){
+      const totalH=rightN*cs+(rightN-1)*gapRight;
+      const startY=(h-totalH)/2+cs/2;
+      for(let i=0;i<rightN;i++) positions.push({x:w+cs/2+gap, y:startY+i*(cs+gapRight)});
+    }
   } else {
     const chairSlot=cs+5;
     const longCap=Math.max(1,Math.floor(w/chairSlot));
@@ -1478,9 +1707,8 @@ function setAddMode(shape){
   if(!def) return;
   var p=proj(); if(!p) return;
   var chairs=def.chairs||0;
-  var _tempMinSide=Math.min(def.w,def.h);
-  var _tempChairPx=Math.max(8,Math.round(_tempMinSide*0.22));
-  var _tempGapPx=Math.max(1,Math.round(_tempMinSide*0.04));
+  var _tempChairPx=Math.max(8,Math.round(CHAIR_SIZE_M*getPPM()));
+  var _tempGapPx=Math.max(2,Math.round(0.05*getPPM()));
   var pad=chairs?_tempChairPx+_tempGapPx:0;
   var vc=_getVisibleCanvasCenter();
   var snap=function(n){return LState.useSnap?Math.round(n/LState.snapGrid)*LState.snapGrid:Math.round(n);};
@@ -1559,19 +1787,22 @@ function _addTableDrawSVG(item, selected){
     }
     chairs+='<circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="'+r.toFixed(1)+'" fill="'+tableFill+'"/>';
   } else {
-    var sideN=2;
-    var topN=Math.ceil((n-sideN*2)/2); var botN=Math.floor((n-sideN*2)/2);
-    for(var ci=0;ci<topN;ci++){
-      var cx2=tx+(ci+0.5)*(tw/topN); var cy2=ty-CG-CS/2;
+    var _svgSides=item.chairSides||_defaultRectChairSides(n);
+    var _svgTop=_svgSides.top||0, _svgBot=_svgSides.bottom||0, _svgLeft=_svgSides.left||0, _svgRight=_svgSides.right||0;
+    for(var ci=0;ci<_svgTop;ci++){
+      var cx2=tx+(ci+0.5)*(tw/_svgTop); var cy2=ty-CG-CS/2;
       chairs+='<circle cx="'+cx2.toFixed(1)+'" cy="'+cy2.toFixed(1)+'" r="'+(CS/2).toFixed(1)+'" fill="'+chairFill+'"/>';
     }
-    for(var ci=0;ci<botN;ci++){
-      var cx2=tx+(ci+0.5)*(tw/botN); var cy2=ty+th+CG+CS/2;
+    for(var ci=0;ci<_svgBot;ci++){
+      var cx2=tx+(ci+0.5)*(tw/_svgBot); var cy2=ty+th+CG+CS/2;
       chairs+='<circle cx="'+cx2.toFixed(1)+'" cy="'+cy2.toFixed(1)+'" r="'+(CS/2).toFixed(1)+'" fill="'+chairFill+'"/>';
     }
-    for(var ci=0;ci<sideN;ci++){
-      var cy3=ty+(ci+0.5)*(th/sideN);
+    for(var ci=0;ci<_svgLeft;ci++){
+      var cy3=ty+(ci+0.5)*(th/_svgLeft);
       chairs+='<circle cx="'+(tx-CG-CS/2).toFixed(1)+'" cy="'+cy3.toFixed(1)+'" r="'+(CS/2).toFixed(1)+'" fill="'+chairFill+'"/>';
+    }
+    for(var ci=0;ci<_svgRight;ci++){
+      var cy3=ty+(ci+0.5)*(th/_svgRight);
       chairs+='<circle cx="'+(tx+tw+CG+CS/2).toFixed(1)+'" cy="'+cy3.toFixed(1)+'" r="'+(CS/2).toFixed(1)+'" fill="'+chairFill+'"/>';
     }
     chairs+='<rect x="'+tx.toFixed(1)+'" y="'+ty.toFixed(1)+'" width="'+tw.toFixed(1)+'" height="'+th.toFixed(1)+'" rx="2" fill="'+tableFill+'"/>';
@@ -1634,20 +1865,13 @@ function _drawSTableSVG(item, tableFill, chairFill){
 
 function _addTableCatalogue(){
   return [
-    {key:'round-0.8', cat:'round',label:'4 seats',dim:'0.8m',wM:0.8,hM:0.8,chairs:4},
-    {key:'round-1.0', cat:'round',label:'6 seats',dim:'1.0m',wM:1.0,hM:1.0,chairs:6},
-    {key:'round-1.2', cat:'round',label:'8 seats',dim:'1.2m',wM:1.2,hM:1.2,chairs:8},
-    {key:'round-1.5', cat:'round',label:'10 seats',dim:'1.5m',wM:1.5,hM:1.5,chairs:10},
-    {key:'round-1.6', cat:'round',label:'12 seats',dim:'1.6m',wM:1.6,hM:1.6,chairs:12},
-    {key:'round-1.8', cat:'round',label:'14 seats',dim:'1.8m',wM:1.8,hM:1.8,chairs:14},
-    {key:'round-2.0', cat:'round',label:'16 seats',dim:'2.0m',wM:2.0,hM:2.0,chairs:16},
-    {key:'rect-1.2x0.8',cat:'rect',label:'4 seats',dim:'1.2 x 0.8m',wM:1.2,hM:0.8,chairs:4},
-    {key:'rect-1.8x0.8',cat:'rect',label:'6 seats',dim:'1.8 x 0.8m',wM:1.8,hM:0.8,chairs:6},
-    {key:'rect-2.0x1.0',cat:'rect',label:'8 seats',dim:'2.0 x 1.0m',wM:2.0,hM:1.0,chairs:8},
-    {key:'rect-2.4x1.2',cat:'rect',label:'10 seats',dim:'2.4 x 1.2m',wM:2.4,hM:1.2,chairs:10},
-    {key:'rect-2.8x1.2',cat:'rect',label:'12 seats',dim:'2.8 x 1.2m',wM:2.8,hM:1.2,chairs:12},
-    {key:'rect-3.2x1.2',cat:'rect',label:'14 seats',dim:'3.2 x 1.2m',wM:3.2,hM:1.2,chairs:14},
-    {key:'rect-3.6x1.2',cat:'rect',label:'16 seats',dim:'3.6 x 1.2m',wM:3.6,hM:1.2,chairs:16},
+    {key:'round-1.2', cat:'round',label:'4 seats',dim:'1.2m',wM:1.2,hM:1.2,chairs:4},
+    {key:'round-1.5', cat:'round',label:'6 seats',dim:'1.5m',wM:1.5,hM:1.5,chairs:6},
+    {key:'round-1.8', cat:'round',label:'8 seats',dim:'1.8m',wM:1.8,hM:1.8,chairs:8},
+    {key:'round-2.0', cat:'round',label:'10 seats',dim:'2.0m',wM:2.0,hM:2.0,chairs:10},
+    {key:'rect-2.44x1.20',cat:'rect',label:'8 seats',dim:'2.44 x 1.20m',wM:2.44,hM:1.20,chairs:8,chairSides:{top:4,bottom:4,left:0,right:0}},
+    {key:'rect-4.88x1.80-12',cat:'rect',label:'12 seats',dim:'4.88 x 1.80m',wM:4.88,hM:1.80,chairs:12,chairSides:{top:6,bottom:6,left:0,right:0}},
+    {key:'rect-4.88x1.80-16',cat:'rect',label:'16 seats',dim:'4.88 x 1.80m',wM:4.88,hM:1.80,chairs:16,chairSides:{top:6,bottom:6,left:2,right:2}},
     {key:'s-table-14',cat:'s-table',label:'14 seats',dim:'4.0 x 1.5m',wM:4.0,hM:1.5,chairs:14},
     {key:'s-table-16',cat:'s-table',label:'16 seats',dim:'4.5 x 1.5m',wM:4.5,hM:1.5,chairs:16},
   ];
@@ -1764,7 +1988,7 @@ function doAddTablesToLayout(){
     var sel=_addTableSelection[key];if(!sel||!sel.n)return;
     var cat=catalogueMap[key];if(!cat)return;
     var tw2=Math.round(cat.wM*ppm);var th2=Math.round(cat.hM*ppm);
-    var pad2=cat.chairs?Math.round(0.4*ppm)+Math.round(0.05*ppm):0;
+    var pad2=cat.chairs?Math.round(CHAIR_SIZE_M*ppm)+Math.round(0.05*ppm):0;
     var cw2=tw2+pad2*2+spacing;var ch2=th2+pad2*2+spacing;
     if(cw2>maxCellW)maxCellW=cw2;if(ch2>maxCellH)maxCellH=ch2;
   });
@@ -1777,7 +2001,7 @@ function doAddTablesToLayout(){
     var shape=shapeMap[cat.cat]||'round-table';
     var tw=Math.round(cat.wM*ppm); var th=Math.round(cat.hM*ppm);
     var defShape=SHAPES[shape]||{bg:'#f0ece0',bdClr:'#c9a84c'};
-    var pad=sel.chairs||cat.chairs?Math.round(0.4*ppm)+Math.round(0.05*ppm):0;
+    var pad=sel.chairs||cat.chairs?Math.round(CHAIR_SIZE_M*ppm)+Math.round(0.05*ppm):0;
     var cellW=tw+pad*2+spacing; var cellH=th+pad*2+spacing;
     for(var i=0;i<sel.n;i++){
       tableNum++;
@@ -1788,6 +2012,7 @@ function doAddTablesToLayout(){
         w:tw, h:th, bg:defShape.bg||'#f0ece0', bdClr:defShape.bdClr||'#c9a84c',
         radius:cat.cat==='round'?'50%':'0px',
         label:String(tableNum), chairs:cat.chairs,
+        chairSides:cat.chairSides||null,
         chairType:'default', centerpiece:'none', cost:0, rotation:0,
         _typeKey:key
       });
@@ -1918,11 +2143,100 @@ function attachLItemEvents(){
   _lDragItem=null;_panning=false;_marquee=false;_fpDragging=false;
   document.querySelectorAll('.litem').forEach(el=>{
     el.addEventListener('mousedown',lItemDown,{passive:false});
+    el.addEventListener('contextmenu',_lItemContextMenu,{passive:false});
   });
   window.removeEventListener('mousemove',lCanvasMove);
   window.removeEventListener('mouseup',lCanvasUp);
   window.addEventListener('mousemove',lCanvasMove);
   window.addEventListener('mouseup',lCanvasUp);
+}
+
+// ── Right-click context menu ──
+function _lItemContextMenu(e){
+  e.preventDefault();e.stopPropagation();
+  var id=e.currentTarget&&e.currentTarget.dataset?e.currentTarget.dataset.id:null;
+  if(!id)return;
+  if(!LState.sel.includes(id)) LState.sel=[id];
+  updateSelUI();
+  _showLayoutContextMenu(e.clientX,e.clientY,id);
+}
+
+function _showLayoutContextMenu(cx,cy,id){
+  _closeLayoutContextMenu();
+  var _es=LANG==='es';
+  var item=LState.items.find(function(i){return i.id===id;});
+  if(!item)return;
+  var isTable=['round-table','rect-table','square-table'].includes(item.shape)||(LSHAPES_M[item.shape]&&LSHAPES_M[item.shape]._isCustomTable);
+  var menu=document.createElement('div');
+  menu.id='l-ctx-menu';
+  menu.style.cssText='position:fixed;left:'+cx+'px;top:'+cy+'px;z-index:99999;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.18);padding:4px 0;min-width:180px;font-size:13px;font-family:Jost,sans-serif';
+  function mi(label,icon,fn,danger){
+    return '<div onclick="'+fn+';_closeLayoutContextMenu()" style="padding:7px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;color:'+(danger?'var(--danger)':'var(--text)')+'" onmouseenter="this.style.background=\'var(--bg2)\'" onmouseleave="this.style.background=\'none\'">'
+      +'<span style="width:18px;text-align:center;font-size:14px;flex-shrink:0">'+icon+'</span>'+label+'</div>';
+  }
+  function sep(){return '<div style="height:1px;background:var(--border);margin:3px 0"></div>';}
+  var html='';
+  html+=mi(_es?'Editar':'Edit','&#9998;','openLItemModal(\''+id+'\')');
+  if(isTable){
+    html+=mi(_es?'Copia':'Copy','&#128203;','makeLayoutDuplicate(\''+id+'\',\'copy\')');
+    html+=mi(_es?'Instancia':'Instance','&#128279;','makeLayoutDuplicate(\''+id+'\',\'instance\')');
+  }
+  html+=sep();
+  html+=mi(_es?'Traer al Frente':'Bring to Front','&#8679;','_lZOrder(\''+id+'\',\'front\')');
+  html+=mi(_es?'Adelantar':'Bring Forward','&#8593;','_lZOrder(\''+id+'\',\'forward\')');
+  html+=mi(_es?'Atrasar':'Send Backward','&#8595;','_lZOrder(\''+id+'\',\'backward\')');
+  html+=mi(_es?'Enviar al Fondo':'Send to Back','&#8681;','_lZOrder(\''+id+'\',\'back\')');
+  html+=sep();
+  html+=mi(_es?'Eliminar':'Delete','&#128465;','delLItem(\''+id+'\')',true);
+  menu.innerHTML=html;
+  document.body.appendChild(menu);
+  // Adjust if overflows viewport
+  var rect=menu.getBoundingClientRect();
+  if(rect.right>window.innerWidth) menu.style.left=(cx-rect.width)+'px';
+  if(rect.bottom>window.innerHeight) menu.style.top=(cy-rect.height)+'px';
+  // Close on click outside
+  setTimeout(function(){document.addEventListener('mousedown',_ctxMenuOutsideClick);},0);
+}
+function _ctxMenuOutsideClick(e){
+  var menu=document.getElementById('l-ctx-menu');
+  if(menu&&!menu.contains(e.target)) _closeLayoutContextMenu();
+}
+function _closeLayoutContextMenu(){
+  var menu=document.getElementById('l-ctx-menu');
+  if(menu) menu.remove();
+  document.removeEventListener('mousedown',_ctxMenuOutsideClick);
+}
+
+// ── Z-order functions ──
+function _lZOrder(id,action){
+  var idx=LState.items.findIndex(function(i){return i.id===id;});
+  if(idx<0)return;
+  var item=LState.items[idx];
+  lHistorySave();
+  switch(action){
+    case 'front':
+      LState.items.splice(idx,1);
+      LState.items.push(item);
+      break;
+    case 'back':
+      LState.items.splice(idx,1);
+      LState.items.unshift(item);
+      break;
+    case 'forward':
+      if(idx<LState.items.length-1){
+        LState.items.splice(idx,1);
+        LState.items.splice(idx+1,0,item);
+      }
+      break;
+    case 'backward':
+      if(idx>0){
+        LState.items.splice(idx,1);
+        LState.items.splice(idx-1,0,item);
+      }
+      break;
+  }
+  var p=proj();p.layoutItems=LState.items;saveProj(p);
+  renderLayout();
 }
 
 let _lDragItem=null,_lDragOffX=0,_lDragOffY=0,_lDidDrag=false;
@@ -2409,6 +2723,7 @@ function delLItem(id){
 }
 function delSelected(){
   if(!LState.sel.length)return;
+  if(LState.sel.length>1&&!confirm('Delete '+LState.sel.length+' selected items?'))return;
   LState.items=LState.items.filter(i=>!LState.sel.includes(i.id));LState.sel=[];
   const p=proj();p.layoutItems=LState.items;saveProj(p);renderLayout();
   lHistorySave();toast('Deleted','s');
@@ -2828,7 +3143,7 @@ function generateGeneralLayout(){
   var items=[];
   var _idN=0;
   var idGen=function(){_idN++;return 'li'+(Date.now()+_idN)+Math.random().toString(36).slice(2,5);};
-  var sp=Math.round(1.0*ppm);
+  var sp=Math.round(0.25*ppm); // gap between table edges
 
   var gn=function(eid){return +(document.getElementById(eid)||{value:0}).value||0;};
   var gs=function(eid){return (document.getElementById(eid)||{value:''}).value||'';};
@@ -2850,9 +3165,8 @@ function generateGeneralLayout(){
   var sqDef=LSHAPES['square-table'];
 
   function makeCell(def, chairs){
-    var _ms=Math.min(def.w,def.h);
-    var _cp=Math.max(8,Math.round(_ms*0.22));
-    var _cg=Math.max(1,Math.round(_ms*0.04));
+    var _cp=Math.max(8,Math.round(CHAIR_SIZE_M*ppm));
+    var _cg=Math.max(2,Math.round(0.05*ppm));
     var pad=chairs?_cp+_cg:0;
     return {w:def.w+pad*2+sp, h:def.h+pad*2+sp, pad:pad, def:def};
   }
@@ -3498,9 +3812,27 @@ function openLItemModal(id){
     <div class="ig"><label>${_es?'Alto (m)':'Height (m)'}</label>
       <input class="input" id="li-h" type="number" step="0.05" value="${(item.h/getPPM()).toFixed(2)}">
     </div>
-    ${isTable?`<div class="ig"><label>${_es?'Sillas / Asientos':'Chairs / Seats'}</label>
+    ${isTable&&item.shape==='rect-table'?function(){
+      var _cs=item.chairSides||_defaultRectChairSides(item.chairs||0);
+      var _cg=item.chairGaps||{};
+      function _gapVal(side){return _cg[side]!=null?_cg[side].toFixed(2):'';}
+      return '<div class="ig" style="grid-column:1/-1"><label>'+(_es?'Sillas por Lado':'Chairs per Side')+'</label>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+        +'<div><div style="display:flex;align-items:center;gap:4px"><span style="font-size:11px;color:var(--muted);min-width:48px">'+(_es?'Arriba':'Top')+'</span><input class="input" id="li-cs-top" type="number" min="0" max="20" value="'+(_cs.top||0)+'" style="width:72px;min-width:72px;padding:4px 6px" onchange="_updateRectChairTotal()"></div>'
+        +'<div style="display:flex;align-items:center;gap:4px;margin-top:3px"><span style="font-size:9px;color:var(--muted);min-width:48px">'+(_es?'Esp. (m)':'Gap (m)')+'</span><input class="input" id="li-cg-top" type="number" min="0" max="2" step="0.01" value="'+_gapVal('top')+'" placeholder="auto" style="width:72px;min-width:72px;padding:4px 6px;font-size:11px"></div></div>'
+        +'<div><div style="display:flex;align-items:center;gap:4px"><span style="font-size:11px;color:var(--muted);min-width:48px">'+(_es?'Abajo':'Bottom')+'</span><input class="input" id="li-cs-bottom" type="number" min="0" max="20" value="'+(_cs.bottom||0)+'" style="width:72px;min-width:72px;padding:4px 6px" onchange="_updateRectChairTotal()"></div>'
+        +'<div style="display:flex;align-items:center;gap:4px;margin-top:3px"><span style="font-size:9px;color:var(--muted);min-width:48px">'+(_es?'Esp. (m)':'Gap (m)')+'</span><input class="input" id="li-cg-bottom" type="number" min="0" max="2" step="0.01" value="'+_gapVal('bottom')+'" placeholder="auto" style="width:72px;min-width:72px;padding:4px 6px;font-size:11px"></div></div>'
+        +'<div><div style="display:flex;align-items:center;gap:4px"><span style="font-size:11px;color:var(--muted);min-width:48px">'+(_es?'Izquierda':'Left')+'</span><input class="input" id="li-cs-left" type="number" min="0" max="10" value="'+(_cs.left||0)+'" style="width:72px;min-width:72px;padding:4px 6px" onchange="_updateRectChairTotal()"></div>'
+        +'<div style="display:flex;align-items:center;gap:4px;margin-top:3px"><span style="font-size:9px;color:var(--muted);min-width:48px">'+(_es?'Esp. (m)':'Gap (m)')+'</span><input class="input" id="li-cg-left" type="number" min="0" max="2" step="0.01" value="'+_gapVal('left')+'" placeholder="auto" style="width:72px;min-width:72px;padding:4px 6px;font-size:11px"></div></div>'
+        +'<div><div style="display:flex;align-items:center;gap:4px"><span style="font-size:11px;color:var(--muted);min-width:48px">'+(_es?'Derecha':'Right')+'</span><input class="input" id="li-cs-right" type="number" min="0" max="10" value="'+(_cs.right||0)+'" style="width:72px;min-width:72px;padding:4px 6px" onchange="_updateRectChairTotal()"></div>'
+        +'<div style="display:flex;align-items:center;gap:4px;margin-top:3px"><span style="font-size:9px;color:var(--muted);min-width:48px">'+(_es?'Esp. (m)':'Gap (m)')+'</span><input class="input" id="li-cg-right" type="number" min="0" max="2" step="0.01" value="'+_gapVal('right')+'" placeholder="auto" style="width:72px;min-width:72px;padding:4px 6px;font-size:11px"></div></div>'
+        +'</div>'
+        +'<div style="margin-top:4px;font-size:11px;color:var(--muted)">Total: <strong id="li-chairs-total">'+(_cs.top+_cs.bottom+_cs.left+_cs.right||item.chairs||0)+'</strong></div>'
+        +'<input type="hidden" id="li-chairs" value="'+(item.chairs||0)+'">'
+        +'</div>';
+    }():(isTable?`<div class="ig"><label>${_es?'Sillas / Asientos':'Chairs / Seats'}</label>
       <input class="input" id="li-chairs" type="number" value="${item.chairs||0}" min="0" max="30">
-    </div>`:''}
+    </div>`:'')}
     ${isTable?`<div class="ig" style="grid-column:1/-1"><label>${_es?'Tipo de Mesa':'Table Type'}</label>
       <input type="hidden" id="li-new-typekey" value="">
       <input type="hidden" id="li-new-shape" value="">
@@ -3519,6 +3851,9 @@ function openLItemModal(id){
     <div class="ig"><label>${_es?'Color de Etiqueta':'Label Color'}</label>
       <input class="input" id="li-bdc" type="color" value="${item.bdClr}" style="height:38px;padding:2px">
     </div>
+    ${isTable?`<div class="ig"><label>${_es?'Línea guía (m)':'Guide line (m)'}</label>
+      <input class="input" id="li-outline" type="number" step="0.05" min="0" max="3" value="${(item.outlineOffset!=null?item.outlineOffset:(typeof DEFAULT_OUTLINE_OFFSET!=='undefined'?DEFAULT_OUTLINE_OFFSET:0.90)).toFixed(2)}">
+    </div>`:''}
   ${hasChairs?`
   <div class="ig" style="grid-column:1/-1">
     <label style="font-size:10.5px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:.07em;display:block;margin-bottom:8px">${_es?'Estilo de Silla':'Chair Style'}</label>
@@ -3551,6 +3886,19 @@ function openLItemModal(id){
     var _wInp=document.getElementById('li-w');if(_wInp)_wInp.value=(ptc.w/getPPM()).toFixed(2);
     var _hInp=document.getElementById('li-h');if(_hInp)_hInp.value=(ptc.h/getPPM()).toFixed(2);
     var _chInp=document.getElementById('li-chairs');if(_chInp)_chInp.value=ptc.chairs;
+    if(ptc.chairSides){
+      var _cst=document.getElementById('li-cs-top');
+      if(_cst){
+        _cst.value=ptc.chairSides.top||0;
+        var _csb=document.getElementById('li-cs-bottom');if(_csb)_csb.value=ptc.chairSides.bottom||0;
+        var _csl=document.getElementById('li-cs-left');if(_csl)_csl.value=ptc.chairSides.left||0;
+        var _csr=document.getElementById('li-cs-right');if(_csr)_csr.value=ptc.chairSides.right||0;
+        _updateRectChairTotal();
+      }
+    }
+    // Set li-chairs AFTER chairSides handling so _updateRectChairTotal() can't overwrite it
+    // when per-side inputs don't exist (e.g. changing from round → rect)
+    var _chInpFinal=document.getElementById('li-chairs');if(_chInpFinal)_chInpFinal.value=ptc.chairs;
     window._pendingTypeChange=null;
   }
 }
@@ -3598,7 +3946,7 @@ function selectNewTableType(itemId,typeKey){
   var th=Math.round(cat.hM*ppm);
   var radius=cat.cat==='round'?'50%':'0px';
   // Store in a temporary global so the edit modal can read it
-  window._pendingTypeChange={typeKey:typeKey,shape:shape,w:tw,h:th,chairs:cat.chairs,radius:radius,label:cat.label};
+  window._pendingTypeChange={typeKey:typeKey,shape:shape,w:tw,h:th,chairs:cat.chairs,chairSides:cat.chairSides||null,radius:radius,label:cat.label};
   closeMo();
   // Re-open the edit modal — the hidden inputs will be populated
   setTimeout(function(){
@@ -3615,6 +3963,29 @@ function saveLItem(id){
   const newH=hM>0?Math.round(hM*getPPM()):item.h;
   const _chEl=document.getElementById('li-chairs');
   const newChairs=_chEl?+_chEl.value:(item.chairs||0);
+  var _olEl=document.getElementById('li-outline');
+  var newOutlineOffset=_olEl?parseFloat(_olEl.value):null;
+  if(newOutlineOffset!=null&&isNaN(newOutlineOffset)) newOutlineOffset=(typeof DEFAULT_OUTLINE_OFFSET!=='undefined'?DEFAULT_OUTLINE_OFFSET:0.90);
+  var newChairSides=null;
+  var newChairGaps=null;
+  var _csTopEl=document.getElementById('li-cs-top');
+  if(_csTopEl){
+    newChairSides={
+      top:+(document.getElementById('li-cs-top')||{}).value||0,
+      bottom:+(document.getElementById('li-cs-bottom')||{}).value||0,
+      left:+(document.getElementById('li-cs-left')||{}).value||0,
+      right:+(document.getElementById('li-cs-right')||{}).value||0
+    };
+    // Read per-side gaps (empty = auto)
+    var _cgT=document.getElementById('li-cg-top'),_cgB=document.getElementById('li-cg-bottom');
+    var _cgL=document.getElementById('li-cg-left'),_cgR=document.getElementById('li-cg-right');
+    newChairGaps={};
+    if(_cgT&&_cgT.value!=='') newChairGaps.top=parseFloat(_cgT.value);
+    if(_cgB&&_cgB.value!=='') newChairGaps.bottom=parseFloat(_cgB.value);
+    if(_cgL&&_cgL.value!=='') newChairGaps.left=parseFloat(_cgL.value);
+    if(_cgR&&_cgR.value!=='') newChairGaps.right=parseFloat(_cgR.value);
+    if(!Object.keys(newChairGaps).length) newChairGaps=null;
+  }
   const newBg=gv('li-bg');
   const newBdClr=gv('li-bdc');
   const ctEl=document.getElementById('li-ctype');
@@ -3629,6 +4000,13 @@ function saveLItem(id){
     newTypeKey=_ntkEl.value;
     newShape=_nsEl?_nsEl.value:item.shape;
     newRadius=_nrEl?_nrEl.value:item.radius;
+    // When shape changes via type picker, use the catalogue's chairSides
+    // instead of form inputs (which were rendered for the OLD shape)
+    var _catEntry=_addTableCatalogue().find(function(c){return c.key===newTypeKey;});
+    if(_catEntry){
+      if(_catEntry.chairSides) newChairSides=_catEntry.chairSides;
+      else { newChairSides=null; newChairGaps=null; }
+    }
   }
   const newCtype=ctEl?ctEl.value:(item.chairType||'default');
   const newCp=cpEl?cpEl.value:(item.centerpiece||'none');
@@ -3644,6 +4022,11 @@ function saveLItem(id){
     it.w=newW; it.h=newH;
     it.bg=newBg; it.bdClr=newBdClr;
     it.chairs=newChairs;
+    if(newChairSides) it.chairSides=newChairSides;
+    else if(newShape!=='rect-table') delete it.chairSides;
+    if(newChairGaps) it.chairGaps=newChairGaps;
+    else if(newShape!=='rect-table') delete it.chairGaps;
+    if(newOutlineOffset!=null) it.outlineOffset=newOutlineOffset;
     it.chairType=newCtype;
     it.centerpiece=newCp;
     it.radius=newRadius;
@@ -3851,31 +4234,67 @@ function exportLayoutFull(layoutName){
   const items=LState.items || [];
   const extras=ensureLayoutQuoteState(p);
   const quote=getLayoutQuoteSummary(items, extras);
-  if(!quote.autoRows.length && !quote.extraRows.length) return toast(LANG==='es'?'No hay elementos para exportar':'No items to export','e');
+  if(!quote.elementRows.length && !quote.chairRows.length && !quote.centerpieceRows.length && !quote.extraRows.length) return toast(LANG==='es'?'No hay elementos para exportar':'No items to export','e');
 
   const isES = LANG==='es';
   const floorplan = (LState.floorplan && LState.floorplan.img) ? LState.floorplan : (p.floorplan || null);
   const graphic = items.length ? buildLayoutSnapshotGraphic({ items: items, floorplan: floorplan, maxWidth: 1200 }) : null;
-  const name = layoutName || p.name || (isES ? 'Plano' : 'Layout');
-  const exportedOn = new Date().toLocaleDateString(isES ? 'es-MX' : 'en-US', { year:'numeric', month:'short', day:'numeric' });
+  // Resolve the actual layout name — when editing a library entry the pseudo-project name is '__lib_layout__'
+  var _resolvedName = layoutName;
+  if(!_resolvedName && typeof _libEditingLayoutId!=='undefined' && _libEditingLayoutId && typeof getLib==='function'){
+    var _exportLibEntry=getLib().layouts.find(function(e){return e.id===_libEditingLayoutId;});
+    if(_exportLibEntry) _resolvedName=_exportLibEntry.name;
+  }
+  const name = _resolvedName || (p && p.name && p.name!=='__lib_layout__' ? p.name : null) || (isES ? 'Plano' : 'Layout');
+  const exportedOn = new Date().toLocaleDateString(isES ? 'es-MX' : 'en-US', { year:'numeric', month:'long', day:'numeric' });
+  const summary = getLayoutSummary(items, {}, floorplan);
 
   function money(v){ return fmtMoney(Number(v||0)); }
   function text(v){ return esc(v==null ? '' : String(v)); }
 
-  const autoRowsHtml = quote.autoRows.map(function(row){
-    return `
-      <tr>
-        <td>${text(row.label)}</td>
-        <td class="num">${text(row.qty)}</td>
-        <td>${text(row.chairStyle || (isES ? 'Predeterminada' : 'Default'))}</td>
-        <td>${text(row.centerpiece || (isES ? 'Ninguno' : 'None'))}</td>
-        <td class="num">${text(row.chairsPerUnit)}</td>
-        <td class="num">${money(row.unitElementPrice)}</td>
-        <td class="num">${money(row.unitChairPriceTotal)}</td>
-        <td class="num">${money(row.unitCenterpiecePrice)}</td>
-        <td class="num strong">${money(row.unitTotal)}</td>
-        <td class="num strong">${money(row.rowTotal)}</td>
-      </tr>`;
+  const ppm = typeof getPPM==='function' ? getPPM() : 100;
+
+  function colorSwatch(color){
+    return `<span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:${color||'#e8e2d8'};border:1px solid #ccc;vertical-align:middle;margin-right:4px"></span>`;
+  }
+
+  const elementRowsHtml = quote.elementRows.map(function(row){
+    const wM=(row.w/ppm).toFixed(1), hM=(row.h/ppm).toFixed(1);
+    const dims=row.w&&row.h?`${wM} \xd7 ${hM} m`:'-';
+    const tags=[];
+    if(row.chairs>0) tags.push(row.chairs+(isES?' sillas':' chairs')+' \xb7 '+text(row.chairLabel));
+    if(row.centerpieceLabel) tags.push(text(row.centerpieceLabel));
+    const subLabel=tags.length?`<div style="font-size:10px;color:#6f665c;margin-top:2px">${tags.join(' · ')}</div>`:'';
+    return `<tr>
+      <td>${text(row.label)}${subLabel}</td>
+      <td>${colorSwatch(row.bg)}</td>
+      <td>${dims}</td>
+      <td class="num">${text(row.qty)}</td>
+      <td class="num">${money(row.cost)}</td>
+      <td class="num strong">${money(row.rowTotal)}</td>
+    </tr>`;
+  }).join('');
+
+  const chairRowsHtml = quote.chairRows.map(function(row){
+    return `<tr>
+      <td>${text(row.label)}</td>
+      <td>${colorSwatch(row.fill)}</td>
+      <td>-</td>
+      <td class="num">${text(row.qty)}</td>
+      <td class="num">${money(row.unitPrice)}</td>
+      <td class="num strong">${money(row.rowTotal)}</td>
+    </tr>`;
+  }).join('');
+
+  const cpRowsHtml = quote.centerpieceRows.map(function(row){
+    return `<tr>
+      <td>${text(row.label)}</td>
+      <td>${colorSwatch(row.color)}</td>
+      <td>-</td>
+      <td class="num">${text(row.qty)}</td>
+      <td class="num">${money(row.unitPrice)}</td>
+      <td class="num strong">${money(row.rowTotal)}</td>
+    </tr>`;
   }).join('');
 
   const extraRowsHtml = quote.extraRows.map(function(row){
@@ -3924,6 +4343,7 @@ function exportLayoutFull(layoutName){
   td.num, th.num{text-align:right}
   .strong{font-weight:700;color:#8a6a1d}
   .total-row td{background:#fbf5e7;font-weight:700}
+  .sec-hdr td{background:#faf7f2;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#6f665c;padding:6px 8px}
   .preview-wrap{border:1px solid #eee6da;border-radius:14px;background:#fff;padding:12px}
   .preview-img{display:block;width:100%;height:auto;border-radius:10px}
   .footer{display:flex;justify-content:flex-end;margin-top:24px}
@@ -3941,8 +4361,7 @@ function exportLayoutFull(layoutName){
   <section class="hero">
     <div>
       <h1>${text(name)}</h1>
-      <div class="sub">${text(t('layout_quote_title'))} � ${text(exportedOn)}</div>
-      <div class="sub">${text(t('layout_quote_sub'))}</div>
+      <div class="sub">${text(isES?'Generado el':'Generated on')} ${text(exportedOn)}</div>
     </div>
   </section>
 
@@ -3954,30 +4373,54 @@ function exportLayoutFull(layoutName){
 
   ${previewHtml}
 
+  ${summary.elements.length ? `
+  <section class="panel">
+    <h2>${text(isES?'Resumen de Elementos':'Element Summary')}</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>${text(isES?'Elemento':'Element')}</th>
+          <th>${text(isES?'Dimensiones':'Dimensions')}</th>
+          <th class="num">${text(isES?'Cantidad':'Qty')}</th>
+          <th>${text(isES?'Etiquetas':'Labels')}</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${summary.elements.map(function(row){
+          return `<tr>
+            <td>${text(row.type)}</td>
+            <td>${text(row.dimensions)}</td>
+            <td class="num">${row.qty}</td>
+            <td class="sub">${text(row.labels.join(', '))}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </section>` : ''}
+
   <section class="panel">
     <h2>${text(t('layout_quote_auto'))}</h2>
     <table>
       <thead>
         <tr>
-          <th>${text(t('layout_quote_item'))}</th>
+          <th>${text(isES?'Elemento':'Item')}</th>
+          <th>${text(isES?'Color':'Color')}</th>
+          <th>${text(isES?'Dimensiones':'Dimensions')}</th>
           <th class="num">${text(t('layout_quote_quantity'))}</th>
-          <th>${text(t('chair_style'))}</th>
-          <th>${text(t('centerpiece'))}</th>
-          <th class="num">${text(t('layout_quote_seats_unit'))}</th>
           <th class="num">${text(t('layout_quote_base'))}</th>
-          <th class="num">${text(t('layout_quote_chair_cost'))}</th>
-          <th class="num">${text(t('layout_quote_centerpiece_cost'))}</th>
-          <th class="num">${text(t('layout_quote_unit_total'))}</th>
           <th class="num">${text(t('layout_quote_row_total'))}</th>
         </tr>
       </thead>
       <tbody>
-        ${autoRowsHtml || `<tr><td colspan="10">${text(t('layout_quote_empty_sub'))}</td></tr>`}
-        <tr class="total-row"><td colspan="9">${text(isES?'Subtotal de layout':'Layout subtotal')}</td><td class="num">${money(quote.autoTotal)}</td></tr>
+        ${quote.elementRows.length ? `<tr class="sec-hdr"><td colspan="6">${text(isES?'Elementos':'Elements')}</td></tr>${elementRowsHtml}` : ''}
+        ${quote.chairRows.length ? `<tr class="sec-hdr"><td colspan="6">${text(isES?'Sillas':'Chairs')}</td></tr>${chairRowsHtml}` : ''}
+        ${quote.centerpieceRows.length ? `<tr class="sec-hdr"><td colspan="6">${text(isES?'Centros de mesa':'Centerpieces')}</td></tr>${cpRowsHtml}` : ''}
+        <tr class="total-row"><td colspan="5">${text(isES?'Subtotal layout':'Layout subtotal')}</td><td class="num">${money(quote.elementsTotal+quote.chairsTotal+quote.centerpiecesTotal)}</td></tr>
       </tbody>
     </table>
   </section>
 
+  ${quote.extraRows.length ? `
   <section class="panel">
     <h2>${text(t('layout_quote_custom'))}</h2>
     <table>
@@ -3992,9 +4435,16 @@ function exportLayoutFull(layoutName){
         </tr>
       </thead>
       <tbody>
-        ${extraRowsHtml || `<tr><td colspan="6">${text(t('layout_quote_empty_sub'))}</td></tr>`}
+        ${extraRowsHtml}
         <tr class="total-row"><td colspan="5">${text(isES?'Subtotal personalizado':'Custom subtotal')}</td><td class="num">${money(quote.extrasTotal)}</td></tr>
-        <tr class="total-row"><td colspan="5">${text(isES?'Total general':'Grand total')}</td><td class="num">${money(quote.total)}</td></tr>
+      </tbody>
+    </table>
+  </section>` : ''}
+
+  <section class="panel">
+    <table>
+      <tbody>
+        <tr class="total-row"><td colspan="5" style="font-size:15px">${text(isES?'Total general':'Grand total')}</td><td class="num" style="font-size:15px">${money(quote.total)}</td></tr>
       </tbody>
     </table>
   </section>
@@ -4015,6 +4465,162 @@ function exportLayoutFull(layoutName){
 }
 
 function exportLayoutPDF(){ exportLayoutFull(); }
+
+function exportEventLayoutSnapshot(){
+  var p=proj(); if(!p) return;
+  var exp=p.layoutExport;
+  if(!exp||!exp.image) return toast(LANG==='es'?'No hay layout para exportar':'No layout to export','e');
+  var isES=LANG==='es';
+  var name=exp.layoutName||(isES?'Layout':'Layout');
+  var exportedAt=exp.exportedAt?new Date(exp.exportedAt).toLocaleDateString(isES?'es-MX':'en-US',{year:'numeric',month:'long',day:'numeric'}):'';
+  var genDate=new Date().toLocaleDateString(isES?'es-MX':'en-US',{year:'numeric',month:'long',day:'numeric'});
+  var summary=exp.summary||null;
+  function _e(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+  var summaryRowsHtml='';
+  if(summary&&summary.elements&&summary.elements.length){
+    summaryRowsHtml=summary.elements.map(function(row){
+      var labels=row.labels&&row.labels.length?row.labels.join(', '):'';
+      return '<tr><td>'+_e(row.type)+'</td><td>'+_e(row.dimensions)+'</td><td class="num">'+row.qty+'</td><td class="muted">'+_e(labels)+'</td></tr>';
+    }).join('');
+  }
+
+  // Resolve library entry items and costs for the quote (same logic as the viewer)
+  var _quoteItems=p.layoutItems||[];
+  var _snapshotLibE=null;
+  if(exp.layoutId&&typeof getLib==='function'){
+    _snapshotLibE=getLib().layouts.find(function(e){return e.id===exp.layoutId;});
+    if(_snapshotLibE) _quoteItems=_snapshotLibE.items||[];
+  }
+  var _savedCT2,_savedCP2,_didSwap2=false;
+  if(_snapshotLibE&&(_snapshotLibE.chairTypes||_snapshotLibE.centerpieceTypes)){
+    _savedCT2=CHAIR_TYPES;_savedCP2=CENTERPIECE_TYPES;_didSwap2=true;
+    syncLayoutStyles({chairTypes:_snapshotLibE.chairTypes||{},centerpieceTypes:_snapshotLibE.centerpieceTypes||{},customShapes:{}});
+  }
+  var _snapQuote=getLayoutQuoteSummary(_quoteItems,[]);
+  if(_didSwap2){CHAIR_TYPES=_savedCT2;CENTERPIECE_TYPES=_savedCP2;}
+  var _snapHasQuote=_snapQuote.elementRows.length||_snapQuote.chairRows.length||_snapQuote.centerpieceRows.length;
+
+  function _money(v){return typeof fmtMoney==='function'?fmtMoney(Number(v||0)):String(Number(v||0).toFixed(2));}
+  function _swatch(color){return '<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:'+(color||'#e8e2d8')+';border:1px solid #ccc;vertical-align:middle;margin-right:3px"></span>';}
+  var ppm2=typeof getPPM==='function'?getPPM():100;
+
+  var _quoteBodyHtml='';
+  if(_snapQuote.elementRows.length){
+    _quoteBodyHtml+='<tr class="sec-hdr"><td colspan="5">'+(isES?'Elementos':'Elements')+'</td></tr>';
+    _quoteBodyHtml+=_snapQuote.elementRows.map(function(row){
+      var wM=(row.w/ppm2).toFixed(1),hM=(row.h/ppm2).toFixed(1);
+      var dims=row.w&&row.h?wM+' \xd7 '+hM+' m':'-';
+      var tags=[];
+      if(row.chairs>0)tags.push(row.chairs+(isES?' sillas':' chairs')+' \xb7 '+_e(row.chairLabel));
+      if(row.centerpieceLabel)tags.push(_e(row.centerpieceLabel));
+      var sub=tags.length?'<div style="font-size:10px;color:#6f665c;margin-top:2px">'+tags.join(' · ')+'</div>':'';
+      return '<tr><td>'+_e(row.label)+sub+'</td><td>'+_swatch(row.bg)+dims+'</td><td class="num">'+row.qty+'</td><td class="num">'+_money(row.cost)+'</td><td class="num strong">'+_money(row.rowTotal)+'</td></tr>';
+    }).join('');
+  }
+  if(_snapQuote.chairRows.length){
+    _quoteBodyHtml+='<tr class="sec-hdr"><td colspan="5">'+(isES?'Sillas':'Chairs')+'</td></tr>';
+    _quoteBodyHtml+=_snapQuote.chairRows.map(function(row){
+      return '<tr><td>'+_e(row.label)+'</td><td>'+_swatch(row.fill)+'-</td><td class="num">'+row.qty+'</td><td class="num">'+_money(row.unitPrice)+'</td><td class="num strong">'+_money(row.rowTotal)+'</td></tr>';
+    }).join('');
+  }
+  if(_snapQuote.centerpieceRows.length){
+    _quoteBodyHtml+='<tr class="sec-hdr"><td colspan="5">'+(isES?'Centros de mesa':'Centerpieces')+'</td></tr>';
+    _quoteBodyHtml+=_snapQuote.centerpieceRows.map(function(row){
+      return '<tr><td>'+_e(row.label)+'</td><td>'+_swatch(row.color)+'-</td><td class="num">'+row.qty+'</td><td class="num">'+_money(row.unitPrice)+'</td><td class="num strong">'+_money(row.rowTotal)+'</td></tr>';
+    }).join('');
+  }
+  if(_snapHasQuote){
+    _quoteBodyHtml+='<tr class="total-row"><td colspan="4">'+(isES?'Subtotal':'Subtotal')+'</td><td class="num">'+_money(_snapQuote.autoTotal)+'</td></tr>';
+  }
+
+  var css='*{box-sizing:border-box;margin:0;padding:0}'
+    +'body{font-family:"Segoe UI",system-ui,Arial,sans-serif;color:#241f17;background:#f6f1e8;font-size:13px;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    +'.cover{background:#fff;padding:52px 56px 44px;border-bottom:4px solid #c9a84c}'
+    +'.brand{font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#c9a84c;margin-bottom:28px}'
+    +'.lname{font-size:36px;font-weight:700;letter-spacing:-.5px;color:#241f17;margin-bottom:8px}'
+    +'.evname{font-size:15px;color:#6f665c;margin-bottom:20px}'
+    +'.rule{width:48px;height:3px;background:#c9a84c;border-radius:2px;margin-bottom:20px}'
+    +'.meta{font-size:11px;color:#b0a898}'
+    +'.body{padding:36px 48px}'
+    +'.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:24px}'
+    +'.stat{background:#fff;border:1px solid #e7dccb;border-radius:12px;padding:14px 16px}'
+    +'.stat-v{font-size:22px;font-weight:700;color:#8a6a1d;line-height:1}'
+    +'.stat-l{font-size:10px;color:#b0a898;text-transform:uppercase;letter-spacing:.07em;margin-top:5px}'
+    +'.img-wrap{background:#fff;border:1px solid #e7dccb;border-radius:16px;overflow:hidden;margin-bottom:24px}'
+    +'.img-wrap img{display:block;width:100%;height:auto}'
+    +'.panel{background:#fff;border:1px solid #e7dccb;border-radius:16px;overflow:hidden}'
+    +'.panel-title{padding:14px 18px;font-size:13px;font-weight:700;border-bottom:1px solid #e7dccb;background:#f6f1e8}'
+    +'table{width:100%;border-collapse:collapse;font-size:12px}'
+    +'th{padding:9px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6f665c;border-bottom:1px solid #e7dccb;background:#faf7f2}'
+    +'td{padding:9px 14px;border-bottom:1px solid #f2ece0;color:#241f17}'
+    +'tr:last-child td{border-bottom:none}'
+    +'td.num{text-align:right;font-weight:600}'
+    +'td.muted{color:#6f665c}'
+    +'.sec-hdr td{background:#faf7f2;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#6f665c;padding:6px 14px}'
+    +'.total-row td{background:#fbf5e7;font-weight:700}'
+    +'.strong{font-weight:700;color:#8a6a1d}'
+    +'.mb{margin-bottom:16px}'
+    +'.print-btn{margin-top:20px;padding:10px 22px;background:#c9a84c;border:none;border-radius:8px;color:#fff;font-weight:700;cursor:pointer;font-size:13px}'
+    +'@media print{body{background:#fff}.body{background:#fff}.print-btn{display:none}}';
+
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+_e(name)+' — '+_e(p.name||'')+'</title><style>'+css+'</style></head><body>'
+    +'<div class="cover">'
+      +'<div class="brand">EventOS &nbsp;·&nbsp; '+(isES?'Plano del Evento':'Event Layout')+'</div>'
+      +'<div class="lname">'+_e(name)+'</div>'
+      +(p.name?'<div class="evname">'+_e(p.name)+'</div>':'')
+      +'<div class="rule"></div>'
+      +'<div class="meta">'+(exportedAt?(isES?'Exportado el ':'Exported on ')+exportedAt+'&ensp;&middot;&ensp;':'')+(isES?'Generado el ':'Generated on ')+genDate+'</div>'
+    +'</div>'
+    +'<div class="body">';
+
+  if(summary){
+    html+='<div class="stats">'
+      +'<div class="stat"><div class="stat-v">'+(summary.tables||0)+'</div><div class="stat-l">'+(isES?'Mesas':'Tables')+'</div></div>'
+      +'<div class="stat"><div class="stat-v">'+(summary.guests||'—')+'</div><div class="stat-l">'+(isES?'Invitados':'Guests')+'</div></div>'
+      +'<div class="stat"><div class="stat-v">'+((summary.elements||[]).reduce(function(s,r){return s+r.qty;},0)||0)+'</div><div class="stat-l">'+(isES?'Elementos':'Elements')+'</div></div>'
+    +'</div>';
+  }
+
+  html+='<div class="img-wrap"><img src="'+exp.image+'" alt="'+_e(name)+'"></div>';
+
+  if(summaryRowsHtml){
+    html+='<div class="panel">'
+      +'<div class="panel-title">'+(isES?'Resumen de Elementos':'Element Summary')+'</div>'
+      +'<table><thead><tr>'
+        +'<th>'+(isES?'Elemento':'Element')+'</th>'
+        +'<th>'+(isES?'Dimensiones':'Dimensions')+'</th>'
+        +'<th style="text-align:right">'+(isES?'Cantidad':'Qty')+'</th>'
+        +'<th>'+(isES?'Etiquetas':'Labels')+'</th>'
+      +'</tr></thead><tbody>'+summaryRowsHtml+'</tbody></table>'
+    +'</div>';
+  }
+
+  if(_snapHasQuote){
+    html+='<div class="panel mb" style="margin-top:16px">'
+      +'<div class="panel-title">'+(isES?'Cotización de Layout':'Layout Quote')+'</div>'
+      +'<table><thead><tr>'
+        +'<th>'+(isES?'Elemento':'Item')+'</th>'
+        +'<th>'+(isES?'Dimensiones / Color':'Dimensions / Color')+'</th>'
+        +'<th style="text-align:right">'+(isES?'Cantidad':'Qty')+'</th>'
+        +'<th style="text-align:right">'+(isES?'Precio unitario':'Unit price')+'</th>'
+        +'<th style="text-align:right">'+(isES?'Subtotal':'Subtotal')+'</th>'
+      +'</tr></thead>'
+      +'<tbody>'+_quoteBodyHtml+'</tbody>'
+      +'</table>'
+    +'</div>';
+  }
+
+  html+='<div style="margin-top:20px;text-align:right"><button class="print-btn" onclick="window.print()">'+(isES?'Imprimir / Guardar PDF':'Print / Save PDF')+'</button></div>'
+    +'</div></body></html>';
+
+  var blob=new Blob([html],{type:'text/html'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=name.replace(/[^a-zA-Z0-9_\-]/g,'_')+'_'+new Date().toISOString().slice(0,10)+'.html';
+  a.click();
+  toast(isES?'Layout exportado':'Layout exported','s');
+}
 
 
 // ─── Layout Editor Guided Tour ─────────────────────────────────────────────
