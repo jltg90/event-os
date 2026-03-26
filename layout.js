@@ -4183,7 +4183,11 @@ function initLayoutTouchHandlers(){
       var cr=cv.getBoundingClientRect();
       var mx=(touch.clientX-cr.left)/LState.zoom, my=(touch.clientY-cr.top)/LState.zoom;
       var it=LState.items.find(i=>i.id===id);
-      if(it){ _lt.dragId=id; _lt.offX=mx-it.x; _lt.offY=my-it.y; if(!LState.sel.includes(id)){LState.sel=[id];updateSelUI();} }
+      if(it){
+        _lt.dragId=id; _lt.offX=mx-it.x; _lt.offY=my-it.y;
+        co.classList.add('layout-dragging-item');
+        if(!LState.sel.includes(id)){LState.sel=[id];updateSelUI();}
+      }
       e.preventDefault();
     } else { _lt.dragId=null; }
   },{passive:false});
@@ -4203,8 +4207,14 @@ function initLayoutTouchHandlers(){
   },{passive:false});
   co.addEventListener('touchend',function(){
     if(_lt.dragId){ var p=proj();p.layoutItems=LState.items;saveProj(p);lHistorySave(); _lt.dragId=null; }
+    co.classList.remove('layout-dragging-item');
     _lt.pinching=false;
   });
+  co.addEventListener('touchcancel',function(){
+    _lt.dragId=null;
+    _lt.pinching=false;
+    co.classList.remove('layout-dragging-item');
+  },{passive:true});
 }
 
 function lZoom(delta,mode,cx,cy){

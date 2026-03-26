@@ -2015,6 +2015,8 @@ tr:hover td { background: var(--bg2); }
   flex: 1; overflow: auto; position: relative;
   background: #ffffff;
 }
+.layout-canvas-outer { overscroll-behavior: contain; }
+.layout-canvas-outer.layout-dragging-item { overflow: hidden; }
 .layout-canvas { position: relative; background: #ffffff; background-image: radial-gradient(circle, rgba(180,172,160,.35) 1px, transparent 1px); background-size: 24px 24px; }
 .layout-mobile-quickbar {
   display: none;
@@ -2468,8 +2470,8 @@ tr:hover td { background: var(--bg2); }
   .ptab svg { display: none; }
 
   /* ── pcontent ── */
-  .pcontent { padding: 0 14px 14px; }
-  #tab-layout { padding-top: 0 !important; }
+  .pcontent { padding: 20px 14px 14px; }
+  #tab-layout { padding-top: 18px !important; }
 
   /* ── Events page ── */
   .evgrid { grid-template-columns: 1fr; gap: 14px; }
@@ -2504,6 +2506,13 @@ tr:hover td { background: var(--bg2); }
   #lib-task-table-wrap {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+  }
+  #lib-vendor-group-table-wrap > div,
+  #lib-vendor-table-wrap > div,
+  #lib-task-group-table-wrap > div,
+  #lib-task-table-wrap > div {
+    overflow: visible !important;
+    min-width: max-content;
   }
   #lib-vendor-group-table-wrap table,
   #lib-vendor-table-wrap table {
@@ -2687,8 +2696,8 @@ tr:hover td { background: var(--bg2); }
   .stat-n { font-size: 20px; }
 
   /* ── Page padding ── */
-  .pcontent { padding: 0 10px 10px; }
-  #tab-layout { padding-top: 0 !important; }
+  .pcontent { padding: 18px 10px 10px; }
+  #tab-layout { padding-top: 16px !important; }
 
   /* ── Hide less important table cols on tiny screens ── */
   .guest-col-table { display: none; }

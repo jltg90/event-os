@@ -581,7 +581,6 @@ function renderLibVendorGroupDetail(lib,entry,isES){
     +(isES?'CARGAR':'LOAD')+'</button>'
     +'</div>'
     +'<div id="lib-vendor-table-wrap">'
-    +'<div id="lib-task-group-table-wrap">'
     +'<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm)">'
     +'<table style="width:100%;border-collapse:collapse">'
     +'<thead><tr style="background:var(--bg2);border-bottom:1px solid var(--border)">'
@@ -738,13 +737,13 @@ function libOpenVendorSetupWizardForGroup(entryId){
 
 function libVendorRow(item, isES){
   var v=item.v;
-  return '<tr onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
+  return '<tr onclick="libOpenVendorModalForGroup(\''+item.entryId+'\',\''+v.id+'\')" style="cursor:pointer" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
     +'<td style="padding:11px 12px;width:36px" onclick="event.stopPropagation()">'
     +'<input type="checkbox" class="lib-v-sel" data-entry="'+item.entryId+'" data-vid="'+v.id+'" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libUpdateBulkBtn()">'
     +'</td>'
-    +'<td style="padding:11px 14px;font-weight:600;font-size:13px">'+esc(v.name)+'</td>'
-    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted)">'+esc(v.contact||'—')+'</td>'
-    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(v.services||'—')+'</td>'
+    +'<td style="padding:11px 14px;font-weight:600;font-size:13px;min-width:180px">'+esc(v.name)+'</td>'
+    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);min-width:220px;white-space:nowrap">'+esc(v.contact||'—')+'</td>'
+    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);min-width:260px;white-space:nowrap">'+esc(v.services||'—')+'</td>'
     +'<td style="padding:11px 14px;text-align:right" onclick="event.stopPropagation()">'
     +'<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">'
     +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadVendorToEvent(\''+item.entryId+'\',\''+v.id+'\')">'+( isES?'CARGAR':'LOAD')+'</button>'
@@ -1283,15 +1282,15 @@ function renderLibTaskGroupDetail(lib,entry,isES){
 }
 function libGroupTaskRow(entryId,tk,isES){
   var clr=tk.color||'#7c3aed';
-  return '<tr onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
+  return '<tr onclick="libOpenTaskModalForGroup(\''+entryId+'\',\''+tk.id+'\')" style="cursor:pointer" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
     +'<td style="padding:11px 12px;width:36px" onclick="event.stopPropagation()">'
     +'<input type="checkbox" class="lib-gtg-sel" data-entry="'+entryId+'" data-tid="'+tk.id+'" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libUpdateGroupTaskBulkBtn()">'
     +'</td>'
-    +'<td style="padding:11px 14px;font-weight:600;font-size:13px;vertical-align:middle">'
+    +'<td style="padding:11px 14px;font-weight:600;font-size:13px;vertical-align:middle;min-width:180px">'
     +'<div style="display:flex;align-items:center;gap:8px"><div style="width:10px;height:10px;border-radius:50%;background:'+clr+';flex-shrink:0"></div>'+esc(tk.title)+'</div></td>'
-    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(tk.desc||'—')+'</td>'
+    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);min-width:280px;white-space:nowrap">'+esc(tk.desc||'—')+'</td>'
     +'<td style="padding:11px 14px;font-size:12px;color:var(--muted)">'+(tk.durationDays?tk.durationDays+(isES?' días':' days'):'—')+'</td>'
-    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted)">'+esc(tk.assignee||'—')+'</td>'
+    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);min-width:180px;white-space:nowrap">'+esc(tk.assignee||'—')+'</td>'
     +'<td style="padding:11px 14px;text-align:right" onclick="event.stopPropagation()">'
     +'<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">'
     +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadGroupTaskToEvent(\''+entryId+'\',\''+tk.id+'\')">'+( isES?'CARGAR':'LOAD')+'</button>'
@@ -3804,6 +3803,7 @@ function libOpenLayoutEditor(entryId, _unused, isNew){
   var entry=lib.layouts.find(function(e){return e.id===entryId;});
   if(!entry){ toast(LANG==='es'?'Plano no encontrado':'Layout not found','e'); return; }
   var isES=LANG==='es';
+  var isPhone=typeof isPhoneViewport==='function' && isPhoneViewport();
 
   // Use the library entry itself as a pseudo-project by storing items in it directly.
   // We create/reuse a hidden __lib_layout__ project slot so renderLayout() works.
@@ -3855,13 +3855,23 @@ function libOpenLayoutEditor(entryId, _unused, isNew){
   if(!pgLib) return;
 
   // Hide normal library UI, inject full-height layout shell
+  var editorTopBarStyle=isPhone
+    ? 'display:flex;flex-direction:column;align-items:stretch;gap:10px;padding:12px 12px 10px;background:var(--card);border-bottom:1px solid var(--border);flex-shrink:0'
+    : 'display:flex;align-items:center;gap:12px;padding:10px 20px;background:var(--card);border-bottom:1px solid var(--border);flex-shrink:0';
+  var editorMainRowStyle=isPhone
+    ? 'display:flex;flex-direction:column;align-items:stretch;gap:10px;min-width:0;width:100%'
+    : 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;flex:1';
+  var editorNameStyle=isPhone
+    ? 'width:100%;min-width:0;font-weight:700;font-size:15px;padding:10px 12px'
+    : 'max-width:320px;font-weight:700;font-size:15px;padding:7px 10px';
+  var editorLoadBtnStyle=isPhone ? 'width:100%;justify-content:center' : '';
   pgLib.innerHTML=
     '<div style="display:flex;flex-direction:column;height:100vh">'
-    +'<div style="display:flex;align-items:center;gap:12px;padding:10px 20px;background:var(--card);border-bottom:1px solid var(--border);flex-shrink:0">'
+    +'<div style="'+editorTopBarStyle+'">'
     +'<button class="btn btn-ghost btn-sm" onclick="libCloseLayoutEditor(\''+entryId+'\',\''+(_prevCID||'')+'\')">← '+(isES?'Volver a Planos':'Back to Layouts')+'</button>'
-    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;flex:1">'
-    +'<input id="lib-layout-editor-name" class="input" value="'+esc(entry.name)+'" style="max-width:320px;font-weight:700;font-size:15px;padding:7px 10px" onblur="libRenameEditingLayout(\''+entryId+'\')" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}">'
-    +'<button class="btn btn-primary btn-sm" onclick="libOpenLayoutEventPicker(\''+entryId+'\')">'+(isES?'CARGAR A EVENTO':'LOAD TO EVENT')+'</button>'
+    +'<div style="'+editorMainRowStyle+'">'
+    +'<input id="lib-layout-editor-name" class="input" value="'+esc(entry.name)+'" style="'+editorNameStyle+'" onblur="libRenameEditingLayout(\''+entryId+'\')" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}">'
+    +'<button class="btn btn-primary btn-sm" style="'+editorLoadBtnStyle+'" onclick="libOpenLayoutEventPicker(\''+entryId+'\')">'+(isES?'CARGAR A EVENTO':'LOAD TO EVENT')+'</button>'
     +'</div>'
     +'<span style="font-size:12px;color:var(--muted)">'+(isES?'Los cambios se guardan automáticamente':'Changes are saved automatically')+'</span>'
     +'</div>'
@@ -3869,17 +3879,30 @@ function libOpenLayoutEditor(entryId, _unused, isNew){
     +'</div>';
 
   // Auto-save: poll for changes every 2 seconds — only saves current layout's items and floorplan metadata
+  function libLayoutSnapshot(lpState){
+    if(!lpState) return '';
+    return JSON.stringify({
+      items: lpState.layoutItems||[],
+      chairTypes: lpState.chairTypes||[],
+      centerpieceTypes: lpState.centerpieceTypes||[],
+      floorplan: lpState.floorplan||null
+    });
+  }
+  window._libAutoSaveSnapshot=libLayoutSnapshot(lp);
   if(window._libAutoSaveInterval) clearInterval(window._libAutoSaveInterval);
   window._libAutoSaveInterval=setInterval(function(){
     if(!_libEditingLayoutId) return;
     var lib2=getLib();
     var entry2=lib2.layouts.find(function(e){return e.id===entryId;});
+    var lp2=typeof uproj==='function'?uproj()['__lib_layout__']:null;
+    var nextSnapshot=libLayoutSnapshot(lp2);
+    if(!entry2 || !lp2 || nextSnapshot===window._libAutoSaveSnapshot) return;
+    window._libAutoSaveSnapshot=nextSnapshot;
     if(entry2){
-      var lp2=typeof uproj==='function'?uproj()['__lib_layout__']:null;
-      if(lp2&&lp2.layoutItems) entry2.items=JSON.parse(JSON.stringify(lp2.layoutItems));
-      if(lp2&&lp2.chairTypes) entry2.chairTypes=JSON.parse(JSON.stringify(lp2.chairTypes));
-      if(lp2&&lp2.centerpieceTypes) entry2.centerpieceTypes=JSON.parse(JSON.stringify(lp2.centerpieceTypes));
-      if(lp2&&lp2.floorplan){
+      if(lp2.layoutItems) entry2.items=JSON.parse(JSON.stringify(lp2.layoutItems));
+      if(lp2.chairTypes) entry2.chairTypes=JSON.parse(JSON.stringify(lp2.chairTypes));
+      if(lp2.centerpieceTypes) entry2.centerpieceTypes=JSON.parse(JSON.stringify(lp2.centerpieceTypes));
+      if(lp2.floorplan){
         var _asFp=JSON.parse(JSON.stringify(lp2.floorplan));
         if(_asFp.img&&_asFp.img!=='__idb__') _asFp.img='__idb__';
         entry2.floorplan=_asFp;
@@ -3898,6 +3921,7 @@ window.libOpenLayoutEditor = libOpenLayoutEditor;
 
 function libCloseLayoutEditor(entryId, prevCID){
   if(window._libAutoSaveInterval){ clearInterval(window._libAutoSaveInterval); window._libAutoSaveInterval=null; }
+  window._libAutoSaveSnapshot=null;
   var lib=getLib();
   var entry=lib.layouts.find(function(e){return e.id===entryId;});
   var lp=typeof uproj==='function'?uproj()['__lib_layout__']:null;
@@ -3946,6 +3970,7 @@ window.libCloseLayoutEditor = libCloseLayoutEditor;
 function libCancelLayoutEditor(){
   if(!_libEditingLayoutId) return;
   if(window._libAutoSaveInterval){ clearInterval(window._libAutoSaveInterval); window._libAutoSaveInterval=null; }
+  window._libAutoSaveSnapshot=null;
   // Final save of layout items to the library entry
   var lib=getLib();
   var entry=lib.layouts.find(function(e){return e.id===_libEditingLayoutId;});
@@ -4101,10 +4126,6 @@ window.libCloseLayoutEditor = libCloseLayoutEditor;
 window.updateLibraryLabels = updateLibraryLabels;
 window.renderLibrary = renderLibrary;
 // placeholder to prevent old duplicate
-
-
-
-
 
 
 
