@@ -509,6 +509,7 @@ function renderLibVendorSets(lib){
     +'<button id="lib-vg-bulk-del-btn" class="btn btn-danger btn-sm" style="display:none;white-space:nowrap" onclick="libDeleteSelectedVendorGroups()">'
     +(isES?'Eliminar':'Delete Selected')+'</button>'
     +'</div>'
+    +'<div id="lib-vendor-group-table-wrap">'
     +'<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm)">'
     +'<table style="width:100%;border-collapse:collapse">'
     +'<thead><tr style="background:var(--bg2);border-bottom:1px solid var(--border)">'
@@ -520,7 +521,7 @@ function renderLibVendorSets(lib){
     +'<th style="padding:9px 14px"></th>'
     +'</tr></thead>'
     +'<tbody id="lib-vg-rows">'+rows+'</tbody>'
-    +'</table></div>';
+    +'</table></div></div>';
 }
 function libVendorGroupRow(entry,isES){
   var vCount=(entry.vendors||[]).length;
@@ -580,6 +581,7 @@ function renderLibVendorGroupDetail(lib,entry,isES){
     +(isES?'CARGAR':'LOAD')+'</button>'
     +'</div>'
     +'<div id="lib-vendor-table-wrap">'
+    +'<div id="lib-task-group-table-wrap">'
     +'<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm)">'
     +'<table style="width:100%;border-collapse:collapse">'
     +'<thead><tr style="background:var(--bg2);border-bottom:1px solid var(--border)">'
@@ -1209,7 +1211,7 @@ function renderLibTaskGroups(lib){
     +'<th style="padding:9px 14px"></th>'
     +'</tr></thead>'
     +'<tbody id="lib-tg-rows">'+rows+'</tbody>'
-    +'</table></div>';
+    +'</table></div></div>';
 }
 function libTaskGroupRow(entry,isES){
   var taskCount=(entry.tasks||[]).length;
@@ -4099,7 +4101,6 @@ window.libCloseLayoutEditor = libCloseLayoutEditor;
 window.updateLibraryLabels = updateLibraryLabels;
 window.renderLibrary = renderLibrary;
 // placeholder to prevent old duplicate
-
 
 
 
