@@ -2247,26 +2247,16 @@ function renderGuestMobileCards(guests){
       ${guests.length ? guests.map(function(g){
         var contact = guestText(g.email);
         if(g.phone) contact += '<br>'+guestText(g.phone);
-        return `<article class="mobile-record-card" onclick="openGuestModal('${g.id}')">
-          <div class="mobile-record-card-head">
-            <label onclick="event.stopPropagation()" style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;margin-top:1px">
-              <input type="checkbox" class="guest-sel" data-gid="${g.id}" ${isGuestSelected(g.id)?'checked':''} style="width:16px;height:16px;accent-color:var(--gold-h);cursor:pointer" onchange="toggleGuestSelection('${g.id}',this.checked)">
+        return `<article class="mobile-record-card" onclick="openGuestModal('${g.id}')" style="padding:14px 16px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <label onclick="event.stopPropagation()" style="display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <input type="checkbox" class="guest-sel" data-gid="${g.id}" ${isGuestSelected(g.id)?'checked':''} style="width:16px;height:16px;accent-color:#242424;cursor:pointer" onchange="toggleGuestSelection('${g.id}',this.checked)">
             </label>
             <div style="flex:1;min-width:0">
-              <div class="mobile-record-title">${guestText(g.name)}</div>
-              <div class="mobile-record-subtitle">${guestValueOrDash(g.category)}${g.plusOne?' · +1':''}</div>
+              <div style="font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;color:#242424;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${guestText(g.name)}</div>
+              <div style="font-family:'DM Sans',sans-serif;font-size:12px;color:#787470;margin-top:2px">${guestValueOrDash(g.category)}${g.table?' · '+t('table_header')+' '+guestText(g.table):''}</div>
             </div>
-            <span class="rb ${guestRsvpClass(g.rsvp)}">${guestText(guestRsvpValue(g.rsvp))}</span>
-          </div>
-          <div class="mobile-meta-grid">
-            ${renderMobileActionChip(isES?'Contacto':'Contact', contact)}
-            ${renderMobileActionChip(isES?'Mesa':'Table', guestValueOrDash(g.table))}
-            ${renderMobileActionChip(isES?'Comida':'Meal', guestValueOrDash(g.meal))}
-            ${renderMobileActionChip(isES?'Notas':'Notes', guestText(g.notes||'—'))}
-          </div>
-          <div class="mobile-record-card-actions" onclick="event.stopPropagation()">
-            <button class="btn btn-ghost btn-sm" onclick="openGuestModal('${g.id}')">${isES?'Editar':'Edit'}</button>
-            <button class="btn btn-danger btn-sm" onclick="delGuest('${g.id}')">${isES?'Eliminar':'Delete'}</button>
+            <span class="rb ${guestRsvpClass(g.rsvp)}" style="flex-shrink:0">${guestText(guestRsvpValue(g.rsvp))}</span>
           </div>
         </article>`;
       }).join('') : empty}

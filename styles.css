@@ -1410,12 +1410,15 @@ h1, h2, h3 { font-family: 'Cormorant Garamond', serif; font-weight: 400; line-he
 
 /* ─── TAB BAR ────────────────────────────────── */
 .tbar {
-  background: var(--card);
-  border-radius: var(--r-lg);
-  border: 1px solid var(--border);
-  display: flex; overflow: hidden;
+  background: transparent;
+  border-radius: 0;
+  border: none;
+  border-bottom: 1px solid rgba(36,36,36,.08);
+  display: flex;
+  gap: 4px;
   margin-bottom: 22px;
-  box-shadow: var(--sh-xs);
+  box-shadow: none;
+  padding-bottom: 0;
 }
 .tb {
   flex: 0 0 auto; padding: 8px 14px;
@@ -2239,6 +2242,8 @@ tr:hover td { background: var(--bg2); }
   #ev-toolbar > div:first-child { flex-wrap: wrap !important; }
 
   /* ── Event grid cards: fix badge/name overlap and footer ── */
+  .evgrid:not(.ev-list) .ev-select { display: none; }
+  .evgrid:not(.ev-list) .evc-body > div:first-child { padding-left: 0 !important; }
   .evc-body { padding: 16px 14px; }
   .evc-body > div:first-child { flex-wrap: wrap; gap: 8px; }
   .evc-body > div:first-child > div:first-child { min-width: 0; flex: 1; }
@@ -2268,6 +2273,47 @@ tr:hover td { background: var(--bg2); }
     padding-top: 4px;
   }
   .evgrid.ev-list .evc-foot { display: none; }
+
+  /* ── Tab bar: full-width on mobile ── */
+  .tbar {
+    gap: 0;
+  }
+  .tbar .tb {
+    flex: 1;
+    border-radius: 0;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 10px 8px;
+    font-size: 13px;
+  }
+  .tbar .tb.active {
+    background: transparent;
+    color: #242424;
+    border-bottom-color: #242424;
+    font-weight: 600;
+  }
+  .tbar .tb:hover:not(.active) {
+    background: transparent;
+    color: #242424;
+  }
+
+  /* ── Task rows: stack layout on mobile ── */
+  .task-row {
+    flex-wrap: wrap;
+    padding: 14px 16px;
+    gap: 10px;
+  }
+  .task-row > div:last-child {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .task-row .btn-icon {
+    min-height: 36px;
+    min-width: 36px;
+  }
+  .task-meta {
+    gap: 8px !important;
+  }
 
   /* ── Stat grids ── */
   .sg { grid-template-columns: repeat(2,1fr); gap: 12px; }
