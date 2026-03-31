@@ -5,7 +5,7 @@ document.addEventListener('keydown', function(e){
   var modal = document.getElementById('mo');
   if(!modal || !modal.classList.contains('open')) return;
   var active = document.activeElement;
-  if(active && (active.tagName === 'TEXTAREA' || active.tagName === 'BUTTON')) return;
+  if(active && active.tagName === 'TEXTAREA') return;
   e.preventDefault();
   _wizNext();
 });

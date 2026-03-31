@@ -2254,9 +2254,12 @@ function renderGuestMobileCards(guests){
             </label>
             <div style="flex:1;min-width:0">
               <div style="font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;color:#242424;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${guestText(g.name)}</div>
-              <div style="font-family:'DM Sans',sans-serif;font-size:12px;color:#787470;margin-top:2px">${guestValueOrDash(g.category)}${g.table?' · '+t('table_header')+' '+guestText(g.table):''}</div>
+              <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;font-family:'DM Sans',sans-serif;font-size:12px;color:#787470;margin-top:3px">
+                <span>${guestValueOrDash(g.category)}</span>
+                ${g.table?'<span>· '+t('table_header')+' '+guestText(g.table)+'</span>':''}
+                <span class="rb ${guestRsvpClass(g.rsvp)}" style="margin-left:auto">${guestText(guestRsvpValue(g.rsvp))}</span>
+              </div>
             </div>
-            <span class="rb ${guestRsvpClass(g.rsvp)}" style="flex-shrink:0">${guestText(guestRsvpValue(g.rsvp))}</span>
           </div>
         </article>`;
       }).join('') : empty}
