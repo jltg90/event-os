@@ -832,10 +832,11 @@ function lightboxNext(){
 function closeLightbox(e){
   if(e && e.target !== document.getElementById('lightbox') && !e.target.classList.contains('lightbox-close')) return;
   document.getElementById('lightbox').classList.remove('open');
-  document.body.style.overflow = '';
+  var moOpen=document.getElementById('mo')&&document.getElementById('mo').classList.contains('open');
+  if(!moOpen) document.body.style.overflow = '';
 }
 document.addEventListener('keydown', e => {
-  if(e.key === 'Escape') { document.getElementById('lightbox').classList.remove('open'); document.body.style.overflow=''; }
+  if(e.key === 'Escape') { document.getElementById('lightbox').classList.remove('open'); var moOpen=document.getElementById('mo')&&document.getElementById('mo').classList.contains('open'); if(!moOpen) document.body.style.overflow=''; }
   else if(e.key === 'ArrowLeft' && document.getElementById('lightbox').classList.contains('open')) lightboxPrev();
   else if(e.key === 'ArrowRight' && document.getElementById('lightbox').classList.contains('open')) lightboxNext();
 });
@@ -1114,6 +1115,7 @@ function openMobDrawer(){
   var cl = document.getElementById('mob-currency-label');
   var cbl = document.getElementById('currency-label');
   if(cl && cbl) cl.textContent = 'Currency: ' + cbl.textContent;
+  document.body.classList.add('modal-open');
   setTimeout(function(){
     var panel = document.getElementById('mob-drawer-panel');
     if(panel) panel.style.transform = 'translateX(0)';
@@ -1124,6 +1126,7 @@ function closeMobDrawer(){
   var d = document.getElementById('mob-drawer');
   if(!panel || !d) return;
   panel.style.transform = 'translateX(-100%)';
+  document.body.classList.remove('modal-open');
   setTimeout(function(){ d.classList.add('hidden'); }, 300);
 }
 function closeMobDrawerIfOverlay(e){

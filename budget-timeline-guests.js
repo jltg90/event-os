@@ -11,7 +11,7 @@ function calcBudgetStats(p){
   var hired = allVendors.filter(function(v){ return v.hired; });
   var estimatedTotal = allVendors.reduce(function(s,v){ return s+Number(v.budget); },0);
   var tb = hired.reduce(function(s,v){ return s+Number(v.budget); },0);
-  var paid = hired.reduce(function(s,v){ return s+v.payments.reduce(function(a,pay){ return a+Number(pay.amount); },0); },0);
+  var paid = hired.reduce(function(s,v){ return s+(v.payments||[]).reduce(function(a,pay){ return a+Number(pay.amount); },0); },0);
   var projBudget = p.budget||0;
   var diff = projBudget - estimatedTotal;
   var guestTotal = (p.guests||[]).length;
@@ -697,7 +697,7 @@ function saveVendor(vid){
   const p=proj();
   const hiredVal=gv('vn-hired')==='1';
   const data={name,services:gv('vn-svc'),contact:gv('vn-email'),phone:gv('vn-phone'),budget:+gv('vn-budget')||0,hired:hiredVal,vendorStatus:hiredVal?'hired':'pending',notes:gv('vn-notes')};
-  if(vid){const v=p.vendors.find(v=>v.id===vid);Object.assign(v,data);}
+  if(vid){const v=p.vendors.find(v=>v.id===vid);if(v) Object.assign(v,data);}
   else{
     const newV={id:'v'+Date.now(),payments:[],...data};
     p.vendors.push(newV);
@@ -1714,7 +1714,7 @@ function saveTask(tid){
   const status=gv('tk-status')||'not-started';
   const p=proj();
   const data={title,desc:gv('tk-desc'),startDate:start,dueDate:due,endDate:due,durationDays:durationDays,assignee:gv('tk-who'),phase:gv('tk-phase').trim()||taskPhaseValue({title:title,assignee:gv('tk-who')}),planningWindow:gv('tk-window').trim(),status:status,done:status==='completed',color:gv('tk-color')};
-  if(tid){const tk=p.tasks.find(tk=>tk.id===tid);Object.assign(tk,data);}
+  if(tid){const tk=p.tasks.find(tk=>tk.id===tid);if(tk) Object.assign(tk,data);}
   else{p.tasks.push({id:'t'+Date.now(),...data});}
   saveProj(p);closeMo();renderTimeline();toast(tid?'Task updated':'Task added','s');
 }
@@ -1759,7 +1759,8 @@ function renderGuestEmptyState(){
 }
 function renderGuests(){
   const p=proj();const el=document.getElementById('tab-guests');
-  if(!p.guests.length){el.innerHTML=renderGuestEmptyState();return;}
+  if(!p||!el) return;
+  if(!p.guests||!p.guests.length){el.innerHTML=renderGuestEmptyState();return;}
   const guestCount=p.guests.length;
   const plusOnes=p.guests.filter(g=>g.plusOne).length;
   const totalGuests=guestCount+plusOnes;
@@ -1832,97 +1833,7 @@ function guestRsvpClass(v){
   var value = guestRsvpValue(v);
   return value === 'confirmed' ? 'rb-c' : value === 'declined' ? 'rb-d' : 'rb-p';
 }
-function renderGuestList(p){
-  let guests=[...p.guests];
-  if(gFilter){var _gfq=gFilter.toLowerCase();guests=guests.filter(function(g){return _guestMatchesFilter(g,_gfq);});}
-  guests.sort((a,b)=>{const va=String(a[gSort]||''),vb=String(b[gSort]||'');return gAsc?va.localeCompare(vb,undefined,{numeric:true}):vb.localeCompare(va,undefined,{numeric:true});});
-  const si=k=>gSort===k?(gAsc?'&uarr;':'&darr;'):'&harr;';
-  document.getElementById('gview').innerHTML=`
-  <div style="background:#fff;border-radius:var(--r);border:1px solid var(--border);overflow:hidden">
-    <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#fafafa">
-      <input class="input" style="flex:1;min-width:200px" placeholder="${t('search_guests')}" value="${esc(gFilter)}" oninput="debouncedGuestFilter(this.value)">
-      <select class="select" style="width:auto" onchange="gSort=this.value;renderGuestList(proj())">
-        <option value="name" ${gSort==='name'?'selected':''}>${t('sort_name')}</option>
-        <option value="rsvp" ${gSort==='rsvp'?'selected':''}>${t('sort_rsvp')}</option>
-        <option value="table" ${gSort==='table'?'selected':''}>${t('sort_table')}</option>
-        <option value="category" ${gSort==='category'?'selected':''}>${t('sort_category')}</option>
-      </select>
-      <button class="btn btn-ghost btn-sm" onclick="gAsc=!gAsc;renderGuestList(proj())">${gAsc?t('asc'):t('desc')}</button>
-    </div>
-    <div style="overflow-x:auto">
-    <table>
-      <thead><tr>
-        <th onclick="gSort='name';gAsc=gSort==='name'?!gAsc:true;renderGuestList(proj())">${t('col_name')} ${si('name')}</th>
-        <th>${t('col_contact')}</th>
-        <th onclick="gSort='category';gAsc=gSort==='category'?!gAsc:true;renderGuestList(proj())">${t('col_category')} ${si('category')}</th>
-        <th onclick="gSort='rsvp';gAsc=gSort==='rsvp'?!gAsc:true;renderGuestList(proj())">${t('col_rsvp')} ${si('rsvp')}</th>
-        <th onclick="gSort='table';gAsc=gSort==='table'?!gAsc:true;renderGuestList(proj())">${t('col_table')} ${si('table')}</th>
-        <th>${t('col_plus_one')}</th><th>${t('col_meal')}</th><th>${t('col_notes')}</th><th>${t('col_actions')}</th>
-      </tr></thead>
-      <tbody id="guest-rows-body">
-        ${guests.map(g=>`<tr>
-          <td style="font-weight:600">${guestText(g.name)}</td>
-          <td style="font-size:12px;color:var(--muted)">${guestText(g.email)}${g.phone?'<br>'+guestText(g.phone):''}</td>
-          <td><span class="badge b-gray">${guestValueOrDash(g.category)}</span></td>
-          <td><span class="rb ${guestRsvpClass(g.rsvp)}">${guestText(guestRsvpValue(g.rsvp))}</span></td>
-          <td>${guestValueOrDash(g.table)}</td>
-          <td>${g.plusOne?'&#10003;':''}</td>
-          <td style="font-size:12px">${guestValueOrDash(g.meal)}</td>
-          <td style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${guestText(g.notes)}</td>
-          <td><div style="display:flex;gap:4px">
-            <button class="btn btn-ghost btn-sm btn-icon" onclick="openGuestModal('${g.id}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>
-            <button class="btn btn-danger btn-sm btn-icon" onclick="delGuest('${g.id}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
-          </div></td>
-        </tr>`).join('')}
-        ${!guests.length?`<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--muted)">${t('no_guests_found')}</td></tr>`:''}
-      </tbody>
-    </table>
-    </div>
-  </div>`;
-}
-function renderGuestRows(p){
-  var tbody = document.getElementById('guest-rows-body');
-  if(!tbody){ renderGuestList(p); return; }
-  var guests=[...p.guests];
-  if(gFilter) guests=guests.filter(g=>JSON.stringify(g).toLowerCase().includes(gFilter.toLowerCase()));
-  guests.sort((a,b)=>{const va=String(a[gSort]||''),vb=String(b[gSort]||'');return gAsc?va.localeCompare(vb,undefined,{numeric:true}):vb.localeCompare(va,undefined,{numeric:true});});
-  if(!guests.length){
-    tbody.innerHTML=`<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--muted)">${t('no_guests_found')}</td></tr>`;
-    return;
-  }
-  tbody.innerHTML=guests.map(g=>`<tr>
-    <td style="font-weight:600">${guestText(g.name)}</td>
-    <td style="font-size:12px;color:var(--muted)">${guestText(g.email)}${g.phone?'<br>'+guestText(g.phone):''}</td>
-    <td><span class="badge b-gray">${guestValueOrDash(g.category)}</span></td>
-    <td><span class="rb ${guestRsvpClass(g.rsvp)}">${guestText(guestRsvpValue(g.rsvp))}</span></td>
-    <td>${guestValueOrDash(g.table)}</td>
-    <td>${g.plusOne?'&#10003;':''}</td>
-    <td style="font-size:12px">${guestValueOrDash(g.meal)}</td>
-    <td style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${guestText(g.notes)}</td>
-    <td><div style="display:flex;gap:4px">
-      <button class="btn btn-ghost btn-sm btn-icon" onclick="openGuestModal('${g.id}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>
-      <button class="btn btn-danger btn-sm btn-icon" onclick="delGuest('${g.id}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
-    </div></td>
-  </tr>`).join('');
-}
 
-function renderSeating(p){
-  const seated=p.guests.filter(g=>g.table).sort((a,b)=>a.table.localeCompare(b.table,undefined,{numeric:true}));
-  const tables=[...new Set(seated.map(g=>g.table))];
-  document.getElementById('gview').innerHTML=tables.length?tables.map(tb=>{
-    const gs=seated.filter(g=>g.table===tb);
-    return `<div style="margin-bottom:20px">
-      <div class="seating-th">${t('table_header')} ${guestText(tb)} &middot; ${gs.length} ${t('guests_lbl')}</div>
-      ${gs.map(g=>`<div class="seating-row">
-        <div><strong>${guestText(g.name)}</strong>${g.plusOne?' <span class="s-sm">+1</span>':''}</div>
-        <div style="display:flex;gap:12px;font-size:12px;color:var(--muted)">
-          <span>${guestValueOrDash(g.meal)}</span>
-          <span class="rb ${guestRsvpClass(g.rsvp)}">${guestText(guestRsvpValue(g.rsvp))}</span>
-        </div>
-      </div>`).join('')}
-    </div>`;
-  }).join(''):`<div class="card" style="text-align:center;padding:40px;color:var(--muted)">${t('no_guests_found')}</div>`;
-}
 function openGuestModal(gid){
   const p=proj();const g=gid?p.guests.find(x=>x.id===gid):null;
   openMo(`<div class="mo-title">${g?t('edit_guest'):t('add_guest')}</div>
@@ -1936,7 +1847,7 @@ function openGuestModal(gid){
     <div class="ig"><label>${t('plus_one_q')}</label><select class="select" id="gf-plus"><option value="0"${!g?.plusOne?' selected':''}>${t('no')}</option><option value="1"${g?.plusOne?' selected':''}>${t('yes')}</option></select></div>
     <div class="ig"><label>${t('meal_pref')}</label><select class="select" id="gf-meal">${['','Chicken','Fish','Beef','Vegetarian','Vegan','Kids Menu'].map(m=>`<option${g?.meal===m?' selected':''}>${m}</option>`).join('')}</select></div>
     <div class="ig" style="grid-column:1/-1"><label>${t('dietary_rest')}</label><input class="input" id="gf-diet" value="${esc(g?.dietary||'')}" placeholder="e.g. Gluten-free, Nut allergy"></div>
-    <div class="ig" style="grid-column:1/-1"><label>Notes</label><textarea class="textarea" id="gf-notes" rows="2">${g?.notes||''}</textarea></div>
+    <div class="ig" style="grid-column:1/-1"><label>Notes</label><textarea class="textarea" id="gf-notes" rows="2">${esc(g?.notes||'')}</textarea></div>
   </div>
   <div class="mo-foot">
     <button class="btn btn-ghost" onclick="closeMo()">${t('cancel')}</button>
@@ -1949,8 +1860,8 @@ function renderSeating(p){
   if(gFilter){var _sfq=gFilter.toLowerCase();seated=seated.filter(function(g){return _guestMatchesFilter(g,_sfq);});}
   seated = seated.sort((a,b) => a.table.localeCompare(b.table, undefined, { numeric:true }));
   const tables = [...new Set(seated.map(g => g.table))];
-  document.getElementById('gview').innerHTML = `<div style="background:#fff;border-radius:var(--r);border:1px solid var(--border);overflow:hidden">
-    <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#fafafa">
+  document.getElementById('gview').innerHTML = `<div style="background:var(--card-solid);border-radius:var(--r);border:1px solid var(--border);overflow:hidden">
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--bg2)">
       <input class="input" id="seating-search-input" style="flex:1;min-width:200px" placeholder="${t('search_guests')}" value="${esc(gFilter)}" oninput="debouncedSeatingFilter(this.value)">
     </div>
     <div style="padding:16px">
@@ -1959,10 +1870,10 @@ function renderSeating(p){
         return `<div style="margin-bottom:20px">
           <div class="seating-th">${t('table_header')} ${tb} &middot; ${gs.length} ${t('guests_lbl')}</div>
           ${gs.map(g => `<div class="seating-row">
-            <div><strong>${esc(g.name)}</strong>${g.plusOne ? ' <span class="s-sm">+1</span>' : ''}</div>
+            <div><strong>${guestText(g.name)}</strong>${g.plusOne ? ' <span class="s-sm">+1</span>' : ''}</div>
             <div style="display:flex;gap:12px;font-size:12px;color:var(--muted)">
-              <span>${esc(g.meal || '—')}</span>
-              <span class="rb ${g.rsvp==='confirmed'?'rb-c':g.rsvp==='declined'?'rb-d':'rb-p'}">${g.rsvp||'pending'}</span>
+              <span>${guestValueOrDash(g.meal)}</span>
+              <span class="rb ${guestRsvpClass(g.rsvp)}">${guestText(guestRsvpValue(g.rsvp))}</span>
             </div>
           </div>`).join('')}
         </div>`;
@@ -1974,7 +1885,7 @@ function saveGuest(gid){
   const name=gv('gf-name');if(!name)return toast('Name required','e');
   const p=proj();
   const data={name,email:gv('gf-email'),phone:gv('gf-phone'),category:gv('gf-cat'),rsvp:gv('gf-rsvp'),table:gv('gf-table'),plusOne:gv('gf-plus')==='1',meal:gv('gf-meal'),dietary:gv('gf-diet'),notes:gv('gf-notes')};
-  if(gid){const g=p.guests.find(g=>g.id===gid);Object.assign(g,data);}
+  if(gid){const g=p.guests.find(g=>g.id===gid);if(g) Object.assign(g,data);}
   else{p.guests.push({id:'g'+Date.now(),...data});}
   saveProj(p);closeMo();renderGuests();toast(gid?'Guest updated':'Guest added','s');
 }
@@ -2171,7 +2082,7 @@ function delGuest(gid){
 }
 function renderGuestList(p){
   let guests=[...p.guests];
-  if(gFilter) guests=guests.filter(g=>JSON.stringify(g).toLowerCase().includes(gFilter.toLowerCase()));
+  if(gFilter){var _gfq=gFilter.toLowerCase();guests=guests.filter(function(g){return _guestMatchesFilter(g,_gfq);});}
   guests.sort((a,b)=>{const va=String(a[gSort]||''),vb=String(b[gSort]||'');return gAsc?va.localeCompare(vb,undefined,{numeric:true}):vb.localeCompare(va,undefined,{numeric:true});});
   if(isPhoneViewport()){
     document.getElementById('gview').innerHTML = renderGuestMobileCards(guests);
@@ -2180,8 +2091,8 @@ function renderGuestList(p){
   }
   const si=k=>gSort===k?(gAsc?'&uarr;':'&darr;'):'&harr;';
   document.getElementById('gview').innerHTML=`
-  <div style="background:#fff;border-radius:var(--r);border:1px solid var(--border);overflow:hidden">
-    <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#fafafa">
+  <div style="background:var(--card-solid);border-radius:var(--r);border:1px solid var(--border);overflow:hidden">
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--bg2)">
       <input class="input" style="flex:1;min-width:200px" placeholder="${t('search_guests')}" value="${esc(gFilter)}" oninput="debouncedGuestFilter(this.value)">
       <select class="select" style="width:auto" onchange="gSort=this.value;renderGuestList(proj())">
         <option value="name" ${gSort==='name'?'selected':''}>${t('sort_name')}</option>
@@ -2288,7 +2199,7 @@ function renderGuestRows(p){
   var tbody = document.getElementById('guest-rows-body');
   if(!tbody){ renderGuestList(p); return; }
   var guests=[...p.guests];
-  if(gFilter) guests=guests.filter(g=>JSON.stringify(g).toLowerCase().includes(gFilter.toLowerCase()));
+  if(gFilter){var _gfq=gFilter.toLowerCase();guests=guests.filter(function(g){return _guestMatchesFilter(g,_gfq);});}
   guests.sort((a,b)=>{const va=String(a[gSort]||''),vb=String(b[gSort]||'');return gAsc?va.localeCompare(vb,undefined,{numeric:true}):vb.localeCompare(va,undefined,{numeric:true});});
   tbody.innerHTML = buildGuestRows(guests);
   updateGuestBulkBar();

@@ -648,8 +648,9 @@ function showLoadingError(msg){
 }
 
 async function saveProj(p){
+  if(!p || typeof p !== 'object' || !p.id) return;
   // Never write a metadata stub to Convex — it would overwrite full project data with empty fields
-  if(p && p._metaOnly){
+  if(p._metaOnly){
     console.warn('EventOS: skipped saveProj for meta-only stub', p.id, '— full data not yet loaded');
     return;
   }
@@ -953,7 +954,7 @@ function enterApp(){
   setTimeout(updateAIFabVisibility, 200);
   var name    = (WIX_USER && WIX_USER.displayName) ? WIX_USER.displayName : (WIX_USER && WIX_USER.email ? WIX_USER.email : DB.cur);
   var email   = (WIX_USER && WIX_USER.email) ? WIX_USER.email : DB.cur;
-  var initial = name[0].toUpperCase();
+  var initial = (name && name.length) ? name[0].toUpperCase() : '?';
   var uav = document.getElementById('uav');
   var uname = document.getElementById('uname');
   var uemail = document.getElementById('uemail');

@@ -1691,7 +1691,7 @@ tr:hover td { background: var(--bg2); }
   flex: 1; overflow: auto; position: relative;
   background: #ffffff;
 }
-.layout-canvas-outer { overscroll-behavior: contain; }
+.layout-canvas-outer { overscroll-behavior: contain; touch-action: none; }
 .layout-canvas-outer.layout-dragging-item { overflow: hidden; }
 .layout-canvas { position: relative; background: #ffffff; background-image: radial-gradient(circle, rgba(180,172,160,.35) 1px, transparent 1px); background-size: 24px 24px; }
 .layout-mobile-quickbar {
@@ -2362,7 +2362,7 @@ tr:hover td { background: var(--bg2); }
   }
   .layout-toolbar::-webkit-scrollbar { display: none; }
   .layout-toolbar .btn { font-size: 11px; padding: 4px 8px; white-space: nowrap; flex-shrink: 0; }
-  .layout-canvas-outer { height: 55vh !important; flex: none !important; overflow: auto; }
+  .layout-canvas-outer { height: max(55vh, 300px) !important; flex: none !important; overflow: auto; }
 
   /* ── Budget tab ── */
   .bud-header { flex-direction: column; gap: 8px; align-items: flex-start; }
@@ -3090,9 +3090,9 @@ tr:hover td { background: var(--bg2); }
 .sidebar-account-wrap .umenu {
   top: auto;
   bottom: calc(100% + 10px);
-  right: -21px;
+  left: 0;
   z-index: var(--z-dropdown);
-  transform-origin: bottom right;
+  transform-origin: bottom left;
 }
 .app-sidebar.collapsed .sidebar-footer {
   align-items: center;
@@ -3169,6 +3169,7 @@ tr:hover td { background: var(--bg2); }
   .evgrid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
   .dash-grid { grid-template-columns: repeat(2, 1fr); }
   .mo-box { max-width: 92vw; }
+  .zoom-btn { min-width: 40px; min-height: 40px; }
 }
 
 @media (max-width: 768px) {
@@ -3432,6 +3433,26 @@ html.dark .ptab.active { color: #F2EFE9; }
 html.dark .ptab:hover { color: #DFD7C9; }
 html.dark .toast { background: #DFD7C9; color: #242424; border-left-color: #242424; }
 html.dark img { opacity: .92; }
+html.dark .layout-canvas-outer { background: var(--bg); }
+html.dark .layout-canvas { background: var(--bg); background-image: radial-gradient(circle, rgba(223,215,201,.12) 1px, transparent 1px); background-size: 24px 24px; }
+html.dark .layout-mobile-quickbar { background: rgba(36,36,36,.94); }
+html.dark .calendar-picker {
+  background: rgba(36,36,36,.98);
+  border-color: rgba(223,215,201,.15);
+  box-shadow: var(--sh-lg), 0 0 0 1px rgba(255,255,255,.06) inset;
+}
+html.dark .calendar-nav-btn {
+  background: rgba(255,255,255,.06);
+  border-color: rgba(223,215,201,.12);
+}
+html.dark .calendar-day:hover {
+  background: rgba(223,215,201,.1);
+}
+html.dark .calendar-day.is-selected {
+  background: #DFD7C9;
+  color: #242424;
+  box-shadow: 0 10px 18px rgba(0,0,0,.25);
+}
 
 /* ── Loading Overlay ── */
 .eventos-loading-overlay {
