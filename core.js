@@ -30,6 +30,13 @@ function fixMojibake(str){
   return fixed;
 }
 function t(key){ return fixMojibake((TRANSLATIONS[LANG]||TRANSLATIONS.en)[key] || TRANSLATIONS.en[key] || key); }
+// Pluralization helper: tp('n_guests', 5) → "5 guests" (uses "singular | plural" format)
+function tp(key, n){
+  var raw = t(key);
+  var parts = raw.split('|');
+  var form = (n === 1 && parts.length > 1) ? parts[0].trim() : (parts[1] || parts[0]).trim();
+  return form.replace(/\{n\}/g, String(n));
+}
 function repairMojibakeInDOM(root){
   try{
     var scope = root || document.body;
@@ -85,14 +92,14 @@ function getLangPrefKey(userId){
 function saveLangPref(){
   try{
     localStorage.setItem(getLangPrefKey(DB.cur), LANG);
-  }catch(e){}
+  }catch(e){ console.warn('EventOS: saveLangPref failed', e); }
 }
 
 function loadLangPref(){
   try{
     var saved = localStorage.getItem(getLangPrefKey(DB.cur));
     if(saved === 'en' || saved === 'es') LANG = saved;
-  }catch(e){}
+  }catch(e){ console.warn('EventOS: loadLangPref failed', e); }
 }
 
 
@@ -198,13 +205,62 @@ function applyTranslations(){
 var DB  = { cur: null, projects: {} };
 var WIX_USER = null;
 
+// ── Centralized State ──────────────────────────────────────────────────────
+// AppState wraps existing globals into a single observable object.
+// Modules can subscribe to specific keys via AppState.on(key, callback).
+// Existing code continues to use the globals directly — AppState bridges them.
+var AppState = {
+  _listeners: {},
+  on: function(key, fn){ if(!this._listeners[key]) this._listeners[key]=[]; this._listeners[key].push(fn); },
+  off: function(key, fn){ if(!this._listeners[key]) return; this._listeners[key]=this._listeners[key].filter(function(f){return f!==fn;}); },
+  emit: function(key, val){ (this._listeners[key]||[]).forEach(function(fn){ try{fn(val);}catch(e){console.warn('AppState listener error',key,e);} }); },
+  // Convenience getters/setters that also emit
+  get currentUserId(){ return DB.cur; },
+  set currentUserId(v){ DB.cur=v; this.emit('currentUserId',v); },
+  get currentProjectId(){ return typeof CID !== 'undefined' ? CID : null; },
+  set currentProjectId(v){ CID=v; this.emit('currentProjectId',v); },
+  get currentTab(){ return typeof CTAB !== 'undefined' ? CTAB : 'dashboard'; },
+  set currentTab(v){ CTAB=v; this.emit('currentTab',v); },
+  get lang(){ return LANG; },
+  set lang(v){ LANG=v; this.emit('lang',v); },
+};
+window.AppState = AppState;
+
+// ── Module Registry ────────────────────────────────────────────────────────
+// Provides a namespace for modules to register public APIs.
+// Usage: EventOS.register('budget', { renderBudget, calcBudgetStats });
+// Access: EventOS.budget.renderBudget();
+// Existing global functions remain — this is additive, not a rewrite.
+window.EventOS = window.EventOS || {};
+EventOS.register = function(name, api){
+  EventOS[name] = Object.assign(EventOS[name] || {}, api);
+};
+
 var EVENTOS_CONFIG = window.EVENTOS_CONFIG || {};
 var AI_PROXY_URL = EVENTOS_CONFIG.aiProxyUrl || '';
 var EVENTOS_DATA = window.EVENTOS_DATA || null;
 var _saveTimer = null;
+var _saveInFlight = false;
+var _savePending = null; // queued project to save after current completes
 var _lastSyncTime = null;
 
 var _fileUrlCache = {};
+var _fileUrlCacheKeys = []; // LRU order tracking
+var _FILE_URL_CACHE_MAX = 300;
+function _fileUrlCacheSet(id, url){
+  if(_fileUrlCache[id]){
+    // Move existing entry to end of LRU queue
+    var idx = _fileUrlCacheKeys.indexOf(id);
+    if(idx > -1) _fileUrlCacheKeys.splice(idx, 1);
+  }
+  _fileUrlCacheKeys.push(id);
+  // Evict oldest entries when exceeding max
+  while(_fileUrlCacheKeys.length > _FILE_URL_CACHE_MAX){
+    var old = _fileUrlCacheKeys.shift();
+    delete _fileUrlCache[old];
+  }
+  _fileUrlCache[id] = url;
+}
 var _loadedProjects = {}; // { userId: Set<projectId> } — tracks which projects have full data loaded
 
 function hasRequiredConfig(){
@@ -248,13 +304,13 @@ function cacheDB(){
       toCache[pid] = (pid === '__library__') ? p : _projectToMetaStub(p);
     });
     localStorage.setItem('eventos_cache_'+DB.cur, JSON.stringify(toCache));
-  }catch(e){}
+  }catch(e){ console.warn('EventOS: saveCache failed', e); }
 }
 function loadCache(userId){
   try{
     var s = localStorage.getItem('eventos_cache_'+userId);
     if(s){ DB.projects[userId] = JSON.parse(s); return true; }
-  }catch(e){}
+  }catch(e){ console.warn('EventOS: loadCache failed', e); }
   return false;
 }
 
@@ -288,7 +344,7 @@ async function resolveStorageUrls(p){
   ids.forEach(function(id){ if(!seen[id]){ seen[id]=true; unique.push(id); } });
   try{
     var urls = await EVENTOS_DATA.getFileUrls(unique);
-    unique.forEach(function(id, i){ if(urls[i]) _fileUrlCache[id] = urls[i]; });
+    unique.forEach(function(id, i){ if(urls[i]) _fileUrlCacheSet(id, urls[i]); });
   }catch(e){ console.error('resolveStorageUrls:', e); return; }
   // Populate src fields from cache
   if(mb && typeof mb === 'object'){
@@ -336,7 +392,7 @@ async function resolveAllProjectUrls(userId){
   allIds.forEach(function(id){ if(!seen[id]){ seen[id]=true; unique.push(id); } });
   try{
     var urls = await EVENTOS_DATA.getFileUrls(unique);
-    unique.forEach(function(id, i){ if(urls[i]) _fileUrlCache[id] = urls[i]; });
+    unique.forEach(function(id, i){ if(urls[i]) _fileUrlCacheSet(id, urls[i]); });
   }catch(e){ console.error('resolveAllProjectUrls:', e); return; }
   // Populate all projects
   Object.keys(projects).forEach(function(pid){
@@ -376,14 +432,17 @@ async function migrateBase64Images(p){
         var storageId = await EVENTOS_DATA.uploadBase64(img.src);
         var url = await EVENTOS_DATA.getFileUrl(storageId);
         img.storageId = storageId;
-        if(url){ img.src = url; _fileUrlCache[storageId] = url; }
+        if(url){ img.src = url; _fileUrlCacheSet(storageId, url); }
         dirty = true;
       }catch(e){ console.error('Migration error (moodboard):', e); }
     };
     var allImgs = (mb.uncategorized || []).concat(
       (mb.folders || []).reduce(function(acc, f){ return acc.concat(f.images || []); }, [])
     );
-    for(var i = 0; i < allImgs.length; i++) await migrateImg(allImgs[i]);
+    // Process in batches of 3 for parallel upload without overwhelming the server
+    for(var i = 0; i < allImgs.length; i += 3){
+      await Promise.all(allImgs.slice(i, i + 3).map(migrateImg));
+    }
   }
 
   // Migrate payment receipts
@@ -396,7 +455,7 @@ async function migrateBase64Images(p){
         var sid = await EVENTOS_DATA.uploadBase64(pay.receipt);
         var rurl = await EVENTOS_DATA.getFileUrl(sid);
         pay.receiptStorageId = sid;
-        if(rurl){ pay.receipt = rurl; _fileUrlCache[sid] = rurl; }
+        if(rurl){ pay.receipt = rurl; _fileUrlCacheSet(sid, rurl); }
         dirty = true;
       }catch(e){ console.error('Migration error (receipt):', e); }
     }
@@ -409,7 +468,7 @@ async function migrateBase64Images(p){
       var fpSid = await EVENTOS_DATA.uploadFile(fpBlob);
       var fpUrl = await EVENTOS_DATA.getFileUrl(fpSid);
       p.floorplan._storageId = fpSid;
-      if(fpUrl){ p.floorplan.img = fpUrl; _fileUrlCache[fpSid] = fpUrl; }
+      if(fpUrl){ p.floorplan.img = fpUrl; _fileUrlCacheSet(fpSid, fpUrl); }
       dirty = true;
     }catch(e){ console.error('Migration error (floorplan):', e); }
   }
@@ -576,34 +635,46 @@ async function saveProj(p){
   // Internal pseudo-projects live in memory/localStorage only — never persist to Convex
   if(p.id === '__lib_layout__') return;
 
+  p._pendingSave = true; // Mark as having unsaved local edits
   setSyncStatus('saving');
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(async function(){
+    // Queue if another save is already in flight
+    if(_saveInFlight){ _savePending = p; return; }
+    _saveInFlight = true;
     var maxRetries = 3;
     for(var attempt = 1; attempt <= maxRetries; attempt++){
       try{
         await EVENTOS_DATA.upsertProject(p);
-        // Advance _lastSyncTime so our own save doesn't appear as "changed" on the next delta poll
         _lastSyncTime = Date.now();
+        delete p._pendingSave;
+        if(typeof clearLayoutDirty === 'function') clearLayoutDirty();
         setSyncStatus('ok');
+        _saveInFlight = false;
+        // Flush queued save if one was pending during this save
+        if(_savePending){ var next = _savePending; _savePending = null; saveProj(next); }
         return;
       }catch(e){
         if(e && e.message && e.message.indexOf('__oversize__') !== -1){
           console.error('EventOS: project', p.id, 'is too large to save even after splitting extras');
-          toast('This event has too much data to save even after optimization. Archive old payments or remove unused layout items to continue.', 'e');
+          toast(t('err_oversize'), 'e');
+          delete p._pendingSave;
           setSyncStatus('error');
+          _saveInFlight = false;
           return;
         }
         console.error('saveProj attempt', attempt + '/' + maxRetries + ':', e);
         if(attempt < maxRetries){
-          // Exponential backoff: 2s, 4s
           await new Promise(function(r){ setTimeout(r, Math.pow(2, attempt) * 1000); });
         } else {
+          delete p._pendingSave;
           setSyncStatus('offline');
-          toast('Could not save changes. Please check your connection.', 'e');
+          toast(t('err_save_failed'), 'e');
         }
       }
     }
+    _saveInFlight = false;
+    if(_savePending){ var next = _savePending; _savePending = null; saveProj(next); }
   }, 1500);
 }
 
@@ -614,6 +685,8 @@ function saveDB(){
 }
 
 async function delProj(id){
+  // Clear any queued save for this project to avoid orphaned writes
+  if(_savePending && _savePending.id === id) _savePending = null;
   if(DB.projects[DB.cur]) delete DB.projects[DB.cur][id];
   cacheDB();
   try{
@@ -644,6 +717,12 @@ async function manualSync(){
       try{
         var data = await EVENTOS_DATA.getProjectById(id);
         if(data){
+          // Skip overwriting projects with unsaved local edits
+          var prev_ = DB.projects[DB.cur] && DB.projects[DB.cur][id];
+          if(prev_ && prev_._pendingSave){
+            console.log('EventOS: skipping sync overwrite for', id, '(has pending local edits)');
+            continue;
+          }
           if(data._hasExtras){
             // If extras were already in memory (user has the project open), preserve them.
             // Otherwise fetch fresh to keep guests/layout current.
@@ -831,7 +910,35 @@ function enterApp(){
   if(mobUav) mobUav.textContent = initial;
   if(mobUname) mobUname.textContent = name;
   if(mobUemail) mobUemail.textContent = email;
-  showPage('events');
+  // Restore last view or default to events
+  var _restored = false;
+  try{
+    var lsKey = 'eventos_lastview_'+(DB.cur||'local');
+    var raw = localStorage.getItem(lsKey);
+    if(raw){
+      var lastView = JSON.parse(raw);
+      if(lastView && lastView.page){
+        var projects = DB.projects[DB.cur];
+        if(lastView.page === 'project' && lastView.projectId && projects && projects[lastView.projectId]){
+          openProject(lastView.projectId);
+          if(lastView.tab && lastView.tab !== 'dashboard'){
+            setTimeout(function(){ switchTab(lastView.tab); }, 200);
+          }
+          _restored = true;
+        } else if(lastView.page === 'library'){
+          showPage('library');
+          _restored = true;
+        } else if(lastView.page === 'analytics'){
+          showPage('analytics');
+          _restored = true;
+        } else if(lastView.page === 'events'){
+          showPage('events');
+          _restored = true;
+        }
+      }
+    }
+  }catch(e){ console.warn('EventOS: restore last view failed', e); }
+  if(!_restored) showPage('events');
   setSyncStatus('ok');
   startSyncPoll();
 }
@@ -869,7 +976,17 @@ function toggleMenu(){ document.getElementById('umenu').classList.toggle('hidden
 function closeMenu(){ document.getElementById('umenu').classList.add('hidden'); }
 document.addEventListener('click',e=>{ if(!e.target.closest('#upill')&&!e.target.closest('#umenu')) closeMenu(); });
 
+function _saveLastView(){
+  try{
+    var view = { page: _currentPage || 'events' };
+    if(_currentPage === 'project' && CID) { view.projectId = CID; view.tab = CTAB || 'dashboard'; }
+    localStorage.setItem('eventos_lastview_'+(DB.cur||'local'), JSON.stringify(view));
+  }catch(e){}
+}
+var _currentPage = 'events';
 function showPage(p){
+  _currentPage = p;
+  _saveLastView();
   if(p !== 'project' && typeof closeProjectTabMenu === 'function') closeProjectTabMenu();
   // If the user navigates away from the library while the layout editor is open,
   // clean up its state so stale data doesn't bleed into other views.
@@ -885,7 +1002,7 @@ function showPage(p){
   const sid=smap[p]||null; if(sid){const se=document.getElementById(sid);if(se)se.classList.add('active');}
   if(p==='dashboard') renderAppDash();
   else if(p==='events') renderEvents();
-  else if(p==='project'){ renderPNav(); switchTab('dashboard'); }
+  else if(p==='project'){ renderPNav(); switchTab('dashboard'); setTimeout(_updateTabIndicator, 50); }
   else if(p==='analytics') renderAnalytics();
   else if(p==='library') renderLibrary();
 }
@@ -898,7 +1015,9 @@ async function openProject(id){
     var loaded = await loadProjectById(id);
     setSyncStatus('ok');
     if(!loaded){
-      toast('Could not load event data. Check your connection and try again.', 'e');
+      toast(t('err_network'), 'e');
+      CID = null;
+      showPage('events');
       return;
     }
   } else if(p && p._hasExtras && !p._extrasLoaded){
@@ -963,22 +1082,75 @@ function renderPNav(){
   syncProjectTabMenu();
 }
 function switchTab(tab){
+  // Warn about unsaved layout changes when leaving layout tab
+  if(CTAB === 'layout' && tab !== 'layout' && typeof isLayoutDirty === 'function' && isLayoutDirty()){
+    openConfirmModal({
+      title: LANG==='es'?'Cambios sin guardar':'Unsaved changes',
+      message: LANG==='es'?'Tienes cambios en el diseño. ¿Salir sin guardar?':'You have unsaved layout changes. Leave without saving?',
+      confirmLabel: LANG==='es'?'Salir':'Leave',
+      danger: false,
+      onConfirm: function(){ if(typeof clearLayoutDirty==='function') clearLayoutDirty(); switchTab(tab); }
+    });
+    return;
+  }
+  // Clean up layout listeners when leaving the layout tab
+  if(CTAB === 'layout' && tab !== 'layout' && typeof layoutCleanup === 'function') layoutCleanup();
+  // Clear any pending search/filter timers from previous tab
+  if(typeof clearSearchTimers === 'function') clearSearchTimers();
   CTAB=tab;
+  _saveLastView();
   ['dashboard','budget','timeline','guests','layout','moodboard'].forEach(tabId=>{
     document.getElementById('tab-'+tabId).classList.toggle('hidden',tabId!==tab);
   });
   document.querySelectorAll('.ptab').forEach(el=>el.classList.toggle('active',el.dataset.tab===tab));
+  _updateTabIndicator();
   syncProjectTabMenu();
   ({dashboard:renderDash,budget:renderBudget,timeline:renderTimeline,guests:renderGuests,layout:renderLayout,moodboard:renderMoodboard})[tab]?.();
   if(tab==='layout'){ setTimeout(function(){ lZoom(0,'fit'); },120); }
 }
 
+// ── Animated Tab Indicator ──
+function _updateTabIndicator(){
+  var container = document.getElementById('ptabs');
+  var indicator = document.getElementById('ptabs-indicator');
+  var activeTab = container && container.querySelector('.ptab.active');
+  if(!container || !indicator || !activeTab) return;
+  var cRect = container.getBoundingClientRect();
+  var tRect = activeTab.getBoundingClientRect();
+  indicator.style.left = (tRect.left - cRect.left) + 'px';
+  indicator.style.width = tRect.width + 'px';
+  indicator.style.background = '#242424';
+}
+
+// Hover background animation for tabs
+(function(){
+  var ptabs = document.getElementById('ptabs');
+  var hoverBg = document.getElementById('ptabs-hover-bg');
+  if(!ptabs || !hoverBg) return;
+  ptabs.addEventListener('mouseover', function(e){
+    var tab = e.target.closest('.ptab');
+    if(!tab) { hoverBg.style.opacity = '0'; return; }
+    var cRect = ptabs.getBoundingClientRect();
+    var tRect = tab.getBoundingClientRect();
+    hoverBg.style.left = (tRect.left - cRect.left) + 'px';
+    hoverBg.style.width = tRect.width + 'px';
+    hoverBg.style.opacity = '1';
+  });
+  ptabs.addEventListener('mouseleave', function(){
+    hoverBg.style.opacity = '0';
+  });
+  // Initialize indicator position on first render
+  setTimeout(_updateTabIndicator, 100);
+})();
+
+// Update indicator position on resize
 document.addEventListener('click', function(e){
   if(!e.target.closest('#pnav-menu-trigger') && !e.target.closest('#pnav-mobile-menu')) closeProjectTabMenu();
 });
 window.addEventListener('resize', function(){
   if(typeof isPhoneViewport === 'function' && !isPhoneViewport()) closeProjectTabMenu();
   syncProjectTabMenu();
+  _updateTabIndicator();
 });
 
 function uproj(){ return DB.projects[DB.cur]||{}; }
@@ -1165,7 +1337,7 @@ function loadEvPrefs(){
       if(p.analyticsFrom) _aFr=new Date(p.analyticsFrom);
       if(p.analyticsTo)   _aTo  =new Date(p.analyticsTo);
     }
-  }catch(e){}
+  }catch(e){ console.warn('EventOS: loadEvPrefs failed', e); }
 }
 
 function saveEvPrefs(){
@@ -1178,7 +1350,7 @@ function saveEvPrefs(){
       analyticsFrom:_aFr?_aFr.toISOString():null,
       analyticsTo:_aTo?_aTo.toISOString():null};
     localStorage.setItem('eventos_evprefs_'+(DB.cur||'local'),JSON.stringify(p));
-  }catch(e){}
+  }catch(e){ console.warn('EventOS: saveEvPrefs failed', e); }
 }
 
 function setEvFilter(mode){
@@ -1236,4 +1408,14 @@ function setEvView(v){
   saveEvPrefs(); renderEvents();
 }
 
-
+// Register core module public API
+EventOS.register('core', {
+  proj: function(){ return proj(); },
+  uproj: function(){ return uproj(); },
+  saveProj: saveProj,
+  switchTab: switchTab,
+  openProject: typeof openProject === 'function' ? openProject : undefined,
+  t: t,
+  tp: tp,
+  esc: typeof esc === 'function' ? esc : undefined,
+});

@@ -1,4 +1,29 @@
 ﻿var bTab='comp';
+
+// Simple memoization for budget aggregations — invalidated when vendor/guest data changes
+var _budgetCache = { key: '', result: null };
+function calcBudgetStats(p){
+  // Build a cheap cache key from vendor count + total budget + guest count
+  var key = (p.vendors||[]).length + ':' + (p.budget||0) + ':' + (p.guests||[]).length
+    + ':' + (p.vendors||[]).reduce(function(s,v){ return s + Number(v.budget) + (v.hired?1:0) + (v.payments||[]).length + (v.payments||[]).reduce(function(ps,pay){return ps+Number(pay.amount);},0); }, 0);
+  if(_budgetCache.key === key) return _budgetCache.result;
+  var allVendors = p.vendors || [];
+  var hired = allVendors.filter(function(v){ return v.hired; });
+  var estimatedTotal = allVendors.reduce(function(s,v){ return s+Number(v.budget); },0);
+  var tb = hired.reduce(function(s,v){ return s+Number(v.budget); },0);
+  var paid = hired.reduce(function(s,v){ return s+v.payments.reduce(function(a,pay){ return a+Number(pay.amount); },0); },0);
+  var projBudget = p.budget||0;
+  var diff = projBudget - estimatedTotal;
+  var guestTotal = (p.guests||[]).length;
+  var plusOnes = (p.guests||[]).filter(function(g){ return g.plusOne; }).length;
+  var totalWithPlusOnes = guestTotal + plusOnes;
+  var budgetPerGuest = totalWithPlusOnes>0&&projBudget>0 ? Math.ceil(projBudget/totalWithPlusOnes) : 0;
+  var budgetPct = projBudget>0 ? Math.min(100,Math.round(estimatedTotal/projBudget*100)) : 0;
+  _budgetCache.key = key;
+  _budgetCache.result = { allVendors:allVendors, hired:hired, estimatedTotal:estimatedTotal, tb:tb, paid:paid, projBudget:projBudget, diff:diff, guestTotal:guestTotal, plusOnes:plusOnes, totalWithPlusOnes:totalWithPlusOnes, budgetPerGuest:budgetPerGuest, budgetPct:budgetPct };
+  return _budgetCache.result;
+}
+
 function renderBudget(){
   const p=proj();const el=document.getElementById('tab-budget');
   if(ensureDefaultVendors(p)) saveProj(p);
@@ -7,7 +32,7 @@ function renderBudget(){
   if(!allVendors.length){
     el.innerHTML=`
   <div class="sh">
-    <div><div class="sh-title editorial-title" style="color:#f59e0b">${t('budget_management_title')}</div>
+    <div><div class="sh-title editorial-title" style="color:#242424">${t('budget_management_title')}</div>
     <div class="sh-sub">${isES?'Gestiona tus proveedores y presupuesto del evento':'Manage your event vendors and budget'}</div></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <button class="btn btn-ghost" onclick="libDownloadVendorTemplate()">
@@ -27,22 +52,16 @@ function renderBudget(){
   ${renderVendorEmptyState()}`;
     return;
   }
-  const hired=allVendors.filter(v=>v.hired);
-  const estimatedTotal = allVendors.reduce((s,v)=>s+Number(v.budget),0);
-  const tb=hired.reduce((s,v)=>s+Number(v.budget),0);
-  const paid=hired.reduce((s,v)=>s+v.payments.reduce((a,pay)=>a+Number(pay.amount),0),0);
-  const projBudget = p.budget||0;
-  const diff = projBudget - estimatedTotal;
-  const guestTotalB=(p.guests||[]).length;
-  const plusOnesB=(p.guests||[]).filter(g=>g.plusOne).length;
-  const totalWithPlusOnesB=guestTotalB+plusOnesB;
-  const budgetPerGuestB=totalWithPlusOnesB>0&&projBudget>0?Math.ceil(projBudget/totalWithPlusOnesB):0;
+  const bs=calcBudgetStats(p);
+  const hired=bs.hired, estimatedTotal=bs.estimatedTotal, tb=bs.tb, paid=bs.paid;
+  const projBudget=bs.projBudget, diff=bs.diff;
+  const guestTotalB=bs.guestTotal, plusOnesB=bs.plusOnes, totalWithPlusOnesB=bs.totalWithPlusOnes;
+  const budgetPerGuestB=bs.budgetPerGuest, budgetPct=bs.budgetPct;
   const diffClr = diff>=0?'var(--success)':'var(--danger)';
-  const budgetPct = projBudget>0?Math.min(100,Math.round(estimatedTotal/projBudget*100)):0;
   el.innerHTML=`
   <div class="sh">
-    <div><div class="sh-title editorial-title" style="color:#f59e0b">${t('budget_management_title')}</div>
-    <div class="sh-sub">${t('budget_label')}: ${fmtMoney(tb)} Â· ${t('paid_label')}: ${fmtMoney(paid)} Â· ${t('balance_label')}: ${fmtMoney(tb-paid)}</div></div>
+    <div><div class="sh-title editorial-title" style="color:#242424">${t('budget_management_title')}</div>
+    <div class="sh-sub">${t('budget_label')}: ${fmtMoney(tb)} &middot; ${t('paid_label')}: ${fmtMoney(paid)} &middot; ${t('balance_label')}: ${fmtMoney(tb-paid)}</div></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <button class="btn btn-ghost" onclick="libDownloadVendorTemplate()">
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>${LANG==='es'?'Descargar Plantilla':'Download Template'}
@@ -556,11 +575,17 @@ function setVendorStatus(id, status){
 function hireV(id){const p=proj();const v=p.vendors.find(v=>v.id===id);if(v){v.hired=true;v.vendorStatus='hired';saveProj(p);renderBudget();toast('Vendor hired','s');}}
 function unhireV(id){const p=proj();const v=p.vendors.find(v=>v.id===id);if(v){v.hired=false;v.vendorStatus='pending';saveProj(p);renderBudget();toast('Vendor moved to comparisons');}}
 function delV(id){
-  if(!confirm('Delete vendor?'))return;
-  const p=proj();
-  p.vendors=p.vendors.filter(v=>v.id!==id);
-  vSelectedVendorIds=vSelectedVendorIds.filter(function(x){ return x!==id; });
-  saveProj(p);renderBudget();toast('Vendor deleted');
+  openConfirmModal({
+    title: LANG==='es'?'Eliminar proveedor':'Delete vendor',
+    message: LANG==='es'?'Esta acción no se puede deshacer.':'This action cannot be undone.',
+    confirmLabel: LANG==='es'?'Eliminar':'Delete',
+    onConfirm: function(){
+      const p=proj();
+      p.vendors=p.vendors.filter(v=>v.id!==id);
+      vSelectedVendorIds=vSelectedVendorIds.filter(function(x){ return x!==id; });
+      saveProj(p);renderBudget();toast(LANG==='es'?'Proveedor eliminado':'Vendor deleted');
+    }
+  });
 }
 function openBulkVendorEditModal(){
   if(!vendorSelectionCount()) return toast(LANG==='es'?'Selecciona al menos un proveedor':'Select at least one vendor','e');
@@ -609,13 +634,17 @@ function applyBulkVendorEdit(){
 }
 function bulkDeleteVendors(){
   if(!vendorSelectionCount()) return;
-  if(!confirm(LANG==='es'?'¿Eliminar los proveedores seleccionados?':'Delete selected vendors?')) return;
-  const p = proj();
-  p.vendors = p.vendors.filter(function(v){ return vSelectedVendorIds.indexOf(v.id)===-1; });
-  vSelectedVendorIds = [];
-  saveProj(p);
-  renderBudget();
-  toast(LANG==='es'?'Proveedores eliminados':'Vendors deleted','s');
+  openConfirmModal({
+    title: LANG==='es'?'Eliminar proveedores':'Delete vendors',
+    message: LANG==='es'?'¿Eliminar los proveedores seleccionados?':'Delete selected vendors?',
+    onConfirm: function(){
+      const p = proj();
+      p.vendors = p.vendors.filter(function(v){ return vSelectedVendorIds.indexOf(v.id)===-1; });
+      vSelectedVendorIds = [];
+      saveProj(p); renderBudget();
+      toast(LANG==='es'?'Proveedores eliminados':'Vendors deleted','s');
+    }
+  });
 }
 function dupVendor(id){
   const p=proj(); const v=p.vendors.find(v=>v.id===id); if(!v) return;
@@ -684,9 +713,10 @@ function autoSyncVendorToGlobal(v){
       lib.vendors.push({id:'lv'+Date.now(),name:v.name,date:formatDMY(today()),vendors:[JSON.parse(JSON.stringify(v))]});
       saveLib(lib);
     }
-  } catch(e){}
+  } catch(e){ console.warn('EventOS: autoSyncVendorToGlobal failed', e); }
 }
 function openPayModal(vid){
+  _paySubmitting=false; // Reset in case previous modal was closed mid-upload
   openMo(`<div class="mo-title">${t('add_payment')}</div>
   <div class="ig" style="margin-bottom:12px"><label>${t('amount_field')} *</label><input class="input" id="pay-amt" type="number" placeholder="0.00"></div>
   <div class="ig" style="margin-bottom:12px"><label>${t('date_field')}</label>
@@ -717,21 +747,28 @@ function previewPay(input){
   _payReceiptFile=f;
   const r=new FileReader();r.onload=e=>{const img=document.getElementById('pay-prev');img.src=e.target.result;img.classList.remove('hidden');};r.readAsDataURL(f);
 }
+var _paySubmitting=false;
 async function savePay(vid){
+  if(_paySubmitting) return; // Prevent double-submit during upload
   const amt=+gv('pay-amt');if(!amt)return toast('Enter a valid amount','e');
+  _paySubmitting=true;
+  // Disable submit button visually
+  var submitBtn=document.querySelector('.mo-foot .btn-success');
+  if(submitBtn){ submitBtn.disabled=true; submitBtn.textContent=t('saving'); }
   const p=proj();const v=p.vendors.find(v=>v.id===vid);
   const img=document.getElementById('pay-prev');
   var receiptUrl=null, receiptStorageId=null;
   if(!img.classList.contains('hidden') && _payReceiptFile){
     try{
-      toast('Uploading receipt…');
+      toast(t('uploading'));
       receiptStorageId = await EVENTOS_DATA.uploadFile(_payReceiptFile);
       receiptUrl = await EVENTOS_DATA.getFileUrl(receiptStorageId);
-    }catch(e){console.error('Receipt upload error:',e);toast('Receipt upload failed','e');}
+    }catch(e){console.error('Receipt upload error:',e);toast(t('err_upload_failed'),'e');_paySubmitting=false;if(submitBtn){submitBtn.disabled=false;submitBtn.textContent=t('add_payment_save');}return;}
   }
   v.payments.push({id:'p'+Date.now(),amount:amt,date:parseUserDate(gv('pay-date'))||today(),note:gv('pay-note'),receipt:receiptUrl,receiptStorageId:receiptStorageId});
   _payReceiptFile=null;
-  saveProj(p);closeMo();renderBudget();toast('Payment recorded','s');
+  _paySubmitting=false;
+  saveProj(p);closeMo();renderBudget();toast(LANG==='es'?'Pago registrado':'Payment recorded','s');
 }
 function showVendorDetail(vid){
   const p=proj(); const v=p.vendors.find(v=>v.id===vid); if(!v) return;
@@ -754,7 +791,7 @@ function showVendorDetail(vid){
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
       <div>
         <div style="font-size:20px;font-weight:700">${esc(v.name)}</div>
-        <div style="font-size:13px;color:var(--muted);margin-top:3px">${esc(v.category||'')}${v.subcategory?' Â· '+esc(v.subcategory):''}</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:3px">${esc(v.category||'')}${v.subcategory?' &middot; '+esc(v.subcategory):''}</div>
       </div>
       <span style="font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px;background:${si.bg};color:${si.clr}">${si.label}</span>
     </div>
@@ -1366,7 +1403,7 @@ function renderTimeline(){
   const pct=p.tasks.length?Math.round(done/p.tasks.length*100):0;
   el.innerHTML=`
   <div class="sh">
-    <div><div class="sh-title editorial-title" style="color:#7c3aed">${t('timeline')}</div>
+    <div><div class="sh-title editorial-title" style="color:#242424">${t('timeline')}</div>
     <div class="sh-sub">${t('timeline_sub')}</div></div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-ghost btn-sm" onclick="openTemplatePlanWizard()" style="display:flex;align-items:center;gap:5px;font-size:11px">
@@ -1615,8 +1652,11 @@ function renderCal(p){
 }
 function toggleTask(tid){const p=proj();const tk=p.tasks.find(tk=>tk.id===tid);if(tk){const nextDone=!taskIsDone(tk);tk.done=nextDone;tk.status=nextDone?'completed':'not-started';saveProj(p);renderTimeline();}}
 function delTask(tid){
-  if(!confirm('Delete task?'))return;
-  const p=proj();p.tasks=p.tasks.filter(tk=>tk.id!==tid);saveProj(p);renderTimeline();
+  openConfirmModal({
+    title: LANG==='es'?'Eliminar tarea':'Delete task',
+    message: LANG==='es'?'Esta acción no se puede deshacer.':'This action cannot be undone.',
+    onConfirm: function(){ const p=proj();p.tasks=p.tasks.filter(tk=>tk.id!==tid);saveProj(p);renderTimeline(); }
+  });
 }
 function openTaskModal(tid){
   const p=proj();const tk=tid?p.tasks.find(x=>x.id===tid):null;
@@ -1682,9 +1722,11 @@ function saveTask(tid){
 var gView='list',gSort='name',gAsc=true,gFilter='';
 var _gFilterTimer=null, _seatingFilterTimer=null, _tSearchTimer=null;
 function _guestMatchesFilter(g,q){ return [g.name,g.email,g.phone,g.category,g.rsvp,g.table,g.notes,g.meal].some(function(f){return f&&String(f).toLowerCase().indexOf(q)!==-1;}); }
-function debouncedGuestFilter(val){ gFilter=val; clearTimeout(_gFilterTimer); _gFilterTimer=setTimeout(function(){ renderGuestRows(proj()); },250); }
-function debouncedSeatingFilter(val){ gFilter=val; clearTimeout(_seatingFilterTimer); _seatingFilterTimer=setTimeout(function(){ renderSeating(proj()); var el=document.getElementById('seating-search-input'); if(el){el.focus();el.value=val;try{el.setSelectionRange(val.length,val.length);}catch(e){}} },250); }
-function debouncedTaskSearch(val){ taskSearchQuery=val; clearTimeout(_tSearchTimer); _tSearchTimer=setTimeout(function(){ renderTimelineView(proj()); },250); }
+function _truncSearch(v){ return typeof v==='string'&&v.length>200?v.substring(0,200):(v||''); }
+function debouncedGuestFilter(val){ gFilter=_truncSearch(val); clearTimeout(_gFilterTimer); _gFilterTimer=setTimeout(function(){ renderGuestRows(proj()); },250); }
+function debouncedSeatingFilter(val){ gFilter=_truncSearch(val); clearTimeout(_seatingFilterTimer); _seatingFilterTimer=setTimeout(function(){ renderSeating(proj()); var el=document.getElementById('seating-search-input'); if(el){el.focus();el.value=val;try{el.setSelectionRange(val.length,val.length);}catch(e){}} },250); }
+function debouncedTaskSearch(val){ taskSearchQuery=_truncSearch(val); clearTimeout(_tSearchTimer); _tSearchTimer=setTimeout(function(){ renderTimelineView(proj()); },250); }
+function clearSearchTimers(){ clearTimeout(_gFilterTimer); clearTimeout(_seatingFilterTimer); clearTimeout(_tSearchTimer); _gFilterTimer=null; _seatingFilterTimer=null; _tSearchTimer=null; }
 function renderGuestEmptyState(){
   const isES=LANG==='es';
   return `<section class="ev-empty fade-in">
@@ -1733,7 +1775,7 @@ function renderGuests(){
   const tables=[...new Set(p.guests.filter(g=>g.table).map(g=>g.table))].length;
   el.innerHTML=`
   <div class="sh">
-    <div><div class="sh-title" style="color:#10b981">${t('guest_management')}</div>
+    <div><div class="sh-title" style="color:#242424">${t('guest_management')}</div>
     <div class="sh-sub">${totalGuests} ${t('total')} &middot; ${confirmed} ${t('confirmed_guests')} &middot; ${pending} ${t('pending_guests')}</div></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-ghost btn-sm" onclick="downloadGuestTemplate()">
@@ -1917,9 +1959,9 @@ function renderSeating(p){
         return `<div style="margin-bottom:20px">
           <div class="seating-th">${t('table_header')} ${tb} &middot; ${gs.length} ${t('guests_lbl')}</div>
           ${gs.map(g => `<div class="seating-row">
-            <div><strong>${g.name}</strong>${g.plusOne ? ' <span class="s-sm">+1</span>' : ''}</div>
+            <div><strong>${esc(g.name)}</strong>${g.plusOne ? ' <span class="s-sm">+1</span>' : ''}</div>
             <div style="display:flex;gap:12px;font-size:12px;color:var(--muted)">
-              <span>${g.meal || '&mdash;'}</span>
+              <span>${esc(g.meal || '—')}</span>
               <span class="rb ${g.rsvp==='confirmed'?'rb-c':g.rsvp==='declined'?'rb-d':'rb-p'}">${g.rsvp||'pending'}</span>
             </div>
           </div>`).join('')}
@@ -1936,7 +1978,23 @@ function saveGuest(gid){
   else{p.guests.push({id:'g'+Date.now(),...data});}
   saveProj(p);closeMo();renderGuests();toast(gid?'Guest updated':'Guest added','s');
 }
-function delGuest(gid){if(!confirm('Delete guest?'))return;const p=proj();p.guests=p.guests.filter(g=>g.id!==gid);saveProj(p);renderGuests();}
+
+function exportGuestsCSV(){
+  var p=proj();
+  if(!p||!Array.isArray(p.guests)||!p.guests.length) return toast(LANG==='es'?'No hay invitados para exportar':'No guests to export','e');
+  var isES=LANG==='es';
+  var headers=[isES?'Nombre':'Name','Email',isES?'Telefono':'Phone',isES?'Categoria':'Category','RSVP',isES?'Mesa':'Table',isES?'Acompanante':'Plus One',isES?'Comida':'Meal',isES?'Restricciones':'Dietary',isES?'Notas':'Notes'];
+  var csvRow=function(arr){return arr.map(function(v){var s=String(v||'').replace(/"/g,'""');return s.indexOf(',')>-1||s.indexOf('"')>-1||s.indexOf('\n')>-1?'"'+s+'"':s;}).join(',');};
+  var lines=[csvRow(headers)];
+  p.guests.forEach(function(g){
+    lines.push(csvRow([g.name,g.email,g.phone,g.category,g.rsvp||'pending',g.table,g.plusOne?(isES?'Si':'Yes'):(isES?'No':'No'),g.meal,g.dietary,g.notes]));
+  });
+  var blob=new Blob(['\uFEFF'+lines.join('\n')],{type:'text/csv;charset=utf-8'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');a.href=url;a.download=(p.name||'guests')+'-guests.csv';a.click();
+  URL.revokeObjectURL(url);
+  toast(isES?'CSV exportado':'CSV exported','s');
+}
 
 function exportGuestsExcel(){
   const p = proj();
@@ -2088,21 +2146,28 @@ function applyBulkGuestEdit(){
 }
 function bulkDeleteGuests(){
   if(!guestSelectionCount()) return;
-  if(!confirm(LANG==='es'?'¿Eliminar los invitados seleccionados?':'Delete selected guests?')) return;
-  const p = proj();
-  p.guests = p.guests.filter(function(g){ return !isGuestSelected(g.id); });
-  saveProj(p);
-  clearGuestSelection();
-  renderGuests();
-  toast(LANG==='es'?'Invitados eliminados':'Guests deleted','s');
+  openConfirmModal({
+    title: LANG==='es'?'Eliminar invitados':'Delete guests',
+    message: LANG==='es'?'¿Eliminar los invitados seleccionados?':'Delete selected guests?',
+    onConfirm: function(){
+      const p = proj();
+      p.guests = p.guests.filter(function(g){ return !isGuestSelected(g.id); });
+      saveProj(p); clearGuestSelection(); renderGuests();
+      toast(LANG==='es'?'Invitados eliminados':'Guests deleted','s');
+    }
+  }); return;
 }
 function delGuest(gid){
-  if(!confirm('Delete guest?')) return;
-  const p = proj();
-  p.guests = p.guests.filter(g => g.id !== gid);
-  gSelectedGuestIds = gSelectedGuestIds.filter(id => id !== gid);
-  saveProj(p);
-  renderGuests();
+  openConfirmModal({
+    title: LANG==='es'?'Eliminar invitado':'Delete guest',
+    message: LANG==='es'?'Esta acción no se puede deshacer.':'This action cannot be undone.',
+    onConfirm: function(){
+      const p = proj();
+      p.guests = p.guests.filter(g => g.id !== gid);
+      gSelectedGuestIds = gSelectedGuestIds.filter(id => id !== gid);
+      saveProj(p); renderGuests();
+    }
+  });
 }
 function renderGuestList(p){
   let guests=[...p.guests];
@@ -2247,10 +2312,10 @@ function processImportFiles(files){
   files.forEach(file=>{
     const isExcel=/\.(xlsx|xls)$/i.test(file.name);
     const r=new FileReader();
-    r.onload=e=>{
+    r.onload=async function(e){
       let parsed=[];
       try{
-        if(isExcel){parsed=parseGuestFileExcel(e.target.result,file.name);}
+        if(isExcel){parsed=await parseGuestFileExcel(e.target.result,file.name);}
         else{parsed=parseGuestFileCSV(e.target.result,file.name);}
       }catch(err){console.error('Import parse error:',err);}
       allParsed=allParsed.concat(parsed);
@@ -2293,7 +2358,8 @@ function rowToGuest(obj,filename){
   };
 }
 
-function parseGuestFileExcel(arrayBuffer,filename){
+async function parseGuestFileExcel(arrayBuffer,filename){
+  if(typeof XLSX === 'undefined' && typeof ensureXLSX === 'function') await ensureXLSX();
   const workbook=XLSX.read(new Uint8Array(arrayBuffer),{type:'array'});
   const sheet=workbook.Sheets[workbook.SheetNames[0]];
   const rows=XLSX.utils.sheet_to_json(sheet,{defval:''});
@@ -2336,12 +2402,12 @@ function showImportPreview(newGuests){
   if(!newGuests.length)return toast('No valid guests found in file(s)','e');
   const p=proj();
   const dupes=[];const unique=[];
+  // Pre-build Sets for O(1) lookup instead of O(n*m)
+  const existingNames=new Set((p.guests||[]).map(function(g){return g.name.toLowerCase().trim();}));
+  const existingEmails=new Set((p.guests||[]).filter(function(g){return g.email;}).map(function(g){return g.email.toLowerCase();}));
   newGuests.forEach(ng=>{
-    const isDupe=p.guests.some(eg=>{
-      const nameMatch=eg.name.toLowerCase().trim()===ng.name.toLowerCase().trim();
-      const emailMatch=eg.email&&ng.email&&eg.email.toLowerCase()===ng.email.toLowerCase();
-      return nameMatch||emailMatch;
-    });
+    const isDupe=existingNames.has(ng.name.toLowerCase().trim())
+      || (ng.email && existingEmails.has(ng.email.toLowerCase()));
     if(isDupe)dupes.push(ng);else unique.push(ng);
   });
   const srcFiles=[...new Set(newGuests.map(g=>g._src))];
@@ -2371,18 +2437,17 @@ function showImportPreview(newGuests){
   <div style="background:var(--bg2);border-radius:var(--r-sm);padding:12px 16px;font-size:12px;max-height:160px;overflow-y:auto;border:1px solid var(--border)">
     <div style="font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--light);margin-bottom:8px">Preview</div>
     ${newGuests.slice(0,8).map(g=>`<div style="display:flex;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)">
-      <span style="font-weight:600;flex:1;font-size:12px">${g.name}</span>
-      <span style="color:var(--muted);font-size:12px">${g.email||'&#8212;'}</span>
+      <span style="font-weight:600;flex:1;font-size:12px">${esc(g.name)}</span>
+      <span style="color:var(--muted);font-size:12px">${esc(g.email||'—')}</span>
       <span class="rb ${g.rsvp==='confirmed'?'rb-c':g.rsvp==='declined'?'rb-d':'rb-p'}">${g.rsvp}</span>
     </div>`).join('')}
     ${newGuests.length>8?`<div style="padding:6px 0;color:var(--light);font-size:11px">+ ${newGuests.length-8} more...</div>`:''}
   </div>
   <div class="mo-foot">
     <button class="btn btn-ghost" onclick="closeMo()">Cancel</button>
-    <button class="btn btn-primary" id="do-import-btn">Import ${unique.length} New Guest${unique.length!==1?'s':''}</button>
+    <button class="btn btn-primary" onclick="doImport()">Import ${unique.length} New Guest${unique.length!==1?'s':''}</button>
   </div>`);
   window._pendingImport={newGuests,unique,dupes};
-  setTimeout(()=>{const b=document.getElementById('do-import-btn');if(b)b.onclick=doImport;},30);
 }
 
 function doImport(){

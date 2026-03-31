@@ -81,6 +81,31 @@ function saveLib(lib){
     }
   });
   saveProj(libToSave);
+  // Clean up orphaned IndexedDB floorplan entries
+  _cleanOrphanedFloorplans(libToSave);
+}
+
+function _cleanOrphanedFloorplans(lib){
+  if(typeof _fpDB !== 'function') return;
+  var activeKeys = {};
+  (lib.layouts || []).forEach(function(entry){
+    if(entry.floorplan && entry.floorplan._idb) activeKeys[entry.floorplan._idb] = true;
+  });
+  _fpDB().then(function(db){
+    var tx = db.transaction('images', 'readonly');
+    var store = tx.objectStore('images');
+    var req = store.getAllKeys ? store.getAllKeys() : null;
+    if(!req) return;
+    req.onsuccess = function(){
+      var allKeys = req.result || [];
+      var orphans = allKeys.filter(function(k){ return typeof k === 'string' && k.indexOf('libfp_') === 0 && !activeKeys[k]; });
+      if(!orphans.length) return;
+      var delTx = db.transaction('images', 'readwrite');
+      var delStore = delTx.objectStore('images');
+      orphans.forEach(function(k){ delStore.delete(k); });
+      console.log('EventOS: cleaned', orphans.length, 'orphaned floorplan(s) from IndexedDB');
+    };
+  }).catch(function(){});
 }
 
 function loadFloorplanImg(layoutId, callback){
@@ -263,12 +288,12 @@ async function libApplyLayoutExportToEvent(entryId, pid, opts){
   var lib = getLib();
   var entry = libSyncEditingLayoutToLibrary(entryId) || lib.layouts.find(function(e){ return e.id===entryId; });
   if(!entry){
-    toast(isES?'Layout no encontrado en biblioteca':'Layout not found in library','e');
+    toast(t('lib_layout_not_found'),'e');
     return null;
   }
   var exp = await libCreateEventLayoutExport(entry);
   if(!exp){
-    toast(isES?'No se pudo exportar el layout':'Could not export the layout','e');
+    toast(t('lib_export_failed'),'e');
     return null;
   }
 
@@ -297,7 +322,7 @@ async function libApplyLayoutExportToEvent(entryId, pid, opts){
   saveProj(p);
   if(typeof CID!=='undefined' && CID===pid && typeof CTAB!=='undefined' && CTAB==='layout' && typeof renderLayout==='function') renderLayout();
   if(typeof renderEventLayoutsBtn==='function') renderEventLayoutsBtn();
-  if(opts.toastSuccess) toast(isES?'Layout exportado al evento':'Layout exported to event','s');
+  if(opts.toastSuccess) toast(t('lib_exported'),'s');
   return exp;
 }
 
@@ -334,12 +359,12 @@ function libHasLayoutNameConflict(name, excludeId){
 
 function libEnsureUniqueLayoutName(name, excludeId){
   if(!libHasLayoutNameConflict(name, excludeId)) return true;
-  toast(LANG==='es'?'Ya existe un layout con ese nombre':'A layout with that name already exists','e');
+  toast(t('lib_name_exists'),'e');
   return false;
 }
 
 function libUniqueLayoutName(baseName, excludeId){
-  var clean = String(baseName||'').trim() || (LANG==='es'?'Layout sin nombre':'Untitled layout');
+  var clean = String(baseName||'').trim() || (t('lib_untitled'));
   if(!libHasLayoutNameConflict(clean, excludeId)) return clean;
   var n = 2;
   var candidate = clean + ' ('+n+')';
@@ -385,47 +410,47 @@ function renderLibrary(){
         addEl.innerHTML =
           '<button class="btn btn-ghost" style="gap:5px" onclick="libBackToVendorGroups()">'
           +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>'
-          +(LANG==='es'?'Volver':'Back')+'</button>'
+          +(t('lib_back'))+'</button>'
           +' <button class="btn btn-primary btn-create-gradient" onclick="libOpenVendorModalForGroup(\''+_libOpenVendorGroupId+'\')">'
           +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
-          +(LANG==='es'?'Agregar Proveedor':'Add Vendor')+'</button>';
+          +(t('lib_add_vendor'))+'</button>';
       } else {
         addEl.innerHTML =
           '<button class="btn btn-primary btn-create-gradient" onclick="libNewVendorGroupModal()">'
           +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
-          +(LANG==='es'?'Nuevo Grupo':'New Group')+'</button>';
+          +(t('lib_new_group'))+'</button>';
       }
     } else if(_libTab==='tasks'){
       if(_libOpenTaskGroupId){
         addEl.innerHTML =
           '<button class="btn btn-ghost" style="gap:5px" onclick="libBackToTaskGroups()">'
           +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>'
-          +(LANG==='es'?'Volver':'Back')+'</button>'
+          +(t('lib_back'))+'</button>'
           +' <button class="btn btn-primary btn-create-gradient" onclick="libOpenTaskModalForGroup(\''+_libOpenTaskGroupId+'\')">'
           +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
-          +(LANG==='es'?'Agregar Tarea':'Add Task')+'</button>';
+          +(t('lib_add_task'))+'</button>';
       } else {
         addEl.innerHTML =
           '<button class="btn btn-primary btn-create-gradient" onclick="libNewTaskGroupModal()">'
           +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
-          +(LANG==='es'?'Nuevo Grupo':'New Group')+'</button>';
+          +(t('lib_new_group'))+'</button>';
       }
     } else if(_libTab==='layouts'){
       addEl.innerHTML = lib.layouts.length
         ? '<button class="btn btn-primary btn-create-gradient" onclick="libOpenLayoutWizard()">'
           +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
-          +(LANG==='es'?'Nuevo Plano':'New Layout')+'</button>'
+          +(t('lib_new_layout'))+'</button>'
         : '';
     } else if(_libTab==='moodboards') {
       if(_mbOpenFolderId){
         addEl.innerHTML = '<button class="btn btn-primary" onclick="libMoodboardUploadImages(\''+_mbOpenFolderId+'\')">'
           +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
-          +(LANG==='es'?'Subir Imágenes':'Upload Images')+'</button>';
+          +(t('lib_upload_images'))+'</button>';
       } else {
         addEl.innerHTML = lib.moodboards.length
           ? '<button class="btn btn-primary btn-create-gradient" onclick="libCreateMoodboardFolder()">'
             +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
-            +(LANG==='es'?'Nuevo Moodboard':'New Moodboard')+'</button>'
+            +(t('lib_new_moodboard'))+'</button>'
           : '';
       }
     } else {
@@ -492,32 +517,32 @@ function renderLibVendorSets(lib){
   if(!lib.vendors.length){
     return '<div class="card" style="text-align:center;padding:52px 24px">'
       +'<svg width="48" height="48" fill="none" stroke="var(--muted)" stroke-width="1.2" viewBox="0 0 24 24" style="margin:0 auto 14px;display:block"><path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Z"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>'
-      +'<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:8px">'+(isES?'No hay grupos de proveedores guardados':'No vendor groups saved yet')+'</div>'
-      +'<div style="font-size:13px;color:var(--muted);max-width:380px;margin:0 auto 20px">'+(isES?'Crea un nuevo grupo para organizar tus proveedores reutilizables.':'Create a new group to organize your reusable vendors.')+'</div>'
+      +'<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:8px">'+(t('lib_no_vendor_groups'))+'</div>'
+      +'<div style="font-size:13px;color:var(--muted);max-width:380px;margin:0 auto 20px">'+(t('lib_no_vendor_groups_sub'))+'</div>'
       +'<button class="btn btn-primary btn-create-gradient" onclick="libNewVendorGroupModal()">'
       +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
-      +(isES?' Nuevo Grupo de Proveedores':' New Vendor Group')+'</button></div>';
+      +(' '+t('lib_new_vendor_group'))+'</button></div>';
   }
   var rows=lib.vendors.map(function(e){ return libVendorGroupRow(e,isES); }).join('');
   return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
     +'<div style="position:relative;flex:1;display:flex;align-items:center">'
     +'<svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>'
-    +'<input class="input" id="lib-vg-search" placeholder="'+(isES?'Buscar grupos o proveedores...':'Search groups or vendors...')+'" oninput="libSearchVendorGroups(this.value)" style="padding-left:36px;width:100%">'
+    +'<input class="input" id="lib-vg-search" placeholder="'+(t('lib_search_groups'))+'" oninput="libSearchVendorGroups(this.value)" style="padding-left:36px;width:100%">'
     +'</div>'
     +'<button id="lib-vg-bulk-load-btn" class="btn btn-primary btn-sm" style="display:none;white-space:nowrap" onclick="libLoadSelectedVendorGroups()">'
-    +(isES?'CARGAR':'LOAD')+'</button>'
+    +(t('lib_load'))+'</button>'
     +'<button id="lib-vg-bulk-del-btn" class="btn btn-danger btn-sm" style="display:none;white-space:nowrap" onclick="libDeleteSelectedVendorGroups()">'
-    +(isES?'Eliminar':'Delete Selected')+'</button>'
+    +(t('lib_delete_sel'))+'</button>'
     +'</div>'
     +'<div id="lib-vendor-group-table-wrap">'
     +'<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm)">'
     +'<table style="width:100%;border-collapse:collapse">'
     +'<thead><tr style="background:var(--bg2);border-bottom:1px solid var(--border)">'
     +'<th style="padding:9px 12px;width:36px"><input type="checkbox" id="lib-vg-chk-all" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libToggleAllVendorGroups(this.checked)"></th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Nombre':'Name')+'</th>'
-    +'<th style="padding:9px 14px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Proveedores':'Vendors')+'</th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Categorías':'Categories')+'</th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Fecha':'Date')+'</th>'
+    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(t('lib_name_col'))+'</th>'
+    +'<th style="padding:9px 14px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(t('lib_vendors_col'))+'</th>'
+    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(t('lib_categories_col'))+'</th>'
+    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(t('lib_date_col'))+'</th>'
     +'<th style="padding:9px 14px"></th>'
     +'</tr></thead>'
     +'<tbody id="lib-vg-rows">'+rows+'</tbody>'
@@ -539,7 +564,7 @@ function libVendorGroupRow(entry,isES){
     +'<td style="padding:11px 14px;font-size:12px;color:var(--muted)">'+esc(entry.date||'—')+'</td>'
     +'<td style="padding:11px 14px;text-align:right" onclick="event.stopPropagation()">'
     +'<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">'
-    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadVendors(\''+entry.id+'\')">'+(isES?'CARGAR':'LOAD')+'</button>'
+    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadVendors(\''+entry.id+'\')">'+(t('lib_load'))+'</button>'
     +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar nombre':'Edit name')+'" onclick="libRenameVendorGroup(\''+entry.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
     +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDelete(\'vendors\',\''+entry.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
     +'</div></td>'
@@ -549,7 +574,7 @@ function renderLibVendorGroupDetail(lib,entry,isES){
   var vendors=entry.vendors||[];
   var header='<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">'
     +'<div style="font-size:15px;font-weight:700;color:var(--text)">'+esc(entry.name)+'</div>'
-    +'<button class="btn btn-ghost btn-sm btn-icon" onclick="libRenameVendorGroup(\''+entry.id+'\')" title="'+(isES?'Renombrar':'Rename')+'">'
+    +'<button class="btn btn-ghost btn-sm btn-icon" onclick="libRenameVendorGroup(\''+entry.id+'\')" title="'+(t('lib_rename'))+'">'
     +'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
     +'<div style="font-size:12px;color:var(--muted);margin-left:auto">'+vendors.length+' '+(isES?'proveedor(es)':'vendor(s)')+'</div>'
     +'</div>';
@@ -578,7 +603,7 @@ function renderLibVendorGroupDetail(lib,entry,isES){
     +'<input class="input" placeholder="'+(isES?'Buscar proveedores...':'Search vendors...')+'" oninput="libFilterVendors(this.value)" style="padding-left:36px;width:100%">'
     +'</div>'
     +'<button id="lib-bulk-load-btn" class="btn btn-primary btn-sm" style="display:none;white-space:nowrap" onclick="libBulkLoadToEvent()">'
-    +(isES?'CARGAR':'LOAD')+'</button>'
+    +(t('lib_load'))+'</button>'
     +'</div>'
     +'<div id="lib-vendor-table-wrap">'
     +'<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm)">'
@@ -618,18 +643,23 @@ function libLoadSelectedVendorGroups(){
     var entry=lib.vendors.find(function(e){return e.id===id;});
     if(entry)(entry.vendors||[]).forEach(function(v){vendors.push(v);});
   });
-  if(!vendors.length) return toast(LANG==='es'?'Los grupos seleccionados están vacíos':'Selected groups are empty','e');
+  if(!vendors.length) return toast(t('lib_groups_empty'),'e');
   libOpenEventPickerModal(vendors);
 }
 function libDeleteSelectedVendorGroups(){
   var ids=Array.from(document.querySelectorAll('.lib-vg-sel:checked')).map(function(c){return c.dataset.id;});
   if(!ids.length) return;
   var isES=LANG==='es';
-  if(!confirm(isES?'¿Eliminar '+ids.length+' grupo(s) seleccionado(s)?':'Delete '+ids.length+' selected group(s)?')) return;
-  var lib=getLib();
-  lib.vendors=lib.vendors.filter(function(e){return ids.indexOf(e.id)===-1;});
-  saveLib(lib); renderLibrary();
-  toast(isES?'Grupos eliminados':'Groups deleted');
+  openConfirmModal({
+    title:isES?'Eliminar grupos':'Delete groups',
+    message:isES?'¿Eliminar '+ids.length+' grupo(s) seleccionado(s)?':'Delete '+ids.length+' selected group(s)?',
+    onConfirm:function(){
+      var lib=getLib();
+      lib.vendors=lib.vendors.filter(function(e){return ids.indexOf(e.id)===-1;});
+      saveLib(lib); renderLibrary();
+      toast(isES?'Grupos eliminados':'Groups deleted');
+    }
+  });
 }
 function libSearchVendorGroups(q){
   var lib=getLib(); var isES=LANG==='es'; var s=q.trim().toLowerCase();
@@ -656,7 +686,7 @@ function libNewVendorGroupModal(){
 function libSaveNewVendorGroup(){
   var name=(document.getElementById('lib-new-vg-name')||{}).value||'';
   var isES=LANG==='es';
-  if(!name.trim()) return toast(isES?'Ingresa un nombre':'Enter a name','e');
+  if(!name.trim()) return toast(t('lib_enter_name'),'e');
   var lib=getLib(); var id='lvg'+Date.now();
   lib.vendors.push({id:id,name:name.trim(),date:formatDMY(today()),vendors:[]});
   saveLib(lib); closeMo(); _libOpenVendorGroupId=id; renderLibrary();
@@ -666,7 +696,7 @@ function libRenameVendorGroup(entryId){
   var lib=getLib(); var entry=lib.vendors.find(function(e){return e.id===entryId;}); if(!entry) return;
   var isES=LANG==='es';
   openMo('<div class="mo-title">'+(isES?'Renombrar Grupo':'Rename Group')+'</div>'
-    +'<div class="ig" style="margin-bottom:14px"><label>'+(isES?'Nombre':'Name')+'</label>'
+    +'<div class="ig" style="margin-bottom:14px"><label>'+(t('lib_name_col'))+'</label>'
     +'<input class="input" id="lib-ren-vg-name" value="'+esc(entry.name)+'"></div>'
     +'<div class="mo-foot">'
     +'<button class="btn btn-ghost" onclick="closeMo()">'+(isES?'Cancelar':'Cancel')+'</button>'
@@ -746,7 +776,7 @@ function libVendorRow(item, isES){
     +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);min-width:260px;white-space:nowrap">'+esc(v.services||'—')+'</td>'
     +'<td style="padding:11px 14px;text-align:right" onclick="event.stopPropagation()">'
     +'<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">'
-    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadVendorToEvent(\''+item.entryId+'\',\''+v.id+'\')">'+( isES?'CARGAR':'LOAD')+'</button>'
+    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadVendorToEvent(\''+item.entryId+'\',\''+v.id+'\')">'+( t('lib_load'))+'</button>'
     +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar':'Edit')+'" onclick="libOpenVendorModalForGroup(\''+item.entryId+'\',\''+v.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
     +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Duplicar':'Duplicate')+'" onclick="libDuplicateSingleVendor(\''+item.entryId+'\',\''+v.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>'
     +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDeleteSingleVendor(\''+item.entryId+'\',\''+v.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
@@ -767,7 +797,7 @@ function renderLibVendors(lib){
     +'<input class="input" placeholder="'+(isES?'Buscar proveedores...':'Search vendors...')+'" oninput="libFilterVendors(this.value)" style="padding-left:36px;width:100%">'
     +'</div>'
     +'<button id="lib-bulk-load-btn" class="btn btn-primary btn-sm" style="display:none;white-space:nowrap" onclick="libBulkLoadToEvent()">'
-    +(isES?'CARGAR':'LOAD')+'</button>'
+    +(t('lib_load'))+'</button>'
     +'</div>'
     +'<div id="lib-vendor-table-wrap">'
     +'<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm)">'
@@ -812,14 +842,19 @@ function libFilterVendors(q){
   libUpdateBulkBtn();
 }
 function libDeleteSingleVendor(entryId, vid){
-  if(!confirm(LANG==='es'?'¿Eliminar este proveedor?':'Delete this vendor?')) return;
-  var lib=getLib();
-  var entry=lib.vendors.find(function(e){return e.id===entryId;});
-  if(!entry) return;
-  entry.vendors=entry.vendors.filter(function(v){return v.id!==vid;});
-  if(!entry.vendors.length) lib.vendors=lib.vendors.filter(function(e){return e.id!==entryId;});
-  saveLib(lib); renderLibrary();
-  toast(LANG==='es'?'Proveedor eliminado':'Vendor deleted');
+  openConfirmModal({
+    title:LANG==='es'?'Eliminar proveedor':'Delete vendor',
+    message:LANG==='es'?'Esta acción no se puede deshacer.':'This action cannot be undone.',
+    onConfirm:function(){
+      var lib=getLib();
+      var entry=lib.vendors.find(function(e){return e.id===entryId;});
+      if(!entry) return;
+      entry.vendors=entry.vendors.filter(function(v){return v.id!==vid;});
+      if(!entry.vendors.length) lib.vendors=lib.vendors.filter(function(e){return e.id!==entryId;});
+      saveLib(lib); renderLibrary();
+      toast(LANG==='es'?'Proveedor eliminado':'Vendor deleted');
+    }
+  });
 }
 function libDuplicateSingleVendor(entryId, vid){
   var lib=getLib();
@@ -1031,8 +1066,9 @@ function libPreviewCSV(input){
     reader.readAsText(file);
   } else if(ext==='xlsx'||ext==='xls'){
     var reader=new FileReader();
-    reader.onload=function(e){
+    reader.onload=async function(e){
       try{
+        if(typeof XLSX === 'undefined' && typeof ensureXLSX === 'function') await ensureXLSX();
         var wb=XLSX.read(e.target.result,{type:'binary'});
         var ws=wb.Sheets[wb.SheetNames[0]];
         var csv=XLSX.utils.sheet_to_csv(ws);
@@ -1093,7 +1129,7 @@ function showCsvPreview(vendors){
     '<div style="font-size:12px;font-weight:600;margin-bottom:6px">'+(isES?'Vista previa':'Preview')+' ('+vendors.length+' '+(isES?'proveedores':'vendors')+'):</div>'
     +'<div style="overflow-x:auto;max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:6px">'
     +'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:var(--bg2)">'
-    +'<th style="padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted)">'+(isES?'Nombre':'Name')+'</th>'
+    +'<th style="padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted)">'+(t('lib_name_col'))+'</th>'
     +'<th style="padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted)">'+(isES?'Servicios':'Services')+'</th>'
     +'<th style="padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted)">'+(isES?'Contacto':'Contact')+'</th>'
     +'</tr></thead><tbody>'+rows+'</tbody></table></div>';
@@ -1137,7 +1173,7 @@ function libTaskRow(tk, isES){
     +'<td style="padding:11px 14px;font-size:12px;color:var(--muted)">'+esc(tk.assignee||'—')+'</td>'
     +'<td style="padding:11px 14px;text-align:right" onclick="event.stopPropagation()">'
     +'<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">'
-    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadTaskToEvent(\''+tk.id+'\')">'+( isES?'CARGAR':'LOAD')+'</button>'
+    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadTaskToEvent(\''+tk.id+'\')">'+( t('lib_load'))+'</button>'
     +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar':'Edit')+'" onclick="libEditGlobalTask(\''+tk.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
     +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Duplicar':'Duplicate')+'" onclick="libDuplicateGlobalTask(\''+tk.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>'
     +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDeleteGlobalTask(\''+tk.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
@@ -1195,18 +1231,18 @@ function renderLibTaskGroups(lib){
     +'<input class="input" id="lib-tg-search" placeholder="'+(isES?'Buscar grupos o tareas...':'Search groups or tasks...')+'" oninput="libSearchTaskGroups(this.value)" style="padding-left:36px;width:100%">'
     +'</div>'
     +'<button id="lib-tg-bulk-load-btn" class="btn btn-primary btn-sm" style="display:none;white-space:nowrap" onclick="libLoadSelectedTaskGroups()">'
-    +(isES?'CARGAR':'LOAD')+'</button>'
+    +(t('lib_load'))+'</button>'
     +'<button id="lib-tg-bulk-del-btn" class="btn btn-danger btn-sm" style="display:none;white-space:nowrap" onclick="libDeleteSelectedTaskGroups()">'
-    +(isES?'Eliminar':'Delete Selected')+'</button>'
+    +(t('lib_delete_sel'))+'</button>'
     +'</div>'
     +'<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm)">'
     +'<table style="width:100%;border-collapse:collapse">'
     +'<thead><tr style="background:var(--bg2);border-bottom:1px solid var(--border)">'
     +'<th style="padding:9px 12px;width:36px"><input type="checkbox" id="lib-tg-chk-all" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libToggleAllTaskGroups(this.checked)"></th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Nombre':'Name')+'</th>'
+    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(t('lib_name_col'))+'</th>'
     +'<th style="padding:9px 14px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Tareas':'Tasks')+'</th>'
     +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Vista previa':'Preview')+'</th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Fecha':'Date')+'</th>'
+    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(t('lib_date_col'))+'</th>'
     +'<th style="padding:9px 14px"></th>'
     +'</tr></thead>'
     +'<tbody id="lib-tg-rows">'+rows+'</tbody>'
@@ -1225,7 +1261,7 @@ function libTaskGroupRow(entry,isES){
     +'<td style="padding:11px 14px;font-size:12px;color:var(--muted)">'+esc(entry.date||'—')+'</td>'
     +'<td style="padding:11px 14px;text-align:right" onclick="event.stopPropagation()">'
     +'<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">'
-    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadTasks(\''+entry.id+'\')">'+(isES?'CARGAR':'LOAD')+'</button>'
+    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadTasks(\''+entry.id+'\')">'+(t('lib_load'))+'</button>'
     +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar nombre':'Edit name')+'" onclick="libRenameTaskGroup(\''+entry.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
     +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDelete(\'tasks\',\''+entry.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
     +'</div></td>'
@@ -1235,7 +1271,7 @@ function renderLibTaskGroupDetail(lib,entry,isES){
   var tasks=entry.tasks||[];
   var header='<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">'
     +'<div style="font-size:15px;font-weight:700;color:var(--text)">'+esc(entry.name)+'</div>'
-    +'<button class="btn btn-ghost btn-sm btn-icon" onclick="libRenameTaskGroup(\''+entry.id+'\')" title="'+(isES?'Renombrar':'Rename')+'">'
+    +'<button class="btn btn-ghost btn-sm btn-icon" onclick="libRenameTaskGroup(\''+entry.id+'\')" title="'+(t('lib_rename'))+'">'
     +'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
     +'<div style="font-size:12px;color:var(--muted);margin-left:auto">'+tasks.length+' '+(isES?'tarea(s)':'task(s)')+'</div>'
     +'</div>';
@@ -1264,7 +1300,7 @@ function renderLibTaskGroupDetail(lib,entry,isES){
     +'<input class="input" placeholder="'+(isES?'Buscar tareas...':'Search tasks...')+'" oninput="libFilterGroupTasks(\''+entry.id+'\',this.value)" style="padding-left:36px;width:100%">'
     +'</div>'
     +'<button id="lib-gtg-bulk-load-btn" class="btn btn-primary btn-sm" style="display:none;white-space:nowrap" onclick="libBulkLoadGroupTasksToEvent(\''+entry.id+'\')">'
-    +(isES?'CARGAR':'LOAD')+'</button>'
+    +(t('lib_load'))+'</button>'
     +'</div>'
     +'<div id="lib-task-table-wrap">'
     +'<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm)">'
@@ -1293,7 +1329,7 @@ function libGroupTaskRow(entryId,tk,isES){
     +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);min-width:180px;white-space:nowrap">'+esc(tk.assignee||'—')+'</td>'
     +'<td style="padding:11px 14px;text-align:right" onclick="event.stopPropagation()">'
     +'<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">'
-    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadGroupTaskToEvent(\''+entryId+'\',\''+tk.id+'\')">'+( isES?'CARGAR':'LOAD')+'</button>'
+    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadGroupTaskToEvent(\''+entryId+'\',\''+tk.id+'\')">'+( t('lib_load'))+'</button>'
     +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar':'Edit')+'" onclick="libOpenTaskModalForGroup(\''+entryId+'\',\''+tk.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
     +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDeleteGroupTask(\''+entryId+'\',\''+tk.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
     +'</div></td>'
@@ -1324,7 +1360,7 @@ function libLoadSelectedTaskGroups(){
     var entry=(lib.tasks||[]).find(function(e){return e.id===id;});
     if(entry)(entry.tasks||[]).forEach(function(tk){tasks.push(tk);});
   });
-  if(!tasks.length) return toast(LANG==='es'?'Los grupos seleccionados están vacíos':'Selected groups are empty','e');
+  if(!tasks.length) return toast(t('lib_groups_empty'),'e');
   libOpenTaskEventPickerModal(tasks);
 }
 function libUpdateGroupTaskBulkBtn(){
@@ -1342,11 +1378,16 @@ function libDeleteSelectedTaskGroups(){
   var ids=Array.from(document.querySelectorAll('.lib-tg-sel:checked')).map(function(c){return c.dataset.id;});
   if(!ids.length) return;
   var isES=LANG==='es';
-  if(!confirm(isES?'¿Eliminar '+ids.length+' grupo(s) seleccionado(s)?':'Delete '+ids.length+' selected group(s)?')) return;
-  var lib=getLib();
-  lib.tasks=lib.tasks.filter(function(e){return ids.indexOf(e.id)===-1;});
-  saveLib(lib); renderLibrary();
-  toast(isES?'Grupos eliminados':'Groups deleted');
+  openConfirmModal({
+    title:isES?'Eliminar grupos':'Delete groups',
+    message:isES?'¿Eliminar '+ids.length+' grupo(s) seleccionado(s)?':'Delete '+ids.length+' selected group(s)?',
+    onConfirm:function(){
+      var lib=getLib();
+      lib.tasks=lib.tasks.filter(function(e){return ids.indexOf(e.id)===-1;});
+      saveLib(lib); renderLibrary();
+      toast(isES?'Grupos eliminados':'Groups deleted');
+    }
+  });
 }
 function libSearchTaskGroups(q){
   var lib=getLib(); var isES=LANG==='es'; var s=q.trim().toLowerCase();
@@ -1373,7 +1414,7 @@ function libNewTaskGroupModal(){
 function libSaveNewTaskGroup(){
   var name=(document.getElementById('lib-new-tg-name')||{}).value||'';
   var isES=LANG==='es';
-  if(!name.trim()) return toast(isES?'Ingresa un nombre':'Enter a name','e');
+  if(!name.trim()) return toast(t('lib_enter_name'),'e');
   var lib=getLib(); var id='ltg'+Date.now();
   lib.tasks.push({id:id,name:name.trim(),date:formatDMY(today()),tasks:[]});
   saveLib(lib); closeMo(); _libOpenTaskGroupId=id; renderLibrary();
@@ -1383,7 +1424,7 @@ function libRenameTaskGroup(entryId){
   var lib=getLib(); var entry=lib.tasks.find(function(e){return e.id===entryId;}); if(!entry) return;
   var isES=LANG==='es';
   openMo('<div class="mo-title">'+(isES?'Renombrar Grupo':'Rename Group')+'</div>'
-    +'<div class="ig" style="margin-bottom:14px"><label>'+(isES?'Nombre':'Name')+'</label>'
+    +'<div class="ig" style="margin-bottom:14px"><label>'+(t('lib_name_col'))+'</label>'
     +'<input class="input" id="lib-ren-tg-name" value="'+esc(entry.name)+'"></div>'
     +'<div class="mo-foot">'
     +'<button class="btn btn-ghost" onclick="closeMo()">'+(isES?'Cancelar':'Cancel')+'</button>'
@@ -1467,12 +1508,17 @@ function libSaveEditGroupTask(entryId,tid){
 }
 function libDeleteGroupTask(entryId,tid){
   var isES=LANG==='es';
-  if(!confirm(isES?'¿Eliminar esta tarea?':'Delete this task?')) return;
-  var lib=getLib();
-  var entry=lib.tasks.find(function(e){return e.id===entryId;}); if(!entry) return;
-  entry.tasks=(entry.tasks||[]).filter(function(t){return t.id!==tid;});
-  saveLib(lib); renderLibrary();
-  toast(isES?'Tarea eliminada':'Task deleted');
+  openConfirmModal({
+    title:isES?'Eliminar tarea':'Delete task',
+    message:isES?'Esta acción no se puede deshacer.':'This action cannot be undone.',
+    onConfirm:function(){
+      var lib=getLib();
+      var entry=lib.tasks.find(function(e){return e.id===entryId;}); if(!entry) return;
+      entry.tasks=(entry.tasks||[]).filter(function(t){return t.id!==tid;});
+      saveLib(lib); renderLibrary();
+      toast(isES?'Tarea eliminada':'Task deleted');
+    }
+  });
 }
 function libOpenTaskModalForGroup(entryId, tid){
   var lib=getLib();
@@ -1618,11 +1664,16 @@ function libSaveEditGlobalTask(tid){
   toast(LANG==='es'?'Tarea actualizada':'Task updated','s');
 }
 function libDeleteGlobalTask(tid){
-  if(!confirm(LANG==='es'?'¿Eliminar esta tarea?':'Delete this task?')) return;
-  var lib=getLib();
-  lib.globalTasks=(lib.globalTasks||[]).filter(function(t){return t.id!==tid;});
-  saveLib(lib); renderLibrary();
-  toast(LANG==='es'?'Tarea eliminada':'Task deleted');
+  openConfirmModal({
+    title:LANG==='es'?'Eliminar tarea':'Delete task',
+    message:LANG==='es'?'Esta acción no se puede deshacer.':'This action cannot be undone.',
+    onConfirm:function(){
+      var lib=getLib();
+      lib.globalTasks=(lib.globalTasks||[]).filter(function(t){return t.id!==tid;});
+      saveLib(lib); renderLibrary();
+      toast(LANG==='es'?'Tarea eliminada':'Task deleted');
+    }
+  });
 }
 function libDuplicateGlobalTask(tid){
   var lib=getLib();
@@ -1788,7 +1839,7 @@ function libPreviewTasksCSV(input){
     }
     if(!_csvTasksParsed.length){ document.getElementById('csv-task-preview').innerHTML='<p style="color:var(--danger);font-size:12px">'+(isES?'No se encontraron tareas válidas':'No valid tasks found')+'</p>'; return; }
     var rows=_csvTasksParsed.slice(0,5).map(function(tk){ return '<tr><td style="padding:6px 8px;font-size:12px;font-weight:600">'+esc(tk.title)+'</td><td style="padding:6px 8px;font-size:11px;color:var(--muted)">'+esc(tk.dueDate||'—')+'</td><td style="padding:6px 8px;font-size:11px;color:var(--muted)">'+esc(tk.assignee||'—')+'</td></tr>'; }).join('');
-    document.getElementById('csv-task-preview').innerHTML='<div style="font-size:12px;font-weight:600;margin-bottom:6px">'+(isES?'Vista previa':'Preview')+' ('+_csvTasksParsed.length+' '+(isES?'tareas':'tasks')+'):</div><div style="overflow-x:auto;max-height:140px;overflow-y:auto;border:1px solid var(--border);border-radius:6px"><table style="width:100%;border-collapse:collapse"><thead><tr style="background:var(--bg2)"><th style="padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--muted);text-align:left">'+(isES?'Título':'Title')+'</th><th style="padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--muted);text-align:left">'+(isES?'Fecha':'Date')+'</th><th style="padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--muted);text-align:left">'+(isES?'Asignado a':'Assignee')+'</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+    document.getElementById('csv-task-preview').innerHTML='<div style="font-size:12px;font-weight:600;margin-bottom:6px">'+(isES?'Vista previa':'Preview')+' ('+_csvTasksParsed.length+' '+(isES?'tareas':'tasks')+'):</div><div style="overflow-x:auto;max-height:140px;overflow-y:auto;border:1px solid var(--border);border-radius:6px"><table style="width:100%;border-collapse:collapse"><thead><tr style="background:var(--bg2)"><th style="padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--muted);text-align:left">'+(isES?'Título':'Title')+'</th><th style="padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--muted);text-align:left">'+(t('lib_date_col'))+'</th><th style="padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--muted);text-align:left">'+(isES?'Asignado a':'Assignee')+'</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
     document.getElementById('csv-task-import-btn').style.display='';
   };
   reader.readAsText(file);
@@ -1819,7 +1870,7 @@ function libLayoutRow(entry, isES){
     +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(entry.notes||'—')+'</td>'
     +'<td style="padding:11px 14px;text-align:right" onclick="event.stopPropagation()">'
     +'<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">'
-    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadLayoutToEvent(\''+entry.id+'\')">'+( isES?'CARGAR':'LOAD')+'</button>'
+    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadLayoutToEvent(\''+entry.id+'\')">'+( t('lib_load'))+'</button>'
     +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar':'Edit')+'" onclick="libOpenLayoutEditor(\''+entry.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
     +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Duplicar':'Duplicate')+'" onclick="libDuplicateLayout(\''+entry.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>'
     +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDelete(\'layouts\',\''+entry.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
@@ -1892,7 +1943,7 @@ function renderLibLayouts(lib){
     +'<input class="input" placeholder="'+(isES?'Buscar planos...':'Search layouts...')+'" oninput="libFilterLayouts(this.value)" style="padding-left:36px;width:100%">'
     +'</div>'
     +'<button id="lib-layout-bulk-btn" class="btn btn-primary btn-sm" style="display:none;white-space:nowrap" onclick="libBulkLoadLayoutsToEvent()">'
-    +(isES?'CARGAR':'LOAD')+'</button>'
+    +(t('lib_load'))+'</button>'
     +'<button id="lib-layout-bulk-del" class="btn btn-danger btn-sm" style="display:none;white-space:nowrap;margin-left:6px" onclick="libBulkDeleteLayouts()">'
     +(isES?'Eliminar Seleccionados':'Delete Selected')+'</button>'
     +'</div>'
@@ -1900,7 +1951,7 @@ function renderLibLayouts(lib){
     +'<table style="width:100%;border-collapse:collapse">'
     +'<thead><tr style="background:var(--bg2);border-bottom:1px solid var(--border)">'
     +'<th style="padding:9px 12px;width:36px"><input type="checkbox" id="lib-layout-chk-all" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libToggleAllLayouts(this.checked)"></th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Nombre':'Name')+'</th>'
+    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(t('lib_name_col'))+'</th>'
     +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Ubicación':'Location')+'</th>'
     +'<th style="padding:9px 14px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Invitados':'Guests')+'</th>'
     +'<th style="padding:9px 14px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Mesas':'Tables')+'</th>'
@@ -1966,7 +2017,7 @@ function libOpenLayoutEventPicker(entryId){
     +'<div id="ly-ev-pick-list" style="max-height:50vh;overflow-y:auto">'+eventRows+'</div>'
     +'<div class="mo-foot">'
     +'<button class="btn btn-ghost" onclick="closeMo()">'+(isES?'Cancelar':'Cancel')+'</button>'
-    +'<button class="btn btn-primary" onclick="libDoLoadLayoutToEvent()">'+(isES?'CARGAR':'LOAD')+'</button>'
+    +'<button class="btn btn-primary" onclick="libDoLoadLayoutToEvent()">'+(t('lib_load'))+'</button>'
     +'</div>');
 }
 function libFilterLayoutEventPicker(q){
@@ -2001,7 +2052,7 @@ async function libDoLoadLayoutToEvent(){
   var exp = await libApplyLayoutExportToEvent(_libPendingLayoutId, pid, {toastSuccess:false});
   if(!exp) return;
   closeMo();
-  toast(isES?'Layout exportado al evento':'Layout exported to event','s');
+  toast(t('lib_exported'),'s');
   _libPendingLayoutId=null;
   if(typeof openProject==='function'){
     openProject(pid);
@@ -2095,19 +2146,23 @@ function libFilterMoodboards(q){
 function libMbBackToFolders(){ _mbOpenFolderId=null; renderLibrary(); }
 
 function libDelete(type, id){
-  if(!confirm(t('lib_delete_confirm'))) return;
-  var lib = getLib();
-  if(type==='vendors')     lib.vendors     = lib.vendors.filter(function(e){return e.id!==id;});
-  else if(type==='tasks')  lib.tasks       = lib.tasks.filter(function(e){return e.id!==id;});
-  else if(type==='layouts')lib.layouts     = lib.layouts.filter(function(e){return e.id!==id;});
-  else if(type==='moodboards')lib.moodboards = lib.moodboards.filter(function(e){return e.id!==id;});
-  else if(type.endsWith('_pack')){
-    var baseType = type.replace('_pack','');
-    if(lib[baseType+'_packs']) lib[baseType+'_packs'] = lib[baseType+'_packs'].filter(function(e){return e.id!==id;});
-  }
-  saveLib(lib);
-  renderLibrary();
-  toast(LANG==='es'?'Eliminado de biblioteca':'Removed from library');
+  openConfirmModal({
+    title:t('lib_delete_confirm'),
+    message:LANG==='es'?'Esta acción no se puede deshacer.':'This action cannot be undone.',
+    onConfirm:function(){
+      var lib = getLib();
+      if(type==='vendors')     lib.vendors     = lib.vendors.filter(function(e){return e.id!==id;});
+      else if(type==='tasks')  lib.tasks       = lib.tasks.filter(function(e){return e.id!==id;});
+      else if(type==='layouts')lib.layouts     = lib.layouts.filter(function(e){return e.id!==id;});
+      else if(type==='moodboards')lib.moodboards = lib.moodboards.filter(function(e){return e.id!==id;});
+      else if(type.endsWith('_pack')){
+        var baseType = type.replace('_pack','');
+        if(lib[baseType+'_packs']) lib[baseType+'_packs'] = lib[baseType+'_packs'].filter(function(e){return e.id!==id;});
+      }
+      saveLib(lib); renderLibrary();
+      toast(LANG==='es'?'Eliminado de biblioteca':'Removed from library');
+    }
+  });
 }
 
 function libSaveModal(type){
@@ -2380,7 +2435,7 @@ function libSaveMoodboardDo(){
 
 function libCreateMoodboardFolder(){
   var isES=LANG==='es';
-  openMo('<div class="mo-title">🎨 '+(isES?'Nuevo Moodboard':'New Moodboard')+'</div>'
+  openMo('<div class="mo-title">🎨 '+(t('lib_new_moodboard'))+'</div>'
     +'<div class="form-grid" style="margin-top:14px">'
     +'<label class="s-lbl">'+(isES?'Nombre de la carpeta':'Folder name')+'</label>'
     +'<input id="lib-mb-folder-name" class="input" placeholder="'+(isES?'Ej: Boda Rosa':'e.g. Pink Wedding')+'" style="width:100%">'
@@ -2535,7 +2590,7 @@ function _libMbRow(entry, isES){
     +'<td style="padding:11px 14px;font-size:12px;color:var(--muted)">'+esc(entry.date||'—')+'</td>'
     +'<td style="padding:11px 14px;text-align:right" onclick="event.stopPropagation()">'
     +'<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">'
-    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadMoodboard(\''+entry.id+'\')">'+(isES?'CARGAR':'LOAD')+'</button>'
+    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadMoodboard(\''+entry.id+'\')">'+(t('lib_load'))+'</button>'
     +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar':'Edit')+'" onclick="libEditMoodboardFolder(\''+entry.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
     +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Duplicar':'Duplicate')+'" onclick="libDuplicateMoodboardFolder(\''+entry.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>'
     +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDelete(\'moodboards\',\''+entry.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
@@ -2562,7 +2617,7 @@ function libMoodboardCard(entry, isES){
     <div class="mobile-meta-grid">
       ${renderMobileActionChip(isES?'Imágenes':'Images', imgCnt)}
       ${renderMobileActionChip(isES?'Carpetas':'Folders', folderCount)}
-      ${renderMobileActionChip(isES?'Fecha':'Date', esc(entry.date||'—'))}
+      ${renderMobileActionChip(t('lib_date_col'), esc(entry.date||'—'))}
       ${renderMobileActionChip(isES?'Estado':'Status', imgCnt?(isES?'Listo':'Ready'):(isES?'Vacío':'Empty'))}
     </div>
     <div class="mobile-record-card-actions">
@@ -2607,11 +2662,16 @@ function libDeleteSelectedMoodboards(){
   var ids=Array.from(document.querySelectorAll('.lib-mb-sel:checked')).map(function(c){return c.dataset.id;});
   if(!ids.length) return;
   var isES=LANG==='es';
-  if(!confirm(isES?'¿Eliminar '+ids.length+' moodboard(s) seleccionado(s)?':'Delete '+ids.length+' selected moodboard(s)?')) return;
-  var lib=getLib();
-  lib.moodboards=lib.moodboards.filter(function(e){return ids.indexOf(e.id)===-1;});
-  saveLib(lib); renderLibrary();
-  toast(isES?'Moodboards eliminados':'Moodboards deleted');
+  openConfirmModal({
+    title:isES?'Eliminar moodboards':'Delete moodboards',
+    message:isES?'¿Eliminar '+ids.length+' moodboard(s) seleccionado(s)?':'Delete '+ids.length+' selected moodboard(s)?',
+    onConfirm:function(){
+      var lib=getLib();
+      lib.moodboards=lib.moodboards.filter(function(e){return ids.indexOf(e.id)===-1;});
+      saveLib(lib); renderLibrary();
+      toast(isES?'Moodboards eliminados':'Moodboards deleted');
+    }
+  });
 }
 function renderLibMoodboards(lib){
   var isES=LANG==='es';
@@ -2669,7 +2729,7 @@ function renderLibMoodboards(lib){
     var cards=lib.moodboards.map(function(e){ return libMoodboardCard(e,isES); }).join('');
     return '<div class="mobile-section-toolbar">'
       +'<div style="display:grid;gap:10px">'
-      +'<input class="input" placeholder="'+(isES?'Buscar moodboards...':'Search moodboards...')+'" oninput="libFilterMoodboards(this.value)">'
+      +'<input class="input" placeholder="'+(t('lib_search_groups'))+'" oninput="libFilterMoodboards(this.value)">'
       +'<div class="mobile-inline-actions">'
       +'<label class="btn btn-ghost btn-sm" style="display:inline-flex;align-items:center;gap:8px">'
       +'<input type="checkbox" id="lib-mb-chk-all" style="width:16px;height:16px;accent-color:var(--gold-h);cursor:pointer" onchange="libToggleAllMoodboards(this.checked)">'
@@ -2679,27 +2739,27 @@ function renderLibMoodboards(lib){
       +'</div></div>'
       +'</div>'
       +'<div id="lib-mb-rows" class="mobile-card-list">'+cards+'</div>'
-      +renderMobileStickyActionBar('<button class="btn btn-primary btn-create-gradient" onclick="libCreateMoodboardFolder()">'+(isES?'Nuevo Moodboard':'New Moodboard')+'</button>');
+      +renderMobileStickyActionBar('<button class="btn btn-primary btn-create-gradient" onclick="libCreateMoodboardFolder()">'+(t('lib_new_moodboard'))+'</button>');
   }
   var rows=lib.moodboards.map(function(e){ return _libMbRow(e,isES); }).join('');
   return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
     +'<div style="position:relative;flex:1;display:flex;align-items:center">'
     +'<svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>'
-    +'<input class="input" placeholder="'+(isES?'Buscar moodboards...':'Search moodboards...')+'" oninput="libFilterMoodboards(this.value)" style="padding-left:36px;width:100%">'
+    +'<input class="input" placeholder="'+(t('lib_search_groups'))+'" oninput="libFilterMoodboards(this.value)" style="padding-left:36px;width:100%">'
     +'</div>'
     +'<button id="lib-mb-bulk-load-btn" class="btn btn-primary btn-sm" style="display:none;white-space:nowrap" onclick="libLoadSelectedMoodboards()">'
-    +(isES?'CARGAR':'LOAD')+'</button>'
+    +(t('lib_load'))+'</button>'
     +'<button id="lib-mb-bulk-del-btn" class="btn btn-danger btn-sm" style="display:none;white-space:nowrap" onclick="libDeleteSelectedMoodboards()">'
-    +(isES?'Eliminar':'Delete Selected')+'</button>'
+    +(t('lib_delete_sel'))+'</button>'
     +'</div>'
     +'<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm)">'
     +'<table style="width:100%;border-collapse:collapse">'
     +'<thead><tr style="background:var(--bg2);border-bottom:1px solid var(--border)">'
     +'<th style="padding:9px 12px;width:36px"><input type="checkbox" id="lib-mb-chk-all" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libToggleAllMoodboards(this.checked)"></th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Nombre':'Name')+'</th>'
+    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(t('lib_name_col'))+'</th>'
     +'<th style="padding:9px 14px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Imágenes':'Images')+'</th>'
     +'<th style="padding:9px 14px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Carpetas':'Folders')+'</th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Fecha':'Date')+'</th>'
+    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(t('lib_date_col'))+'</th>'
     +'<th style="padding:9px 14px"></th>'
     +'</tr></thead>'
     +'<tbody id="lib-mb-rows">'+rows+'</tbody>'
@@ -4107,18 +4167,22 @@ function libBulkDeleteLayouts(){
   if(!checks.length) return toast(LANG==='es'?'Selecciona layouts para eliminar':'Select layouts to delete','e');
   var ids=Array.from(checks).map(function(c){return c.dataset.lid;});
   var isES=LANG==='es';
-  if(!confirm(isES?'¿Eliminar '+ids.length+' layouts seleccionados?':'Delete '+ids.length+' selected layouts?')) return;
-  var lib=getLib();
-  ids.forEach(function(id){
-    var entry=lib.layouts.find(function(e){return e.id===id;});
-    if(entry&&entry.floorplan&&entry.floorplan._idb&&typeof _fpDelete==='function'){
-      _fpDelete(entry.floorplan._idb).catch(function(){});
+  openConfirmModal({
+    title:isES?'Eliminar layouts':'Delete layouts',
+    message:isES?'¿Eliminar '+ids.length+' layouts seleccionados?':'Delete '+ids.length+' selected layouts?',
+    onConfirm:function(){
+      var lib=getLib();
+      ids.forEach(function(id){
+        var entry=lib.layouts.find(function(e){return e.id===id;});
+        if(entry&&entry.floorplan&&entry.floorplan._idb&&typeof _fpDelete==='function'){
+          _fpDelete(entry.floorplan._idb).catch(function(){});
+        }
+      });
+      lib.layouts=lib.layouts.filter(function(e){return ids.indexOf(e.id)<0;});
+      saveLib(lib); renderLibrary();
+      toast(isES?ids.length+' layouts eliminados':ids.length+' layouts deleted','s');
     }
   });
-  lib.layouts=lib.layouts.filter(function(e){return ids.indexOf(e.id)<0;});
-  saveLib(lib);
-  renderLibrary();
-  toast(isES?ids.length+' layouts eliminados':ids.length+' layouts deleted','s');
 }
 window.libBulkDeleteLayouts = libBulkDeleteLayouts;
 

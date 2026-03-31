@@ -2,10 +2,39 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "./auth";
 
-export const getProjectsByWixUserId = query({
-  args: {
-    sessionToken: v.string(),
-  },
+// Auth wrapper helpers — reduce boilerplate across handlers
+function authedQuery<Args extends Record<string, any>, Returns>(config: {
+  args: Args;
+  returns: any;
+  handler: (ctx: any, wixUserId: string, args: any) => Promise<Returns>;
+}) {
+  return query({
+    args: { sessionToken: v.string(), ...config.args },
+    returns: config.returns,
+    handler: async (ctx: any, args: any) => {
+      const wixUserId = await requireAuth(ctx, args.sessionToken);
+      return config.handler(ctx, wixUserId, args);
+    },
+  });
+}
+
+function authedMutation<Args extends Record<string, any>, Returns>(config: {
+  args: Args;
+  returns: any;
+  handler: (ctx: any, wixUserId: string, args: any) => Promise<Returns>;
+}) {
+  return mutation({
+    args: { sessionToken: v.string(), ...config.args },
+    returns: config.returns,
+    handler: async (ctx: any, args: any) => {
+      const wixUserId = await requireAuth(ctx, args.sessionToken);
+      return config.handler(ctx, wixUserId, args);
+    },
+  });
+}
+
+export const getProjectsByWixUserId = authedQuery({
+  args: {},
   returns: v.array(
     v.object({
       projectId: v.string(),
@@ -13,15 +42,13 @@ export const getProjectsByWixUserId = query({
       updatedAt: v.number(),
     }),
   ),
-  handler: async (ctx, args) => {
-    const wixUserId = await requireAuth(ctx, args.sessionToken);
-
+  handler: async (ctx, wixUserId) => {
     const docs = await ctx.db
       .query("projects")
-      .withIndex("by_wix_user", (q) => q.eq("wixUserId", wixUserId))
+      .withIndex("by_wix_user", (q: any) => q.eq("wixUserId", wixUserId))
       .collect();
 
-    return docs.map((doc) => ({
+    return docs.map((doc: any) => ({
       projectId: doc.projectId,
       data: doc.data,
       updatedAt: doc.updatedAt,
@@ -29,15 +56,50 @@ export const getProjectsByWixUserId = query({
   },
 });
 
-export const upsertProject = mutation({
+// Paginated project listing — returns up to `limit` projects, ordered by updatedAt desc.
+// Pass `cursor` from a previous response to get the next page. Returns isDone when no more.
+export const getProjectsPaginated = authedQuery({
   args: {
-    sessionToken: v.string(),
+    limit: v.optional(v.number()),
+    cursor: v.optional(v.string()),
+  },
+  returns: v.object({
+    projects: v.array(
+      v.object({
+        projectId: v.string(),
+        data: v.any(),
+        updatedAt: v.number(),
+      }),
+    ),
+    cursor: v.union(v.string(), v.null()),
+    isDone: v.boolean(),
+  }),
+  handler: async (ctx, wixUserId, args) => {
+    const pageSize = Math.min(args.limit || 25, 100);
+    const result = await ctx.db
+      .query("projects")
+      .withIndex("by_wix_user_updated", (q: any) => q.eq("wixUserId", wixUserId))
+      .order("desc")
+      .paginate({ numItems: pageSize, cursor: args.cursor || null });
+
+    return {
+      projects: result.page.map((doc: any) => ({
+        projectId: doc.projectId,
+        data: doc.data,
+        updatedAt: doc.updatedAt,
+      })),
+      cursor: result.continueCursor ?? null,
+      isDone: result.isDone,
+    };
+  },
+});
+
+export const upsertProject = authedMutation({
+  args: {
     project: v.any(),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const wixUserId = await requireAuth(ctx, args.sessionToken);
-
+  handler: async (ctx, wixUserId, args) => {
     const projectId = String(args.project && args.project.id ? args.project.id : "");
     if (!projectId) {
       throw new Error("Project is missing an id");
@@ -46,7 +108,7 @@ export const upsertProject = mutation({
     const now = Date.now();
     const existing = await ctx.db
       .query("projects")
-      .withIndex("by_wix_user_project", (q) =>
+      .withIndex("by_wix_user_project", (q: any) =>
         q.eq("wixUserId", wixUserId).eq("projectId", projectId),
       )
       .unique();
@@ -69,18 +131,15 @@ export const upsertProject = mutation({
   },
 });
 
-export const deleteProject = mutation({
+export const deleteProject = authedMutation({
   args: {
-    sessionToken: v.string(),
     projectId: v.string(),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const wixUserId = await requireAuth(ctx, args.sessionToken);
-
+  handler: async (ctx, wixUserId, args) => {
     const existing = await ctx.db
       .query("projects")
-      .withIndex("by_wix_user_project", (q) =>
+      .withIndex("by_wix_user_project", (q: any) =>
         q.eq("wixUserId", wixUserId).eq("projectId", args.projectId),
       )
       .unique();
@@ -93,30 +152,25 @@ export const deleteProject = mutation({
   },
 });
 
-export const getChangedProjectIds = query({
+export const getChangedProjectIds = authedQuery({
   args: {
-    sessionToken: v.string(),
     since: v.number(),
   },
   returns: v.array(v.string()),
-  handler: async (ctx, args) => {
-    const wixUserId = await requireAuth(ctx, args.sessionToken);
-
+  handler: async (ctx, wixUserId, args) => {
     const docs = await ctx.db
       .query("projects")
-      .withIndex("by_wix_user_updated", (q) =>
+      .withIndex("by_wix_user_updated", (q: any) =>
         q.eq("wixUserId", wixUserId).gt("updatedAt", args.since),
       )
       .collect();
 
-    return docs.map((doc) => doc.projectId);
+    return docs.map((doc: any) => doc.projectId);
   },
 });
 
-export const getProjectMetaByWixUserId = query({
-  args: {
-    sessionToken: v.string(),
-  },
+export const getProjectMetaByWixUserId = authedQuery({
+  args: {},
   returns: v.array(
     v.object({
       projectId: v.string(),
@@ -124,15 +178,13 @@ export const getProjectMetaByWixUserId = query({
       updatedAt: v.number(),
     }),
   ),
-  handler: async (ctx, args) => {
-    const wixUserId = await requireAuth(ctx, args.sessionToken);
-
+  handler: async (ctx, wixUserId) => {
     const docs = await ctx.db
       .query("projects")
-      .withIndex("by_wix_user", (q) => q.eq("wixUserId", wixUserId))
+      .withIndex("by_wix_user", (q: any) => q.eq("wixUserId", wixUserId))
       .collect();
 
-    return docs.map((doc) => {
+    return docs.map((doc: any) => {
       const d: any = doc.data || {};
       return {
         projectId: doc.projectId,
@@ -157,9 +209,8 @@ export const getProjectMetaByWixUserId = query({
   },
 });
 
-export const getProjectById = query({
+export const getProjectById = authedQuery({
   args: {
-    sessionToken: v.string(),
     projectId: v.string(),
   },
   returns: v.union(
@@ -170,12 +221,10 @@ export const getProjectById = query({
       updatedAt: v.number(),
     }),
   ),
-  handler: async (ctx, args) => {
-    const wixUserId = await requireAuth(ctx, args.sessionToken);
-
+  handler: async (ctx, wixUserId, args) => {
     const doc = await ctx.db
       .query("projects")
-      .withIndex("by_wix_user_project", (q) =>
+      .withIndex("by_wix_user_project", (q: any) =>
         q.eq("wixUserId", wixUserId).eq("projectId", args.projectId),
       )
       .unique();
@@ -191,9 +240,8 @@ export const getProjectById = query({
 
 // ─── Project extras (companion documents for large projects) ─────────────────
 
-export const getProjectExtras = query({
+export const getProjectExtras = authedQuery({
   args: {
-    sessionToken: v.string(),
     projectId: v.string(),
   },
   returns: v.union(
@@ -205,11 +253,10 @@ export const getProjectExtras = query({
       layouts: v.optional(v.any()),
     }),
   ),
-  handler: async (ctx, args) => {
-    const wixUserId = await requireAuth(ctx, args.sessionToken);
+  handler: async (ctx, wixUserId, args) => {
     const doc = await ctx.db
       .query("project_extras")
-      .withIndex("by_wix_user_project", (q) =>
+      .withIndex("by_wix_user_project", (q: any) =>
         q.eq("wixUserId", wixUserId).eq("projectId", args.projectId),
       )
       .unique();
@@ -223,9 +270,8 @@ export const getProjectExtras = query({
   },
 });
 
-export const upsertProjectExtras = mutation({
+export const upsertProjectExtras = authedMutation({
   args: {
-    sessionToken: v.string(),
     projectId: v.string(),
     extras: v.object({
       guests: v.any(),
@@ -235,11 +281,10 @@ export const upsertProjectExtras = mutation({
     }),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const wixUserId = await requireAuth(ctx, args.sessionToken);
+  handler: async (ctx, wixUserId, args) => {
     const existing = await ctx.db
       .query("project_extras")
-      .withIndex("by_wix_user_project", (q) =>
+      .withIndex("by_wix_user_project", (q: any) =>
         q.eq("wixUserId", wixUserId).eq("projectId", args.projectId),
       )
       .unique();

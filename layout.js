@@ -1,3 +1,27 @@
+// -- Layout dirty tracking --
+var _layoutDirty = false;
+function markLayoutDirty(){ _layoutDirty = true; }
+function clearLayoutDirty(){ _layoutDirty = false; }
+function isLayoutDirty(){ return _layoutDirty; }
+
+// -- Layout listener cleanup registry --
+var _layoutListeners = [];
+function _lListen(target, event, handler, opts){
+  target.addEventListener(event, handler, opts);
+  _layoutListeners.push({target:target, event:event, handler:handler, opts:opts});
+}
+function layoutCleanup(){
+  window.removeEventListener('mousemove', lCanvasMove);
+  window.removeEventListener('mouseup', lCanvasUp);
+  _layoutListeners.forEach(function(l){
+    try{ l.target.removeEventListener(l.event, l.handler, l.opts); }catch(e){}
+  });
+  _layoutListeners = [];
+  // Reset rAF throttle state to prevent stale flags blocking next layout session
+  if(typeof _lMoveRafPending !== 'undefined') _lMoveRafPending = false;
+  if(typeof _lMoveCachedRect !== 'undefined') _lMoveCachedRect = null;
+}
+
 // -- IndexedDB helpers for floorplan image --
 function _fpDB(){
   return new Promise(function(resolve,reject){
@@ -2390,6 +2414,7 @@ function lHistoryReset(){
 }
 function lHistorySave(){
   if(!LHistorySaving)return;
+  markLayoutDirty();
   var fp=LState.floorplan;
   var snapshot=JSON.stringify({
     items:LState.items,
@@ -2446,9 +2471,40 @@ function makeLayoutDuplicate(id,mode){
   window.LClipboard=[JSON.parse(JSON.stringify(src))];
   lPaste(mode==='instance'?'instance':'copy');
 }
+function showLayoutShortcuts(){
+  var isES=LANG==='es';
+  var rows=[
+    ['Ctrl+Z','Cmd+Z',isES?'Deshacer':'Undo'],
+    ['Ctrl+Y','Cmd+Shift+Z',isES?'Rehacer':'Redo'],
+    ['Ctrl+A','Cmd+A',isES?'Seleccionar todo':'Select all'],
+    ['Ctrl+C','Cmd+C',isES?'Copiar':'Copy'],
+    ['Ctrl+V','Cmd+V',isES?'Pegar':'Paste'],
+    ['Ctrl+D','Cmd+D',isES?'Duplicar':'Duplicate'],
+    ['Delete','Backspace',isES?'Eliminar selección':'Delete selected'],
+    ['Space',isES?'(mantener)':'(hold)',isES?'Mover lienzo':'Pan canvas'],
+    ['Escape','',isES?'Cancelar / Deseleccionar':'Cancel / Deselect'],
+    ['Shift',isES?'(al medir)':'(measure)',isES?'Restringir ángulo':'Constrain angle'],
+  ];
+  var html='<div class="mo-title">'+(isES?'Atajos de teclado':'Keyboard Shortcuts')+'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:6px 12px;font-size:13px;padding:8px 0">'
+    +rows.map(function(r){
+      return '<div><kbd style="background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:2px 7px;font-size:11px;font-family:monospace">'+r[0]+'</kbd></div>'
+        +'<div style="color:var(--muted);font-size:11px">'+r[1]+'</div>'
+        +'<div>'+r[2]+'</div>';
+    }).join('')
+    +'</div>'
+    +'<div class="mo-foot"><button class="btn btn-ghost" onclick="closeMo()">'+(isES?'Cerrar':'Close')+'</button></div>';
+  openMo(html);
+}
+
 document.addEventListener('keydown',e=>{
   if(e.target.matches('input,textarea,select'))return;
   var moOpen=document.getElementById('mo')&&document.getElementById('mo').classList.contains('open');
+
+  // Show keyboard shortcuts help on ? key
+  if(e.key==='?'&&!moOpen&&typeof CTAB!=='undefined'&&CTAB==='layout'){
+    showLayoutShortcuts(); return;
+  }
 
   if(e.code==='Space'&&!moOpen){
     _spaceDown=true;
@@ -2661,7 +2717,23 @@ function lCanvasLeave(e){
   if(cv&&cv.style.pointerEvents==='none') cv.style.pointerEvents='';
 }
 
+var _lMoveRafPending = false;
+var _lMoveCachedRect = null;
 function lCanvasMove(e){
+  // Throttle via requestAnimationFrame — skip if a frame is already queued
+  if(_lMoveRafPending){ e.preventDefault(); return; }
+  _lMoveRafPending = true;
+  _lMoveCachedRect = null; // invalidate per-frame cache
+  requestAnimationFrame(function(){ _lMoveRafPending = false; _lCanvasMoveInner(e); });
+}
+function _lGetCanvasRect(){
+  if(!_lMoveCachedRect){
+    var el = document.getElementById('lcanvas');
+    if(el) _lMoveCachedRect = el.getBoundingClientRect();
+  }
+  return _lMoveCachedRect;
+}
+function _lCanvasMoveInner(e){
   if(_panning){
     const outer=document.getElementById('lcanvas-outer');
     outer.scrollLeft=_panOrigin.x-(e.clientX-_panStart.x);
@@ -2669,8 +2741,8 @@ function lCanvasMove(e){
     return;
   }
   if(_fpDragging){
-    const canvasEl=document.getElementById('lcanvas');
-    const cr=canvasEl.getBoundingClientRect();
+    const cr=_lGetCanvasRect();
+    if(!cr) return;
     const cx=(e.clientX-cr.left)/LState.zoom;
     const cy=(e.clientY-cr.top)/LState.zoom;
     LState.floorplan.x=Math.round(cx-_fpDragOffX);
@@ -2680,18 +2752,19 @@ function lCanvasMove(e){
     return;
   }
   if(LState.measureMode&&_measurePoints.length===1){
-    const canvasEl=document.getElementById('lcanvas');
-    const cr=canvasEl.getBoundingClientRect();
-    _measurePreviewMouse={
-      x:(e.clientX-cr.left)/LState.zoom,
-      y:(e.clientY-cr.top)/LState.zoom
-    };
-    updateMeasurePreview(_measurePreviewMouse,e.shiftKey);
+    const cr=_lGetCanvasRect();
+    if(cr){
+      _measurePreviewMouse={
+        x:(e.clientX-cr.left)/LState.zoom,
+        y:(e.clientY-cr.top)/LState.zoom
+      };
+      updateMeasurePreview(_measurePreviewMouse,e.shiftKey);
+    }
   }
 
   if(_marquee){
-    const canvas=document.getElementById('lcanvas');
-    const cr=canvas.getBoundingClientRect();
+    const cr=_lGetCanvasRect();
+    if(!cr) return;
     const cx=(e.clientX-cr.left)/LState.zoom;
     const cy=(e.clientY-cr.top)/LState.zoom;
     const rx=Math.min(cx,_marqueeStart.x);
@@ -2722,8 +2795,8 @@ function lCanvasMove(e){
   }
 
   if(_lDragItem===null)return;
-  const canvas=document.getElementById('lcanvas');
-  const cr=canvas.getBoundingClientRect();
+  const cr=_lGetCanvasRect();
+  if(!cr) return;
   const snap=n=>LState.useSnap?Math.round(n/LState.snapGrid)*LState.snapGrid:Math.round(n);
   let anchorX=snap((e.clientX-cr.left)/LState.zoom-_lDragOffX);
   let anchorY=snap((e.clientY-cr.top)/LState.zoom-_lDragOffY);
@@ -2754,11 +2827,17 @@ function lCanvasMove(e){
     if(it){it.x+=ddx;it.y+=ddy;}
   });
 
-  document.querySelectorAll('.litem').forEach(el=>{
-    const id=el.getAttribute('data-id');
-    const it=LState.items.find(i=>i.id===id);
-    if(it){el.style.left=it.x+'px';el.style.top=it.y+'px';}
-  });
+  // Only update DOM for items that actually moved (selected items)
+  var movedIds = [_lDragItem].concat(LState.sel);
+  for(var mi=0; mi<movedIds.length; mi++){
+    var mid = movedIds[mi];
+    if(!mid) continue;
+    var mel = document.querySelector('.litem[data-id="'+mid+'"]');
+    if(mel){
+      var mit = LState.items.find(function(i){return i.id===mid;});
+      if(mit){mel.style.left=mit.x+'px';mel.style.top=mit.y+'px';}
+    }
+  }
 }
 function lCanvasUp(e){
   var cv=document.getElementById('lcanvas');
@@ -2828,15 +2907,22 @@ function delLItem(id){
 }
 function delSelected(){
   if(!LState.sel.length)return;
-  if(LState.sel.length>1&&!confirm('Delete '+LState.sel.length+' selected items?'))return;
-  LState.items=LState.items.filter(i=>!LState.sel.includes(i.id));LState.sel=[];
-  const p=proj();p.layoutItems=LState.items;saveProj(p);renderLayout();
-  lHistorySave();toast('Deleted','s');
+  var count=LState.sel.length;
+  function doDelete(){
+    LState.items=LState.items.filter(i=>!LState.sel.includes(i.id));LState.sel=[];
+    const p=proj();p.layoutItems=LState.items;saveProj(p);renderLayout();
+    lHistorySave();toast(LANG==='es'?'Eliminado':'Deleted','s');
+  }
+  if(count>1){
+    openConfirmModal({ title:LANG==='es'?'Eliminar elementos':'Delete items', message:(LANG==='es'?'¿Eliminar ':'Delete ')+count+(LANG==='es'?' elementos seleccionados?':' selected items?'), onConfirm:doDelete });
+  } else { doDelete(); }
 }
 function clearLayoutConfirm(){
-  if(!confirm('Clear all layout items?'))return;
-  LState.items=[];LState.sel=[];
-  const p=proj();p.layoutItems=[];saveProj(p);renderLayout();
+  openConfirmModal({
+    title:LANG==='es'?'Limpiar diseño':'Clear layout',
+    message:LANG==='es'?'¿Eliminar todos los elementos del diseño?':'Clear all layout items?',
+    onConfirm:function(){ LState.items=[];LState.sel=[];const p=proj();p.layoutItems=[];saveProj(p);renderLayout(); }
+  });
 }
 
 function openChairEditor(){
@@ -2885,13 +2971,17 @@ function openChairEditor(){
 function deleteChairType(key){
   if(key==='default') return;
   var isES=LANG==='es';
-  if(!confirm(isES?'¿Eliminar esta silla? Las mesas que la usan pasarán a la silla predeterminada.':'Delete this chair? Tables using it will revert to the default chair.')) return;
-  delete CHAIR_TYPES[key];
-  var p=proj();
-  if(p){ (p.layoutItems||[]).forEach(function(it){ if(it.chairType===key) it.chairType='default'; }); }
-  saveLayoutStyles();
-  if(p) saveProj(p);
-  closeMo(); openChairEditor(); renderLayout();
+  openConfirmModal({
+    title:isES?'Eliminar silla':'Delete chair',
+    message:isES?'Las mesas que la usan pasarán a la silla predeterminada.':'Tables using it will revert to the default chair.',
+    onConfirm:function(){
+      delete CHAIR_TYPES[key];
+      var p=proj();
+      if(p){ (p.layoutItems||[]).forEach(function(it){ if(it.chairType===key) it.chairType='default'; }); }
+      saveLayoutStyles(); if(p) saveProj(p);
+      closeMo(); openChairEditor(); renderLayout();
+    }
+  });
 }
 
 function addNewChairType(){
@@ -2965,13 +3055,17 @@ function openCenterpieceEditor(){
 function deleteCenterpieceType(key){
   if(key==='none') return;
   var isES=LANG==='es';
-  if(!confirm(isES?'¿Eliminar este centro de mesa? Las mesas que lo usan quedarán sin centro.':'Delete this centerpiece? Tables using it will revert to none.')) return;
-  delete CENTERPIECE_TYPES[key];
-  var p=proj();
-  if(p){ (p.layoutItems||[]).forEach(function(it){ if(it.centerpiece===key) it.centerpiece='none'; }); }
-  saveLayoutStyles();
-  if(p) saveProj(p);
-  closeMo(); openCenterpieceEditor(); renderLayout();
+  openConfirmModal({
+    title:isES?'Eliminar centro de mesa':'Delete centerpiece',
+    message:isES?'Las mesas que lo usan quedarán sin centro.':'Tables using it will revert to none.',
+    onConfirm:function(){
+      delete CENTERPIECE_TYPES[key];
+      var p=proj();
+      if(p){ (p.layoutItems||[]).forEach(function(it){ if(it.centerpiece===key) it.centerpiece='none'; }); }
+      saveLayoutStyles(); if(p) saveProj(p);
+      closeMo(); openCenterpieceEditor(); renderLayout();
+    }
+  });
 }
 
 function addNewCenterpieceType(){
@@ -3527,16 +3621,21 @@ function handleFloorplanDrop(e){
 }
 
 function removeFloorplan(){
-  if(!confirm(LANG==='es'?'¿Quitar el plano?':'Remove the floorplan image?'))return;
-  var idbKey=LState.floorplan._idb;
-  var storageId=LState.floorplan._storageId;
-  LState.floorplan={img:null,opacity:0.4,scale:1,x:0,y:0,w:0,h:0};
-  LState.scaleMode=false;LState.scalePoints=[];
-  var p=proj();delete p.floorplan;saveProj(p);
-  if(idbKey) _fpDelete(idbKey).catch(function(){});
-  if(storageId) EVENTOS_DATA.deleteFile(storageId).catch(function(){});
-  renderLayout();
-  toast(LANG==='es'?'Plano eliminado':'Floorplan removed','s');
+  openConfirmModal({
+    title:LANG==='es'?'Quitar plano':'Remove floorplan',
+    message:LANG==='es'?'¿Quitar la imagen del plano?':'Remove the floorplan image?',
+    onConfirm:function(){
+      var idbKey=LState.floorplan._idb;
+      var storageId=LState.floorplan._storageId;
+      LState.floorplan={img:null,opacity:0.4,scale:1,x:0,y:0,w:0,h:0};
+      LState.scaleMode=false;LState.scalePoints=[];
+      var p=proj();delete p.floorplan;saveProj(p);
+      if(idbKey) _fpDelete(idbKey).catch(function(){});
+      if(storageId) EVENTOS_DATA.deleteFile(storageId).catch(function(){});
+      renderLayout();
+      toast(LANG==='es'?'Plano eliminado':'Floorplan removed','s');
+    }
+  });
 }
 
 function saveFloorplan(){
@@ -4345,6 +4444,10 @@ function openStylesEditor(){
 
 
 function exportLayoutFull(layoutName){
+  if(typeof showLoading === 'function') showLoading(t('exporting'));
+  try{ _exportLayoutFullInner(layoutName); }finally{ if(typeof hideLoading === 'function') setTimeout(hideLoading, 500); }
+}
+function _exportLayoutFullInner(layoutName){
   const p=proj();
   const items=LState.items || [];
   const extras=ensureLayoutQuoteState(p);

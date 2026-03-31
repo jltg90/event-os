@@ -18,9 +18,11 @@ function statusLabel(s){ return s ? t('status_'+(_STATUS_KEY[s]||s.replace(/-/g,
 var _evSearch = '';
 var _evSelected = {};
 var _evVisibleIds = [];
+var _evSearchTimer = null;
 function filterEvents(query){
-  _evSearch = query;
-  renderEvents();
+  _evSearch = typeof query === 'string' && query.length > 200 ? query.substring(0, 200) : (query || '');
+  clearTimeout(_evSearchTimer);
+  _evSearchTimer = setTimeout(renderEvents, 250);
 }
 
 var _WIZ_TYPES = [
@@ -78,7 +80,7 @@ function _openEditModal(id, p) {
       </div>
     </div>
     <div class="ig"><label>${t('location')}</label><input class="input" id="e-location" value="${esc(p?.location||'')}"></div>
-    <div class="ig"><label>${t('total_budget')} ($)</label><input class="input" id="e-budget" type="number" value="${p?.budget||''}"></div>
+    <div class="ig"><label>${t('total_budget')} ($)</label><input class="input" id="e-budget" type="number" min="0" value="${p?.budget||''}"></div>
     <div class="ig"><label>${t('status')}</label><select class="select" id="e-status"><option value="to-be-confirmed"${p?.status==='to-be-confirmed'?' selected':''}>${t('status_planning')}</option><option value="confirmed"${p?.status==='confirmed'?' selected':''}>${t('status_confirmed')}</option><option value="in-progress"${p?.status==='in-progress'?' selected':''}>${t('status_in_progress')}</option><option value="completed"${p?.status==='completed'?' selected':''}>${t('status_completed')}</option><option value="cancelled"${p?.status==='cancelled'?' selected':''}>${t('status_cancelled')}</option></select></div>
   </div>
   <div class="mo-foot">
@@ -292,6 +294,7 @@ function _wizNext() {
     if (!(_wiz.clientName||'').trim()) { toast(isES?'El cliente es requerido':'Client name is required','e'); return; }
   }
   if (s === 2 && !_wiz.date) { toast(isES?'La fecha es requerida':'Event date is required','e'); return; }
+  if (s === 2 && _wiz.budget && +_wiz.budget < 0) { toast(isES?'El presupuesto no puede ser negativo':'Budget cannot be negative','e'); return; }
   if (s === 2) { _wizFinish(); return; }
   _wiz.step++;
   _renderWizard();
@@ -330,6 +333,7 @@ function _wizFinish() {
 async function saveEvent(id){
   const name=gv('e-name'),client=gv('e-client'),date=parseUserDate(gv('e-date'));
   if(!name||!client||!date)return toast('Name, client and date required','e');
+  if(+gv('e-budget') < 0) return toast(LANG==='es'?'El presupuesto no puede ser negativo':'Budget cannot be negative','e');
   var p=id?uproj()[id]:null;
   const data={name,clientName:client,date,description:gv('e-desc'),type:gv('e-type'),location:gv('e-location'),budget:+gv('e-budget')||0,status:gv('e-status')};
   if(p){
@@ -462,13 +466,13 @@ function renderEvents(){
         <div class="evc-body">
           <div class="ev-list-main ev-list-cell">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
-              <div style="font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px">${p.name}</div>
-              <span class="badge ${tc[p.type]||'b-gray'}">${tl[p.type]||p.type}</span>
+              <div style="font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px">${esc(p.name)}</div>
+              <span class="badge ${tc[p.type]||'b-gray'}">${tl[p.type]||esc(p.type)}</span>
             </div>
-            <div class="s-sm ev-hover-detail ev-list-client">${p.clientName}</div>
+            <div class="s-sm ev-hover-detail ev-list-client">${esc(p.clientName)}</div>
           </div>
           <div class="ev-list-cell ev-list-date" style="font-size:12px;white-space:nowrap">${fmtDate(p.date)}</div>
-          <div class="ev-list-cell ev-list-location" style="font-size:12px;white-space:nowrap">${p.location||'—'}</div>
+          <div class="ev-list-cell ev-list-location" style="font-size:12px;white-space:nowrap">${esc(p.location||'—')}</div>
           <div class="ev-list-cell ev-hover-detail ev-list-budget" style="font-size:12px;white-space:nowrap">${fmtMoney(p.budget)}</div>
           <div class="ev-list-cell ev-list-status" style="font-size:12px;white-space:nowrap">${statusLabel(p.status)}</div>
           <div class="ev-list-actions" onclick="event.stopPropagation()">
@@ -494,14 +498,14 @@ function renderEvents(){
         <div class="evc-body">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:14px">
             <div style="min-width:0;flex:1">
-              <div style="font-size:17px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name}</div>
-              <div style="font-size:12px;color:var(--muted);margin-top:2px">${p.description||''}</div>
+              <div style="font-size:17px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(p.description||'')}</div>
             </div>
-            <span class="badge ${tc[p.type]||'b-gray'}">${tl[p.type]||p.type}</span>
+            <span class="badge ${tc[p.type]||'b-gray'}">${tl[p.type]||esc(p.type)}</span>
           </div>
-          <div class="ev-hover-detail ev-grid-client" style="font-size:12px;color:var(--muted);margin-bottom:14px">${t('client')}: <span style="color:var(--text);font-weight:500">${p.clientName}</span></div>
+          <div class="ev-hover-detail ev-grid-client" style="font-size:12px;color:var(--muted);margin-bottom:14px">${t('client')}: <span style="color:var(--text);font-weight:500">${esc(p.clientName)}</span></div>
           ${evcRow('#f7f0de','#a8862e','<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',t('event_date'),fmtDate(p.date))}
-          ${evcRow('#f0fdf4','#10b981','<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7Z"/><circle cx="12" cy="9" r="2.5"/>',t('location'),p.location||'TBD')}
+          ${evcRow('#f0fdf4','#10b981','<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7Z"/><circle cx="12" cy="9" r="2.5"/>',t('location'),esc(p.location||'TBD'))}
           ${evcRow('#fdf4e0','#b8861a','<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',t('total_budget'),fmtMoney(p.budget),'ev-hover-detail ev-grid-budget')}
         </div>
         <div class="evc-foot">
@@ -672,13 +676,15 @@ function bulkDeleteEvents(){
   var ids=getEvSelectedIds();
   if(!ids.length) return;
   var isES=LANG==='es';
-  if(!confirm(isES?('¿Eliminar '+ids.length+' eventos seleccionados? Esta acción no se puede deshacer.'):('Delete '+ids.length+' selected events? This cannot be undone.'))) return;
-  ids.forEach(function(id){
-    delProj(id);
-    delete _evSelected[id];
+  openConfirmModal({
+    title: isES?'Eliminar eventos':'Delete events',
+    message: isES?('¿Eliminar '+ids.length+' eventos seleccionados? Esta acción no se puede deshacer.'):('Delete '+ids.length+' selected events? This cannot be undone.'),
+    onConfirm: function(){
+      ids.forEach(function(id){ delProj(id); delete _evSelected[id]; });
+      renderEvents();
+      toast(isES?(ids.length+' eventos eliminados'):(ids.length+' events deleted'),'s');
+    }
   });
-  renderEvents();
-  toast(isES?(ids.length+' eventos eliminados'):(ids.length+' events deleted'),'s');
 }
 window.bulkDeleteEvents = bulkDeleteEvents;
 
@@ -700,17 +706,44 @@ function renderEventsEmptyState(){
   const isES = LANG === 'es';
   return `<section class="ev-empty fade-in">
     <div class="ev-empty-shell">
-      <div class="ev-empty-aurora" aria-hidden="true"></div>
       <div class="ev-empty-grid">
         <div class="ev-empty-copy">
-          <div class="ev-empty-badge">${isES ? 'Primer evento' : 'First event'}</div>
-          <h2 class="ev-empty-title">${isES ? 'Crea tu primer evento con una escena digna del gran dia.' : 'Create your first event with a launch scene worthy of the big day.'}</h2>
-          <p class="ev-empty-subtitle">${isES ? 'Empieza con el nombre, la fecha y los detalles clave. EventOS se encarga del resto para que puedas planear con claridad desde el minuto uno.' : 'Start with the name, date, and key details. EventOS takes care of the rest so your planning begins with clarity from minute one.'}</p>
+          <h2 class="ev-empty-title">${isES ? 'Donde cada <em>detalle</em> importa' : 'Where every <em>detail</em> matters'}</h2>
+          <p class="ev-empty-subtitle">${isES
+            ? 'Presupuesto, invitados, cronograma y diseño del espacio, todo en un solo lugar.'
+            : 'Budget, guests, timeline, and venue design \u2014 all in one place.'}</p>
           <div class="ev-empty-actions">
-            <button class="btn btn-primary btn-create-gradient ev-empty-cta" onclick="openEventModal()">
-              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-              ${isES ? 'Crear mi primer evento' : 'Create my first event'}
+            <button class="ev-empty-cta" onclick="openEventModal()">
+              <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+              ${isES ? 'Crear evento' : 'Create Event'}
             </button>
+          </div>
+        </div>
+        <div class="ev-empty-bento">
+          <div class="ev-empty-bento-card --cool">
+            <div class="ev-empty-bento-icon">
+              <svg width="18" height="18" fill="none" stroke="#fff" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            </div>
+            <div class="ev-empty-bento-stat">6</div>
+            <div class="ev-empty-bento-label">${isES ? 'Herramientas integradas' : 'Built-in tools'}</div>
+          </div>
+          <div class="ev-empty-bento-card --sand">
+            <div class="ev-empty-bento-icon">
+              <svg width="18" height="18" fill="none" stroke="#fff" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <div class="ev-empty-bento-stat">100%</div>
+            <div class="ev-empty-bento-label">${isES ? 'Control total de tu evento' : 'Full control of your event'}</div>
+          </div>
+          <div class="ev-empty-bento-card --white --wide">
+            <div class="ev-empty-bento-label" style="margin-bottom:10px;font-weight:600;color:#DFD7C9">${isES ? 'Todo lo que necesitas' : 'Everything you need'}</div>
+            <div class="ev-empty-bento-features">
+              <span class="ev-empty-bento-chip">${isES ? 'Presupuesto' : 'Budget'}</span>
+              <span class="ev-empty-bento-chip">${isES ? 'Cronograma' : 'Timeline'}</span>
+              <span class="ev-empty-bento-chip">${isES ? 'Invitados' : 'Guests'}</span>
+              <span class="ev-empty-bento-chip">${isES ? 'Diseño' : 'Layout'}</span>
+              <span class="ev-empty-bento-chip">Moodboard</span>
+              <span class="ev-empty-bento-chip">${isES ? 'Exportar PDF' : 'PDF Export'}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -743,8 +776,11 @@ async function dupProj(id){
 
 function confirmDelProj(id){
   const p=uproj()[id];
-  if(!confirm(`Delete "${p.name}"? This cannot be undone.`))return;
-  delProj(id);renderEvents();toast('Event deleted');
+  openConfirmModal({
+    title: LANG==='es'?'Eliminar evento':'Delete event',
+    message: (LANG==='es'?'¿Eliminar "':'Delete "')+esc(p.name)+'"?',
+    onConfirm: function(){ delProj(id);renderEvents();toast(LANG==='es'?'Evento eliminado':'Event deleted'); }
+  });
 }
 
 function _dashDonut(data, colorFn, size){
@@ -770,10 +806,11 @@ function _dashRing(pct, color, size){
     +'</svg>';
 }
 function _dashKPI(label, value, sub, color, tooltip){
-  return '<div class="card" style="padding:14px 10px;text-align:center'+(tooltip?';cursor:default':'')+'"'+(tooltip?' title="'+tooltip+'"':'')+'>'+
-    '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--light);font-weight:600;margin-bottom:6px">'+label+'</div>'+
-    '<div style="font-size:22px;font-weight:700;color:'+color+';font-family:\'Cormorant Garamond\',serif;line-height:1.1">'+value+'</div>'+
-    '<div style="font-size:10px;color:var(--muted);margin-top:3px">'+sub+'</div>'+
+  var clr = color || '#242424';
+  return '<div class="card" style="padding:16px 12px;text-align:center'+(tooltip?';cursor:default':'')+'"'+(tooltip?' title="'+tooltip+'"':'')+'>'+
+    '<div style="font-family:\'DM Sans\',sans-serif;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#787470;font-weight:600;margin-bottom:8px">'+label+'</div>'+
+    '<div style="font-size:18px;font-weight:600;color:'+clr+';font-family:\'DM Sans\',sans-serif;line-height:1.2">'+value+'</div>'+
+    '<div style="font-family:\'DM Sans\',sans-serif;font-size:10px;color:#787470;margin-top:4px">'+sub+'</div>'+
     '</div>';
 }
 function dismissOnboarding(pid){
@@ -795,30 +832,30 @@ function _dashOnboarding(p,hired,done,litems){
   var pct=Math.round(complete/steps.length*100);
   var stepsHtml=steps.map(function(s){
     if(s.ok){
-      return '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25)">'
-        +'<div style="width:20px;height:20px;border-radius:50%;background:#10b981;display:flex;align-items:center;justify-content:center;flex-shrink:0">'
-          +'<svg width="10" height="10" fill="none" stroke="#fff" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>'
+      return '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;background:#F2EFE9;border:1px solid rgba(36,36,36,.06)">'
+        +'<div style="width:20px;height:20px;border-radius:50%;background:#242424;display:flex;align-items:center;justify-content:center;flex-shrink:0">'
+          +'<svg width="10" height="10" fill="none" stroke="#F2EFE9" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>'
         +'</div>'
-        +'<span style="font-size:12px;font-weight:600;color:#10b981">'+t(s.key)+'</span>'
+        +'<span style="font-family:\'DM Sans\',sans-serif;font-size:12px;font-weight:500;color:#242424">'+t(s.key)+'</span>'
       +'</div>';
     }
-    return '<button onclick="'+s.action+'" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;background:var(--bg);border:1px solid var(--border);cursor:pointer;text-align:left;width:100%;transition:border-color .15s" onmouseover="this.style.borderColor=\'var(--gold-h)\'" onmouseout="this.style.borderColor=\'var(--border)\'">'
-      +'<div style="width:20px;height:20px;border-radius:50%;border:2px solid var(--border);flex-shrink:0"></div>'
+    return '<button onclick="'+s.action+'" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;background:#fff;border:1px solid rgba(36,36,36,.08);cursor:pointer;text-align:left;width:100%;transition:all .15s ease;font-family:\'DM Sans\',sans-serif" onmouseover="this.style.borderColor=\'#242424\'" onmouseout="this.style.borderColor=\'rgba(36,36,36,.08)\'">'
+      +'<div style="width:20px;height:20px;border-radius:50%;border:1.5px solid #DFD7C9;flex-shrink:0"></div>'
       +'<div style="min-width:0">'
-        +'<div style="font-size:12px;font-weight:600;color:var(--text)">'+t(s.key)+'</div>'
-        +(s.hint?'<div style="font-size:10px;color:var(--muted)">'+esc(s.hint)+' →</div>':'')
+        +'<div style="font-size:12px;font-weight:500;color:#242424">'+t(s.key)+'</div>'
+        +(s.hint?'<div style="font-size:10px;color:#787470;margin-top:1px">'+esc(s.hint)+' &rarr;</div>':'')
       +'</div>'
     +'</button>';
   }).join('');
-  return '<div class="card" style="padding:18px 20px;margin-bottom:20px;background:var(--bg2)">'
-    +'<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">'
+  return '<div class="card" style="padding:20px 22px;margin-bottom:20px;background:#fff;border:1px solid rgba(36,36,36,.08)">'
+    +'<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">'
       +'<div>'
-        +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--light)">'+t('onb_title')+'</div>'
-        +'<div style="font-size:11px;color:var(--muted);margin-top:3px">'+complete+' / '+steps.length+' '+t('onb_steps_done')+'</div>'
+        +'<div style="font-family:\'DM Sans\',sans-serif;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#787470">'+t('onb_title')+'</div>'
+        +'<div style="font-family:\'DM Sans\',sans-serif;font-size:11px;color:#787470;margin-top:3px">'+complete+' / '+steps.length+' '+t('onb_steps_done')+'</div>'
       +'</div>'
-      +'<button class="btn btn-ghost" style="padding:2px 8px;font-size:12px;line-height:1.8;color:var(--muted)" onclick="dismissOnboarding(\''+esc(pid)+'\')" title="'+t('onb_dismiss')+'">✕</button>'
+      +'<button class="btn btn-ghost" style="padding:2px 8px;font-size:12px;line-height:1.8;color:#787470" onclick="dismissOnboarding(\''+esc(pid)+'\')" title="'+t('onb_dismiss')+'">&#10005;</button>'
     +'</div>'
-    +'<div class="prog" style="margin-bottom:14px;background:var(--border)"><div class="prog-f" style="width:'+pct+'%;background:var(--gold-h);transition:width .4s"></div></div>'
+    +'<div class="prog" style="margin-bottom:14px;background:#F2EFE9"><div class="prog-f" style="width:'+pct+'%;background:#242424;transition:width .4s"></div></div>'
     +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:8px">'
       +stepsHtml
     +'</div>'
@@ -893,8 +930,8 @@ function renderDash(){
   // HEADER
   +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">'
     +'<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">'
-      +'<div style="font-family:\'Cormorant Garamond\',serif;font-size:28px;font-weight:700;color:var(--gold-h)">'+esc(p.name)+'</div>'
-      +(p.clientName?'<span style="font-size:13px;color:var(--muted)">· '+esc(p.clientName)+'</span>':'')
+      +'<div style="font-family:\'DM Sans\',sans-serif;font-size:22px;font-weight:600;color:#242424">'+esc(p.name)+'</div>'
+      +(p.clientName?'<span style="font-family:\'DM Sans\',sans-serif;font-size:13px;color:#787470">· '+esc(p.clientName)+'</span>':'')
       +'<span class="badge b-blue">'+fmtDateShort(p.date)+'</span>'
       +'<span class="badge '+dlBadge+'">'+dlText+'</span>'
     +'</div>'
@@ -904,14 +941,14 @@ function renderDash(){
   +'</div>'
   // KPI ROW
   +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:20px">'
-    +_dashKPI(t('dash_total_budget'), tb>0?formatCost(tb):'—', t('dash_event_budget'), 'var(--gold-h)')
-    +(totalWithPlusOnes>0&&tb>0?_dashKPI(LANG==='es'?'Presupuesto p/Inv.':'Budget / Guest', formatCost(budgetPerGuest), totalWithPlusOnes+' '+(LANG==='es'?'invitados':'guests'), 'var(--gold-h)', LANG==='es'?'Presupuesto ('+formatCost(tb)+') ÷ '+totalWithPlusOnes+' invitados (incl. acompañantes)':'Budget ('+formatCost(tb)+') ÷ '+totalWithPlusOnes+' guests (incl. plus-ones)'):'')
+    +_dashKPI(t('dash_total_budget'), tb>0?formatCost(tb):'—', t('dash_event_budget'), '#242424')
+    +(totalWithPlusOnes>0&&tb>0?_dashKPI(LANG==='es'?'Presupuesto p/Inv.':'Budget / Guest', formatCost(budgetPerGuest), totalWithPlusOnes+' '+(LANG==='es'?'invitados':'guests'), '#242424', LANG==='es'?'Presupuesto ('+formatCost(tb)+') ÷ '+totalWithPlusOnes+' invitados (incl. acompañantes)':'Budget ('+formatCost(tb)+') ÷ '+totalWithPlusOnes+' guests (incl. plus-ones)'):'')
     +_dashKPI(t('dash_paid'), formatCost(paid), tb>0?budgetPct+'% '+t('dash_of_budget'):'', '#ef4444')
     +_dashKPI(t('dash_remaining'), formatCost(remaining), tb>0?t('dash_left'):'', remaining>=0?'#10b981':'#ef4444')
-    +_dashKPI(t('dash_guests_total'), guestTotal+(plusOnes?'<span style="font-size:14px;color:var(--muted);font-weight:400"> +'+plusOnes+'</span>':''), confirmed+' '+t('dash_confirmed'), '#10b981')
-    +_dashKPI(t('dash_vendors_hired'), hired.length+'<span style="font-size:14px;color:var(--muted);font-weight:400">/'+p.vendors.length+'</span>', t('dash_hired'), '#f59e0b')
-    +_dashKPI(t('dash_tasks_progress'), done+'<span style="font-size:14px;color:var(--muted);font-weight:400">/'+p.tasks.length+'</span>', tpct+'% '+t('dash_complete'), '#7c3aed')
-    +_dashKPI(t('dash_tables'), tables||'0', chairs+' '+t('dash_chairs'), 'var(--navy)', LANG==='es'?'Total: '+guestTotal+' | Con mesa: '+guestsWithTable+' | Sin mesa: '+guestsWithoutTable:'Total: '+guestTotal+' | Assigned: '+guestsWithTable+' | Unassigned: '+guestsWithoutTable)
+    +_dashKPI(t('dash_guests_total'), guestTotal+(plusOnes?'<span style="font-family:\'DM Sans\',sans-serif;font-size:14px;color:#787470;font-weight:400"> +'+plusOnes+'</span>':''), confirmed+' '+t('dash_confirmed'), '#10b981')
+    +_dashKPI(t('dash_vendors_hired'), hired.length+'<span style="font-family:\'DM Sans\',sans-serif;font-size:14px;color:#787470;font-weight:400">/'+p.vendors.length+'</span>', t('dash_hired'), '#f59e0b')
+    +_dashKPI(t('dash_tasks_progress'), done+'<span style="font-family:\'DM Sans\',sans-serif;font-size:14px;color:#787470;font-weight:400">/'+p.tasks.length+'</span>', tpct+'% '+t('dash_complete'), '#7c3aed')
+    +_dashKPI(t('dash_tables'), tables||'0', chairs+' '+t('dash_chairs'), '#242424', LANG==='es'?'Total: '+guestTotal+' | Con mesa: '+guestsWithTable+' | Sin mesa: '+guestsWithoutTable:'Total: '+guestTotal+' | Assigned: '+guestsWithTable+' | Unassigned: '+guestsWithoutTable)
   +'</div>'
   // DETAIL GRID
   +'<div class="dash-grid">'

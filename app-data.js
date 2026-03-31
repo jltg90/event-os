@@ -95,6 +95,19 @@
     return new Blob([arr], { type: mime });
   }
 
+  // Validate project data shape before saving — catches corruption early
+  function validateProjectShape(p){
+    if(!p || typeof p !== 'object') return 'Project must be an object';
+    if(!p.id || typeof p.id !== 'string') return 'Project must have a string id';
+    if(p.name !== undefined && typeof p.name !== 'string') return 'name must be a string';
+    if(p.budget !== undefined && typeof p.budget !== 'number') return 'budget must be a number';
+    if(p.vendors !== undefined && !Array.isArray(p.vendors)) return 'vendors must be an array';
+    if(p.tasks !== undefined && !Array.isArray(p.tasks)) return 'tasks must be an array';
+    if(p.guests !== undefined && !Array.isArray(p.guests)) return 'guests must be an array';
+    if(p.layoutItems !== undefined && !Array.isArray(p.layoutItems)) return 'layoutItems must be an array';
+    return null; // valid
+  }
+
   // Strip resolved URLs / base64 from objects that have a storageId before saving to Convex.
   // The in-memory project keeps URLs for display; only the saved copy is cleaned.
   // Increment this when the project data shape changes and a migration is needed.
@@ -106,6 +119,8 @@
     copy._dataVersion = CURRENT_DATA_VERSION;
     // Transient in-memory flags — never persist to Convex
     delete copy._extrasLoaded;
+    delete copy._pendingSave;
+    delete copy._extrasPending;
     var mb = copy.moodboard;
     if(mb){
       var stripImg = function(img){
@@ -196,11 +211,19 @@
       return row.data;
     },
     upsertProject: async function(project, options){
+      var validationError = validateProjectShape(project);
+      if(validationError){
+        console.warn('EventOS: project validation failed:', validationError, project);
+        throw new Error('Invalid project data: ' + validationError);
+      }
       var cleaned = prepareProjectForSave(project);
 
-      // If the document exceeds 700 KB, automatically split large arrays into a
-      // companion project_extras document so the main record stays under Convex's 1 MB limit.
-      if(JSON.stringify(cleaned).length > 700000){
+      // If previous extras save failed, force retry regardless of size
+      var forceExtras = !!project._extrasPending;
+
+      // If the document exceeds 700 KB (or extras retry is pending), automatically split
+      // large arrays into a companion project_extras document.
+      if(forceExtras || JSON.stringify(cleaned).length > 700000){
         var extras = {
           guests: cleaned.guests || [],
           layoutItems: cleaned.layoutItems || [],
@@ -216,18 +239,38 @@
         cleaned.savedLayouts = [];
         cleaned._hasExtras = true;
 
-        // Save extras BEFORE the main document — both must succeed for data integrity
-        await callConvex("mutation", "projects:upsertProjectExtras", {
+        // Final guard: if the main record is still over 950 KB after splitting, reject with a
+        // sentinel error so the caller can show an appropriate message.
+        if(JSON.stringify(cleaned).length > 950000){
+          throw new Error("__oversize__");
+        }
+
+        // Save main document FIRST, then extras. If extras fails, log a warning
+        // but don't lose the main save. On next load the app will re-merge from
+        // the in-memory copy and retry the extras on the following save.
+        await callConvex("mutation", "projects:upsertProject", {
           sessionToken: _sessionToken,
-          projectId: String(cleaned.id || ""),
-          extras: extras
-        });
+          project: cleaned
+        }, options);
+
+        try {
+          await callConvex("mutation", "projects:upsertProjectExtras", {
+            sessionToken: _sessionToken,
+            projectId: String(cleaned.id || ""),
+            extras: extras
+          });
+          delete project._extrasPending; // Clear retry flag on success
+        } catch(extrasErr) {
+          console.warn("EventOS: extras save failed (main document saved OK)", extrasErr);
+          // Flag project so next save retries the extras
+          project._extrasPending = true;
+        }
+        return;
       } else {
         cleaned._hasExtras = false;
       }
 
-      // Final guard: if the main record is still over 950 KB after splitting, reject with a
-      // sentinel error so the caller can show an appropriate message.
+      // No extras needed — just save the main document
       if(JSON.stringify(cleaned).length > 950000){
         throw new Error("__oversize__");
       }
@@ -250,15 +293,31 @@
       }, options);
     },
     // --- File Storage API ---
+    MAX_UPLOAD_BYTES: 10 * 1024 * 1024, // 10 MB
+    ALLOWED_MIME_TYPES: [
+      'image/jpeg','image/png','image/gif','image/webp','image/svg+xml',
+      'application/pdf','application/octet-stream'
+    ],
+    _validateUpload: function(blob){
+      if(blob.size > this.MAX_UPLOAD_BYTES){
+        throw new Error("File too large (max " + Math.round(this.MAX_UPLOAD_BYTES/1024/1024) + " MB)");
+      }
+      var mime = (blob.type || 'application/octet-stream').toLowerCase();
+      if(this.ALLOWED_MIME_TYPES.length && this.ALLOWED_MIME_TYPES.indexOf(mime) === -1){
+        throw new Error("File type not allowed: " + mime);
+      }
+    },
     generateUploadUrl: async function(options){
       return await callConvex("mutation", "files:generateUploadUrl", {}, options);
     },
     uploadFile: async function(fileOrBlob, options){
+      this._validateUpload(fileOrBlob);
       var uploadUrl = await callConvex("mutation", "files:generateUploadUrl", {}, options);
       var res = await fetch(uploadUrl, {
         method: "POST",
         headers: { "Content-Type": fileOrBlob.type || "application/octet-stream" },
-        body: fileOrBlob
+        body: fileOrBlob,
+        signal: AbortSignal.timeout ? AbortSignal.timeout(30000) : undefined
       });
       if(!res.ok) throw new Error("File upload failed: HTTP " + res.status);
       var json = await res.json();
