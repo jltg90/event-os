@@ -2432,12 +2432,12 @@ tr:hover td { background: var(--bg2); }
 /* ═══ HAMBURGER MENU (mobile nav) ════════════════════════════════ */
 .mob-menu-btn {
   display: none;
-  background: rgba(255,252,247,.68);
+  background: #F2EFE9;
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 7px 10px;
   cursor: pointer;
-  color: var(--muted);
+  color: #242424;
   transition: var(--tr);
   box-shadow: var(--sh-xs), var(--sh-inset);
 }
