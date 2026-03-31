@@ -54,6 +54,11 @@
     }
 
     var fetchOptions = options || {};
+    // Use caller's signal or create a 15-second timeout
+    var signal = fetchOptions.signal;
+    if(!signal && typeof AbortSignal !== 'undefined' && AbortSignal.timeout){
+      signal = AbortSignal.timeout(15000);
+    }
     var res = await fetch(CONVEX_URL + "/api/" + kind, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -62,7 +67,7 @@
         args: args || {},
         format: "json"
       }),
-      signal: fetchOptions.signal
+      signal: signal
     });
     var payload = await res.json().catch(function(){ return null; });
     if(!res.ok){
@@ -77,7 +82,11 @@
   function normalizeProjectRows(rows){
     var projects = {};
     (rows || []).forEach(function(row){
-      if(row && row.projectId && row.data) projects[row.projectId] = row.data;
+      if(row && row.projectId && row.data){
+        // Stamp version for optimistic locking on save
+        row.data._expectedVersion = row.updatedAt;
+        projects[row.projectId] = row.data;
+      }
     });
     return projects;
   }
@@ -88,8 +97,9 @@
 
   function base64ToBlob(dataUrl){
     var parts = dataUrl.split(',');
-    var mime = parts[0].match(/:(.*?);/)[1];
-    var binary = atob(parts[1]);
+    var mimeMatch = parts[0].match(/:(.*?);/);
+    var mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+    var binary = atob(parts[1] || '');
     var arr = new Uint8Array(binary.length);
     for(var i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
     return new Blob([arr], { type: mime });
@@ -242,7 +252,7 @@
         // Final guard: if the main record is still over 950 KB after splitting, reject with a
         // sentinel error so the caller can show an appropriate message.
         if(JSON.stringify(cleaned).length > 950000){
-          throw new Error("__oversize__");
+          throw new Error("__oversize__: Project data too large. Please remove some content (images, guests, or layouts) and try again.");
         }
 
         // Save main document FIRST, then extras. If extras fails, log a warning
@@ -259,11 +269,14 @@
             projectId: String(cleaned.id || ""),
             extras: extras
           });
-          delete project._extrasPending; // Clear retry flag on success
+          delete project._extrasPending;
+          // Clear persisted retry flag on success
+          try{ localStorage.removeItem('eventos_extras_pending_'+String(cleaned.id||'')); }catch(e){}
         } catch(extrasErr) {
           console.warn("EventOS: extras save failed (main document saved OK)", extrasErr);
-          // Flag project so next save retries the extras
           project._extrasPending = true;
+          // Persist retry flag so it survives page reload
+          try{ localStorage.setItem('eventos_extras_pending_'+String(cleaned.id||''), '1'); }catch(e){}
         }
         return;
       } else {
@@ -296,7 +309,7 @@
     MAX_UPLOAD_BYTES: 10 * 1024 * 1024, // 10 MB
     ALLOWED_MIME_TYPES: [
       'image/jpeg','image/png','image/gif','image/webp','image/svg+xml',
-      'application/pdf','application/octet-stream'
+      'application/pdf'
     ],
     _validateUpload: function(blob){
       if(blob.size > this.MAX_UPLOAD_BYTES){
@@ -308,11 +321,11 @@
       }
     },
     generateUploadUrl: async function(options){
-      return await callConvex("mutation", "files:generateUploadUrl", {}, options);
+      return await callConvex("mutation", "files:generateUploadUrl", { sessionToken: _sessionToken }, options);
     },
     uploadFile: async function(fileOrBlob, options){
       this._validateUpload(fileOrBlob);
-      var uploadUrl = await callConvex("mutation", "files:generateUploadUrl", {}, options);
+      var uploadUrl = await callConvex("mutation", "files:generateUploadUrl", { sessionToken: _sessionToken }, options);
       var res = await fetch(uploadUrl, {
         method: "POST",
         headers: { "Content-Type": fileOrBlob.type || "application/octet-stream" },
@@ -321,21 +334,25 @@
       });
       if(!res.ok) throw new Error("File upload failed: HTTP " + res.status);
       var json = await res.json();
-      return json.storageId;
+      var storageId = json.storageId;
+      // Server-side validation — deletes file if invalid
+      var validation = await callConvex("mutation", "files:validateUpload", { storageId: storageId, sessionToken: _sessionToken }, options);
+      if(!validation.valid) throw new Error(validation.reason || "File rejected by server");
+      return storageId;
     },
     uploadBase64: async function(dataUrl, options){
       var blob = base64ToBlob(dataUrl);
       return await window.EVENTOS_DATA.uploadFile(blob, options);
     },
     getFileUrl: async function(storageId, options){
-      return await callConvex("query", "files:getFileUrl", { storageId: storageId }, options);
+      return await callConvex("query", "files:getFileUrl", { storageId: storageId, sessionToken: _sessionToken }, options);
     },
     getFileUrls: async function(storageIds, options){
       if(!storageIds || !storageIds.length) return [];
-      return await callConvex("query", "files:getFileUrls", { storageIds: storageIds }, options);
+      return await callConvex("query", "files:getFileUrls", { storageIds: storageIds, sessionToken: _sessionToken }, options);
     },
     deleteFile: async function(storageId, options){
-      return await callConvex("mutation", "files:deleteFile", { storageId: storageId }, options);
+      return await callConvex("mutation", "files:deleteFile", { storageId: storageId, sessionToken: _sessionToken }, options);
     },
     isBase64Image: isBase64Image,
     base64ToBlob: base64ToBlob

@@ -694,6 +694,7 @@ function generateExportPDF(){
 
   const win = window.open('','_blank','width=960,height=760');
   if(!win){ toast(isES?'Permite ventanas emergentes para exportar':'Allow popups to export PDF','e'); return; }
+  win.document.open();
   win.document.write(html);
   win.document.close();
   win.focus();

@@ -7,10 +7,13 @@ export default defineSchema({
     projectId: v.string(),
     data: v.any(),
     updatedAt: v.number(),
+    shareToken: v.optional(v.string()),
+    shareEnabled: v.optional(v.boolean()),
   })
     .index("by_wix_user", ["wixUserId"])
     .index("by_wix_user_project", ["wixUserId", "projectId"])
-    .index("by_wix_user_updated", ["wixUserId", "updatedAt"]),
+    .index("by_wix_user_updated", ["wixUserId", "updatedAt"])
+    .index("by_share_token", ["shareToken"]),
 
   sessions: defineTable({
     sessionToken: v.string(),

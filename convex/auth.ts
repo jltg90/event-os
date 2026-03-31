@@ -38,12 +38,14 @@ export const _createSessionRecord = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    // Delete any existing sessions for this user to keep the table lean
+    // Keep the last 5 sessions per user (allows multi-device), prune the rest
     const existing = await ctx.db
       .query("sessions")
       .withIndex("by_user", (q: any) => q.eq("wixUserId", args.wixUserId))
       .collect();
-    await Promise.all(existing.map((s: any) => ctx.db.delete(s._id)));
+    const sorted = existing.sort((a: any, b: any) => b.expiresAt - a.expiresAt);
+    const toDelete = sorted.slice(4); // keep 4 + the new one = 5 total
+    await Promise.all(toDelete.map((s: any) => ctx.db.delete(s._id)));
 
     await ctx.db.insert("sessions", {
       sessionToken: args.sessionToken,
@@ -130,13 +132,27 @@ export const createSession = action({
     const { wixToken, claimedUserId } = args;
     const expiresAt = Date.now() + SESSION_TTL;
 
-    // Dev bypass: local / preview environments that pass a synthetic userId
-    if (claimedUserId === "dev_user_local" || claimedUserId === "") {
-      // Still issue a real session so the rest of the code path is exercised
+    const allowUnsigned = process.env.ALLOW_UNSIGNED_JWT === "true";
+
+    // Dev bypass: "dev_user_local" is always allowed (named synthetic user for local dev).
+    // Empty claimedUserId requires explicit ALLOW_UNSIGNED_JWT flag.
+    if (claimedUserId === "dev_user_local") {
       const token = await _generateToken();
       await ctx.runMutation(internal.auth._createSessionRecord, {
         sessionToken: token,
-        wixUserId: claimedUserId || "dev_user_local",
+        wixUserId: "dev_user_local",
+        expiresAt,
+      });
+      return { token, expiresAt };
+    }
+    if (claimedUserId === "") {
+      if (!allowUnsigned) {
+        throw new Error("Unauthorized: dev bypass is disabled in production. Set ALLOW_UNSIGNED_JWT=true for development.");
+      }
+      const token = await _generateToken();
+      await ctx.runMutation(internal.auth._createSessionRecord, {
+        sessionToken: token,
+        wixUserId: "dev_user_local",
         expiresAt,
       });
       return { token, expiresAt };
@@ -156,10 +172,8 @@ export const createSession = action({
       if (!tokenUserId || tokenUserId !== claimedUserId) {
         throw new Error("Unauthorized: userId mismatch");
       }
-    } else {
-      // Graceful degradation: no secret configured → decode payload only
-      // This allows development before WIX_APP_SECRET is set, but does NOT
-      // verify the signature. Log a warning so operators notice.
+    } else if (allowUnsigned) {
+      // Development mode: no secret configured → decode payload only
       console.warn(
         "EventOS: WIX_APP_SECRET is not set. Wix token signature is NOT verified. " +
           "Set WIX_APP_SECRET in Convex environment variables for production.",
@@ -174,6 +188,11 @@ export const createSession = action({
           }
         }
       }
+    } else {
+      throw new Error(
+        "Unauthorized: WIX_APP_SECRET must be configured. " +
+          "Set it in Convex environment variables, or set ALLOW_UNSIGNED_JWT=true for development.",
+      );
     }
 
     const token = await _generateToken();

@@ -269,7 +269,7 @@ h1, h2, h3 { font-family: 'Cormorant Garamond', serif; font-weight: 400; line-he
 .mo {
   position: fixed; inset: 0;
   background: rgba(36,36,36,.4);
-  z-index: 1000;
+  z-index: var(--z-overlay);
   display: flex; align-items: center; justify-content: center;
   padding: 20px;
   opacity: 0; pointer-events: none;
@@ -597,7 +597,7 @@ h1, h2, h3 { font-family: 'Cormorant Garamond', serif; font-weight: 400; line-he
 .tnav-logo:hover { color: #DFD7C9; }
 .tnav-logo span { color: #DFD7C9; font-style: italic; }
 
-.app-body { display: flex; min-height: 100vh; }
+.app-body { display: flex; min-height: 100dvh; }
 .app-content {
   flex: 1;
   min-width: 0;
@@ -1605,7 +1605,7 @@ tr:hover td { background: var(--bg2); }
 
 /* ─── GANTT ──────────────────────────────────── */
 .gantt-wrap { background: var(--card); border-radius: var(--r-lg); border: 1px solid var(--border); overflow: hidden; box-shadow: var(--sh-sm); }
-.gantt-scroll { overflow-x: auto; touch-action: pan-x; }
+.gantt-scroll { overflow-x: auto; touch-action: pan-x; -webkit-overflow-scrolling: touch; }
 .gantt-inner { min-width: 900px; }
 .g-hdr { display: flex; border-bottom: 1px solid var(--border); background: var(--bg2); }
 .g-months { flex: 1; display: flex; }
@@ -2401,7 +2401,7 @@ tr:hover td { background: var(--bg2); }
   .sg { grid-template-columns: repeat(2,1fr); gap: 8px; }
   .gs-stats { grid-template-columns: repeat(2,1fr); gap: 8px; }
 
-  .mo-box { padding: 16px 12px; margin: 8px; width: calc(100% - 16px); }
+  .mo-box { padding: 16px 12px; margin: 8px; width: calc(100% - 16px); max-height: calc(100dvh - 24px); overflow-y: auto; }
   .mo-title { font-size: 16px; }
 
   .btn { font-size: 11.5px; }

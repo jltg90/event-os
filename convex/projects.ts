@@ -2,6 +2,44 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "./auth";
 
+// ─── Runtime validation for project data ──────────────────────────────────────
+
+const MAX_PROJECT_BYTES = 950_000; // ~950 KB
+const MAX_NESTING_DEPTH = 12;
+const MAX_STRING_LENGTH = 500_000; // 500 KB per string field
+
+function validateProjectData(data: unknown): void {
+  const json = JSON.stringify(data);
+  if (json.length > MAX_PROJECT_BYTES) {
+    throw new Error("Project data too large. Please remove some content and try again.");
+  }
+  checkDepthAndStrings(data, 0);
+}
+
+function checkDepthAndStrings(val: unknown, depth: number): void {
+  if (depth > MAX_NESTING_DEPTH) {
+    throw new Error("Project data is too deeply nested (max " + MAX_NESTING_DEPTH + " levels).");
+  }
+  if (typeof val === "string") {
+    if (val.length > MAX_STRING_LENGTH) {
+      throw new Error("A text field in the project exceeds the maximum allowed length.");
+    }
+    return;
+  }
+  if (Array.isArray(val)) {
+    for (let i = 0; i < val.length; i++) {
+      checkDepthAndStrings(val[i], depth + 1);
+    }
+    return;
+  }
+  if (val && typeof val === "object") {
+    const keys = Object.keys(val as Record<string, unknown>);
+    for (let i = 0; i < keys.length; i++) {
+      checkDepthAndStrings((val as Record<string, unknown>)[keys[i]], depth + 1);
+    }
+  }
+}
+
 // Auth wrapper helpers — reduce boilerplate across handlers
 function authedQuery<Args extends Record<string, any>, Returns>(config: {
   args: Args;
@@ -105,6 +143,8 @@ export const upsertProject = authedMutation({
       throw new Error("Project is missing an id");
     }
 
+    validateProjectData(args.project);
+
     const now = Date.now();
     const existing = await ctx.db
       .query("projects")
@@ -114,6 +154,11 @@ export const upsertProject = authedMutation({
       .unique();
 
     if (existing) {
+      // Optimistic locking: if client sends _expectedVersion, reject on mismatch
+      const expectedVersion = args.project?._expectedVersion;
+      if (expectedVersion != null && expectedVersion !== existing.updatedAt) {
+        throw new Error("__conflict__");
+      }
       await ctx.db.patch(existing._id, {
         data: args.project,
         updatedAt: now,
@@ -282,6 +327,8 @@ export const upsertProjectExtras = authedMutation({
   },
   returns: v.null(),
   handler: async (ctx, wixUserId, args) => {
+    validateProjectData(args.extras);
+
     const existing = await ctx.db
       .query("project_extras")
       .withIndex("by_wix_user_project", (q: any) =>

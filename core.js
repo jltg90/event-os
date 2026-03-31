@@ -479,6 +479,35 @@ async function migrateBase64Images(p){
   }
 }
 
+// ─── Data migration framework ──────────────────────────────────────────────
+// Each entry: { fromVersion, toVersion, migrate(project) }
+// Migrations run sequentially on project load when _dataVersion < CURRENT.
+var _DATA_MIGRATIONS = [
+  // Example for future migrations:
+  // { fromVersion: 1, toVersion: 2, migrate: function(p){ p.newField = p.newField || []; } }
+];
+
+function runDataMigrations(p){
+  if(!p || typeof p !== 'object') return;
+  var currentVersion = p._dataVersion || 0;
+  var applied = false;
+  for(var i = 0; i < _DATA_MIGRATIONS.length; i++){
+    var m = _DATA_MIGRATIONS[i];
+    if(currentVersion >= m.fromVersion && currentVersion < m.toVersion){
+      try{
+        m.migrate(p);
+        p._dataVersion = m.toVersion;
+        applied = true;
+        console.log('EventOS: migrated project', p.id, 'from v'+m.fromVersion+' to v'+m.toVersion);
+      }catch(e){
+        console.error('EventOS: migration failed for project', p.id, 'v'+m.fromVersion+'→v'+m.toVersion, e);
+        break;
+      }
+    }
+  }
+  if(applied) saveProj(p);
+}
+
 // Run lazy migration for all projects in the background
 function migrateAllProjectImages(userId){
   var projects = DB.projects[userId];
@@ -658,6 +687,14 @@ async function saveProj(p){
         if(e && e.message && e.message.indexOf('__oversize__') !== -1){
           console.error('EventOS: project', p.id, 'is too large to save even after splitting extras');
           toast(t('err_oversize'), 'e');
+          delete p._pendingSave;
+          setSyncStatus('error');
+          _saveInFlight = false;
+          return;
+        }
+        if(e && e.message && e.message.indexOf('__conflict__') !== -1){
+          console.warn('EventOS: save conflict for project', p.id, '— data was modified elsewhere');
+          toast(LANG==='es'?'Este evento fue modificado en otra sesión. Recarga para ver los cambios.':'This event was modified elsewhere. Reload to see changes.', 'e');
           delete p._pendingSave;
           setSyncStatus('error');
           _saveInFlight = false;
@@ -971,6 +1008,12 @@ function setSyncDot(state){ setSyncStatus(state); }
 
 window.addEventListener('online',  function(){ if(DB.cur) manualSync(); });
 window.addEventListener('offline', function(){ setSyncStatus('offline'); });
+window.addEventListener('beforeunload', function(e){
+  if(_saveInFlight || _savePending){
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
 
 function toggleMenu(){ document.getElementById('umenu').classList.toggle('hidden'); }
 function closeMenu(){ document.getElementById('umenu').classList.add('hidden'); }

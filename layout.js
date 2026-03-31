@@ -927,6 +927,7 @@ function renderLayout(){
           <button title="Rotate clockwise" onclick="doRotate(getRotateStep())" style="width:32px;height:32px;border:none;background:transparent;cursor:pointer;border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--muted)" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 10h5V5"/><path d="M4 11a8 8 0 1 1 2.34 5.66L4 14"/></svg></button>
         </div>
         <button id="lbtn-export" class="btn btn-ghost btn-sm" onclick="exportLayoutFull()">${t('export')}</button>
+        <button id="lbtn-highlights" class="btn btn-ghost btn-sm" onclick="startLayoutTour()" title="${LANG==='es'?'Ver guía interactiva':'Rewatch layout highlights'}" style="display:flex;align-items:center;gap:5px"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><circle cx="12" cy="8" r="0.5" fill="currentColor" stroke="none"/></svg>${LANG==='es'?'Guía':'Highlights'}</button>
       </div>
       ${isPhone?renderLayoutMobileQuickBar():''}
       ${isPhone?'':renderLayoutQuoteWorkspace(p)}
@@ -1055,6 +1056,7 @@ function renderLayoutMobileQuickBar(){
       <button class="layout-mobile-btn" onclick="setLayoutMobilePane('quote')">${LANG==='es'?'Cotización':'Quote'}</button>
       <button class="layout-mobile-btn" onclick="setLayoutMobilePane('properties')">${LANG==='es'?'Propiedades':'Properties'}</button>
       <button class="layout-mobile-btn" onclick="${hasFloorplan?'startScaleMode()':'triggerFloorplanUpload()'}">${hasFloorplan?(LANG==='es'?'Escalar':'Scale'):(LANG==='es'?'Plano':'Floorplan')}</button>
+      <button class="layout-mobile-btn" onclick="startLayoutTour()">${LANG==='es'?'Guía':'Highlights'}</button>
     </div>
   </div>`;
 }
@@ -2263,16 +2265,25 @@ function doAddCustomElement(){
   toast(name+(isES?' agregado':' added'),'s');
 }
 
+var _lItemDelegationCanvas = null;
 function attachLItemEvents(){
   // Reset pointerEvents in case a previous drag left it stuck
   var cv=document.getElementById('lcanvas');
   if(cv) cv.style.pointerEvents='';
   // Reset any stale drag state
   _lDragItem=null;_panning=false;_marquee=false;_fpDragging=false;
-  document.querySelectorAll('.litem').forEach(el=>{
-    el.addEventListener('mousedown',lItemDown,{passive:false});
-    el.addEventListener('contextmenu',_lItemContextMenu,{passive:false});
-  });
+  // Use event delegation on canvas — re-attach if canvas was rebuilt
+  if(cv && cv !== _lItemDelegationCanvas){
+    _lItemDelegationCanvas = cv;
+    cv.addEventListener('mousedown',function(e){
+      var el=e.target.closest('.litem');
+      if(el){ e.litemEl=el; lItemDown(e); }
+    },{passive:false});
+    cv.addEventListener('contextmenu',function(e){
+      var el=e.target.closest('.litem');
+      if(el){ e.litemEl=el; _lItemContextMenu(e); }
+    },{passive:false});
+  }
   window.removeEventListener('mousemove',lCanvasMove);
   window.removeEventListener('mouseup',lCanvasUp);
   window.addEventListener('mousemove',lCanvasMove);
@@ -2282,7 +2293,8 @@ function attachLItemEvents(){
 // ── Right-click context menu ──
 function _lItemContextMenu(e){
   e.preventDefault();e.stopPropagation();
-  var id=e.currentTarget&&e.currentTarget.dataset?e.currentTarget.dataset.id:null;
+  var el=e.litemEl||e.currentTarget;
+  var id=el&&el.dataset?el.dataset.id:null;
   if(!id)return;
   if(!LState.sel.includes(id)) LState.sel=[id];
   updateSelUI();
@@ -2322,8 +2334,9 @@ function _showLayoutContextMenu(cx,cy,id){
   var rect=menu.getBoundingClientRect();
   if(rect.right>window.innerWidth) menu.style.left=(cx-rect.width)+'px';
   if(rect.bottom>window.innerHeight) menu.style.top=(cy-rect.height)+'px';
-  // Close on click outside
-  setTimeout(function(){document.addEventListener('mousedown',_ctxMenuOutsideClick);},0);
+  // Close on click outside (remove first to prevent accumulation)
+  document.removeEventListener('mousedown',_ctxMenuOutsideClick);
+  setTimeout(function(){document.addEventListener('mousedown',_ctxMenuOutsideClick,{once:true});},0);
 }
 function _ctxMenuOutsideClick(e){
   var menu=document.getElementById('l-ctx-menu');
@@ -2594,7 +2607,8 @@ function lPaste(mode){
 
 function lItemDown(e){
   if(e.button!==0)return;
-  const id=e.currentTarget&&e.currentTarget.dataset?e.currentTarget.dataset.id:null;
+  var el=e.litemEl||e.currentTarget;
+  const id=el&&el.dataset?el.dataset.id:null;
   if(!id)return;
   const canvas=document.getElementById('lcanvas');
   const cr=canvas.getBoundingClientRect();
@@ -2724,7 +2738,9 @@ function lCanvasMove(e){
   if(_lMoveRafPending){ e.preventDefault(); return; }
   _lMoveRafPending = true;
   _lMoveCachedRect = null; // invalidate per-frame cache
-  requestAnimationFrame(function(){ _lMoveRafPending = false; _lCanvasMoveInner(e); });
+  // Capture coordinates immediately to avoid stale event reference in RAF callback
+  var snapshot = { clientX: e.clientX, clientY: e.clientY, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, buttons: e.buttons, preventDefault: function(){} };
+  requestAnimationFrame(function(){ _lMoveRafPending = false; _lCanvasMoveInner(snapshot); });
 }
 function _lGetCanvasRect(){
   if(!_lMoveCachedRect){

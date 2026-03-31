@@ -1623,8 +1623,10 @@ async function callAIForAction(key, userMsg, p){
 function updateAIFabVisibility(){
   var fab = document.getElementById('ai-fab');
   if(!fab) return;
-  var clientHidden = document.getElementById('pg-client').classList.contains('hidden');
-  var appHidden = document.getElementById('pg-app').classList.contains('hidden');
+  var clientEl = document.getElementById('pg-client');
+  var appEl = document.getElementById('pg-app');
+  var clientHidden = clientEl ? clientEl.classList.contains('hidden') : true;
+  var appHidden = appEl ? appEl.classList.contains('hidden') : true;
   if(clientHidden && !appHidden && !window._shareMode){
     fab.classList.remove('hidden');
   } else {
