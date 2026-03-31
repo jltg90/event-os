@@ -853,6 +853,7 @@ window.addEventListener('message', function(event){
 
   WIX_USER = { userId: newUserId, email: d.email||'', displayName: d.displayName||'', token: d.token||'' };
   DB.cur = newUserId;
+  console.info('EventOS: WIX_USER received — userId:', newUserId, 'hasToken:', !!(d.token));
 
   // If already initialised for this user, just keep the stored Wix token fresh
   // so that session renewal (_doReauth) can send a valid signature.
@@ -896,10 +897,28 @@ async function initApp(){
   }
   startMojibakeObserver();
   var isDevMode = (DB.cur === 'dev_user_local');
-  try{
-    await EVENTOS_DATA.authenticate(WIX_USER ? WIX_USER.token || '' : '', DB.cur);
-  }catch(authErr){
-    showLoadingError('Authentication failed. Please reload the page.');
+  var authRetries = 3;
+  var authOk = false;
+  var lastAuthErr = null;
+  while(authRetries > 0 && !authOk){
+    try{
+      await EVENTOS_DATA.authenticate(WIX_USER ? WIX_USER.token || '' : '', DB.cur);
+      authOk = true;
+    }catch(authErr){
+      lastAuthErr = authErr;
+      authRetries--;
+      console.warn('EventOS: authenticate attempt failed (' + (3 - authRetries) + '/3):', authErr && authErr.message ? authErr.message : authErr);
+      // Don't retry server-side auth rejections — only retry on network / transient errors
+      if(authErr && authErr.message && (authErr.message.indexOf('Unauthorized') !== -1 || authErr.message.indexOf('mismatch') !== -1)){
+        authRetries = 0;
+      }
+      if(authRetries > 0) await new Promise(function(r){ setTimeout(r, 1500); });
+    }
+  }
+  if(!authOk){
+    console.error('EventOS: authentication failed permanently:', lastAuthErr);
+    var detail = (lastAuthErr && lastAuthErr.message) ? ' (' + lastAuthErr.message + ')' : '';
+    showLoadingError('Authentication failed' + detail + '. Please reload the page.');
     return;
   }
   var ok = await loadProjectsFromCloud(DB.cur);

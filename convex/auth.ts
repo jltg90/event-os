@@ -160,6 +160,11 @@ export const createSession = action({
 
     const appSecret = process.env.WIX_APP_SECRET;
 
+    // Extract user ID from a Wix JWT payload, checking all known field names
+    function extractWixUserId(payload: any): string {
+      return payload.uid || payload.sub || payload.memberId || payload.contactId || "";
+    }
+
     if (appSecret) {
       // Full HMAC-SHA256 verification
       const valid = await verifyJwtHmac(wixToken, appSecret);
@@ -168,9 +173,10 @@ export const createSession = action({
       const payload = decodeJwtPayload(wixToken);
       if (!payload) throw new Error("Unauthorized: malformed Wix token");
 
-      const tokenUserId: string = payload.uid || payload.sub || "";
+      const tokenUserId = extractWixUserId(payload);
       if (!tokenUserId || tokenUserId !== claimedUserId) {
-        throw new Error("Unauthorized: userId mismatch");
+        console.error("EventOS auth: userId mismatch — token fields:", JSON.stringify(Object.keys(payload)), "extracted:", tokenUserId, "claimed:", claimedUserId);
+        throw new Error("Unauthorized: userId mismatch (token=" + tokenUserId + " claimed=" + claimedUserId + ")");
       }
     } else if (allowUnsigned) {
       // Development mode: no secret configured → decode payload only
@@ -182,8 +188,9 @@ export const createSession = action({
       if (wixToken) {
         const payload = decodeJwtPayload(wixToken);
         if (payload) {
-          const tokenUserId: string = payload.uid || payload.sub || "";
+          const tokenUserId = extractWixUserId(payload);
           if (tokenUserId && tokenUserId !== claimedUserId) {
+            console.error("EventOS auth (unsigned): userId mismatch — token fields:", JSON.stringify(Object.keys(payload)), "extracted:", tokenUserId, "claimed:", claimedUserId);
             throw new Error("Unauthorized: userId mismatch");
           }
         }

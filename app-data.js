@@ -71,7 +71,8 @@
     });
     var payload = await res.json().catch(function(){ return null; });
     if(!res.ok){
-      throw new Error("HTTP " + res.status);
+      var errMsg = (payload && payload.errorMessage) ? payload.errorMessage : "status " + res.status;
+      throw new Error("HTTP " + res.status + ": " + errMsg);
     }
     if(!payload || payload.status !== "success"){
       throw new Error(payload && payload.errorMessage ? payload.errorMessage : "Convex request failed");
