@@ -593,6 +593,128 @@ h1, h2, h3 { font-family: 'Cormorant Garamond', serif; font-weight: 400; line-he
   gap: 6px;
 }
 
+/* ── Task Mobile Cards (collapsed/expanded) ── */
+.tmc {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  transition: box-shadow .2s ease, border-color .2s ease;
+}
+.tmc + .tmc { margin-top: 10px; }
+.tmc.tmc-open {
+  border-color: rgba(124,58,237,.2);
+  box-shadow: 0 4px 20px rgba(0,0,0,.07);
+}
+.tmc-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.tmc-info { flex: 1; min-width: 0; }
+.tmc-name {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+.tmc-name.tmc-done {
+  text-decoration: line-through;
+  opacity: .55;
+}
+.tmc-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 3px;
+  flex-wrap: wrap;
+}
+.tmc-date {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.tmc-date.tmc-overdue {
+  color: var(--danger);
+}
+.tmc-status {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--light);
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+.tmc-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.tmc-chevron {
+  flex-shrink: 0;
+  color: var(--light);
+  transition: transform .25s cubic-bezier(.4,0,.2,1);
+}
+.tmc.tmc-open .tmc-chevron { transform: rotate(180deg); }
+.tmc-detail {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height .3s cubic-bezier(.4,0,.2,1), opacity .2s ease;
+  opacity: 0;
+}
+.tmc.tmc-open .tmc-detail {
+  max-height: 600px;
+  opacity: 1;
+}
+.tmc-desc {
+  padding: 0 14px 10px;
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.5;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.tmc-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 12px;
+  padding: 0 14px 12px;
+}
+.tmc-meta-item { padding: 5px 0; }
+.tmc-meta-lbl {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--light);
+  font-weight: 700;
+}
+.tmc-meta-val {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1.4;
+}
+.tmc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--border);
+}
+.tmc-actions .btn {
+  flex: 1 1 calc(33% - 6px);
+  justify-content: center;
+  min-height: 42px;
+  gap: 6px;
+}
+
 .mobile-section-toolbar {
   display: grid;
   gap: 10px;
@@ -1529,7 +1651,7 @@ h1, h2, h3 { font-family: 'Cormorant Garamond', serif; font-weight: 400; line-he
 }
 
 .sh {
-  background: #ffffff;
+  background: var(--card-solid);
   border-radius: var(--r-lg);
   padding: 24px 28px;
   border: 1px solid rgba(36,36,36,.06);
@@ -1544,9 +1666,9 @@ h1, h2, h3 { font-family: 'Cormorant Garamond', serif; font-weight: 400; line-he
   font-family: 'Cormorant Garamond', serif;
   font-size: 24px; font-weight: 400;
   letter-spacing: -.01em;
-  color: #242424;
+  color: var(--text);
 }
-.sh-sub { color: #464646; font-size: 13px; margin-top: 3px; font-family: 'DM Sans', sans-serif; }
+.sh-sub { color: var(--muted); font-size: 13px; margin-top: 3px; font-family: 'DM Sans', sans-serif; }
 
 .editorial-title {
   position: relative;
@@ -1611,7 +1733,7 @@ h1, h2, h3 { font-family: 'Cormorant Garamond', serif; font-weight: 400; line-he
 /* ─── STAT CARDS ─────────────────────────────── */
 .sg { display: grid; grid-template-columns: repeat(4,1fr); gap: 18px; margin-bottom: 26px; }
 .sc {
-  background: #ffffff;
+  background: var(--card-solid);
   border-radius: var(--r);
   border: 1px solid rgba(36,36,36,.08);
   padding: 22px;
@@ -2398,7 +2520,10 @@ tr:hover td { background: var(--bg2); }
   .ev-empty-bento-card { padding: 20px 16px; border-radius: 14px; }
   .ev-empty-bento-stat { font-size: 28px; }
   .ev-empty-bento-icon { width: 30px; height: 30px; border-radius: 8px; margin-bottom: 14px; }
-  .sh { flex-direction: column; gap: 10px; align-items: flex-start; }
+  .sh { flex-direction: column; gap: 6px; align-items: flex-start; padding: 16px; margin-bottom: 14px; }
+  .sh-title { font-size: 20px; }
+  .sh-sub { font-size: 12px; }
+  .sh > div:last-child:not(:first-child) { display: none; }
   .vtabs {
     width: 100%;
     overflow-x: auto;
@@ -2613,8 +2738,6 @@ tr:hover td { background: var(--bg2); }
   /* ── Timeline ── */
   .gantt-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
-  /* ── Buttons in section headers ── */
-  .sh .btn span { display: none; }
 }
 
 /* ═══ RESPONSIVE — SMALL MOBILE (≤ 480px) ════════════════════════ */
@@ -2632,8 +2755,22 @@ tr:hover td { background: var(--bg2); }
   .ev-empty-bento-card.--wide { grid-column: auto; }
   .evc-body { padding: 14px 12px; }
 
-  .sg { grid-template-columns: repeat(2,1fr); gap: 8px; }
-  .gs-stats { grid-template-columns: repeat(2,1fr); gap: 8px; }
+  .sg {
+    display: flex; gap: 10px;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    padding-bottom: 8px;
+  }
+  .sg::-webkit-scrollbar { display: none; }
+  .sg .sc { flex: 0 0 140px; scroll-snap-align: start; }
+  .gs-stats {
+    display: flex; gap: 10px;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    padding-bottom: 8px;
+  }
+  .gs-stats::-webkit-scrollbar { display: none; }
+  .gs-stats .gs-stat { flex: 0 0 100px; scroll-snap-align: start; }
 
   .mo-box { padding: 16px 12px; margin: 8px; width: calc(100% - 16px); max-height: calc(100dvh - 24px); overflow-y: auto; }
   .mo-title { font-size: 16px; }
@@ -3687,6 +3824,8 @@ html.dark .layout-mobile-quickbar { background: rgba(36,36,36,.94); }
 html.dark .vmc { background: #242424; border-color: rgba(223,215,201,.08); }
 html.dark .vmc.vmc-open { border-color: rgba(223,215,201,.18); box-shadow: 0 4px 20px rgba(0,0,0,.25); }
 html.dark .vmc-progress-bar { background: rgba(223,215,201,.08); }
+html.dark .tmc { background: #242424; border-color: rgba(223,215,201,.08); }
+html.dark .tmc.tmc-open { border-color: rgba(124,58,237,.25); box-shadow: 0 4px 20px rgba(0,0,0,.25); }
 html.dark .calendar-picker {
   background: rgba(36,36,36,.98);
   border-color: rgba(223,215,201,.15);

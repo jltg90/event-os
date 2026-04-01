@@ -1443,7 +1443,7 @@ function renderTimeline(){
   const pct=p.tasks.length?Math.round(done/p.tasks.length*100):0;
   el.innerHTML=`
   <div class="sh">
-    <div><div class="sh-title editorial-title" style="color:#242424">${t('timeline')}</div>
+    <div><div class="sh-title editorial-title" style="color:var(--text)">${t('timeline')}</div>
     <div class="sh-sub">${t('timeline_sub')}</div></div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-ghost btn-sm" onclick="openTemplatePlanWizard()" style="display:flex;align-items:center;gap:5px;font-size:11px">
@@ -1525,10 +1525,62 @@ function renderTimelineView(p){
   else if(tView==='gantt')renderGantt(p);
   else renderCal(p);
 }
+var _expandedTaskIds = [];
+function toggleTaskExpand(tid){
+  var idx = _expandedTaskIds.indexOf(tid);
+  if(idx > -1) _expandedTaskIds.splice(idx, 1);
+  else _expandedTaskIds.push(tid);
+  var card = document.querySelector('.tmc[data-tid="'+tid+'"]');
+  if(card) card.classList.toggle('tmc-open', _expandedTaskIds.indexOf(tid) > -1);
+}
 function renderTaskList(p){
   const el=document.getElementById('tview-content');
   const tod=today();
+  const isMob=isPhoneViewport();
   let sorted=filterTasks([...p.tasks]).sort((a,b)=>(a.dueDate||'').localeCompare(b.dueDate||''));
+  if(!sorted.length){ el.innerHTML=`<div class="card" style="text-align:center;padding:40px;color:var(--muted)">${taskSearchQuery.trim()?t('no_tasks_found'):t('no_tasks_yet')}</div>`; return; }
+  if(isMob){
+    el.innerHTML=sorted.map(function(tk){
+      var status=taskStatusValue(tk);
+      var isDone=taskIsDone(tk);
+      var ov=!isDone&&tk.dueDate&&tk.dueDate<tod;
+      var isOpen=_expandedTaskIds.indexOf(tk.id)>-1;
+      var dateStr=fmtDate(tk.dueDate||tk.startDate);
+      var statusLbl=taskStatusLabel(status);
+      return `<article class="tmc${isOpen?' tmc-open':''}" data-tid="${tk.id}">
+        <div class="tmc-summary" onclick="toggleTaskExpand('${tk.id}')">
+          <div class="tchk ${isDone?'done':''}" onclick="event.stopPropagation();toggleTask('${tk.id}')">
+            ${isDone?'<svg width="12" height="12" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24"><polyline points="20,6 9,17 4,12"/></svg>':''}
+          </div>
+          <div class="tmc-info">
+            <div class="tmc-name ${isDone?'tmc-done':''}">${esc(tk.title)}</div>
+            <div class="tmc-row">
+              <span class="tmc-date${ov?' tmc-overdue':''}">${dateStr}${ov?' · '+t('overdue'):''}</span>
+              <span class="tmc-status">${esc(statusLbl)}</span>
+            </div>
+          </div>
+          <div class="tmc-color" style="background:${tk.color||'#7c3aed'}"></div>
+          <svg class="tmc-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="tmc-detail">
+          ${tk.desc?'<div class="tmc-desc">'+esc(tk.desc)+'</div>':''}
+          <div class="tmc-meta">
+            <div class="tmc-meta-item"><span class="tmc-meta-lbl">${LANG==='es'?'Fechas':'Dates'}</span><span class="tmc-meta-val" style="color:${ov?'var(--danger)':'var(--text)'}">${fmtDate(tk.startDate||tk.dueDate)}${tk.startDate&&tk.dueDate?' → '+fmtDate(tk.dueDate):''}</span></div>
+            <div class="tmc-meta-item"><span class="tmc-meta-lbl">${LANG==='es'?'Asignado':'Assignee'}</span><span class="tmc-meta-val">${esc(tk.assignee||t('unassigned'))}</span></div>
+            <div class="tmc-meta-item"><span class="tmc-meta-lbl">${LANG==='es'?'Duración':'Duration'}</span><span class="tmc-meta-val">${tk.durationDays||1} ${LANG==='es'?'días':'days'}</span></div>
+            <div class="tmc-meta-item"><span class="tmc-meta-lbl">${LANG==='es'?'Fase':'Phase'}</span><span class="tmc-meta-val">${esc(tk.phase||taskPhaseValue(tk))}</span></div>
+            ${tk.planningWindow?'<div class="tmc-meta-item"><span class="tmc-meta-lbl">'+(LANG==='es'?'Ventana':'Window')+'</span><span class="tmc-meta-val">'+esc(tk.planningWindow)+'</span></div>':''}
+          </div>
+          <div class="tmc-actions" onclick="event.stopPropagation()">
+            <button class="btn btn-ghost btn-sm" onclick="openTaskModal('${tk.id}')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg> ${LANG==='es'?'Editar':'Edit'}</button>
+            <button class="btn btn-ghost btn-sm" onclick="dupTask('${tk.id}')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> ${LANG==='es'?'Duplicar':'Duplicate'}</button>
+            <button class="btn btn-danger btn-sm" onclick="delTask('${tk.id}')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg> ${LANG==='es'?'Eliminar':'Delete'}</button>
+          </div>
+        </div>
+      </article>`;
+    }).join('');
+    return;
+  }
   el.innerHTML=sorted.map(tk=>{
     const status=taskStatusValue(tk);
     const isDone=taskIsDone(tk);
@@ -1556,7 +1608,7 @@ function renderTaskList(p){
         <button class="btn btn-danger btn-sm btn-icon" onclick="delTask('${tk.id}')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
       </div>
     </div>`;
-  }).join('')||`<div class="card" style="text-align:center;padding:40px;color:var(--muted)">${taskSearchQuery.trim()?t('no_tasks_found'):t('no_tasks_yet')}</div>`;
+  }).join('');
 }
 var _ganttZoom=14; var _ganttOffset=0; // px per day
 function renderGantt(p){
@@ -1816,7 +1868,7 @@ function renderGuests(){
   const tables=[...new Set(p.guests.filter(g=>g.table).map(g=>g.table))].length;
   el.innerHTML=`
   <div class="sh">
-    <div><div class="sh-title" style="color:#242424">${t('guest_management')}</div>
+    <div><div class="sh-title" style="color:var(--text)">${t('guest_management')}</div>
     <div class="sh-sub">${totalGuests} ${t('total')} &middot; ${confirmed} ${t('confirmed_guests')} &middot; ${pending} ${t('pending_guests')}</div></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-ghost btn-sm" onclick="downloadGuestTemplate()">
