@@ -715,6 +715,104 @@ h1, h2, h3 { font-family: 'Cormorant Garamond', serif; font-weight: 400; line-he
   gap: 6px;
 }
 
+/* ── Event Mobile Cards (collapsed/expanded) ── */
+.emc-list { display: flex; flex-direction: column; gap: 8px; }
+.emc {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  transition: box-shadow .2s ease, border-color .2s ease;
+}
+.emc.emc-open {
+  border-color: rgba(201,168,76,.3);
+  box-shadow: 0 4px 20px rgba(0,0,0,.07);
+}
+.emc-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 14px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.emc-info { flex: 1; min-width: 0; }
+.emc-name {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+.emc-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+.emc-date {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.emc-days {
+  font-size: 11px;
+  font-weight: 700;
+}
+.emc-chevron {
+  flex-shrink: 0;
+  color: var(--light);
+  transition: transform .25s cubic-bezier(.4,0,.2,1);
+}
+.emc.emc-open .emc-chevron { transform: rotate(180deg); }
+.emc-detail {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height .3s cubic-bezier(.4,0,.2,1), opacity .2s ease;
+  opacity: 0;
+}
+.emc.emc-open .emc-detail {
+  max-height: 500px;
+  opacity: 1;
+}
+.emc-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 14px;
+  padding: 8px 14px 12px;
+  border-top: 1px solid var(--border);
+}
+.emc-meta-item { padding: 5px 0; }
+.emc-meta-lbl {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--light);
+  font-weight: 700;
+}
+.emc-meta-val {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1.4;
+}
+.emc-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 10px 14px 14px;
+  border-top: 1px solid var(--border);
+}
+.emc-actions .btn {
+  justify-content: center;
+  min-height: 42px;
+  gap: 6px;
+}
+
 .mobile-section-toolbar {
   display: grid;
   gap: 10px;
@@ -3822,6 +3920,8 @@ html.dark .vmc.vmc-open { border-color: rgba(223,215,201,.18); box-shadow: 0 4px
 html.dark .vmc-progress-bar { background: rgba(223,215,201,.08); }
 html.dark .tmc { background: #242424; border-color: rgba(223,215,201,.08); }
 html.dark .tmc.tmc-open { border-color: rgba(124,58,237,.25); box-shadow: 0 4px 20px rgba(0,0,0,.25); }
+html.dark .emc { background: #242424; border-color: rgba(223,215,201,.08); }
+html.dark .emc.emc-open { border-color: rgba(223,215,201,.18); box-shadow: 0 4px 20px rgba(0,0,0,.25); }
 html.dark .calendar-picker {
   background: rgba(36,36,36,.98);
   border-color: rgba(223,215,201,.15);

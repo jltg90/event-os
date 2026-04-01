@@ -350,8 +350,17 @@ async function saveEvent(id){
   toast(id?'Event updated':'Event created!','s');
 }
 
+var _expandedEventIds = [];
+function toggleEventExpand(eid){
+  var idx = _expandedEventIds.indexOf(eid);
+  if(idx > -1) _expandedEventIds.splice(idx, 1);
+  else _expandedEventIds.push(eid);
+  var card = document.querySelector('.emc[data-eid="'+eid+'"]');
+  if(card) card.classList.toggle('emc-open', _expandedEventIds.indexOf(eid) > -1);
+}
 function renderEvents(){
-  if(typeof isPhoneViewport === 'function' && isPhoneViewport()) _evView='grid';
+  var isMob = typeof isPhoneViewport === 'function' && isPhoneViewport();
+  if(isMob) _evView='grid';
   updateEvSortLabel();
   updateEvFilterLabels();
   const esEl=document.getElementById('event-search');
@@ -364,9 +373,12 @@ function renderEvents(){
   const evGridBtn=document.getElementById('ev-view-grid');
   const evListBtn=document.getElementById('ev-view-list');
   if(evGridBtn) evGridBtn.style.display = '';
-  if(evListBtn) evListBtn.style.display = (typeof isPhoneViewport === 'function' && isPhoneViewport()) ? 'none' : '';
+  if(evListBtn) evListBtn.style.display = isMob ? 'none' : '';
   if(evGridBtn) evGridBtn.classList.toggle('active',_evView==='grid');
   if(evListBtn) evListBtn.classList.toggle('active',_evView==='list');
+  // Hide desktop toolbar on mobile, show compact search inline
+  var evToolbarEl = document.getElementById('ev-toolbar');
+  if(evToolbarEl) evToolbarEl.style.display = isMob ? 'none' : 'flex';
 
   const allEvents=Object.values(uproj()).filter(p=>p&&p.id&&p.id!=='__library__'&&p.id!=='__lib_layout__'&&p.status&&p.status!=='__internal__');
   let list=allEvents.slice();
@@ -482,6 +494,42 @@ function renderEvents(){
           </div>
         </div>
       </div>`;
+    }).join('');
+  } else if(isMob) {
+    // ── Mobile: compact expandable event cards ──
+    g.className='emc-list';
+    g.innerHTML=list.map(p=>{
+      const da=daysAway(p.date); const isPast=da<0;
+      const dLabel=da===0?t('today'):da>0?`${da} ${t('days_away')}`:`${Math.abs(da)} ${t('days_ago')}`;
+      const isOpen=_expandedEventIds.indexOf(p.id)>-1;
+      const isES=LANG==='es';
+      return `<article class="emc${isOpen?' emc-open':''}" data-eid="${p.id}">
+        <div class="emc-summary" onclick="toggleEventExpand('${p.id}')">
+          <div class="emc-info">
+            <div class="emc-name">${esc(p.name)}</div>
+            <div class="emc-row">
+              <span class="badge ${tc[p.type]||'b-gray'}" style="font-size:9px;padding:1px 7px">${tl[p.type]||esc(p.type)}</span>
+              <span class="emc-date">${fmtDate(p.date)}</span>
+              <span class="emc-days" style="color:${isPast?'var(--light)':'var(--success)'}">${dLabel}</span>
+            </div>
+          </div>
+          <svg class="emc-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="emc-detail">
+          <div class="emc-meta">
+            ${p.clientName?'<div class="emc-meta-item"><span class="emc-meta-lbl">'+(isES?'Cliente':'Client')+'</span><span class="emc-meta-val">'+esc(p.clientName)+'</span></div>':''}
+            <div class="emc-meta-item"><span class="emc-meta-lbl">${isES?'Ubicación':'Location'}</span><span class="emc-meta-val">${esc(p.location||'TBD')}</span></div>
+            <div class="emc-meta-item"><span class="emc-meta-lbl">${isES?'Presupuesto':'Budget'}</span><span class="emc-meta-val">${fmtMoney(p.budget)}</span></div>
+            <div class="emc-meta-item"><span class="emc-meta-lbl">${isES?'Estado':'Status'}</span><span class="emc-meta-val" style="text-transform:capitalize">${statusLabel(p.status)}</span></div>
+          </div>
+          <div class="emc-actions" onclick="event.stopPropagation()">
+            <button class="btn btn-primary btn-sm" onclick="openProject('${p.id}')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg> ${isES?'Abrir':'Open'}</button>
+            <button class="btn btn-ghost btn-sm" onclick="openEventModal('${p.id}')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg> ${isES?'Editar':'Edit'}</button>
+            <button class="btn btn-ghost btn-sm" onclick="dupProj('${p.id}')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> ${isES?'Duplicar':'Duplicate'}</button>
+            <button class="btn btn-danger btn-sm" onclick="confirmDelProj('${p.id}')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg> ${isES?'Eliminar':'Delete'}</button>
+          </div>
+        </div>
+      </article>`;
     }).join('');
   } else {
     g.innerHTML=list.map(p=>{
