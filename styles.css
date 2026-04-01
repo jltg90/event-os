@@ -2485,6 +2485,8 @@ tr:hover td { background: var(--bg2); }
     min-height: 58px;
     padding: 8px 14px !important;
     gap: 10px !important;
+    position: fixed;
+    left: 0; right: 0;
     top: 54px;
     align-items: center;
     justify-content: space-between;
@@ -2517,9 +2519,9 @@ tr:hover td { background: var(--bg2); }
   .ptab { padding: 5px 9px; font-size: 11px; white-space: nowrap; flex-shrink: 0; }
   .ptab svg { display: none; }
 
-  /* ── pcontent ── */
-  .pcontent { padding: 20px 14px 14px; }
-  #tab-layout { padding-top: 18px !important; }
+  /* ── pcontent: top padding clears fixed pnav (58px) ── */
+  .pcontent { padding: 78px 14px 14px; }
+  #tab-layout { padding-top: 76px !important; }
 
   /* ── Events page ── */
   .evgrid { grid-template-columns: 1fr; gap: 14px; }
@@ -2534,17 +2536,7 @@ tr:hover td { background: var(--bg2); }
   .ev-empty-bento-card { padding: 20px 16px; border-radius: 14px; }
   .ev-empty-bento-stat { font-size: 28px; }
   .ev-empty-bento-icon { width: 30px; height: 30px; border-radius: 8px; margin-bottom: 14px; }
-  .sh {
-    flex-direction: column; gap: 4px; align-items: flex-start;
-    padding: 12px 16px; margin-bottom: 10px;
-    overflow: visible; border-radius: 14px;
-    scroll-margin-top: 120px;
-  }
-  .sh .editorial-title { animation: none; padding-bottom: 0; }
-  .sh .editorial-title::after, .sh .editorial-title::before { display: none; }
-  .sh-title { font-size: 16px; font-family: 'DM Sans', sans-serif; font-weight: 700; letter-spacing: 0; }
-  .sh-sub { font-size: 11.5px; margin-top: 2px; }
-  .sh > div:last-child:not(:first-child) { display: none !important; }
+  .sh { display: none !important; }
   .vtabs {
     width: 100%;
     overflow-x: auto;
@@ -2796,8 +2788,8 @@ tr:hover td { background: var(--bg2); }
   .stat-n { font-size: 20px; }
 
   /* ── Page padding ── */
-  .pcontent { padding: 18px 10px 10px; }
-  #tab-layout { padding-top: 16px !important; }
+  .pcontent { padding: 76px 10px 10px; }
+  #tab-layout { padding-top: 74px !important; }
 
   /* ── Hide less important table cols on tiny screens ── */
   .guest-col-table { display: none; }
