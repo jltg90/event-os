@@ -372,6 +372,48 @@ h1, h2, h3 { font-family: 'Cormorant Garamond', serif; font-weight: 400; line-he
 .mobile-meta-value-success { color: var(--success); }
 .mobile-meta-value-danger { color: var(--danger); }
 .mobile-meta-value-warn { color: var(--warn); }
+/* ── Budget Mobile Stat Cards ── */
+.bstat-scroll {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 0 14px;
+  margin-bottom: 6px;
+  scroll-snap-type: x mandatory;
+}
+.bstat-scroll::-webkit-scrollbar { display: none; }
+.bstat-card {
+  flex: 0 0 140px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  scroll-snap-align: start;
+}
+.bstat-label {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--light);
+  font-weight: 700;
+  margin-bottom: 6px;
+  line-height: 1.3;
+}
+.bstat-value {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -.02em;
+}
+.bstat-sub {
+  font-size: 10.5px;
+  color: var(--muted);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
 /* ── Vendor Mobile Cards (collapsed/expanded) ── */
 .vmc {
   background: var(--card);

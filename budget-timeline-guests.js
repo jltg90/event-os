@@ -24,32 +24,43 @@ function calcBudgetStats(p){
   return _budgetCache.result;
 }
 
+function _budgetToolbarHtml(isES){
+  return `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <button class="btn btn-ghost" onclick="libDownloadVendorTemplate()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>${isES?'Descargar Plantilla':'Download Template'}</span>
+      </button>
+      <button class="btn btn-ghost" onclick="libQuickLoadVendors()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>${isES?'Importar Proveedores':'Import Vendors'}</span>
+      </button>
+      <button class="btn btn-ghost" onclick="libQuickSaveVendors()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span>${isES?'Guardar en Biblioteca':'Save to Library'}</span>
+      </button>
+      <button class="btn btn-primary btn-create-gradient" onclick="openVendorModal()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>${t('add_vendor')}
+      </button>
+    </div>`;
+}
+function _budgetStatCard(label, value, valueColor, sub){
+  return `<div class="bstat-card"><div class="bstat-label">${label}</div><div class="bstat-value" style="color:${valueColor}">${value}</div>${sub?'<div class="bstat-sub">'+sub+'</div>':''}</div>`;
+}
 function renderBudget(){
   const p=proj();const el=document.getElementById('tab-budget');
   if(ensureDefaultVendors(p)) saveProj(p);
   const allVendors = p.vendors;
   const isES = LANG==='es';
+  const isMob = isPhoneViewport();
   if(!allVendors.length){
     el.innerHTML=`
   <div class="sh">
-    <div><div class="sh-title editorial-title" style="color:#242424">${t('budget_management_title')}</div>
+    <div><div class="sh-title editorial-title" style="color:var(--text)">${t('budget_management_title')}</div>
     <div class="sh-sub">${isES?'Gestiona tus proveedores y presupuesto del evento':'Manage your event vendors and budget'}</div></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <button class="btn btn-ghost" onclick="libDownloadVendorTemplate()">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>${isES?'Descargar Plantilla':'Download Template'}
-      </button>
-      <button class="btn btn-ghost" onclick="libQuickLoadVendors()">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>${isES?'Importar Proveedores':'Import Vendors'}
-      </button>
-      <button class="btn btn-ghost" onclick="libQuickSaveVendors()">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>${isES?'Guardar en Biblioteca':'Save to Library'}
-      </button>
-      <button class="btn btn-primary btn-create-gradient" onclick="openVendorModal()">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>${t('add_vendor')}
-      </button>
-    </div>
+    ${isMob?'':_budgetToolbarHtml(isES)}
   </div>
-  ${renderVendorEmptyState()}`;
+  ${renderVendorEmptyState()}
+  ${renderMobileStickyActionBar(`
+    <button class="btn btn-ghost" onclick="libQuickLoadVendors()">${isES?'Importar':'Import'}</button>
+    <button class="btn btn-primary btn-create-gradient" onclick="openVendorModal()">${t('add_vendor')}</button>
+  `)}`;
     return;
   }
   const bs=calcBudgetStats(p);
@@ -58,37 +69,35 @@ function renderBudget(){
   const guestTotalB=bs.guestTotal, plusOnesB=bs.plusOnes, totalWithPlusOnesB=bs.totalWithPlusOnes;
   const budgetPerGuestB=bs.budgetPerGuest, budgetPct=bs.budgetPct;
   const diffClr = diff>=0?'var(--success)':'var(--danger)';
+  const paidPct = tb>0 ? Math.min(100, Math.round(paid/tb*100)) : 0;
   el.innerHTML=`
   <div class="sh">
-    <div><div class="sh-title editorial-title" style="color:#242424">${t('budget_management_title')}</div>
+    <div><div class="sh-title editorial-title" style="color:var(--text)">${t('budget_management_title')}</div>
     <div class="sh-sub">${t('budget_label')}: ${fmtMoney(tb)} &middot; ${t('paid_label')}: ${fmtMoney(paid)} &middot; ${t('balance_label')}: ${fmtMoney(tb-paid)}</div></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <button class="btn btn-ghost" onclick="libDownloadVendorTemplate()">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>${LANG==='es'?'Descargar Plantilla':'Download Template'}
-      </button>
-      <button class="btn btn-ghost" onclick="libQuickLoadVendors()">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>${LANG==='es'?'Importar Proveedores':'Import Vendors'}
-      </button>
-      <button class="btn btn-ghost" onclick="libQuickSaveVendors()">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>${LANG==='es'?'Guardar en Biblioteca':'Save to Library'}
-      </button>
-      <button class="btn btn-primary btn-create-gradient" onclick="openVendorModal()">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>${t('add_vendor')}
-      </button>
-    </div>
+    ${isMob?'':_budgetToolbarHtml(isES)}
   </div>
+  ${isMob?`
+  <div class="bstat-scroll">
+    ${_budgetStatCard(t('event_total_budget'), fmtMoney(projBudget), 'var(--gold-h)', t('approved_budget'))}
+    ${_budgetStatCard(t('estimated_cost'), fmtMoney(estimatedTotal), '#f59e0b',
+      '<div class="prog" style="margin-bottom:2px"><div class="prog-f" style="width:'+budgetPct+'%;background:'+(budgetPct>100?'var(--danger)':'#f59e0b')+'"></div></div>'+budgetPct+'% '+t('of_approved'))}
+    ${_budgetStatCard(t('actual_paid'), fmtMoney(paid), 'var(--success)',
+      '<div class="prog" style="margin-bottom:2px"><div class="prog-f" style="width:'+paidPct+'%;background:var(--success)"></div></div>'+t('balance_label')+': '+fmtMoney(tb-paid))}
+    ${_budgetStatCard(t('budget_variance'), (diff>=0?'+':'')+fmtMoney(diff), diffClr,
+      '<span style="font-weight:600;color:'+diffClr+'">'+(diff>=0?t('under_budget'):t('over_budget'))+'</span>')}
+    ${totalWithPlusOnesB>0&&projBudget>0?_budgetStatCard(isES?'Presupuesto p/Inv.':'Budget / Guest', fmtMoney(budgetPerGuestB), 'var(--gold-h)', totalWithPlusOnesB+' '+(isES?'invitados':'guests')):''}
+  </div>`:`
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:20px">
     <div class="card" style="padding:18px">
       <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--light);font-weight:600;margin-bottom:6px">${t('event_total_budget')}</div>
       <div style="font-size:22px;font-weight:700;color:var(--gold-h)">${fmtMoney(projBudget)}</div>
       <div style="font-size:11px;color:var(--muted);margin-top:2px">${t('approved_budget')}</div>
     </div>
-    ${totalWithPlusOnesB>0&&projBudget>0?`<div class="card" style="padding:18px;cursor:default" title="${LANG==='es'?'Presupuesto ('+fmtMoney(projBudget)+') ÷ '+totalWithPlusOnesB+' invitados (incl. acompañantes)':'Budget ('+fmtMoney(projBudget)+') ÷ '+totalWithPlusOnesB+' guests (incl. plus-ones)'}">
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--light);font-weight:600;margin-bottom:6px">${LANG==='es'?'Presupuesto p/Inv.':'Budget / Guest'}</div>
+    ${totalWithPlusOnesB>0&&projBudget>0?`<div class="card" style="padding:18px;cursor:default" title="${isES?'Presupuesto ('+fmtMoney(projBudget)+') ÷ '+totalWithPlusOnesB+' invitados (incl. acompañantes)':'Budget ('+fmtMoney(projBudget)+') ÷ '+totalWithPlusOnesB+' guests (incl. plus-ones)'}">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--light);font-weight:600;margin-bottom:6px">${isES?'Presupuesto p/Inv.':'Budget / Guest'}</div>
       <div style="font-size:22px;font-weight:700;color:var(--gold-h)">${fmtMoney(budgetPerGuestB)}</div>
-      <div style="font-size:11px;color:var(--muted);margin-top:2px">${totalWithPlusOnesB} ${LANG==='es'?'invitados':'guests'}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">${totalWithPlusOnesB} ${isES?'invitados':'guests'}</div>
     </div>`:''}
-
     <div class="card" style="padding:18px">
       <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--light);font-weight:600;margin-bottom:6px">${t('estimated_cost')}</div>
       <div style="font-size:22px;font-weight:700;color:#f59e0b">${fmtMoney(estimatedTotal)}</div>
@@ -107,14 +116,14 @@ function renderBudget(){
       <div style="font-size:22px;font-weight:700;color:${diffClr}">${diff>=0?'+':''}${fmtMoney(diff)}</div>
       <div style="font-size:11px;color:${diffClr};margin-top:2px;font-weight:600">${diff>=0?t('under_budget'):t('over_budget')}</div>
     </div>
-  </div>
+  </div>`}
   <div style="margin-bottom:14px;position:relative;display:flex;align-items:center">
     <svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
     <input id="vendor-search" class="input" placeholder="${LANG==='es'?'Buscar proveedores...':'Search vendors...'}" oninput="filterVendors(this.value)" style="padding-left:36px;width:100%" aria-label="${LANG==='es'?'Buscar proveedores':'Search vendors'}">
   </div>
   <div id="vlist">${renderVendorTable(allVendors, '')}</div>
   ${renderMobileStickyActionBar(`
-    <button class="btn btn-ghost" onclick="libQuickLoadVendors()">${LANG==='es'?'Importar':'Import'}</button>
+    <button class="btn btn-ghost" onclick="libQuickLoadVendors()">${isES?'Importar':'Import'}</button>
     <button class="btn btn-primary btn-create-gradient" onclick="openVendorModal()">${t('add_vendor')}</button>
   `)}`;
 }
