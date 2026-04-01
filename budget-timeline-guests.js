@@ -110,7 +110,7 @@ function renderBudget(){
   </div>
   <div style="margin-bottom:14px;position:relative;display:flex;align-items:center">
     <svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-    <input id="vendor-search" class="input" placeholder="${LANG==='es'?'Buscar proveedores...':'Search vendors...'}" oninput="filterVendors(this.value)" style="padding-left:36px;width:100%">
+    <input id="vendor-search" class="input" placeholder="${LANG==='es'?'Buscar proveedores...':'Search vendors...'}" oninput="filterVendors(this.value)" style="padding-left:36px;width:100%" aria-label="${LANG==='es'?'Buscar proveedores':'Search vendors'}">
   </div>
   <div id="vlist">${renderVendorTable(allVendors, '')}</div>
   ${renderMobileStickyActionBar(`
@@ -511,6 +511,15 @@ function renderVendorTable(vendors, tab){
     </table>
   </div>`;
 }
+var _expandedVendorIds = [];
+function toggleVendorExpand(vid){
+  var idx = _expandedVendorIds.indexOf(vid);
+  if(idx > -1) _expandedVendorIds.splice(idx, 1);
+  else _expandedVendorIds.push(vid);
+  var card = document.querySelector('.vmc[data-vid="'+vid+'"]');
+  if(!card) return;
+  card.classList.toggle('vmc-open', _expandedVendorIds.indexOf(vid) > -1);
+}
 function renderVendorMobileCards(vendors, tab){
   const isES = LANG==='es';
   if(!vendors.length) return `<div class="card" style="text-align:center;padding:40px;color:var(--muted)">${t(tab==='hired'?'no_hired_vendors':'no_comparison_vendors')}</div>`;
@@ -530,37 +539,54 @@ function renderVendorMobileCards(vendors, tab){
     </div>
     <div class="mobile-card-list">
       ${vendors.map(function(v){
-        var paid = v.payments.reduce(function(a,p){ return a+Number(p.amount); },0);
+        var paid = (v.payments||[]).reduce(function(a,p){ return a+Number(p.amount); },0);
         var si = vendorStatusInfo(v);
-        return `<article class="mobile-record-card" onclick="showVendorDetail('${v.id}')">
-          <div class="mobile-record-card-head">
-            <label onclick="event.stopPropagation()" style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;margin-top:1px">
-              <input class="vendor-sel" type="checkbox" data-vid="${v.id}" ${isVendorSelected(v.id)?'checked':''} onchange="toggleVendorSelection('${v.id}', this.checked)" style="width:16px;height:16px;accent-color:var(--gold-h);cursor:pointer">
+        var isOpen = _expandedVendorIds.indexOf(v.id) > -1;
+        var remaining = Math.max(0, Number(v.budget||0) - paid);
+        var pct = v.budget > 0 ? Math.min(100, Math.round(paid / v.budget * 100)) : 0;
+        return `<article class="vmc${isOpen?' vmc-open':''}" data-vid="${v.id}">
+          <div class="vmc-summary" onclick="toggleVendorExpand('${v.id}')">
+            <label class="vmc-chk" onclick="event.stopPropagation()">
+              <input class="vendor-sel" type="checkbox" data-vid="${v.id}" ${isVendorSelected(v.id)?'checked':''} onchange="toggleVendorSelection('${v.id}', this.checked)">
             </label>
-            <div style="flex:1;min-width:0">
-              <div class="mobile-record-title">${esc(v.name)}</div>
-              <div class="mobile-record-subtitle">${esc(v.category||'')}${v.subcategory?' · '+esc(v.subcategory):''}</div>
+            <div class="vmc-info">
+              <div class="vmc-name">${esc(v.name)}</div>
+              <div class="vmc-row">
+                <span class="vmc-badge" style="background:${si.bg};color:${si.clr}">${si.label}</span>
+                <span class="vmc-money">${fmtMoney(v.budget)}</span>
+                ${paid > 0 ? `<span class="vmc-paid">${fmtMoney(paid)} ${isES?'pagado':'paid'}</span>` : ''}
+              </div>
             </div>
-            <span class="badge" style="background:${si.bg};color:${si.clr}">${si.label}</span>
+            <svg class="vmc-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
           </div>
-          <div class="mobile-meta-grid">
-            ${renderMobileActionChip(isES?'Contacto':'Contact', esc(v.contact||'—'))}
-            ${renderMobileActionChip(isES?'Presupuesto':'Budget', fmtMoney(v.budget))}
-            ${renderMobileActionChip(isES?'Pagado':'Paid', fmtMoney(paid), paid>0?'success':'')}
-            ${renderMobileActionChip(isES?'Pagos':'Payments', v.payments.length?`${v.payments.length} ${isES?'pagos':'payments'}`:'—')}
-          </div>
-          <div style="margin-top:12px" onclick="event.stopPropagation()">
-            <select class="select" style="width:100%;min-height:44px;background:${si.bg};color:${si.clr};border:none;font-weight:700;border-radius:14px;cursor:pointer" onchange="setVendorStatus('${v.id}',this.value)">
-              ${['pending','hired','in-progress','paid','cancelled'].map(function(s){
-                return `<option value="${s}"${(v.vendorStatus||(v.hired?'hired':'pending'))===s?' selected':''}>${{pending:isES?'Pendiente':'Pending',hired:isES?'Contratado':'Hired','in-progress':isES?'En Progreso':'In Progress',paid:isES?'Pagado':'Paid',cancelled:isES?'Cancelado':'Cancelled'}[s]}</option>`;
-              }).join('')}
-            </select>
-          </div>
-          <div class="mobile-record-card-actions" onclick="event.stopPropagation()">
-            <button class="btn btn-ghost btn-sm" onclick="showVendorDetail('${v.id}')">${isES?'Ver':'View'}</button>
-            <button class="btn btn-ghost btn-sm" onclick="openVendorModal('${v.id}')">${isES?'Editar':'Edit'}</button>
-            <button class="btn btn-ghost btn-sm" onclick="dupVendor('${v.id}')">${isES?'Duplicar':'Duplicate'}</button>
-            <button class="btn btn-danger btn-sm" onclick="delV('${v.id}')">${isES?'Eliminar':'Delete'}</button>
+          <div class="vmc-detail">
+            <div class="vmc-progress-wrap">
+              <div class="vmc-progress-bar"><div class="vmc-progress-fill" style="width:${pct}%"></div></div>
+              <div class="vmc-progress-labels">
+                <span>${isES?'Pagado':'Paid'}: ${fmtMoney(paid)}</span>
+                <span>${isES?'Restante':'Remaining'}: ${fmtMoney(remaining)}</span>
+              </div>
+            </div>
+            <div class="vmc-meta">
+              ${v.category ? `<div class="vmc-meta-item"><span class="vmc-meta-label">${isES?'Categoría':'Category'}</span><span class="vmc-meta-value">${esc(v.category)}${v.subcategory?' · '+esc(v.subcategory):''}</span></div>` : ''}
+              ${v.contact ? `<div class="vmc-meta-item"><span class="vmc-meta-label">${isES?'Contacto':'Contact'}</span><span class="vmc-meta-value">${esc(v.contact)}</span></div>` : ''}
+              ${v.phone ? `<div class="vmc-meta-item"><span class="vmc-meta-label">${isES?'Teléfono':'Phone'}</span><span class="vmc-meta-value">${esc(v.phone)}</span></div>` : ''}
+              ${(v.payments||[]).length ? `<div class="vmc-meta-item"><span class="vmc-meta-label">${isES?'Pagos':'Payments'}</span><span class="vmc-meta-value">${v.payments.length}</span></div>` : ''}
+              ${v.notes ? `<div class="vmc-meta-item vmc-meta-full"><span class="vmc-meta-label">${isES?'Notas':'Notes'}</span><span class="vmc-meta-value">${esc(v.notes)}</span></div>` : ''}
+            </div>
+            <div class="vmc-status-row" onclick="event.stopPropagation()">
+              <select class="select vmc-status-select" style="background:${si.bg};color:${si.clr}" onchange="setVendorStatus('${v.id}',this.value)">
+                ${['pending','hired','in-progress','paid','cancelled'].map(function(s){
+                  return `<option value="${s}"${(v.vendorStatus||(v.hired?'hired':'pending'))===s?' selected':''}>${{pending:isES?'Pendiente':'Pending',hired:isES?'Contratado':'Hired','in-progress':isES?'En Progreso':'In Progress',paid:isES?'Pagado':'Paid',cancelled:isES?'Cancelado':'Cancelled'}[s]}</option>`;
+                }).join('')}
+              </select>
+            </div>
+            <div class="vmc-actions" onclick="event.stopPropagation()">
+              <button class="btn btn-ghost btn-sm" onclick="showVendorDetail('${v.id}')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> ${isES?'Ver':'View'}</button>
+              <button class="btn btn-ghost btn-sm" onclick="openVendorModal('${v.id}')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg> ${isES?'Editar':'Edit'}</button>
+              <button class="btn btn-ghost btn-sm" onclick="dupVendor('${v.id}')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> ${isES?'Duplicar':'Duplicate'}</button>
+              <button class="btn btn-danger btn-sm" onclick="delV('${v.id}')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg> ${isES?'Eliminar':'Delete'}</button>
+            </div>
           </div>
         </article>`;
       }).join('')}
@@ -660,7 +686,7 @@ function dupVendor(id){
 }
 function delPay(vid,pid){const p=proj();const v=p.vendors.find(v=>v.id===vid);if(v){var removed=v.payments.find(function(pay){return pay.id===pid;});if(removed&&removed.receiptStorageId){EVENTOS_DATA.deleteFile(removed.receiptStorageId).catch(function(){});}v.payments=v.payments.filter(pay=>pay.id!==pid);saveProj(p);renderBudget();toast('Payment deleted');}}
 function viewReceipt(vid,pid){
-  const p=proj();const v=p.vendors.find(v=>v.id===vid);const pay=v?.payments.find(pay=>pay.id===pid);
+  const p=proj();const v=p.vendors.find(v=>v.id===vid);const pay=v?.payments?.find(pay=>pay.id===pid);
   if(pay?.receipt)openMo(`<div class="mo-title">Receipt</div><img src="${pay.receipt}" style="width:100%;border-radius:8px"><div class="mo-foot"><button class="btn btn-ghost" onclick="closeMo()">${t('close')}</button></div>`);
 }
 
@@ -685,7 +711,7 @@ function openVendorModal(vid){
     <div class="ig"><label>${t('phone')}</label><input class="input" id="vn-phone" value="${esc(v?.phone||'')}" placeholder="555-0000"></div>
     <div class="ig"><label>${t('budget_field')}</label><input class="input" id="vn-budget" type="number" value="${v?.budget||''}" placeholder="0"></div>
     <div class="ig"><label>${t('vendor_status')}</label><select class="select" id="vn-hired"><option value="0"${!v?.hired?' selected':''}>${t('comparison')}</option><option value="1"${v?.hired?' selected':''}>${t('hired')}</option></select></div>
-    <div class="ig" style="grid-column:1/-1"><label>${t('notes')}</label><textarea class="textarea" id="vn-notes" rows="2" placeholder="Additional notes...">${v?.notes||''}</textarea></div>
+    <div class="ig" style="grid-column:1/-1"><label>${t('notes')}</label><textarea class="textarea" id="vn-notes" rows="2" placeholder="Additional notes...">${esc(v?.notes||'')}</textarea></div>
   </div>
   <div class="mo-foot">
     <button class="btn btn-ghost" onclick="closeMo()">${t('cancel')}</button>
@@ -700,6 +726,7 @@ function saveVendor(vid){
   if(vid){const v=p.vendors.find(v=>v.id===vid);if(v) Object.assign(v,data);}
   else{
     const newV={id:'v'+Date.now(),payments:[],...data};
+    if(!p.vendors) p.vendors=[];
     p.vendors.push(newV);
     autoSyncVendorToGlobal(newV);
   }
@@ -708,6 +735,7 @@ function saveVendor(vid){
 function autoSyncVendorToGlobal(v){
   try {
     const lib=getLib();
+    if(!lib||!Array.isArray(lib.vendors)) return;
     const exists=lib.vendors.some(e=>e.vendors&&e.vendors.some(lv=>lv.name.toLowerCase()===v.name.toLowerCase()));
     if(!exists){
       lib.vendors.push({id:'lv'+Date.now(),name:v.name,date:formatDMY(today()),vendors:[JSON.parse(JSON.stringify(v))]});
@@ -756,9 +784,11 @@ async function savePay(vid){
   var submitBtn=document.querySelector('.mo-foot .btn-success');
   if(submitBtn){ submitBtn.disabled=true; submitBtn.textContent=t('saving'); }
   const p=proj();const v=p.vendors.find(v=>v.id===vid);
+  if(!v){_paySubmitting=false;toast('Vendor not found','e');return;}
+  if(!v.payments) v.payments=[];
   const img=document.getElementById('pay-prev');
   var receiptUrl=null, receiptStorageId=null;
-  if(!img.classList.contains('hidden') && _payReceiptFile){
+  if(img&&!img.classList.contains('hidden') && _payReceiptFile){
     try{
       toast(t('uploading'));
       receiptStorageId = await EVENTOS_DATA.uploadFile(_payReceiptFile);
@@ -772,6 +802,7 @@ async function savePay(vid){
 }
 function showVendorDetail(vid){
   const p=proj(); const v=p.vendors.find(v=>v.id===vid); if(!v) return;
+  if(!v.payments) v.payments=[];
   const isES=LANG==='es';
   const paid=v.payments.reduce((a,py)=>a+Number(py.amount),0);
   const pct=v.budget>0?Math.min(100,Math.round(paid/v.budget*100)):0;
@@ -1715,7 +1746,7 @@ function saveTask(tid){
   const p=proj();
   const data={title,desc:gv('tk-desc'),startDate:start,dueDate:due,endDate:due,durationDays:durationDays,assignee:gv('tk-who'),phase:gv('tk-phase').trim()||taskPhaseValue({title:title,assignee:gv('tk-who')}),planningWindow:gv('tk-window').trim(),status:status,done:status==='completed',color:gv('tk-color')};
   if(tid){const tk=p.tasks.find(tk=>tk.id===tid);if(tk) Object.assign(tk,data);}
-  else{p.tasks.push({id:'t'+Date.now(),...data});}
+  else{if(!p.tasks) p.tasks=[];p.tasks.push({id:'t'+Date.now(),...data});}
   saveProj(p);closeMo();renderTimeline();toast(tid?'Task updated':'Task added','s');
 }
 
@@ -1862,7 +1893,7 @@ function renderSeating(p){
   const tables = [...new Set(seated.map(g => g.table))];
   document.getElementById('gview').innerHTML = `<div style="background:var(--card-solid);border-radius:var(--r);border:1px solid var(--border);overflow:hidden">
     <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--bg2)">
-      <input class="input" id="seating-search-input" style="flex:1;min-width:200px" placeholder="${t('search_guests')}" value="${esc(gFilter)}" oninput="debouncedSeatingFilter(this.value)">
+      <input class="input" id="seating-search-input" style="flex:1;min-width:200px" placeholder="${t('search_guests')}" aria-label="${t('search_guests')}" value="${esc(gFilter)}" oninput="debouncedSeatingFilter(this.value)">
     </div>
     <div style="padding:16px">
       ${tables.length ? tables.map(tb => {
@@ -1886,7 +1917,7 @@ function saveGuest(gid){
   const p=proj();
   const data={name,email:gv('gf-email'),phone:gv('gf-phone'),category:gv('gf-cat'),rsvp:gv('gf-rsvp'),table:gv('gf-table'),plusOne:gv('gf-plus')==='1',meal:gv('gf-meal'),dietary:gv('gf-diet'),notes:gv('gf-notes')};
   if(gid){const g=p.guests.find(g=>g.id===gid);if(g) Object.assign(g,data);}
-  else{p.guests.push({id:'g'+Date.now(),...data});}
+  else{if(!p.guests) p.guests=[];p.guests.push({id:'g'+Date.now(),...data});}
   saveProj(p);closeMo();renderGuests();toast(gid?'Guest updated':'Guest added','s');
 }
 
@@ -2093,7 +2124,7 @@ function renderGuestList(p){
   document.getElementById('gview').innerHTML=`
   <div style="background:var(--card-solid);border-radius:var(--r);border:1px solid var(--border);overflow:hidden">
     <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--bg2)">
-      <input class="input" style="flex:1;min-width:200px" placeholder="${t('search_guests')}" value="${esc(gFilter)}" oninput="debouncedGuestFilter(this.value)">
+      <input class="input" style="flex:1;min-width:200px" placeholder="${t('search_guests')}" aria-label="${t('search_guests')}" value="${esc(gFilter)}" oninput="debouncedGuestFilter(this.value)">
       <select class="select" style="width:auto" onchange="gSort=this.value;renderGuestList(proj())">
         <option value="name" ${gSort==='name'?'selected':''}>${t('sort_name')}</option>
         <option value="rsvp" ${gSort==='rsvp'?'selected':''}>${t('sort_rsvp')}</option>
@@ -2132,7 +2163,7 @@ function renderGuestMobileCards(guests){
   const empty = `<div class="mobile-record-card" style="text-align:center;color:var(--muted)">${t('no_guests_found')}</div>`;
   return `<div class="mobile-section-toolbar">
       <div style="display:grid;gap:10px">
-        <input class="input" placeholder="${t('search_guests')}" value="${esc(gFilter)}" oninput="debouncedGuestFilter(this.value)">
+        <input class="input" placeholder="${t('search_guests')}" aria-label="${t('search_guests')}" value="${esc(gFilter)}" oninput="debouncedGuestFilter(this.value)">
         <div class="mobile-inline-actions">
           <select class="select" style="flex:1;min-width:0" onchange="gSort=this.value;renderGuestList(proj())">
             <option value="name" ${gSort==='name'?'selected':''}>${t('sort_name')}</option>

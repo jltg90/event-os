@@ -647,8 +647,13 @@ function showLoadingError(msg){
   if(el){ el.textContent = msg; el.style.display = 'block'; }
 }
 
+var _lastSaveToastTime = 0;
+var _baseTitleCache = null;
+function _markTitleUnsaved(){ if(!_baseTitleCache) _baseTitleCache=document.title.replace(/^● /,''); if(document.title.indexOf('● ')!==0) document.title='● '+_baseTitleCache; }
+function _clearTitleUnsaved(){ if(_baseTitleCache){ document.title=_baseTitleCache; } }
 async function saveProj(p){
   if(!p || typeof p !== 'object' || !p.id) return;
+  _markTitleUnsaved();
   // Never write a metadata stub to Convex — it would overwrite full project data with empty fields
   if(p._metaOnly){
     console.warn('EventOS: skipped saveProj for meta-only stub', p.id, '— full data not yet loaded');
@@ -680,6 +685,8 @@ async function saveProj(p){
         delete p._pendingSave;
         if(typeof clearLayoutDirty === 'function') clearLayoutDirty();
         setSyncStatus('ok');
+        _clearTitleUnsaved();
+        var now=Date.now(); if(now-_lastSaveToastTime>5000){_lastSaveToastTime=now;if(typeof toast==='function')toast(t('saved'),'s');}
         _saveInFlight = false;
         // Flush queued save if one was pending during this save
         if(_savePending){ var next = _savePending; _savePending = null; saveProj(next); }
@@ -1210,10 +1217,15 @@ function _updateTabIndicator(){
 document.addEventListener('click', function(e){
   if(!e.target.closest('#pnav-menu-trigger') && !e.target.closest('#pnav-mobile-menu')) closeProjectTabMenu();
 });
+var _resizeRaf=null;
 window.addEventListener('resize', function(){
-  if(typeof isPhoneViewport === 'function' && !isPhoneViewport()) closeProjectTabMenu();
-  syncProjectTabMenu();
-  _updateTabIndicator();
+  if(_resizeRaf) return;
+  _resizeRaf=requestAnimationFrame(function(){
+    _resizeRaf=null;
+    if(typeof isPhoneViewport === 'function' && !isPhoneViewport()) closeProjectTabMenu();
+    syncProjectTabMenu();
+    _updateTabIndicator();
+  });
 });
 
 function uproj(){ return DB.projects[DB.cur]||{}; }

@@ -728,7 +728,7 @@ function closeMo(){
   }
 }
 document.addEventListener('keydown',function(e){
-  if(e.key==='Escape') closeMo();
+  if(e.key==='Escape'){ closeCalendarPicker(); closeMo(); }
   // Focus trap: keep Tab within modal when open
   if(e.key==='Tab'){
     var mo=document.getElementById('mo');
@@ -1042,15 +1042,15 @@ document.addEventListener('click', function(e){
   if(e.target.closest('.date-field')) return;
   closeCalendarPicker();
 });
+var _cpResizeRaf=null;
 window.addEventListener('resize', function(){
-  if(!_calendarPicker.targetId) return;
-  var input = document.getElementById(_calendarPicker.targetId);
-  if(input) positionCalendarPicker(input);
+  if(!_calendarPicker.targetId||_cpResizeRaf) return;
+  _cpResizeRaf=requestAnimationFrame(function(){_cpResizeRaf=null;var input=document.getElementById(_calendarPicker.targetId);if(input)positionCalendarPicker(input);});
 });
+var _cpScrollRaf=null;
 window.addEventListener('scroll', function(){
-  if(!_calendarPicker.targetId) return;
-  var input = document.getElementById(_calendarPicker.targetId);
-  if(input) positionCalendarPicker(input);
+  if(!_calendarPicker.targetId||_cpScrollRaf) return;
+  _cpScrollRaf=requestAnimationFrame(function(){_cpScrollRaf=null;var input=document.getElementById(_calendarPicker.targetId);if(input)positionCalendarPicker(input);});
 }, true);
 function openDateField(id){
   var el = document.getElementById(id);

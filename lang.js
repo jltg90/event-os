@@ -528,6 +528,7 @@ var TRANSLATIONS = {
     'settings_monday': 'Monday',
     // Error / validation messages
     'err_network': 'Network error. Check your connection and try again.',
+    'saved': 'Saved',
     'err_save_failed': 'Failed to save. Please try again.',
     'err_upload_failed': 'File upload failed. Please try again.',
     'err_file_too_large': 'File is too large (max 10 MB).',
@@ -1069,6 +1070,7 @@ var TRANSLATIONS = {
     'settings_monday': 'Lunes',
     // Error / validation messages
     'err_network': 'Error de red. Verifica tu conexión e intenta de nuevo.',
+    'saved': 'Guardado',
     'err_save_failed': 'No se pudo guardar. Intenta de nuevo.',
     'err_upload_failed': 'Error al subir archivo. Intenta de nuevo.',
     'err_file_too_large': 'Archivo demasiado grande (máx. 10 MB).',

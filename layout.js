@@ -862,7 +862,7 @@ function renderLayout(){
         </div>
         <div id="layout-zoom-bar" class="zoom-bar">
           <button class="zoom-btn" onclick="lZoom(-0.1)">-</button>
-          <span style="font-size:12px;font-weight:600;min-width:45px;text-align:center">${Math.round(LState.zoom*100)}%</span>
+          <input id="layout-zoom-input" class="zoom-input" type="text" value="${Math.round(LState.zoom*100)}%" onkeydown="if(event.key==='Enter'){lZoomTo(this.value);this.blur();}" onblur="lZoomTo(this.value)" onfocus="this.select()">
           <button class="zoom-btn" onclick="lZoom(0.1)">+</button>
         </div>
         <div style="width:1px;height:24px;background:var(--border)"></div>
@@ -4423,8 +4423,12 @@ function lZoom(delta,mode,cx,cy){
     }
   } else {
     LState.zoom=Math.max(0.1,Math.min(3,LState.zoom+delta));
-    // Zoom toward cursor point if provided
-    if(cx!=null&&outer){
+    // Zoom toward point — use cursor if provided, otherwise visible canvas center
+    if(outer){
+      if(cx==null){
+        var vc=_getVisibleCanvasCenter();
+        cx=vc.x; cy=vc.y;
+      }
       const newZoom=LState.zoom;
       outer.scrollLeft=_canvasPad + cx*newZoom - (cx*oldZoom + _canvasPad - outer.scrollLeft);
       outer.scrollTop=_canvasPad + cy*newZoom - (cy*oldZoom + _canvasPad - outer.scrollTop);
@@ -4432,8 +4436,24 @@ function lZoom(delta,mode,cx,cy){
   }
   const canvas=document.getElementById('lcanvas');
   if(canvas)canvas.style.transform=`scale(${LState.zoom})`;
-  const zd=document.querySelector('.zoom-bar span');
-  if(zd)zd.textContent=Math.round(LState.zoom*100)+'%';
+  var zi=document.getElementById('layout-zoom-input');
+  if(zi&&document.activeElement!==zi) zi.value=Math.round(LState.zoom*100)+'%';
+}
+function lZoomTo(val){
+  var n=parseInt(String(val).replace(/[^0-9]/g,''),10);
+  if(!n||n<10) n=10; if(n>300) n=300;
+  var oldZoom=LState.zoom;
+  LState.zoom=n/100;
+  var outer=document.getElementById('lcanvas-outer');
+  if(outer){
+    var vc=_getVisibleCanvasCenter();
+    outer.scrollLeft=_canvasPad + vc.x*LState.zoom - outer.clientWidth/2;
+    outer.scrollTop=_canvasPad + vc.y*LState.zoom - outer.clientHeight/2;
+  }
+  var canvas=document.getElementById('lcanvas');
+  if(canvas) canvas.style.transform='scale('+LState.zoom+')';
+  var zi=document.getElementById('layout-zoom-input');
+  if(zi) zi.value=Math.round(LState.zoom*100)+'%';
 }
 
 function lWheel(e){

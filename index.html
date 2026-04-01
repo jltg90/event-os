@@ -29,7 +29,7 @@ function ensureXLSX(){ return typeof XLSX !== 'undefined' ? Promise.resolve() : 
 <script src="app-data.js?v=20260331-1"></script>
 </head>
 <body>
-<div id="toast-c"></div>
+<div id="toast-c" role="status" aria-live="polite"></div>
 
 <!-- LOADING SCREEN (shown while waiting for Wix user identity) -->
 <div id="pg-loading" style="min-height:100dvh;display:flex;align-items:center;justify-content:center;background:var(--bg);flex-direction:column;gap:16px">
