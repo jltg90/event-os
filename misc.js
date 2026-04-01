@@ -83,7 +83,7 @@ function renderMoodboard(){
   el.innerHTML=`
   <div class="sh">
     <div>
-      <div class="sh-title editorial-title" style="color:#242424">${t('moodboard_library_title')}</div>
+      <div class="sh-title editorial-title" style="color:var(--text)">${t('moodboard_library_title')}</div>
       <div class="sh-sub">${total} ${t('images')} · ${mb.folders.length} folders</div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
