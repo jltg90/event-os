@@ -372,7 +372,7 @@ function renderEvents(){
   if(efBtn) efBtn.classList.toggle('active',_efAt);
   const evGridBtn=document.getElementById('ev-view-grid');
   const evListBtn=document.getElementById('ev-view-list');
-  if(evGridBtn) evGridBtn.style.display = '';
+  if(evGridBtn) evGridBtn.style.display = isMob ? 'none' : '';
   if(evListBtn) evListBtn.style.display = isMob ? 'none' : '';
   if(evGridBtn) evGridBtn.classList.toggle('active',_evView==='grid');
   if(evListBtn) evListBtn.classList.toggle('active',_evView==='list');
