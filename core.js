@@ -1175,6 +1175,10 @@ function switchTab(tab){
   document.querySelectorAll('.ptab').forEach(el=>el.classList.toggle('active',el.dataset.tab===tab));
   _updateTabIndicator();
   syncProjectTabMenu();
+  // Scroll to top so section header is visible below the sticky pnav
+  var pgEl=document.getElementById('pg-project');
+  if(pgEl) pgEl.scrollTop=0;
+  window.scrollTo(0,0);
   ({dashboard:renderDash,budget:renderBudget,timeline:renderTimeline,guests:renderGuests,layout:renderLayout,moodboard:renderMoodboard})[tab]?.();
   if(tab==='layout'){ setTimeout(function(){ lZoom(0,'fit'); },120); }
 }
