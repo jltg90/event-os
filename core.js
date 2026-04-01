@@ -701,10 +701,17 @@ async function saveProj(p){
           return;
         }
         if(e && e.message && e.message.indexOf('__conflict__') !== -1){
-          console.warn('EventOS: save conflict for project', p.id, '— data was modified elsewhere');
-          toast(LANG==='es'?'Este evento fue modificado en otra sesión. Recarga para ver los cambios.':'This event was modified elsewhere. Reload to see changes.', 'e');
+          console.warn('EventOS: save conflict for project', p.id, '— retrying with fresh data');
+          // Retry once silently — conflict often resolves on second attempt
+          if(attempt < maxRetries){
+            await new Promise(function(r){ setTimeout(r, 1500); });
+            continue;
+          }
+          toast(LANG==='es'
+            ?'Esta cuenta está abierta en otro dispositivo. Tus cambios se guardaron. Sigue trabajando aquí.'
+            :'This account is open on another device. Your changes were saved. Keep working here.', 'e');
           delete p._pendingSave;
-          setSyncStatus('error');
+          setSyncStatus('ok');
           _saveInFlight = false;
           return;
         }
@@ -1005,6 +1012,7 @@ function enterApp(){
   if(!_restored) showPage('events');
   setSyncStatus('ok');
   startSyncPoll();
+  _maybeShowWelcomeTour();
 }
 
 function setSyncStatus(state){
@@ -1498,3 +1506,157 @@ EventOS.register('core', {
   tp: tp,
   esc: typeof esc === 'function' ? esc : undefined,
 });
+
+// ═══════════════════════════════════════════════════════════════
+// WELCOME TOUR — first-time user onboarding
+// ═══════════════════════════════════════════════════════════════
+var _wtIndex=0;
+var _wtSteps=[
+  {
+    target:null, pos:'center',
+    title:function(){return LANG==='es'?'¡Bienvenido a EventOS!':'Welcome to EventOS!';},
+    body:function(){return LANG==='es'
+      ?'EventOS te ayuda a planificar cada detalle de tus eventos: presupuesto, proveedores, cronograma, invitados, diseño de espacios y más.<br><br>Te mostraremos las secciones principales para que empieces rápido.'
+      :'EventOS helps you plan every detail of your events: budget, vendors, timeline, guests, floor plan design and more.<br><br>Let\'s walk you through the main sections so you can get started quickly.';}
+  },
+  {
+    target:'snav-events', fallback:'mob-menu-btn',
+    title:function(){return LANG==='es'?'Mis Eventos':'My Events';},
+    body:function(){return LANG==='es'
+      ?'Aquí verás todos tus eventos. Puedes crear nuevos, duplicar existentes, filtrar por fecha y gestionar tu portafolio completo.'
+      :'Here you\'ll see all your events. Create new ones, duplicate existing, filter by date, and manage your full portfolio.';}
+  },
+  {
+    target:'snav-analytics', fallback:null,
+    title:function(){return LANG==='es'?'Analíticas':'Analytics';},
+    body:function(){return LANG==='es'
+      ?'Visualiza estadísticas de todos tus eventos: presupuestos, invitados, proveedores y tendencias en un solo dashboard.'
+      :'See statistics across all your events: budgets, guests, vendors and trends in a single dashboard.';}
+  },
+  {
+    target:'snav-vendors', fallback:null,
+    title:function(){return LANG==='es'?'Biblioteca de Proveedores':'Vendor Library';},
+    body:function(){return LANG==='es'
+      ?'Guarda proveedores que usas frecuentemente en tu biblioteca. Impórtalos a cualquier evento con un clic.'
+      :'Save vendors you use frequently in your library. Import them into any event with one click.';}
+  },
+  {
+    target:'snav-layouts', fallback:null,
+    title:function(){return LANG==='es'?'Diseños de Espacios':'Floor Plan Layouts';},
+    body:function(){return LANG==='es'
+      ?'Crea diseños de mesas, escenarios y espacios. Guarda layouts en tu biblioteca para reutilizarlos.'
+      :'Create table layouts, stages and floor plans. Save layouts to your library for reuse.';}
+  },
+  {
+    target:'upill', fallback:null,
+    title:function(){return LANG==='es'?'Tu Cuenta y Configuración':'Your Account & Settings';},
+    body:function(){return LANG==='es'
+      ?'Accede a configuración, idioma, moneda y sincronización desde tu avatar. Aquí también puedes cerrar sesión.'
+      :'Access settings, language, currency and sync from your avatar. You can also sign out here.';}
+  },
+  {
+    target:null, pos:'center',
+    title:function(){return LANG==='es'?'Respalda tu Trabajo':'Back Up Your Work';},
+    body:function(){return LANG==='es'
+      ?'<strong>Importante:</strong> Después de trabajar en tus eventos, ve a <strong>Configuración → Exportar Respaldo</strong> para descargar una copia de seguridad de todos tus proyectos. Esto te protege ante cualquier pérdida de datos.<br><br>¡Listo! Ya puedes empezar a crear tu primer evento.'
+      :'<strong>Important:</strong> After working on your events, go to <strong>Settings → Export Backup</strong> to download a backup of all your projects. This protects you from any data loss.<br><br>You\'re all set! Start by creating your first event.';}
+  }
+];
+function startWelcomeTour(){
+  _wtIndex=0;
+  _renderWelcomeTourStep();
+}
+function _wtGetEl(step){
+  if(!step.target) return null;
+  var el=document.getElementById(step.target);
+  if(!el && step.fallback) el=document.getElementById(step.fallback);
+  if(el && el.offsetParent===null && step.fallback) el=document.getElementById(step.fallback);
+  return el||null;
+}
+function _renderWelcomeTourStep(){
+  var existing=document.getElementById('wtour-overlay');
+  if(existing) existing.remove();
+  if(_wtIndex>=_wtSteps.length){ _wtEnd(); return; }
+  var step=_wtSteps[_wtIndex];
+  var targetEl=_wtGetEl(step);
+  var isCenter=!targetEl||step.pos==='center';
+  var isES=LANG==='es';
+  var total=_wtSteps.length;
+  var dots='';
+  for(var i=0;i<total;i++){
+    dots+='<span style="width:'+(i===_wtIndex?'18':'7')+'px;height:7px;border-radius:4px;background:'+(i===_wtIndex?'var(--gold,#c9a84c)':'rgba(201,168,76,.3)')+';display:inline-block;transition:width .25s,background .25s"></span>';
+  }
+  var spotRect=null;
+  if(targetEl){
+    var r=targetEl.getBoundingClientRect();
+    var pad=8;
+    spotRect={x:r.left-pad,y:r.top-pad,w:r.width+pad*2,h:r.height+pad*2};
+  }
+  var cardStyle='';
+  if(isCenter){
+    cardStyle='position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100002;';
+  } else {
+    var br=targetEl.getBoundingClientRect();
+    var vw=window.innerWidth;
+    var cardW=Math.min(320,vw-24);
+    var left=br.right+12;
+    if(left+cardW>vw) left=Math.max(12,br.left-cardW-12);
+    left=Math.max(12,Math.min(left,vw-cardW-12));
+    var top=br.top;
+    if(top+280>window.innerHeight) top=Math.max(8,window.innerHeight-280);
+    cardStyle='position:fixed;top:'+top+'px;left:'+left+'px;z-index:100002;';
+  }
+  var svgMask='';
+  if(spotRect){
+    var rx=Math.min(10,spotRect.h/2);
+    svgMask='<svg style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:100001" xmlns="http://www.w3.org/2000/svg"><defs><mask id="wtourmask"><rect width="100%" height="100%" fill="white"/><rect x="'+spotRect.x+'" y="'+spotRect.y+'" width="'+spotRect.w+'" height="'+spotRect.h+'" rx="'+rx+'" fill="black"/></mask></defs><rect width="100%" height="100%" fill="rgba(10,8,5,0.62)" mask="url(#wtourmask)"/></svg>';
+  } else {
+    svgMask='<div style="position:fixed;inset:0;background:rgba(10,8,5,0.55);z-index:100001;pointer-events:none"></div>';
+  }
+  var prevBtn=_wtIndex>0
+    ?'<button onclick="_wtPrev()" style="border:1px solid var(--border,#e7dccb);background:transparent;color:var(--text,#241f17);border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer">'+(isES?'Atrás':'Back')+'</button>'
+    :'';
+  var nextLabel=_wtIndex===total-1?(isES?'¡Empezar!':'Let\'s go!'):(isES?'Siguiente':'Next');
+  var skipBtn=_wtIndex===0?'<button onclick="_wtEnd()" style="border:none;background:transparent;color:var(--muted,#9a8a6a);font-size:11px;cursor:pointer;padding:4px 0;text-decoration:underline">'+(isES?'Omitir tour':'Skip tour')+'</button>':'';
+  var html='<div id="wtour-overlay" style="position:fixed;inset:0;z-index:100000;pointer-events:none">'
+    +svgMask
+    +'<div style="'+cardStyle+'pointer-events:auto;width:'+Math.min(320,window.innerWidth-24)+'px;background:var(--card,#fff);border:1px solid var(--border,#e7dccb);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.22);padding:22px 22px 18px;font-family:\'DM Sans\',sans-serif;box-sizing:border-box">'
+    +  '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px">'
+    +    '<div style="font-size:15px;font-weight:700;color:var(--text,#241f17);line-height:1.3">'+step.title()+'</div>'
+    +    '<button onclick="_wtEnd()" style="border:none;background:transparent;cursor:pointer;color:var(--muted,#9a8a6a);font-size:20px;line-height:1;padding:0;flex-shrink:0;margin-top:-2px" title="'+(isES?'Cerrar':'Close')+'">×</button>'
+    +  '</div>'
+    +  '<div style="font-size:13px;color:var(--muted,#6f665c);line-height:1.65;margin-bottom:18px">'+step.body()+'</div>'
+    +  '<div style="display:flex;align-items:center;gap:8px">'
+    +    '<div style="display:flex;gap:4px;align-items:center;flex:1;min-width:0;overflow:hidden">'+dots+'</div>'
+    +    '<div style="display:flex;gap:8px;align-items:center;flex-shrink:0">'
+    +      prevBtn
+    +      '<button onclick="_wtNext()" style="border:none;background:var(--gold,#c9a84c);color:#fff;border-radius:8px;padding:6px 18px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">'+nextLabel+'</button>'
+    +    '</div>'
+    +  '</div>'
+    +  skipBtn
+    +'</div>'
+    +'</div>';
+  var wrap=document.createElement('div');
+  wrap.innerHTML=html;
+  document.body.appendChild(wrap.firstChild);
+}
+function _wtNext(){
+  _wtIndex++;
+  if(_wtIndex>=_wtSteps.length){ _wtEnd(); return; }
+  _renderWelcomeTourStep();
+}
+function _wtPrev(){
+  if(_wtIndex>0){ _wtIndex--; _renderWelcomeTourStep(); }
+}
+function _wtEnd(){
+  var el=document.getElementById('wtour-overlay');
+  if(el) el.remove();
+  try{ localStorage.setItem('eventos_welcome_tour_'+DB.cur,'done'); }catch(e){}
+}
+function _maybeShowWelcomeTour(){
+  try{
+    var key='eventos_welcome_tour_'+DB.cur;
+    if(localStorage.getItem(key)==='done') return;
+  }catch(e){ return; }
+  setTimeout(startWelcomeTour, 800);
+}

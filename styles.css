@@ -2704,12 +2704,7 @@ tr:hover td { background: var(--bg2); }
   #ev-searchbar {
     margin-bottom: 14px !important;
   }
-  #ev-toolbar {
-    flex-direction: column !important;
-    align-items: stretch !important;
-    gap: 8px !important;
-  }
-  #ev-toolbar > div:first-child { flex-wrap: wrap !important; }
+  #ev-toolbar { display: none !important; }
 
   /* ── Event grid cards: fix badge/name overlap and footer ── */
   .evgrid:not(.ev-list) .ev-select { display: none; }
