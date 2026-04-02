@@ -135,8 +135,9 @@ export const getProjectsPaginated = authedQuery({
 export const upsertProject = authedMutation({
   args: {
     project: v.any(),
+    expectedVersion: v.optional(v.number()),
   },
-  returns: v.null(),
+  returns: v.number(),
   handler: async (ctx, wixUserId, args) => {
     const projectId = String(args.project && args.project.id ? args.project.id : "");
     if (!projectId) {
@@ -154,8 +155,9 @@ export const upsertProject = authedMutation({
       .unique();
 
     if (existing) {
-      // Optimistic locking: if client sends _expectedVersion, reject on mismatch
-      const expectedVersion = args.project?._expectedVersion;
+      // Optimistic locking: reject if another writer changed the document since we last read it.
+      // Also support the legacy path where _expectedVersion was embedded in the project blob.
+      const expectedVersion = args.expectedVersion ?? args.project?._expectedVersion;
       if (expectedVersion != null && expectedVersion !== existing.updatedAt) {
         throw new Error("__conflict__");
       }
@@ -172,7 +174,8 @@ export const upsertProject = authedMutation({
       });
     }
 
-    return null;
+    // Return the new updatedAt so the client can track the version for the next save
+    return now;
   },
 });
 

@@ -777,19 +777,19 @@ function _showConflictModal(){
     btn.textContent = LANG==='es' ? 'Cerrando sesiones...' : 'Closing sessions...';
     try{
       await EVENTOS_DATA.closeOtherSessions();
-      // Clear the stale optimistic-lock version so the retry doesn't hit __conflict__ again.
-      // We just closed all other writers, so it's safe to overwrite unconditionally.
-      var p = proj();
-      if(p) delete p._expectedVersion;
-      closeMo();
       toast(t('conflict_sessions_closed'), 's');
-      // Retry saving the current project now that other sessions are gone
-      if(p) saveProj(p);
     }catch(e){
-      console.error('closeOtherSessions failed:', e);
-      closeMo();
-      toast(t('err_save_failed'), 'e');
+      console.warn('closeOtherSessions failed (non-critical):', e);
+      // Even if the API call fails (e.g. no other sessions exist), proceed with
+      // the save retry — the user chose to continue on this device.
     }
+    // Clear the stale optimistic-lock version so the retry doesn't hit __conflict__ again.
+    // We're taking ownership of this project, so it's safe to overwrite unconditionally.
+    var p = proj();
+    if(p) delete p._expectedVersion;
+    closeMo();
+    // Retry saving the current project
+    if(p) saveProj(p);
   };
 }
 

@@ -132,6 +132,7 @@
     delete copy._extrasLoaded;
     delete copy._pendingSave;
     delete copy._extrasPending;
+    delete copy._expectedVersion;
     var mb = copy.moodboard;
     if(mb){
       var stripImg = function(img){
@@ -219,6 +220,8 @@
         projectId: projectId
       }, options);
       if(!row || !row.data) return null;
+      // Stamp version for optimistic locking (same as normalizeProjectRows)
+      if(row.updatedAt) row.data._expectedVersion = row.updatedAt;
       return row.data;
     },
     upsertProject: async function(project, options){
@@ -228,6 +231,15 @@
         throw new Error('Invalid project data: ' + validationError);
       }
       var cleaned = prepareProjectForSave(project);
+      // Pass the optimistic-lock version as a separate arg (stripped from the data blob)
+      var ev = (typeof project._expectedVersion === 'number') ? project._expectedVersion : undefined;
+      var versionArgs = ev !== undefined ? { expectedVersion: ev } : {};
+
+      // Helper: after a successful main-document save, update the in-memory version
+      // so the next save carries the correct optimistic-lock value.
+      function _stampVersion(newUpdatedAt){
+        if(typeof newUpdatedAt === 'number') project._expectedVersion = newUpdatedAt;
+      }
 
       // If previous extras save failed, force retry regardless of size
       var forceExtras = !!project._extrasPending;
@@ -259,10 +271,11 @@
         // Save main document FIRST, then extras. If extras fails, log a warning
         // but don't lose the main save. On next load the app will re-merge from
         // the in-memory copy and retry the extras on the following save.
-        await callConvex("mutation", "projects:upsertProject", {
+        var newVersion = await callConvex("mutation", "projects:upsertProject", Object.assign({
           sessionToken: _sessionToken,
           project: cleaned
-        }, options);
+        }, versionArgs), options);
+        _stampVersion(newVersion);
 
         try {
           await callConvex("mutation", "projects:upsertProjectExtras", {
@@ -289,10 +302,11 @@
         throw new Error("__oversize__");
       }
 
-      return await callConvex("mutation", "projects:upsertProject", {
+      var newVersion = await callConvex("mutation", "projects:upsertProject", Object.assign({
         sessionToken: _sessionToken,
         project: cleaned
-      }, options);
+      }, versionArgs), options);
+      _stampVersion(newVersion);
     },
     getProjectExtras: async function(projectId, options){
       return await callConvex("query", "projects:getProjectExtras", {
