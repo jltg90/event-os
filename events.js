@@ -464,6 +464,7 @@ function renderEvents(){
       <div>${isES?'Ubicación':'Location'}</div>
       <div>${isES?'Estado':'Status'}</div>
       <div>${isES?'Días':'Days'}</div>
+      <div></div>
     </div>`;
     g.innerHTML=listHeader+list.map(p=>{
       const da=daysAway(p.date); const isPast=da<0;
@@ -487,8 +488,8 @@ function renderEvents(){
           <div class="ev-list-cell ev-list-location" style="font-size:12px;white-space:nowrap">${esc(p.location||'—')}</div>
           <div class="ev-list-cell ev-hover-detail ev-list-budget" style="font-size:12px;white-space:nowrap">${fmtMoney(p.budget)}</div>
           <div class="ev-list-cell ev-list-status" style="font-size:12px;white-space:nowrap">${statusLabel(p.status)}</div>
+          <div class="ev-list-cell ev-list-days-cell" style="font-size:11px;font-weight:600;color:${isPast?'var(--light)':'var(--accent)'};white-space:nowrap;text-align:right">${dLabel}</div>
           <div class="ev-list-actions" onclick="event.stopPropagation()">
-            <span class="ev-list-days" style="font-size:11px;font-weight:600;color:${isPast?'var(--light)':'var(--accent)'};white-space:nowrap;margin-right:6px">${dLabel}</span>
             <button class="btn btn-ghost btn-sm btn-icon" title="Export PDF" onclick="openExportPDFForEvent('${p.id}')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></button>
             <button class="btn btn-ghost btn-sm btn-icon" title="Edit" onclick="openEventModal('${p.id}')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>
             <button class="btn btn-danger btn-sm btn-icon" title="Delete" onclick="confirmDelProj('${p.id}')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>
