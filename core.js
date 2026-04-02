@@ -592,8 +592,13 @@ async function _loadFullProjectsBackground(userId){
       if(!DB.projects[userId]) DB.projects[userId] = {};
       Object.keys(projects).forEach(function(pid){
         var inMem = DB.projects[userId][pid];
-        // Only overwrite if: no local copy exists, or the local copy is still a meta stub
-        if(!inMem || inMem._metaOnly) DB.projects[userId][pid] = projects[pid];
+        // Only overwrite if: no local copy exists, or the local copy is still a meta stub.
+        // Always overwrite __library__ with the server version so library data (layouts,
+        // vendor groups, task templates) syncs across devices.  The library is cached in full
+        // by cacheDB(), so without this exception it would never pick up server changes.
+        // Respect _pendingSave to avoid clobbering unsaved local edits.
+        var forceSync = (pid === '__library__' && !(inMem && inMem._pendingSave));
+        if(!inMem || inMem._metaOnly || forceSync) DB.projects[userId][pid] = projects[pid];
       });
       if(DB.projects[userId]['__library__']) DB.projects[userId]['__library__']._seeded = true;
       if(!_loadedProjects[userId]) _loadedProjects[userId] = new Set();
@@ -840,10 +845,14 @@ async function manualSync(){
             continue;
           }
           if(data._hasExtras){
-            // If extras were already in memory (user has the project open), preserve them.
-            // Otherwise fetch fresh to keep guests/layout current.
+            // If extras were already in memory AND the user is not actively editing on
+            // another device (the project just changed remotely), we must decide whether
+            // to keep the old in-memory extras or fetch fresh ones.
+            // For __library__ always fetch fresh extras so layouts/vendor-groups/task-
+            // templates sync across devices.  For regular projects, preserve in-memory
+            // extras if they were already loaded (user may have the project open).
             var prev = DB.projects[DB.cur] && DB.projects[DB.cur][id];
-            if(prev && prev._extrasLoaded){
+            if(prev && prev._extrasLoaded && id !== '__library__'){
               data.guests       = prev.guests       || [];
               data.layoutItems  = prev.layoutItems  || [];
               data.savedLayouts = prev.savedLayouts || [];
@@ -867,6 +876,10 @@ async function manualSync(){
     if(anyFetched){
       cacheDB();
       renderEvents();
+      // If the library was updated from another device, re-render the library page
+      if(changedIds.indexOf('__library__') !== -1 && _currentPage === 'library' && typeof renderLibrary === 'function'){
+        renderLibrary();
+      }
       // If the currently open project was updated externally, re-render its active tab
       if(CID && changedIds.indexOf(CID) !== -1){
         renderPNav();
