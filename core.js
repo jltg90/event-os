@@ -245,6 +245,7 @@ var _saveTimer = null;
 var _saveInFlight = false;
 var _savePending = null; // queued project to save after current completes
 var _lastSyncTime = null;
+var _pendingProject = null; // project waiting on the debounce timer
 
 var _fileUrlCache = {};
 var _fileUrlCacheKeys = []; // LRU order tracking
@@ -675,61 +676,111 @@ async function saveProj(p){
   p._pendingSave = true; // Mark as having unsaved local edits
   setSyncStatus('saving');
   clearTimeout(_saveTimer);
-  _saveTimer = setTimeout(async function(){
-    // Queue if another save is already in flight
-    if(_saveInFlight){ _savePending = p; return; }
-    _saveInFlight = true;
-    var maxRetries = 3;
-    for(var attempt = 1; attempt <= maxRetries; attempt++){
-      try{
-        await EVENTOS_DATA.upsertProject(p);
-        _lastSyncTime = Date.now();
+  _pendingProject = p;
+  _saveTimer = setTimeout(function(){ _executeSave(p); }, 1500);
+}
+
+// Core save logic — extracted so flushSave() and the debounce timer share the same path
+async function _executeSave(p){
+  _pendingProject = null;
+  clearTimeout(_saveTimer);
+  _saveTimer = null;
+  // Queue if another save is already in flight
+  if(_saveInFlight){ _savePending = p; return; }
+  _saveInFlight = true;
+  var maxRetries = 3;
+  for(var attempt = 1; attempt <= maxRetries; attempt++){
+    try{
+      await EVENTOS_DATA.upsertProject(p);
+      _lastSyncTime = Date.now();
+      delete p._pendingSave;
+      if(typeof clearLayoutDirty === 'function') clearLayoutDirty();
+      setSyncStatus('ok');
+      _clearTitleUnsaved();
+      var now=Date.now(); if(now-_lastSaveToastTime>5000){_lastSaveToastTime=now;if(typeof toast==='function')toast(t('saved'),'s');}
+      _saveInFlight = false;
+      // Flush queued save if one was pending during this save
+      if(_savePending){ var next = _savePending; _savePending = null; saveProj(next); }
+      return;
+    }catch(e){
+      if(e && e.message && e.message.indexOf('__oversize__') !== -1){
+        console.error('EventOS: project', p.id, 'is too large to save even after splitting extras');
+        toast(t('err_oversize'), 'e');
         delete p._pendingSave;
-        if(typeof clearLayoutDirty === 'function') clearLayoutDirty();
-        setSyncStatus('ok');
-        _clearTitleUnsaved();
-        var now=Date.now(); if(now-_lastSaveToastTime>5000){_lastSaveToastTime=now;if(typeof toast==='function')toast(t('saved'),'s');}
+        setSyncStatus('error');
         _saveInFlight = false;
-        // Flush queued save if one was pending during this save
-        if(_savePending){ var next = _savePending; _savePending = null; saveProj(next); }
         return;
-      }catch(e){
-        if(e && e.message && e.message.indexOf('__oversize__') !== -1){
-          console.error('EventOS: project', p.id, 'is too large to save even after splitting extras');
-          toast(t('err_oversize'), 'e');
-          delete p._pendingSave;
-          setSyncStatus('error');
-          _saveInFlight = false;
-          return;
-        }
-        if(e && e.message && e.message.indexOf('__conflict__') !== -1){
-          console.warn('EventOS: save conflict for project', p.id, '— retrying with fresh data');
-          // Retry once silently — conflict often resolves on second attempt
-          if(attempt < maxRetries){
-            await new Promise(function(r){ setTimeout(r, 1500); });
-            continue;
-          }
-          toast(LANG==='es'
-            ?'Esta cuenta está abierta en otro dispositivo. Tus cambios se guardaron. Sigue trabajando aquí.'
-            :'This account is open on another device. Your changes were saved. Keep working here.', 'e');
-          delete p._pendingSave;
-          setSyncStatus('ok');
-          _saveInFlight = false;
-          return;
-        }
-        console.error('saveProj attempt', attempt + '/' + maxRetries + ':', e);
+      }
+      if(e && e.message && e.message.indexOf('__conflict__') !== -1){
+        console.warn('EventOS: save conflict for project', p.id, '— retrying with fresh data');
+        // Retry once silently — conflict often resolves on second attempt
         if(attempt < maxRetries){
-          await new Promise(function(r){ setTimeout(r, Math.pow(2, attempt) * 1000); });
-        } else {
-          delete p._pendingSave;
-          setSyncStatus('offline');
-          toast(t('err_save_failed'), 'e');
+          await new Promise(function(r){ setTimeout(r, 1500); });
+          continue;
         }
+        _showConflictModal();
+        delete p._pendingSave;
+        setSyncStatus('ok');
+        _saveInFlight = false;
+        return;
+      }
+      console.error('saveProj attempt', attempt + '/' + maxRetries + ':', e);
+      if(attempt < maxRetries){
+        await new Promise(function(r){ setTimeout(r, Math.pow(2, attempt) * 1000); });
+      } else {
+        delete p._pendingSave;
+        setSyncStatus('offline');
+        toast(t('err_save_failed'), 'e');
       }
     }
-    _saveInFlight = false;
-    if(_savePending){ var next = _savePending; _savePending = null; saveProj(next); }
-  }, 1500);
+  }
+  _saveInFlight = false;
+  if(_savePending){ var next = _savePending; _savePending = null; saveProj(next); }
+}
+
+// Immediately flush any debounced save — call before navigation, tab switches,
+// page unload, or visibility changes to prevent data loss.
+function flushSave(){
+  if(_pendingProject){
+    var p = _pendingProject;
+    _pendingProject = null;
+    clearTimeout(_saveTimer);
+    _saveTimer = null;
+    _executeSave(p);
+  }
+}
+
+// Show a modal when a save conflict is detected (account open on another device).
+// Offers the user a button to close all other sessions and continue here.
+function _showConflictModal(){
+  if(typeof openMo !== 'function') return;
+  openMo(
+    '<div class="mo-title">' + esc(t('conflict_title')) + '</div>'
+    + '<div style="font-size:14px;color:var(--text);margin-bottom:16px;line-height:1.5">'
+    + esc(t('conflict_message'))
+    + '</div>'
+    + '<div class="mo-foot">'
+    + '<button class="btn btn-ghost" onclick="closeMo()">' + esc(t('conflict_dismiss')) + '</button>'
+    + '<button class="btn btn-primary" id="_conflict-close-sessions-btn">' + esc(t('conflict_close_sessions')) + '</button>'
+    + '</div>'
+  );
+  var btn = document.getElementById('_conflict-close-sessions-btn');
+  if(btn) btn.onclick = async function(){
+    btn.disabled = true;
+    btn.textContent = '...';
+    try{
+      await EVENTOS_DATA.closeOtherSessions();
+      closeMo();
+      toast(t('conflict_sessions_closed'), 's');
+      // Retry saving the current project now that other sessions are gone
+      var p = proj();
+      if(p) saveProj(p);
+    }catch(e){
+      console.error('closeOtherSessions failed:', e);
+      closeMo();
+      toast(t('err_save_failed'), 'e');
+    }
+  };
 }
 
 function saveDB(){
@@ -1046,11 +1097,20 @@ function setSyncDot(state){ setSyncStatus(state); }
 window.addEventListener('online',  function(){ if(DB.cur) manualSync(); });
 window.addEventListener('offline', function(){ setSyncStatus('offline'); });
 window.addEventListener('beforeunload', function(e){
-  if(_saveInFlight || _savePending){
+  // Flush debounced saves so the upsert starts before the page unloads
+  flushSave();
+  if(_saveInFlight || _savePending || _pendingProject){
     e.preventDefault();
     e.returnValue = '';
   }
 });
+// Flush saves when tab becomes hidden (user switches apps, minimizes, or Wix navigates).
+// On mobile browsers especially, a hidden tab can be killed without further notice.
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState === 'hidden') flushSave();
+});
+// pagehide fires more reliably than beforeunload in iframes and on mobile Safari
+window.addEventListener('pagehide', function(){ flushSave(); });
 
 function toggleMenu(){ document.getElementById('umenu').classList.toggle('hidden'); }
 function closeMenu(){ document.getElementById('umenu').classList.add('hidden'); }
@@ -1065,6 +1125,8 @@ function _saveLastView(){
 }
 var _currentPage = 'events';
 function showPage(p){
+  // Flush any pending debounced save before navigating away from current page
+  flushSave();
   _currentPage = p;
   _saveLastView();
   if(p !== 'project' && typeof closeProjectTabMenu === 'function') closeProjectTabMenu();
@@ -1087,6 +1149,8 @@ function showPage(p){
   else if(p==='library') renderLibrary();
 }
 async function openProject(id){
+  // Flush any pending save for the previously open project before switching
+  flushSave();
   CID = id;
   var p = DB.projects[DB.cur] && DB.projects[DB.cur][id];
   if(p && p._metaOnly){
@@ -1162,6 +1226,8 @@ function renderPNav(){
   syncProjectTabMenu();
 }
 function switchTab(tab){
+  // Flush any pending debounced save before switching sections
+  flushSave();
   // Warn about unsaved layout changes when leaving layout tab
   if(CTAB === 'layout' && tab !== 'layout' && typeof isLayoutDirty === 'function' && isLayoutDirty()){
     openConfirmModal({
@@ -1502,6 +1568,7 @@ EventOS.register('core', {
   proj: function(){ return proj(); },
   uproj: function(){ return uproj(); },
   saveProj: saveProj,
+  flushSave: flushSave,
   switchTab: switchTab,
   openProject: typeof openProject === 'function' ? openProject : undefined,
   t: t,
@@ -1510,7 +1577,219 @@ EventOS.register('core', {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// WELCOME TOUR — first-time user onboarding
+// ONBOARDING WIZARD — first-time setup (creates first event)
+// ═══════════════════════════════════════════════════════════════
+var _ob = null; // onboarding state
+
+function _showOnboardingWizard(){
+  _ob = { step:0, type:'', name:'', clientName:(WIX_USER&&WIX_USER.displayName)||'', date:'', location:'', budget:'', goals:[], otherLabel:'' };
+  _renderOnboarding();
+}
+
+function _renderOnboarding(){
+  var s = _ob.step;
+  var isES = LANG === 'es';
+  var stepLabels = isES ? ['Detalles','Fecha y lugar','Herramientas'] : ['Details','Date & venue','Tools'];
+
+  // Progress indicator
+  var prog = '<div style="display:flex;align-items:flex-start;gap:0;margin-bottom:28px;">';
+  for(var i=0;i<stepLabels.length;i++){
+    var done=i<s, active=i===s;
+    var circBg=done?'var(--gold)':active?'var(--gold-l)':'var(--bg)';
+    var circBd=(done||active)?'var(--gold)':'var(--border)';
+    var circClr=done?'#fff':active?'var(--gold-h)':'var(--light)';
+    var txtClr=active?'var(--gold-h)':done?'var(--text)':'var(--light)';
+    var inner=done?'<svg width="11" height="11" fill="none" stroke="#fff" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>':String(i+1);
+    var lineClr=i<=s?'var(--gold)':'var(--border)';
+    var line=i>0?'<div style="position:absolute;right:50%;top:13px;width:100%;height:1px;background:'+lineClr+'"></div>':'';
+    prog+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;position:relative;">'
+      +line
+      +'<div style="width:26px;height:26px;border-radius:50%;border:1.5px solid '+circBd+';background:'+circBg+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:'+circClr+';position:relative;z-index:1;">'+inner+'</div>'
+      +'<div style="font-size:10px;margin-top:5px;color:'+txtClr+';font-weight:'+(active?'600':'400')+';white-space:nowrap;letter-spacing:.3px;">'+stepLabels[i]+'</div>'
+      +'</div>';
+  }
+  prog+='</div>';
+
+  var body = '';
+  if(s===0) body = _obStep0(isES);
+  else if(s===1) body = _obStep1(isES);
+  else body = _obStep2(isES);
+
+  var backBtn = s>0
+    ? '<button class="btn btn-ghost" onclick="_obBack()">'+(isES?'← Atrás':'← Back')+'</button>'
+    : '<button class="btn btn-ghost" onclick="_obSkip()">'+(isES?'Explorar primero':'Explore first')+'</button>';
+
+  var nextLbl = s===2 ? (isES?'Crear mi evento':'Create my event') : (isES?'Siguiente':'Next →');
+
+  openMo(
+    '<div style="width:100%;max-width:560px;">'
+    +'<div style="font-family:\'Cormorant Garamond\',serif;font-size:26px;font-weight:400;color:var(--text);margin-bottom:3px;letter-spacing:-.01em;">'
+      +(isES?'Planifica tu evento perfecto':'Plan your perfect event')
+    +'</div>'
+    +'<div style="font-size:12px;color:var(--light);margin-bottom:24px;letter-spacing:.3px;">'
+      +(isES?'Paso '+(s+1)+' de 3 — Configura tu primer evento':'Step '+(s+1)+' of 3 — Set up your first event')
+    +'</div>'
+    +prog+body
+    +'<div class="mo-foot" style="margin-top:28px;">'
+      +backBtn
+      +'<button class="btn btn-primary" onclick="_obNext()">'+nextLbl+'</button>'
+    +'</div>'
+    +'</div>'
+  );
+}
+
+function _obStep0(isES){
+  // Event type cards
+  var cards = '';
+  for(var i=0;i<_WIZ_TYPES.length;i++){
+    var et=_WIZ_TYPES[i], sel=_ob.type===et.value;
+    var lbl=isES?et.label_es:et.label_en, desc=isES?et.desc_es:et.desc_en;
+    var isOther=et.isOther;
+    var unselBd=isOther?'#94a3b8':'var(--border)', selBd=isOther?'#475569':'var(--gold)';
+    var selBg=isOther?'#f1f5f9':'var(--gold-l)';
+    var icoBgSel=isOther?'#475569':'var(--gold)', icoBgUn=isOther?'#cbd5e1':'var(--border)';
+    cards+='<div onclick="_obPickType(\''+et.value+'\')" style="display:flex;align-items:center;gap:14px;padding:13px 16px;border-radius:var(--r);border:1.5px solid '+(sel?selBd:unselBd)+';background:'+(sel?selBg:'transparent')+';cursor:pointer;transition:var(--tr);margin-bottom:8px;">'
+      +'<div style="width:36px;height:36px;border-radius:9px;background:'+(sel?icoBgSel:icoBgUn)+';display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
+      +'<svg width="17" height="17" fill="none" stroke="'+(sel?'#fff':'var(--muted)')+'" stroke-width="1.8" viewBox="0 0 24 24">'+et.icon+'</svg></div>'
+      +'<div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:1px;">'+lbl+'</div><div style="font-size:12px;color:var(--muted);">'+desc+'</div></div>'
+      +(sel?'<svg width="16" height="16" fill="none" stroke="'+(isOther?'#475569':'var(--gold)')+'" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>':'')
+      +'</div>';
+  }
+  var otherInput = _ob.type==='other'
+    ? '<div class="ig" style="margin-top:4px;margin-bottom:4px;">'
+      +'<label style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px;">'+(isES?'¿Cómo llamarías a este tipo?':'What would you call this event type?')+'</label>'
+      +'<input class="input" id="ob-other-label" placeholder="'+(isES?'Ej. Festival, Retiro...':'E.g. Festival, Retreat...')+'" value="'+esc(_ob.otherLabel||'')+'" oninput="if(_ob)_ob.otherLabel=this.value">'
+      +'</div>'
+    : '';
+
+  return '<div>'
+    +'<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:4px;">'+(isES?'¿Qué tipo de evento estás organizando?':'What type of event are you planning?')+'</div>'
+    +'<div style="font-size:13px;color:var(--muted);margin-bottom:18px;">'+(isES?'Selecciona la categoría que mejor describe tu evento.':'Select the category that best describes your event.')+'</div>'
+    +cards+otherInput
+    +'<div style="border-top:1px solid var(--border);margin-top:16px;padding-top:16px;">'
+    +'<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:12px;">'+(isES?'Detalles del evento':'Event details')+'</div>'
+    +_obField('ob-name',isES?'Nombre del evento *':'Event name *',isES?'Ej. Boda de María y Carlos':'E.g. Summer Gala 2026',_ob.name,'text')
+    +_obField('ob-client',isES?'Cliente / Organización *':'Client / Organization *',isES?'Nombre del cliente':'Client name',_ob.clientName,'text')
+    +'</div></div>';
+}
+
+function _obStep1(isES){
+  return '<div>'
+    +'<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:4px;">'+(isES?'¿Cuándo y dónde?':'When and where?')+'</div>'
+    +'<div style="font-size:13px;color:var(--muted);margin-bottom:20px;">'+(isES?'Define cuándo y dónde se llevará a cabo tu evento.':'Set when and where your event will take place.')+'</div>'
+    +'<div class="ig" style="margin-bottom:14px;">'
+    +'<label style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px;">'+(isES?'Fecha del evento *':'Event date *')+'</label>'
+    +'<div class="date-field">'
+    +'<input class="input date-field-input" type="text" id="ob-date" value="'+(_ob.date?formatDMY(_ob.date):'')+'" placeholder="DD/MM/YYYY" readonly onclick="openCalendarPicker(\'ob-date\')" onfocus="openCalendarPicker(\'ob-date\')">'
+    +'<button type="button" class="date-field-btn" onclick="openCalendarPicker(\'ob-date\')" aria-label="'+(isES?'Fecha del evento':'Event date')+'">'
+    +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>'
+    +'</button></div></div>'
+    +_obField('ob-location',isES?'Sede / Lugar':'Venue / Location',isES?'Nombre o dirección del lugar':'Venue name or address',_ob.location,'text')
+    +_obField('ob-budget',isES?'Presupuesto total ('+CURRENCY.symbol+')':'Total budget ('+CURRENCY.symbol+')','0',_ob.budget,'number')
+    +'</div>';
+}
+
+function _obStep2(isES){
+  var items = '';
+  for(var i=0;i<_WIZ_GOALS.length;i++){
+    var g=_WIZ_GOALS[i], sel=_ob.goals.indexOf(g.id)>-1;
+    var lbl=isES?g.es:g.en;
+    items+='<div onclick="_obToggleGoal(\''+g.id+'\')" style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:var(--r);border:1.5px solid '+(sel?'var(--gold)':'var(--border)')+';background:'+(sel?'var(--gold-l)':'transparent')+';cursor:pointer;transition:var(--tr);margin-bottom:8px;">'
+      +'<svg width="16" height="16" fill="none" stroke="'+(sel?'var(--gold-h)':'var(--muted)')+'" stroke-width="1.8" viewBox="0 0 24 24">'+g.icon+'</svg>'
+      +'<span style="font-size:13px;font-weight:'+(sel?'600':'400')+';color:var(--text);flex:1;">'+lbl+'</span>'
+      +'<div style="width:18px;height:18px;border-radius:4px;border:1.5px solid '+(sel?'var(--gold)':'var(--border)')+';background:'+(sel?'var(--gold)':'transparent')+';display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
+      +(sel?'<svg width="10" height="10" fill="none" stroke="#fff" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>':'')
+      +'</div></div>';
+  }
+  return '<div>'
+    +'<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:4px;">'+(isES?'¿Qué quieres organizar?':'What will you manage?')+'</div>'
+    +'<div style="font-size:13px;color:var(--muted);margin-bottom:18px;">'+(isES?'Selecciona todo lo que aplique. Puedes ajustarlo después.':'Select everything that applies. You can adjust later.')+'</div>'
+    +items+'</div>';
+}
+
+function _obField(id, label, placeholder, value, type){
+  var val = value ? esc(String(value)) : '';
+  return '<div class="ig" style="margin-bottom:14px;">'
+    +'<label style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px;">'+label+'</label>'
+    +'<input class="input" id="'+id+'" type="'+(type||'text')+'" placeholder="'+placeholder+'" value="'+val+'">'
+    +'</div>';
+}
+
+function _obPickType(val){ if(_ob){ _ob.type=val; _renderOnboarding(); } }
+function _obToggleGoal(id){
+  if(!_ob) return;
+  var i=_ob.goals.indexOf(id);
+  if(i>-1) _ob.goals.splice(i,1); else _ob.goals.push(id);
+  _renderOnboarding();
+}
+
+function _obFlush(){
+  if(!_ob) return;
+  var fields=[['ob-name','name'],['ob-client','clientName'],['ob-date','date'],['ob-location','location'],['ob-budget','budget'],['ob-other-label','otherLabel']];
+  for(var i=0;i<fields.length;i++){
+    var el=document.getElementById(fields[i][0]);
+    if(el) _ob[fields[i][1]]=el.value;
+  }
+}
+
+function _obNext(){
+  if(!_ob) return;
+  _obFlush();
+  var s=_ob.step, isES=LANG==='es';
+  if(s===0){
+    if(!_ob.type){ toast(isES?'Selecciona un tipo de evento':'Select an event type','e'); return; }
+    if(!(_ob.name||'').trim()){ toast(isES?'El nombre es requerido':'Event name is required','e'); return; }
+    if(!(_ob.clientName||'').trim()){ toast(isES?'El cliente es requerido':'Client name is required','e'); return; }
+  }
+  if(s===1){
+    if(!_ob.date){ toast(isES?'La fecha es requerida':'Event date is required','e'); return; }
+    if(_ob.budget && +_ob.budget<0){ toast(isES?'El presupuesto no puede ser negativo':'Budget cannot be negative','e'); return; }
+  }
+  if(s===2){ _obFinish(); return; }
+  _ob.step++;
+  _renderOnboarding();
+}
+
+function _obBack(){
+  if(!_ob) return;
+  _obFlush();
+  if(_ob.step>0){ _ob.step--; _renderOnboarding(); }
+}
+
+function _obSkip(){
+  closeMo();
+  _ob=null;
+  try{ localStorage.setItem('eventos_welcome_tour_'+DB.cur,'done'); }catch(e){}
+}
+
+function _obFinish(){
+  _obFlush();
+  var isES=LANG==='es';
+  var name=(_ob.name||'').trim();
+  var client=(_ob.clientName||'').trim();
+  var date=parseUserDate(_ob.date);
+  if(!name||!client||!date){ toast(isES?'Nombre, cliente y fecha son requeridos':'Name, client and date required','e'); return; }
+  var np={
+    id:'p'+Date.now(),
+    vendors:[], vendorsInitialized:true,
+    tasks:[], tasksInitialized:true, guests:[], layoutItems:[], layoutQuoteExtras:[], layoutExport:null, savedLayouts:[],
+    moodboard:{folders:[],uncategorized:[]},
+    name:name, clientName:client, description:'',
+    type:_ob.type==='other'?('other:'+((_ob.otherLabel||'').trim()||'Other')):_ob.type,
+    date:date, location:_ob.location,
+    budget:+_ob.budget||0, status:'to-be-confirmed',
+    wizardGoals:_ob.goals
+  };
+  saveProj(np);
+  closeMo();
+  _ob=null;
+  try{ localStorage.setItem('eventos_welcome_tour_'+DB.cur,'done'); }catch(e){}
+  toast(isES?'¡Evento creado! Bienvenido a EventOS':'Event created! Welcome to EventOS','s');
+  setTimeout(function(){ openProject(np.id); },80);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// WELCOME TOUR — guided tour (accessible from sidebar button)
 // ═══════════════════════════════════════════════════════════════
 var _wtIndex=0;
 var _wtSteps=[
@@ -1660,5 +1939,5 @@ function _maybeShowWelcomeTour(){
     var key='eventos_welcome_tour_'+DB.cur;
     if(localStorage.getItem(key)==='done') return;
   }catch(e){ return; }
-  setTimeout(startWelcomeTour, 800);
+  setTimeout(_showOnboardingWizard, 800);
 }

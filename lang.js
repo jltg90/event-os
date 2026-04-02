@@ -545,6 +545,11 @@ var TRANSLATIONS = {
     'importing': 'Importing...',
     'exporting': 'Exporting...',
     'err_oversize': 'This event has too much data to save. Try removing some images or attachments.',
+    'conflict_title': 'Account open elsewhere',
+    'conflict_message': 'This account is open on another device, which may cause your changes to not be saved correctly. You can close all other sessions and continue working here.',
+    'conflict_dismiss': 'Dismiss',
+    'conflict_close_sessions': 'Continue here & close other sessions',
+    'conflict_sessions_closed': 'Other sessions closed. You can continue working here.',
     // Library module
     'lib_back': 'Back',
     'lib_add_vendor': 'Add Vendor',
@@ -1087,6 +1092,11 @@ var TRANSLATIONS = {
     'importing': 'Importando...',
     'exporting': 'Exportando...',
     'err_oversize': 'Este evento tiene demasiados datos para guardar. Intenta eliminar algunas imágenes o archivos adjuntos.',
+    'conflict_title': 'Cuenta abierta en otro lugar',
+    'conflict_message': 'Esta cuenta está abierta en otro dispositivo, lo que puede causar que tus cambios no se guarden correctamente. Puedes cerrar las otras sesiones y continuar trabajando aquí.',
+    'conflict_dismiss': 'Cerrar',
+    'conflict_close_sessions': 'Continuar aquí y cerrar otras sesiones',
+    'conflict_sessions_closed': 'Otras sesiones cerradas. Puedes continuar trabajando aquí.',
     // Library module
     'lib_back': 'Volver',
     'lib_add_vendor': 'Agregar Proveedor',

@@ -1,4 +1,4 @@
-import { action, internalMutation } from "./_generated/server";
+import { action, mutation, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 
@@ -54,6 +54,52 @@ export const _createSessionRecord = internalMutation({
     });
 
     return null;
+  },
+});
+
+// ─── Revoke other sessions (keep only the caller's) ──────────────────────────
+
+export const revokeOtherSessions = internalMutation({
+  args: {
+    wixUserId: v.string(),
+    keepToken: v.string(),
+  },
+  returns: v.number(),
+  handler: async (ctx, args) => {
+    const sessions = await ctx.db
+      .query("sessions")
+      .withIndex("by_user", (q: any) => q.eq("wixUserId", args.wixUserId))
+      .collect();
+    let revoked = 0;
+    for (const s of sessions) {
+      if (s.sessionToken !== args.keepToken) {
+        await ctx.db.delete(s._id);
+        revoked++;
+      }
+    }
+    return revoked;
+  },
+});
+
+// ─── Public mutation: close all other sessions for this user ─────────────────
+
+export const closeOtherSessions = mutation({
+  args: { sessionToken: v.string() },
+  returns: v.number(),
+  handler: async (ctx, args) => {
+    const wixUserId = await requireAuth(ctx, args.sessionToken);
+    const sessions = await ctx.db
+      .query("sessions")
+      .withIndex("by_user", (q: any) => q.eq("wixUserId", wixUserId))
+      .collect();
+    let revoked = 0;
+    for (const s of sessions) {
+      if (s.sessionToken !== args.sessionToken) {
+        await ctx.db.delete(s._id);
+        revoked++;
+      }
+    }
+    return revoked;
   },
 });
 

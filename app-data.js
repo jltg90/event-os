@@ -306,6 +306,11 @@
         projectId: projectId
       }, options);
     },
+    closeOtherSessions: async function(options){
+      return await callConvex("mutation", "auth:closeOtherSessions", {
+        sessionToken: _sessionToken
+      }, options);
+    },
     // --- File Storage API ---
     MAX_UPLOAD_BYTES: 10 * 1024 * 1024, // 10 MB
     ALLOWED_MIME_TYPES: [
