@@ -1877,31 +1877,44 @@ function libLayoutRow(entry, isES){
     +'</div></td>'
     +'</tr>';
 }
+var _expandedLibLayoutIds=[];
+function toggleLibLayoutExpand(lid){
+  var idx=_expandedLibLayoutIds.indexOf(lid);
+  if(idx>-1) _expandedLibLayoutIds.splice(idx,1); else _expandedLibLayoutIds.push(lid);
+  var card=document.querySelector('.llmc[data-lid="'+lid+'"]');
+  if(card) card.classList.toggle('emc-open',_expandedLibLayoutIds.indexOf(lid)>-1);
+}
 function libLayoutCard(entry, isES){
   var tables=entry.items.filter(function(i){return i.shape&&i.shape.includes('table');}).length;
   var seats=entry.items.reduce(function(s,i){return s+(i.chairs||0);},0);
-  return `<article class="mobile-record-card">
-    <div class="mobile-record-card-head">
-      <label onclick="event.stopPropagation()" style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;margin-top:1px">
+  var isOpen=_expandedLibLayoutIds.indexOf(entry.id)>-1;
+  return `<article class="emc llmc${isOpen?' emc-open':''}" data-lid="${entry.id}">
+    <div class="emc-summary" onclick="toggleLibLayoutExpand('${entry.id}')">
+      <label onclick="event.stopPropagation()" style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;flex-shrink:0">
         <input type="checkbox" class="lib-ly-sel" data-lid="${entry.id}" style="width:16px;height:16px;accent-color:var(--gold-h);cursor:pointer" onchange="libUpdateLayoutBulkBtn()">
       </label>
-      <div style="flex:1;min-width:0">
-        <div class="mobile-record-title">${esc(entry.name)}</div>
-        <div class="mobile-record-subtitle">${esc(entry.location||'—')}</div>
+      <div class="emc-info">
+        <div class="emc-name">${esc(entry.name)}</div>
+        <div class="emc-row">
+          <span class="emc-date">${tables} ${isES?'mesas':'tables'} · ${seats} ${isES?'sillas':'seats'}</span>
+          ${entry.location?'<span class="emc-days">'+esc(entry.location)+'</span>':''}
+        </div>
       </div>
-      <button class="btn btn-ghost btn-sm" onclick="libOpenLayoutEditor('${entry.id}')">${isES?'Abrir':'Open'}</button>
+      <svg class="emc-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
     </div>
-    <div class="mobile-meta-grid">
-      ${renderMobileActionChip(isES?'Invitados':'Guests', entry.guests||seats||'—')}
-      ${renderMobileActionChip(isES?'Mesas':'Tables', tables||'—')}
-      ${renderMobileActionChip(isES?'Ubicación':'Location', esc(entry.location||'—'))}
-      ${renderMobileActionChip(isES?'Notas':'Notes', esc(entry.notes||'—'))}
-    </div>
-    <div class="mobile-record-card-actions">
-      <button class="btn btn-ghost btn-sm" onclick="libLoadLayoutToEvent('${entry.id}')">${isES?'Cargar':'Load'}</button>
-      <button class="btn btn-ghost btn-sm" onclick="libOpenLayoutEditor('${entry.id}')">${isES?'Editar':'Edit'}</button>
-      <button class="btn btn-ghost btn-sm" onclick="libDuplicateLayout('${entry.id}')">${isES?'Duplicar':'Duplicate'}</button>
-      <button class="btn btn-danger btn-sm" onclick="libDelete('layouts','${entry.id}')">${isES?'Eliminar':'Delete'}</button>
+    <div class="emc-detail">
+      <div class="emc-meta">
+        <div class="emc-meta-item"><span class="emc-meta-lbl">${isES?'Invitados':'Guests'}</span><span class="emc-meta-val">${entry.guests||seats||'—'}</span></div>
+        <div class="emc-meta-item"><span class="emc-meta-lbl">${isES?'Mesas':'Tables'}</span><span class="emc-meta-val">${tables||'—'}</span></div>
+        ${entry.location?'<div class="emc-meta-item"><span class="emc-meta-lbl">'+(isES?'Ubicación':'Location')+'</span><span class="emc-meta-val">'+esc(entry.location)+'</span></div>':''}
+        ${entry.notes?'<div class="emc-meta-item emc-meta-full"><span class="emc-meta-lbl">'+(isES?'Notas':'Notes')+'</span><span class="emc-meta-val">'+esc(entry.notes)+'</span></div>':''}
+      </div>
+      <div class="emc-actions" onclick="event.stopPropagation()">
+        <button class="btn btn-primary btn-sm" onclick="libOpenLayoutEditor('${entry.id}')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg> ${isES?'Abrir':'Open'}</button>
+        <button class="btn btn-ghost btn-sm" onclick="libLoadLayoutToEvent('${entry.id}')">${isES?'Cargar':'Load'}</button>
+        <button class="btn btn-ghost btn-sm" onclick="libDuplicateLayout('${entry.id}')">${isES?'Duplicar':'Duplicate'}</button>
+        <button class="btn btn-danger btn-sm" onclick="libDelete('layouts','${entry.id}')">${isES?'Eliminar':'Delete'}</button>
+      </div>
     </div>
   </article>`;
 }
@@ -2597,34 +2610,44 @@ function _libMbRow(entry, isES){
     +'</div></td>'
     +'</tr>';
 }
+var _expandedLibMbIds=[];
+function toggleLibMbExpand(mid){
+  var idx=_expandedLibMbIds.indexOf(mid);
+  if(idx>-1) _expandedLibMbIds.splice(idx,1); else _expandedLibMbIds.push(mid);
+  var card=document.querySelector('.lmmc[data-mid="'+mid+'"]');
+  if(card) card.classList.toggle('emc-open',_expandedLibMbIds.indexOf(mid)>-1);
+}
 function libMoodboardCard(entry, isES){
   var images = entry.images || [];
   var imgCnt = images.length;
   var folderCount = (entry.folders||[]).length + ((entry.uncategorized||[]).length ? 1 : 0) + (images.length ? 1 : 0);
-  var cover = images[0] || '';
-  return `<article class="mobile-record-card">
-    <div class="mobile-record-card-head">
-      <label onclick="event.stopPropagation()" style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;margin-top:1px">
+  var isOpen=_expandedLibMbIds.indexOf(entry.id)>-1;
+  return `<article class="emc lmmc${isOpen?' emc-open':''}" data-mid="${entry.id}">
+    <div class="emc-summary" onclick="toggleLibMbExpand('${entry.id}')">
+      <label onclick="event.stopPropagation()" style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;flex-shrink:0">
         <input type="checkbox" class="lib-mb-sel" data-id="${entry.id}" style="width:16px;height:16px;accent-color:var(--gold-h);cursor:pointer" onchange="libUpdateMoodboardBulkBtn()">
       </label>
-      <div style="flex:1;min-width:0">
-        <div class="mobile-record-title">${esc(entry.name)}</div>
-        <div class="mobile-record-subtitle">${esc(entry.date||'—')}</div>
+      <div class="emc-info">
+        <div class="emc-name">${esc(entry.name)}</div>
+        <div class="emc-row">
+          <span class="emc-date">${imgCnt} ${isES?'imágenes':'images'} · ${folderCount} ${isES?'carpetas':'folders'}</span>
+        </div>
       </div>
-      <button class="btn btn-ghost btn-sm" onclick="libOpenMoodboardFolder('${entry.id}')">${isES?'Abrir':'Open'}</button>
+      <svg class="emc-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
     </div>
-    ${cover?`<div style="margin-top:12px;border-radius:14px;overflow:hidden;aspect-ratio:1.35;background:var(--bg2)"><img src="${cover}" alt="${esc(entry.name)}" style="width:100%;height:100%;object-fit:cover;display:block"></div>`:''}
-    <div class="mobile-meta-grid">
-      ${renderMobileActionChip(isES?'Imágenes':'Images', imgCnt)}
-      ${renderMobileActionChip(isES?'Carpetas':'Folders', folderCount)}
-      ${renderMobileActionChip(t('lib_date_col'), esc(entry.date||'—'))}
-      ${renderMobileActionChip(isES?'Estado':'Status', imgCnt?(isES?'Listo':'Ready'):(isES?'Vacío':'Empty'))}
-    </div>
-    <div class="mobile-record-card-actions">
-      <button class="btn btn-ghost btn-sm" onclick="libOpenMoodboardFolder('${entry.id}')">${isES?'Ver':'View'}</button>
-      <button class="btn btn-ghost btn-sm" onclick="libLoadMoodboard('${entry.id}')">${isES?'Cargar':'Load'}</button>
-      <button class="btn btn-ghost btn-sm" onclick="libEditMoodboardFolder('${entry.id}')">${isES?'Editar':'Edit'}</button>
-      <button class="btn btn-danger btn-sm" onclick="libDelete('moodboards','${entry.id}')">${isES?'Eliminar':'Delete'}</button>
+    <div class="emc-detail">
+      <div class="emc-meta">
+        <div class="emc-meta-item"><span class="emc-meta-lbl">${isES?'Imágenes':'Images'}</span><span class="emc-meta-val">${imgCnt}</span></div>
+        <div class="emc-meta-item"><span class="emc-meta-lbl">${isES?'Carpetas':'Folders'}</span><span class="emc-meta-val">${folderCount}</span></div>
+        <div class="emc-meta-item"><span class="emc-meta-lbl">${isES?'Fecha':'Date'}</span><span class="emc-meta-val">${esc(entry.date||'—')}</span></div>
+        <div class="emc-meta-item"><span class="emc-meta-lbl">${isES?'Estado':'Status'}</span><span class="emc-meta-val">${imgCnt?(isES?'Listo':'Ready'):(isES?'Vacío':'Empty')}</span></div>
+      </div>
+      <div class="emc-actions" onclick="event.stopPropagation()">
+        <button class="btn btn-primary btn-sm" onclick="libOpenMoodboardFolder('${entry.id}')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg> ${isES?'Abrir':'Open'}</button>
+        <button class="btn btn-ghost btn-sm" onclick="libLoadMoodboard('${entry.id}')">${isES?'Cargar':'Load'}</button>
+        <button class="btn btn-ghost btn-sm" onclick="libEditMoodboardFolder('${entry.id}')">${isES?'Editar':'Edit'}</button>
+        <button class="btn btn-danger btn-sm" onclick="libDelete('moodboards','${entry.id}')">${isES?'Eliminar':'Delete'}</button>
+      </div>
     </div>
   </article>`;
 }

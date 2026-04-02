@@ -1676,3 +1676,140 @@ function sidebarSwitchTab(tab){
   const sid = tabMap[tab];
   if (sid) { const se = document.getElementById(sid); if (se) se.classList.add('active'); }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// FEEDBACK SYSTEM
+// ═══════════════════════════════════════════════════════════════
+var FEEDBACK_PROJECT_ID = '__feedback__';
+
+function openFeedbackModal(){
+  var isES = LANG==='es';
+  openMo(`<div class="mo-title">${isES?'Enviar Retroalimentación':'Send Feedback'}</div>
+  <div class="form-grid">
+    <div class="ig" style="grid-column:1/-1">
+      <label>${isES?'Tipo':'Type'}</label>
+      <select class="select" id="fb-type">
+        <option value="bug">${isES?'Reporte de Error':'Bug Report'}</option>
+        <option value="feature">${isES?'Solicitud de Función':'Feature Request'}</option>
+        <option value="general">${isES?'Comentario General':'General Feedback'}</option>
+      </select>
+    </div>
+    <div class="ig" style="grid-column:1/-1">
+      <label>${isES?'¿Qué sucedió?':'What happened?'} *</label>
+      <textarea class="textarea" id="fb-desc" rows="4" placeholder="${isES?'Describe el problema o sugerencia...':'Describe the issue or suggestion...'}" style="min-height:100px"></textarea>
+    </div>
+    <div class="ig" style="grid-column:1/-1">
+      <label>${isES?'Adjuntar captura (opcional)':'Attach screenshot (optional)'}</label>
+      <input type="file" class="input" id="fb-file" accept="image/*" style="padding:8px">
+    </div>
+  </div>
+  <div style="font-size:11px;color:var(--muted);margin-top:8px;margin-bottom:12px">${isES
+    ?'Solo recopilamos la información mostrada arriba + contexto técnico (página actual, versión de la app).'
+    :'We only collect the information above + technical context (current page, app version).'}</div>
+  <div class="mo-foot">
+    <button class="btn btn-ghost" onclick="closeMo()">${t('cancel')}</button>
+    <button class="btn btn-primary" onclick="submitFeedback()">${isES?'Enviar':'Send'}</button>
+  </div>`);
+}
+
+async function submitFeedback(){
+  var desc = (document.getElementById('fb-desc')||{}).value||'';
+  if(!desc.trim()) return toast(LANG==='es'?'Por favor describe el problema':'Please describe the issue','e');
+  var type = (document.getElementById('fb-type')||{}).value||'general';
+  var fileInput = document.getElementById('fb-file');
+  var screenshotUrl = null;
+
+  // Upload screenshot if provided
+  if(fileInput && fileInput.files && fileInput.files[0]){
+    try{
+      toast(LANG==='es'?'Subiendo imagen...':'Uploading image...');
+      var storageId = await EVENTOS_DATA.uploadFile(fileInput.files[0]);
+      screenshotUrl = await EVENTOS_DATA.getFileUrl(storageId);
+    }catch(e){ console.warn('Feedback screenshot upload failed:', e); }
+  }
+
+  var entry = {
+    id: 'fb_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
+    type: type,
+    description: desc.trim(),
+    screenshot: screenshotUrl,
+    context: {
+      page: typeof CID!=='undefined'&&CID ? 'project' : 'events',
+      tab: typeof CTAB!=='undefined' ? CTAB : '',
+      viewport: window.innerWidth+'x'+window.innerHeight,
+      userAgent: navigator.userAgent.slice(0,120),
+      lang: LANG,
+      appVersion: (window.EVENTOS_CONFIG||{}).buildVersion||'',
+      projectId: typeof CID!=='undefined' ? CID : ''
+    },
+    timestamp: new Date().toISOString(),
+    status: 'new'
+  };
+
+  // Store in __feedback__ pseudo-project
+  try{
+    if(!DB.projects[DB.cur]) DB.projects[DB.cur]={};
+    var fbProj = DB.projects[DB.cur][FEEDBACK_PROJECT_ID];
+    if(!fbProj){
+      fbProj = {id:FEEDBACK_PROJECT_ID, name:'Feedback', status:'__internal__', entries:[]};
+      DB.projects[DB.cur][FEEDBACK_PROJECT_ID] = fbProj;
+    }
+    if(!fbProj.entries) fbProj.entries=[];
+    fbProj.entries.push(entry);
+    await saveProj(fbProj);
+    closeMo();
+    toast(LANG==='es'?'¡Gracias! Tu retroalimentación fue enviada.':'Thanks! Your feedback has been sent.','s');
+  }catch(e){
+    console.error('Feedback submit error:', e);
+    toast(LANG==='es'?'Error al enviar. Intenta de nuevo.':'Error sending. Please try again.','e');
+  }
+}
+
+function openFeedbackAdmin(){
+  var isES = LANG==='es';
+  var fbProj = DB.projects[DB.cur] && DB.projects[DB.cur][FEEDBACK_PROJECT_ID];
+  var entries = (fbProj && fbProj.entries) || [];
+  var sorted = entries.slice().sort(function(a,b){ return (b.timestamp||'').localeCompare(a.timestamp||''); });
+  var statusClr = {new:'var(--warn)',reviewed:'var(--success)',resolved:'var(--muted)'};
+  var rows = sorted.length ? sorted.map(function(e){
+    var clr = statusClr[e.status]||'var(--muted)';
+    var typeLabel = {bug:isES?'Error':'Bug',feature:isES?'Función':'Feature',general:isES?'General':'General'}[e.type]||e.type;
+    return `<div style="padding:14px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <div style="width:8px;height:8px;border-radius:50%;background:${clr};flex-shrink:0"></div>
+        <span style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em">${esc(typeLabel)}</span>
+        <span style="font-size:11px;color:var(--muted);margin-left:auto">${e.timestamp?new Date(e.timestamp).toLocaleDateString():''}</span>
+      </div>
+      <div style="font-size:13px;color:var(--text);line-height:1.5;margin-bottom:6px">${esc(e.description)}</div>
+      ${e.screenshot?'<div style="margin-bottom:8px"><img src="'+e.screenshot+'" style="max-width:100%;max-height:200px;border-radius:8px;border:1px solid var(--border);cursor:pointer" onclick="openLightbox(this.src,\'Feedback screenshot\')"></div>':''}
+      <div style="font-size:10px;color:var(--light)">${esc((e.context||{}).viewport||'')} · ${esc((e.context||{}).appVersion||'')} · ${esc((e.context||{}).page||'')}${(e.context||{}).tab?' / '+esc(e.context.tab):''}</div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="btn btn-ghost btn-sm" style="font-size:10px" onclick="setFeedbackStatus('${e.id}','reviewed')">${isES?'Revisado':'Reviewed'}</button>
+        <button class="btn btn-ghost btn-sm" style="font-size:10px" onclick="setFeedbackStatus('${e.id}','resolved')">${isES?'Resuelto':'Resolved'}</button>
+        <button class="btn btn-danger btn-sm" style="font-size:10px" onclick="deleteFeedbackEntry('${e.id}')">${isES?'Eliminar':'Delete'}</button>
+      </div>
+    </div>`;
+  }).join('') : `<div style="padding:40px;text-align:center;color:var(--muted)">${isES?'No hay retroalimentación aún':'No feedback yet'}</div>`;
+
+  openMo(`<div class="mo-title">${isES?'Retroalimentación Recibida':'Feedback Received'} <span style="font-size:14px;color:var(--muted)">(${sorted.length})</span></div>
+  <div style="max-height:60vh;overflow-y:auto">${rows}</div>
+  <div class="mo-foot">
+    <button class="btn btn-ghost" onclick="closeMo()">${t('close')}</button>
+  </div>`);
+}
+
+function setFeedbackStatus(entryId, status){
+  var fbProj = DB.projects[DB.cur] && DB.projects[DB.cur][FEEDBACK_PROJECT_ID];
+  if(!fbProj||!fbProj.entries) return;
+  var entry = fbProj.entries.find(function(e){ return e.id===entryId; });
+  if(entry){ entry.status=status; saveProj(fbProj); openFeedbackAdmin(); }
+}
+
+function deleteFeedbackEntry(entryId){
+  var fbProj = DB.projects[DB.cur] && DB.projects[DB.cur][FEEDBACK_PROJECT_ID];
+  if(!fbProj||!fbProj.entries) return;
+  fbProj.entries = fbProj.entries.filter(function(e){ return e.id!==entryId; });
+  saveProj(fbProj);
+  openFeedbackAdmin();
+  toast(LANG==='es'?'Entrada eliminada':'Entry deleted');
+}

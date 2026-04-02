@@ -1086,6 +1086,7 @@ function qaction(ibg,iclr,icon,lbl,onclick){
     <span style="font-size:12px;font-weight:600;color:var(--muted)">${lbl}</span>
   </div>`;
 }
+var _dashTasksExpanded={};
 function renderAppDash(){
   const el = document.getElementById('pg-dashboard-content');
   if (!el) return;
@@ -1161,7 +1162,6 @@ function renderAppDash(){
     </div>
   </div>`;
 
-  var _dashTasksExpanded={};
   function taskTable(title, items, emptyMsg, accentClr, sectionKey) {
     var isMob_ = typeof isPhoneViewport==='function' && isPhoneViewport();
     var isOpen = _dashTasksExpanded[sectionKey];
