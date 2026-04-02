@@ -750,8 +750,8 @@ function flushSave(){
   }
 }
 
-// Show a modal when a save conflict is detected (account open on another device).
-// Offers the user a button to close all other sessions and continue here.
+// Show a locked modal when a save conflict is detected (account open on another device).
+// The user MUST pick an option — clicking outside or pressing Escape won't dismiss it.
 function _showConflictModal(){
   if(typeof openMo !== 'function') return;
   openMo(
@@ -760,20 +760,30 @@ function _showConflictModal(){
     + esc(t('conflict_message'))
     + '</div>'
     + '<div class="mo-foot">'
-    + '<button class="btn btn-ghost" onclick="closeMo()">' + esc(t('conflict_dismiss')) + '</button>'
+    + '<button class="btn btn-ghost" id="_conflict-dismiss-btn">' + esc(t('conflict_dismiss')) + '</button>'
     + '<button class="btn btn-primary" id="_conflict-close-sessions-btn">' + esc(t('conflict_close_sessions')) + '</button>'
     + '</div>'
   );
+  // Lock the modal so only the explicit buttons can close it
+  if(typeof _moLocked !== 'undefined') _moLocked = true;
+
+  var dismissBtn = document.getElementById('_conflict-dismiss-btn');
+  if(dismissBtn) dismissBtn.onclick = function(){ closeMo(); };
+
   var btn = document.getElementById('_conflict-close-sessions-btn');
   if(btn) btn.onclick = async function(){
     btn.disabled = true;
-    btn.textContent = '...';
+    if(dismissBtn) dismissBtn.disabled = true;
+    btn.textContent = LANG==='es' ? 'Cerrando sesiones...' : 'Closing sessions...';
     try{
       await EVENTOS_DATA.closeOtherSessions();
+      // Clear the stale optimistic-lock version so the retry doesn't hit __conflict__ again.
+      // We just closed all other writers, so it's safe to overwrite unconditionally.
+      var p = proj();
+      if(p) delete p._expectedVersion;
       closeMo();
       toast(t('conflict_sessions_closed'), 's');
       // Retry saving the current project now that other sessions are gone
-      var p = proj();
       if(p) saveProj(p);
     }catch(e){
       console.error('closeOtherSessions failed:', e);

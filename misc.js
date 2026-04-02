@@ -678,6 +678,7 @@ function del3DModel(idx){
 }
 
 let _moMouseDownOnOverlay=false;
+var _moLocked = false; // When true, overlay click and Escape cannot close the modal
 function moDown(e){ _moMouseDownOnOverlay=(e.target===document.getElementById('mo')); }
 function syncModalViewportMode(){
   var mo=document.getElementById('mo');
@@ -685,7 +686,7 @@ function syncModalViewportMode(){
   mo.classList.toggle('mobile-sheet', isPhoneViewport());
 }
 window.addEventListener('mouseup',e=>{
-  if(_moMouseDownOnOverlay&&e.target===document.getElementById('mo'))closeMo();
+  if(_moMouseDownOnOverlay&&e.target===document.getElementById('mo')&&!_moLocked)closeMo();
   _moMouseDownOnOverlay=false;
 });
 var _moReturnFocus = null;
@@ -713,6 +714,7 @@ function openMo(html){
   }, 50);
 }
 function closeMo(){
+  _moLocked = false;
   var mo=document.getElementById('mo');
   if(mo){
     mo.classList.remove('open');
@@ -728,7 +730,7 @@ function closeMo(){
   }
 }
 document.addEventListener('keydown',function(e){
-  if(e.key==='Escape'){ closeCalendarPicker(); closeMo(); }
+  if(e.key==='Escape'){ closeCalendarPicker(); if(!_moLocked) closeMo(); }
   // Focus trap: keep Tab within modal when open
   if(e.key==='Tab'){
     var mo=document.getElementById('mo');
