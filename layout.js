@@ -1004,15 +1004,23 @@ function renderLayout(){
       </div>
       ${isPhone?renderLayoutMobileInspector(p):''}
       <div style="padding:5px 16px;background:var(--card);border-top:1px solid var(--border);font-size:10.5px;color:var(--muted);display:flex;gap:16px;align-items:center;flex-wrap:wrap">
-        <span>${t('scroll_zoom')}</span>
-        <span>${t('space_pan')}</span>
-        <span>${t('drag_select')}</span>
-        <span>${t('shift_drag_add')}</span>
-        <span>${t('ctrl_drag_remove')}</span>
-        <span>${t('shift_click_add')}</span>
-        <span>${t('ctrl_click_desel')}</span>
-        <span>${t('copy_paste')}</span>
-        <span>${t('del_remove')}</span>
+        ${isPhone?`
+          <span>${LANG==='es'?'Arrastra para mover':'Drag to pan'}</span>
+          <span>${LANG==='es'?'Pellizca para zoom':'Pinch to zoom'}</span>
+          <span>${LANG==='es'?'Toca un elemento para moverlo':'Tap item to move'}</span>
+          <span>${LANG==='es'?'Doble toque para editar':'Double-tap to edit'}</span>
+          <span>${LANG==='es'?'Mantén presionado para opciones':'Long-press for options'}</span>
+        `:`
+          <span>${t('scroll_zoom')}</span>
+          <span>${t('space_pan')}</span>
+          <span>${t('drag_select')}</span>
+          <span>${t('shift_drag_add')}</span>
+          <span>${t('ctrl_drag_remove')}</span>
+          <span>${t('shift_click_add')}</span>
+          <span>${t('ctrl_click_desel')}</span>
+          <span>${t('copy_paste')}</span>
+          <span>${t('del_remove')}</span>
+        `}
         ${LState.sel.length?`<span style="color:var(--gold-h);font-weight:600">${LState.sel.length} ${LANG==='es'?'seleccionados':'selected'}</span>`:''}
       </div>
     </div>

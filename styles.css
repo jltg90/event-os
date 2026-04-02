@@ -3183,27 +3183,10 @@ tr:hover td { background: var(--bg2); }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 /* ═══ AI ASSISTANT ════════════════════════════════════════════════ */
-#feedback-fab {
-  position: fixed;
-  bottom: 28px; left: 28px;
-  width: 44px; height: 44px;
-  border-radius: 50%;
-  background: var(--card-solid);
-  border: 1px solid var(--border);
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: var(--sh-sm);
-  z-index: 400;
-  transition: all .2s ease;
-  color: var(--muted);
+@media (max-width: 768px) {
+  #feedback-sidebar-btn { display: none !important; }
+  #feedback-tnav-btn { display: flex !important; }
 }
-#feedback-fab:hover {
-  background: var(--gold-l);
-  color: var(--gold-h);
-  border-color: var(--gold);
-  box-shadow: var(--sh);
-}
-@media print { #feedback-fab { display: none !important; } }
 
 #ai-fab {
   display: none !important;
