@@ -132,7 +132,9 @@
     delete copy._extrasLoaded;
     delete copy._pendingSave;
     delete copy._extrasPending;
-    delete copy._expectedVersion;
+    // NOTE: _expectedVersion is intentionally kept in the blob — the server reads it
+    // for optimistic-lock conflict detection.  It is deleted from the in-memory project
+    // after each successful save (in core.js _executeSave) to prevent staleness.
     var mb = copy.moodboard;
     if(mb){
       var stripImg = function(img){
@@ -220,6 +222,8 @@
         projectId: projectId
       }, options);
       if(!row || !row.data) return null;
+      // Stamp version for optimistic locking (same as normalizeProjectRows)
+      if(row.updatedAt) row.data._expectedVersion = row.updatedAt;
       return row.data;
     },
     upsertProject: async function(project, options){

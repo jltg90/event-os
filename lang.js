@@ -550,6 +550,8 @@ var TRANSLATIONS = {
     'conflict_dismiss': 'Dismiss',
     'conflict_close_sessions': 'Continue here & close other sessions',
     'conflict_sessions_closed': 'Other sessions closed. You can continue working here.',
+    'sync_remote_update': 'This event was updated from another device. Your view has been refreshed.',
+    'sync_project_deleted': 'This event was deleted from another device.',
     // Library module
     'lib_back': 'Back',
     'lib_add_vendor': 'Add Vendor',
@@ -1097,6 +1099,8 @@ var TRANSLATIONS = {
     'conflict_dismiss': 'Cerrar',
     'conflict_close_sessions': 'Continuar aquí y cerrar otras sesiones',
     'conflict_sessions_closed': 'Otras sesiones cerradas. Puedes continuar trabajando aquí.',
+    'sync_remote_update': 'Este evento fue actualizado desde otro dispositivo. Tu vista se ha actualizado.',
+    'sync_project_deleted': 'Este evento fue eliminado desde otro dispositivo.',
     // Library module
     'lib_back': 'Volver',
     'lib_add_vendor': 'Agregar Proveedor',

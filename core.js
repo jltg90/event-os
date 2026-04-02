@@ -246,6 +246,7 @@ var _saveInFlight = false;
 var _savePending = null; // queued project to save after current completes
 var _lastSyncTime = null;
 var _pendingProject = null; // project waiting on the debounce timer
+var _syncCycleCount = 0;    // tracks manualSync cycles for periodic reconciliation
 
 var _fileUrlCache = {};
 var _fileUrlCacheKeys = []; // LRU order tracking
@@ -603,6 +604,18 @@ async function _loadFullProjectsBackground(userId){
       if(DB.projects[userId]['__library__']) DB.projects[userId]['__library__']._seeded = true;
       if(!_loadedProjects[userId]) _loadedProjects[userId] = new Set();
       Object.keys(projects).forEach(function(pid){ _loadedProjects[userId].add(pid); });
+
+      // Reconcile: remove local projects that no longer exist on the server
+      // (deleted on another device). Skip internal pseudo-projects and unsaved edits.
+      var serverIds = projects;
+      Object.keys(DB.projects[userId]).forEach(function(pid){
+        if(pid === '__lib_layout__') return;
+        if(serverIds[pid]) return; // still on server
+        var local = DB.projects[userId][pid];
+        if(local && local._pendingSave) return; // don't delete unsaved work
+        delete DB.projects[userId][pid];
+      });
+
       cacheDB();
 
       // The library needs its extras (layouts) immediately so getLib().layouts is populated
@@ -699,6 +712,11 @@ async function _executeSave(p){
       await EVENTOS_DATA.upsertProject(p);
       _lastSyncTime = Date.now();
       delete p._pendingSave;
+      // Clear the optimistic-lock version after a successful save.  The server's
+      // updatedAt just changed but we don't know the new value, so delete it to
+      // avoid sending a stale version on the next save.  manualSync will re-stamp
+      // it from the server on the next poll, restoring conflict detection.
+      delete p._expectedVersion;
       if(typeof clearLayoutDirty === 'function') clearLayoutDirty();
       setSyncStatus('ok');
       _clearTitleUnsaved();
@@ -880,8 +898,9 @@ async function manualSync(){
       if(changedIds.indexOf('__library__') !== -1 && _currentPage === 'library' && typeof renderLibrary === 'function'){
         renderLibrary();
       }
-      // If the currently open project was updated externally, re-render its active tab
+      // If the currently open project was updated externally, re-render and notify the user
       if(CID && changedIds.indexOf(CID) !== -1){
+        toast(t('sync_remote_update'), 's');
         renderPNav();
         var tabRenders = {
           dashboard: typeof renderDash==='function'?renderDash:null,
@@ -898,6 +917,38 @@ async function manualSync(){
 
     _lastSyncTime = Date.now();
     setSyncStatus('ok');
+
+    // Every 3rd sync cycle, do a full reconciliation to detect projects
+    // deleted on another device. getChangedProjectIds(0) returns ALL project IDs.
+    _syncCycleCount = (_syncCycleCount || 0) + 1;
+    if(_syncCycleCount % 3 === 0){
+      try{
+        var allServerIds = await EVENTOS_DATA.getChangedProjectIds(0);
+        if(allServerIds && DB.projects[DB.cur]){
+          var serverSet = {};
+          allServerIds.forEach(function(sid){ serverSet[sid] = true; });
+          var removedAny = false;
+          Object.keys(DB.projects[DB.cur]).forEach(function(pid){
+            if(pid === '__lib_layout__') return;
+            if(serverSet[pid]) return;
+            var local = DB.projects[DB.cur][pid];
+            if(local && local._pendingSave) return;
+            delete DB.projects[DB.cur][pid];
+            removedAny = true;
+          });
+          if(removedAny){
+            cacheDB();
+            renderEvents();
+            // If the currently-open project was deleted on another device, go back to events list
+            if(CID && !DB.projects[DB.cur][CID]){
+              CID = null;
+              showPage('events');
+              toast(t('sync_project_deleted'), 'e');
+            }
+          }
+        }
+      }catch(e){ console.warn('manualSync reconciliation:', e); }
+    }
 
     // Check if a newer version of the app has been deployed
     _checkForNewVersion();
