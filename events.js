@@ -460,6 +460,7 @@ function renderEvents(){
     const isES=LANG==='es';
     const listHeader=`<div class="ev-list-header">
       <div>${isES?'Evento':'Event'}</div>
+      <div>${isES?'Tipo':'Type'}</div>
       <div>${isES?'Fecha':'Date'}</div>
       <div>${isES?'Ubicación':'Location'}</div>
       <div>${isES?'Estado':'Status'}</div>
@@ -478,11 +479,11 @@ function renderEvents(){
         </label>
         <div class="evc-body">
           <div class="ev-list-main ev-list-cell">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
-              <div style="font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px">${esc(p.name)}</div>
-              <span class="badge ${tc[p.type]||'b-gray'}">${tl[p.type]||esc(p.type)}</span>
-            </div>
+            <div style="font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.name)}</div>
             <div class="s-sm ev-hover-detail ev-list-client">${esc(p.clientName)}</div>
+          </div>
+          <div class="ev-list-cell ev-list-type" style="white-space:nowrap">
+            <span class="badge ${tc[p.type]||'b-gray'}">${tl[p.type]||esc(p.type)}</span>
           </div>
           <div class="ev-list-cell ev-list-date" style="font-size:12px;white-space:nowrap">${fmtDate(p.date)}</div>
           <div class="ev-list-cell ev-list-location" style="font-size:12px;white-space:nowrap">${esc(p.location||'—')}</div>

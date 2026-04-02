@@ -1193,7 +1193,7 @@ h1, h2, h3 { font-family: 'Cormorant Garamond', serif; font-weight: 400; line-he
 .evgrid.ev-list { grid-template-columns: 1fr; gap: 0; border: 1px solid var(--border); border-radius: var(--r-lg); overflow: clip; }
 .ev-list-header {
   display: grid;
-  grid-template-columns: minmax(220px,1.7fr) 116px minmax(150px,1fr) 98px auto auto;
+  grid-template-columns: minmax(180px,1.7fr) auto 116px minmax(120px,1fr) 98px auto auto;
   gap: 14px;
   padding: 7px 18px 7px 48px;
   background: var(--bg2);
@@ -1208,8 +1208,12 @@ h1, h2, h3 { font-family: 'Cormorant Garamond', serif; font-weight: 400; line-he
   letter-spacing: .5px;
   color: var(--light);
 }
-.ev-list-header > div:nth-child(5) { text-align: right; }
+.ev-list-header > div:nth-child(2),
+.ev-list-header > div:nth-child(3) { text-align: center; }
+.ev-list-header > div:nth-child(6) { text-align: right; }
 .ev-list-header > div:last-child { width: 110px; }
+.evgrid.ev-list .evc-body .ev-list-type { display: flex; align-items: center; justify-content: center; }
+.evgrid.ev-list .evc-body .ev-list-date { text-align: center; }
 .evgrid.ev-list .evc { border-radius: 0; border: none; border-bottom: 1px solid var(--border); transform: none !important; box-shadow: none !important; }
 .evgrid.ev-list .evc.evc-selected {
   background: linear-gradient(180deg, rgba(255,249,238,.94), rgba(252,247,239,.88));
@@ -1221,7 +1225,7 @@ h1, h2, h3 { font-family: 'Cormorant Garamond', serif; font-weight: 400; line-he
 .evgrid.ev-list .evc-body {
   padding: 12px 18px 12px 48px;
   display: grid;
-  grid-template-columns: minmax(220px, 1.7fr) 116px minmax(150px, 1fr) 98px auto auto;
+  grid-template-columns: minmax(180px, 1.7fr) auto 116px minmax(120px, 1fr) 98px auto auto;
   align-items: center;
   gap: 14px;
 }
@@ -2732,6 +2736,7 @@ tr:hover td { background: var(--bg2); }
   .evgrid.ev-list .evc-body .ev-list-main { width: 100%; }
   .evgrid.ev-list .evc-body .ev-list-date,
   .evgrid.ev-list .evc-body .ev-list-location,
+  .evgrid.ev-list .evc-body .ev-list-type,
   .evgrid.ev-list .evc-body .ev-list-status { width: 100%; }
   .evgrid.ev-list .evc-body .ev-list-actions {
     grid-column: auto;
@@ -3533,6 +3538,18 @@ tr:hover td { background: var(--bg2); }
   justify-content: center;
   margin-bottom: 8px;
 }
+.app-sidebar #sidebar-toggle-btn {
+  background: transparent;
+  border-color: transparent;
+  color: #F2EFE9;
+  box-shadow: none;
+}
+.app-sidebar #sidebar-toggle-btn:hover {
+  background: rgba(242,239,233,.12);
+  color: #F2EFE9;
+  border-color: transparent;
+}
+#mob-sidebar-toggle-btn { display: none !important; }
 .sidebar-nav {
   padding: 14px 10px;
   display: flex;
@@ -3591,9 +3608,10 @@ tr:hover td { background: var(--bg2); }
   display: none;
 }
 .app-sidebar.collapsed .sidebar-account-wrap {
-  width: 40px;
-  min-width: 40px;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
 }
 .sidebar-item {
   display: flex;
