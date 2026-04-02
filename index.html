@@ -52,8 +52,8 @@ function ensureXLSX(){ return typeof XLSX !== 'undefined' ? Promise.resolve() : 
       <div class="tnav-logo" onclick="showPage('events')">Event<span>OS</span></div>
     </div>
     <div style="flex:1"></div>
-    <button id="feedback-tnav-btn" onclick="openFeedbackModal()" title="Send feedback" style="display:none;width:36px;height:36px;border-radius:50%;border:1.5px solid rgba(223,215,201,.25);background:transparent;cursor:pointer;align-items:center;justify-content:center;color:#DFD7C9;flex-shrink:0">
-      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    <button id="feedback-tnav-btn" onclick="openFeedbackModal()" title="Send feedback" style="display:none;width:36px;height:36px;border-radius:50%;border:none;background:#F2EFE9;cursor:pointer;align-items:center;justify-content:center;flex-shrink:0">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:#242424"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
     </button>
   </nav>
 
@@ -129,7 +129,7 @@ function ensureXLSX(){ return typeof XLSX !== 'undefined' ? Promise.resolve() : 
           <span id="sync-label">Offline</span>
         </div>
         <div class="sidebar-account-wrap" style="display:flex;align-items:center;gap:8px">
-          <button id="feedback-sidebar-btn" class="nav-avatar-trigger sidebar-account-trigger" onclick="openFeedbackModal()" title="Send feedback" style="cursor:pointer;border:none;background:#DFD7C9">
+          <button id="feedback-sidebar-btn" class="nav-avatar-trigger sidebar-account-trigger" onclick="openFeedbackModal()" title="Send feedback" style="cursor:pointer;border:none;background:#F2EFE9">
             <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:#242424"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           </button>
           <div id="upill" class="nav-avatar-trigger sidebar-account-trigger" onclick="toggleMenu()" title="Account">
