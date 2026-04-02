@@ -641,6 +641,8 @@ async function _mergeProjectExtras(projectId, p){
       p.layoutItems  = extras.layoutItems  || [];
       p.savedLayouts = extras.savedLayouts || [];
       if(extras.layouts) p.layouts = extras.layouts;
+      if(extras.vendors) p.vendors = extras.vendors;
+      if(extras.moodboard) p.moodboard = extras.moodboard;
     }
     p._extrasLoaded = true;
   }catch(e){ console.error('EventOS: _mergeProjectExtras:', e); }
@@ -731,6 +733,9 @@ async function _executeSave(p){
         toast(t('err_oversize'), 'e');
         delete p._pendingSave;
         setSyncStatus('error');
+        // Reset to 'ok' after 8s — data is safe in localStorage, the error status
+        // shouldn't stay stuck permanently.  The next edit will retry the save.
+        setTimeout(function(){ setSyncStatus('ok'); }, 8000);
         _saveInFlight = false;
         return;
       }
@@ -755,6 +760,8 @@ async function _executeSave(p){
         delete p._pendingSave;
         setSyncStatus('offline');
         toast(t('err_save_failed'), 'e');
+        // Auto-recover status after 10s so the button doesn't stay stuck on error
+        setTimeout(function(){ if(navigator.onLine) setSyncStatus('ok'); }, 10000);
       }
     }
   }
@@ -875,6 +882,8 @@ async function manualSync(){
               data.layoutItems  = prev.layoutItems  || [];
               data.savedLayouts = prev.savedLayouts || [];
               if(prev.layouts) data.layouts = prev.layouts;
+              if(prev.vendors) data.vendors = prev.vendors;
+              if(prev.moodboard) data.moodboard = prev.moodboard;
               data._extrasLoaded = true;
             } else {
               await _mergeProjectExtras(id, data);
@@ -1164,7 +1173,7 @@ function setSyncStatus(state){
   if(btn){
     btn.title = c.title;
     btn.style.borderColor = (state==='offline'||state==='error') ? 'rgba(239,68,68,.4)' : 'var(--border)';
-    btn.style.color       = (state==='offline'||state==='error') ? '#ef4444' : 'var(--muted)';
+    btn.style.color       = (state==='offline'||state==='error') ? '#ef4444' : '';
   }
 }
 function setSyncDot(state){ setSyncStatus(state); }

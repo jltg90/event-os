@@ -250,6 +250,16 @@
           extras.layouts = cleaned.layouts;
           cleaned.layouts = [];
         }
+        // Vendors can be large when they contain unmigrated receipt base64 data
+        if(cleaned.vendors && cleaned.vendors.length){
+          extras.vendors = cleaned.vendors;
+          cleaned.vendors = [];
+        }
+        // Moodboard images (especially unmigrated base64) can be very large
+        if(cleaned.moodboard){
+          extras.moodboard = cleaned.moodboard;
+          cleaned.moodboard = {folders:[],uncategorized:[]};
+        }
         cleaned.guests = [];
         cleaned.layoutItems = [];
         cleaned.savedLayouts = [];

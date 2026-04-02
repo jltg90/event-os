@@ -302,12 +302,6 @@ function ensureXLSX(){ return typeof XLSX !== 'undefined' ? Promise.resolve() : 
           <div class="s-sm" id="pnav-type">Type</div>
         </div>
       </div>
-      <div class="pnav-actions" style="display:flex;align-items:center;gap:8px;margin-left:auto;padding-right:8px">
-        <button class="btn btn-ghost btn-sm" onclick="openExportPDFModal()" title="Export Presentation PDF" style="display:flex;align-items:center;gap:5px;font-size:11px">
-          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
-          <span id="export-pdf-btn-lbl" data-i18n="export_pdf_btn">Export Event PDF</span>
-        </button>
-      </div>
       <button class="pnav-menu-trigger hidden" id="pnav-menu-trigger" type="button" onclick="toggleProjectTabMenu(event)" aria-expanded="false" aria-controls="pnav-mobile-menu">
         <span id="pnav-menu-label">Dashboard</span>
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>

@@ -323,6 +323,8 @@ export const upsertProjectExtras = authedMutation({
       layoutItems: v.any(),
       savedLayouts: v.any(),
       layouts: v.optional(v.any()),
+      vendors: v.optional(v.any()),
+      moodboard: v.optional(v.any()),
     }),
   },
   returns: v.null(),
@@ -344,6 +346,12 @@ export const upsertProjectExtras = authedMutation({
     };
     if (args.extras.layouts !== undefined) {
       patch.layouts = args.extras.layouts;
+    }
+    if (args.extras.vendors !== undefined) {
+      patch.vendors = args.extras.vendors;
+    }
+    if (args.extras.moodboard !== undefined) {
+      patch.moodboard = args.extras.moodboard;
     }
     if (existing) {
       await ctx.db.patch(existing._id, patch);

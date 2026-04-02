@@ -282,8 +282,16 @@ function renderAnalytics(){
   </div>`;
 }
 
+var _exportPDFTarget = null; // when set, generateExportPDF uses this project instead of proj()
+function openExportPDFForEvent(eventId){
+  var projects = DB.projects[DB.cur] || {};
+  var p = projects[eventId];
+  if(!p) return toast(LANG==='es'?'Proyecto no encontrado':'Project not found','e');
+  _exportPDFTarget = p;
+  openExportPDFModal();
+}
 function openExportPDFModal(){
-  const p = proj();
+  const p = _exportPDFTarget || proj();
   if(!p) return toast(LANG==='es'?'Abre un proyecto primero':'Open a project first','e');
   const sections = [
     ['sec_dash','section_dashboard',true],
@@ -312,7 +320,7 @@ function openExportPDFModal(){
 }
 
 function generateExportPDF(){
-  const p = proj(); if(!p) return;
+  const p = _exportPDFTarget || proj(); _exportPDFTarget = null; if(!p) return;
   const incDash     = document.getElementById('sec_dash')?.checked;
   const incBudget   = document.getElementById('sec_budget')?.checked;
   const incTimeline = document.getElementById('sec_timeline')?.checked;
@@ -711,4 +719,5 @@ window.toggleEvSortMenu = toggleEvSortMenu;
 window.toggleEvSortDir = toggleEvSortDir;
 window.setEvView = setEvView;
 window.openExportPDFModal = openExportPDFModal;
+window.openExportPDFForEvent = openExportPDFForEvent;
 window.generateExportPDF = generateExportPDF;

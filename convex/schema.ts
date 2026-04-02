@@ -33,6 +33,8 @@ export default defineSchema({
     layoutItems: v.any(),
     savedLayouts: v.any(),
     layouts: v.optional(v.any()),
+    vendors: v.optional(v.any()),
+    moodboard: v.optional(v.any()),
     updatedAt: v.number(),
   })
     .index("by_wix_user_project", ["wixUserId", "projectId"]),
