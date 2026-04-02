@@ -4335,13 +4335,19 @@ function initLayoutTouchHandlers(){
         },500);
       }
       e.preventDefault();
-    } else { _lt.dragId=null; _lt.dragFp=false; }
+    } else {
+      // Single-finger on empty canvas = pan
+      _lt.dragId=null; _lt.dragFp=false;
+      _lt.panning=true;
+      _lt.panStartX=touch.clientX; _lt.panStartY=touch.clientY;
+      _lt.panScrollX=co.scrollLeft; _lt.panScrollY=co.scrollTop;
+    }
   },{passive:false});
   co.addEventListener('touchmove',function(e){
     // Pinch-zoom + two-finger pan
     if(_lt.pinching&&e.touches.length===2){
       var nd=_ltDist(e.touches), ratio=nd/(_lt.lastDist||nd);
-      if(Math.abs(ratio-1)>0.005){ lZoom((ratio>1?1:-1)*0.05); }
+      if(Math.abs(ratio-1)>0.015){ lZoom((ratio>1?1:-1)*0.03); }
       _lt.lastDist=nd;
       var mid={x:(e.touches[0].clientX+e.touches[1].clientX)/2,y:(e.touches[0].clientY+e.touches[1].clientY)/2};
       if(_lt.lastMid){
@@ -4369,17 +4375,24 @@ function initLayoutTouchHandlers(){
       if(it2){ it2.x=_ltSnap(mx2-_lt.offX); it2.y=_ltSnap(my2-_lt.offY); var el=document.getElementById('li_'+it2.id); if(el){el.style.left=it2.x+'px';el.style.top=it2.y+'px';} }
       e.preventDefault();
     }
+    // Single-finger canvas pan
+    if(_lt.panning&&!_lt.pinching&&!_lt.dragId&&!_lt.dragFp&&e.touches.length===1){
+      var pt=e.touches[0];
+      co.scrollLeft=_lt.panScrollX-(pt.clientX-_lt.panStartX);
+      co.scrollTop=_lt.panScrollY-(pt.clientY-_lt.panStartY);
+      e.preventDefault();
+    }
   },{passive:false});
   co.addEventListener('touchend',function(){
     _ltClearLongPress();
     if(_lt.dragFp){ var p=proj();if(p&&LState.floorplan){p.layoutFloorplan=LState.floorplan;saveProj(p);lHistorySave();} _lt.dragFp=false; }
     if(_lt.dragId){ var p=proj();p.layoutItems=LState.items;saveProj(p);lHistorySave(); _lt.dragId=null; }
     co.classList.remove('layout-dragging-item');
-    _lt.pinching=false; _lt.lastMid=null; _lt.didDrag=false;
+    _lt.pinching=false; _lt.lastMid=null; _lt.didDrag=false; _lt.panning=false;
   });
   co.addEventListener('touchcancel',function(){
     _ltClearLongPress();
-    _lt.dragId=null; _lt.dragFp=false;
+    _lt.dragId=null; _lt.dragFp=false; _lt.panning=false;
     _lt.pinching=false; _lt.lastMid=null; _lt.didDrag=false;
     co.classList.remove('layout-dragging-item');
   },{passive:true});

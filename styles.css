@@ -2998,6 +2998,7 @@ tr:hover td { background: var(--bg2); }
     background: linear-gradient(180deg, rgba(255,255,255,0), var(--card) 22%, var(--card) 100%);
   }
   .mobile-record-card-actions .btn { min-height: 42px; }
+  .layout-toolbar { display: none !important; }
   .layout-mobile-quickbar,
   .layout-mobile-inspector { display: block; }
   .layout-mobile-pane #layout-quote-workspace {
