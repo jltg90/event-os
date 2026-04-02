@@ -1090,6 +1090,7 @@ function renderAppDash(){
   const el = document.getElementById('pg-dashboard-content');
   if (!el) return;
   const isES = LANG === 'es';
+  var isMob_ = typeof isPhoneViewport==='function' && isPhoneViewport();
   const allProjects = Object.values(uproj()).filter(p => p && p.id && !p._metaOnly && p.id !== '__library__' && p.id !== '__lib_layout__' && p.status && p.status !== '__internal__');
   const now = new Date(); now.setHours(0,0,0,0);
   const todayTasks = [], expiredTasks = [], upcomingEvents = [];
@@ -1160,7 +1161,32 @@ function renderAppDash(){
     </div>
   </div>`;
 
-  function taskTable(title, items, emptyMsg, accentClr) {
+  var _dashTasksExpanded={};
+  function taskTable(title, items, emptyMsg, accentClr, sectionKey) {
+    var isMob_ = typeof isPhoneViewport==='function' && isPhoneViewport();
+    var isOpen = _dashTasksExpanded[sectionKey];
+    if(isMob_){
+      var mobileRows = items.slice(0,8).map(({tk,p}) =>
+        `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer" onclick="openProject('${p.id}');setTimeout(()=>switchTab('timeline'),120)">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(tk.title||tk.name||'Task')}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(p.name)} · ${tk.dueDate?fmtDateShort(tk.dueDate):'—'}</div>
+          </div>
+          <svg width="14" height="14" fill="none" stroke="var(--light)" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        </div>`
+      ).join('');
+      return `<div style="background:var(--card);border-radius:16px;border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm);margin-bottom:12px">
+        <div style="padding:14px 14px;display:flex;align-items:center;gap:10px;cursor:pointer" onclick="_dashTasksExpanded['${sectionKey}']=!_dashTasksExpanded['${sectionKey}'];renderAppDash()">
+          <div style="width:8px;height:8px;border-radius:50%;background:${accentClr};flex-shrink:0"></div>
+          <span style="font-size:14px;font-weight:700;flex:1">${title}</span>
+          <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:2px 9px">${items.length}</span>
+          <svg width="16" height="16" fill="none" stroke="var(--light)" stroke-width="2.5" viewBox="0 0 24 24" style="transition:transform .25s;transform:rotate(${isOpen?'180':'0'}deg)"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        ${isOpen?(items.length===0
+          ?`<div style="padding:24px;text-align:center;font-size:13px;color:var(--light);border-top:1px solid var(--border)">${emptyMsg}</div>`
+          :mobileRows):''}
+      </div>`;
+    }
     const rows = items.slice(0,8).map(({tk,p}) =>
       `<tr>
         <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;cursor:pointer;color:var(--gold-h)" onclick="openProject('${p.id}');setTimeout(()=>switchTab('timeline'),120)">${esc(tk.title||tk.name||'Task')}</td>
@@ -1210,9 +1236,9 @@ function renderAppDash(){
       <p style="color:var(--muted);font-size:14px;margin-top:2px">${isES?'Resumen de todos tus proyectos':'Overview across all your projects'}</p>
     </div>
     ${displayEvents.length>0?`<div style="margin-bottom:20px"><div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px;color:var(--text)">${within30.length>=3?(isES?'Próximos Eventos (30 días)':'Upcoming Events (30 days)'):(isES?'Próximos 3 Eventos':'Next 3 Events')}</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px">${evCards}</div></div>`:''}
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
-      <div>${taskTable(isES?'Tareas de Hoy':"Today's Tasks",todayTasks,isES?'Sin tareas para hoy':'No tasks due today','var(--gold)')}</div>
-      <div>${taskTable(isES?'Tareas Vencidas':'Expired Tasks',expiredTasks,isES?'Sin tareas vencidas':'No overdue tasks','var(--danger)')}</div>
+    <div style="display:grid;grid-template-columns:${isMob_?'1fr':'1fr 1fr'};gap:${isMob_?'0':'20'}px;align-items:start">
+      <div>${taskTable(isES?'Tareas de Hoy':"Today's Tasks",todayTasks,isES?'Sin tareas para hoy':'No tasks due today','var(--gold)','today')}</div>
+      <div>${taskTable(isES?'Tareas Vencidas':'Expired Tasks',expiredTasks,isES?'Sin tareas vencidas':'No overdue tasks','var(--danger)','expired')}</div>
     </div>`;
 
   }

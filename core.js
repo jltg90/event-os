@@ -198,6 +198,8 @@ function applyTranslations(){
   if(mlb) mlb.textContent = LANG==='es' ? 'English / Inglés' : 'Español / Spanish';
   const ll = document.getElementById('lang-label');
   if(ll) ll.textContent = LANG==='es' ? 'EN' : 'ES';
+  var tl_ = document.getElementById('tour-label');
+  if(tl_) tl_.textContent = LANG==='es' ? 'Guía' : 'Highlights';
   repairMojibakeInDOM(document.body);
 }
 
