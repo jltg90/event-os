@@ -712,8 +712,9 @@ async function _executeSave(p){
         return;
       }
       if(e && e.message && e.message.indexOf('__conflict__') !== -1){
-        console.warn('EventOS: save conflict for project', p.id, '— retrying with fresh data');
-        // Retry once silently — conflict often resolves on second attempt
+        console.warn('EventOS: save conflict for project', p.id, '— retrying');
+        // Clear stale version so the retry skips the server-side optimistic lock check
+        delete p._expectedVersion;
         if(attempt < maxRetries){
           await new Promise(function(r){ setTimeout(r, 1500); });
           continue;
