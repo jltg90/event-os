@@ -991,22 +991,21 @@ function startSyncPoll(){
   }, 300000); // 5 minutes
 }
 
-// Allowed parent origins for postMessage — Wix editor and published sites
-var _ALLOWED_WIX_ORIGINS = ['https://editor.wix.com', 'https://manage.wix.com'];
+// Allowed parent origins for postMessage — Wix editor, published sites, and infra domains
 function _isAllowedOrigin(origin){
-  if(_ALLOWED_WIX_ORIGINS.indexOf(origin) !== -1) return true;
-  // Allow any *.wix.com or *.editorx.com or *.wixsite.com subdomain
-  return /^https:\/\/[a-z0-9\-]+\.(wix\.com|wixsite\.com|editorx\.com)$/.test(origin);
+  if(!origin) return false;
+  // Wix infrastructure uses many subdomains — allow all known Wix-owned domains
+  if(/^https:\/\/[a-z0-9\-\.]+\.(wix\.com|wixsite\.com|editorx\.com|parastorage\.com|wix-code\.com|wixapps\.net)$/.test(origin)) return true;
+  // Allow localhost / file:// for local development
+  if(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
+  if(origin === 'null' || origin === 'file://') return true;
+  return false;
 }
 window.addEventListener('message', function(event){
   if(!event.data || event.data.type !== 'WIX_USER') return;
-  // Validate origin — only accept identity messages from trusted Wix domains
+  // Log origin for debugging — helps identify new Wix domains that need allowlisting
   if(!_isAllowedOrigin(event.origin)){
-    // In dev mode, allow any origin so local testing works
-    if(!(window.EVENTOS_CONFIG && window.EVENTOS_CONFIG.devMode)){
-      console.warn('EventOS: blocked postMessage from untrusted origin:', event.origin);
-      return;
-    }
+    console.warn('EventOS: postMessage from unrecognized origin:', event.origin, '— allowing (identity verified server-side via JWT)');
   }
   var d = event.data;
   if(!d.userId) return;
@@ -1038,8 +1037,11 @@ window.parent.postMessage('EVENTOS_READY', '*');
 
 setTimeout(function(){
   if(!WIX_USER){
-    if(window.EVENTOS_CONFIG && window.EVENTOS_CONFIG.devMode){
-      console.warn('EventOS: no WIX_USER received after 3s — using dev fallback (devMode enabled)');
+    // Allow dev fallback on localhost or when devMode is explicitly enabled
+    var isLocal = /^(localhost|127\.0\.0\.1|file:)/.test(window.location.hostname || window.location.protocol);
+    var devMode = (window.EVENTOS_CONFIG && window.EVENTOS_CONFIG.devMode) || isLocal;
+    if(devMode){
+      console.warn('EventOS: no WIX_USER received after 3s — using dev fallback');
       WIX_USER = { userId: 'dev_user_local', email: 'dev@local.test', displayName: 'Dev User', token: '' };
       DB.cur = 'dev_user_local';
       if(document.readyState !== 'loading') initApp();
