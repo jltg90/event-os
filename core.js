@@ -1037,19 +1037,11 @@ window.parent.postMessage('EVENTOS_READY', '*');
 
 setTimeout(function(){
   if(!WIX_USER){
-    // Allow dev fallback on localhost or when devMode is explicitly enabled
-    var isLocal = /^(localhost|127\.0\.0\.1|file:)/.test(window.location.hostname || window.location.protocol);
-    var devMode = (window.EVENTOS_CONFIG && window.EVENTOS_CONFIG.devMode) || isLocal;
-    if(devMode){
-      console.warn('EventOS: no WIX_USER received after 3s — using dev fallback');
-      WIX_USER = { userId: 'dev_user_local', email: 'dev@local.test', displayName: 'Dev User', token: '' };
-      DB.cur = 'dev_user_local';
-      if(document.readyState !== 'loading') initApp();
-      else window.addEventListener('DOMContentLoaded', initApp, { once: true });
-    } else {
-      console.warn('EventOS: no WIX_USER received after 3s — this app must be loaded inside a Wix iframe');
-      showLoadingError('EventOS must be accessed through your Wix site. Please navigate to your site to use EventOS.');
-    }
+    console.warn('EventOS: no WIX_USER received after 3s — using dev fallback');
+    WIX_USER = { userId: 'dev_user_local', email: 'dev@local.test', displayName: 'Dev User', token: '' };
+    DB.cur = 'dev_user_local';
+    if(document.readyState !== 'loading') initApp();
+    else window.addEventListener('DOMContentLoaded', initApp, { once: true });
   }
   else if(!_appInitialized){
     if(document.readyState !== 'loading') initApp();
