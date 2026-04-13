@@ -605,11 +605,12 @@ function loadGLBBuffer(buffer, filename, filesize){
   if(!V3D.scene){toast('Viewer not ready, please try again','e');return;}
 
   if(!window.THREE_GLTFLoader){
-    const script=document.createElement('script');
-    script.src='https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js';
-    script.onload=()=>{window.THREE_GLTFLoader=true;_doLoadGLB(buffer,filename,filesize);};
-    script.onerror=()=>toast('Could not load GLTFLoader — check your internet connection','e');
-    document.head.appendChild(script);
+    // TODO: compute actual SRI hash with: curl -s <URL> | openssl dgst -sha384 -binary | openssl base64 -A
+    lazyLoadScript(
+      'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js',
+      null  // SRI hash needs to be computed and added here
+    ).then(function(){ window.THREE_GLTFLoader=true; _doLoadGLB(buffer,filename,filesize); })
+     .catch(function(){ toast('Could not load GLTFLoader — check your internet connection','e'); });
   } else {
     _doLoadGLB(buffer,filename,filesize);
   }
@@ -1089,6 +1090,10 @@ function fmtDateShort(s){ if(!s)return'—'; return formatDMY(s); }
 function fmtMoney(n){ return'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:0}); }
 function gv(id){ const el=document.getElementById(id);return el?el.value:''; }
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function secureId(prefix){
+  var arr=new Uint8Array(8); crypto.getRandomValues(arr);
+  return (prefix||'')+Date.now().toString(36)+Array.from(arr,function(b){return b.toString(36);}).join('').slice(0,8);
+}
 
 
 
@@ -1581,9 +1586,13 @@ async function callAIForAction(key, userMsg, p){
     throw new Error('AI proxy not configured.');
   }
 
+  var sessionToken = (typeof EVENTOS_DATA !== 'undefined' && EVENTOS_DATA.getSessionToken) ? EVENTOS_DATA.getSessionToken() : '';
   var resp = await fetch(AI_PROXY_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + sessionToken
+    },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 1000,
@@ -1597,7 +1606,8 @@ async function callAIForAction(key, userMsg, p){
   }
 
   var data = await resp.json();
-  console.log('[EventOS AI] Response status:', resp.status, '| type:', data.type);
+  // Response status logged only in dev mode to avoid leaking info
+  if(window.EVENTOS_CONFIG && window.EVENTOS_CONFIG.devMode) console.log('[EventOS AI] Response status:', resp.status);
 
   if(data.type === 'error' || data.error){
     var msg = (data.error && data.error.message) || 'API error';
@@ -1605,7 +1615,7 @@ async function callAIForAction(key, userMsg, p){
   }
 
   var raw = (data.content||[]).map(function(c){return c.text||'';}).join('');
-  console.log('[EventOS AI] Raw text:', raw.slice(0, 200));
+  if(window.EVENTOS_CONFIG && window.EVENTOS_CONFIG.devMode) console.log('[EventOS AI] Raw text:', raw.slice(0, 200));
 
   if(!raw.trim()){
     throw new Error('Empty response from AI. Please try again.');
@@ -1621,7 +1631,7 @@ async function callAIForAction(key, userMsg, p){
     try { return JSON.parse(raw.slice(start, end+1)); } catch(e){}
   }
 
-  console.error('[EventOS AI] Parse failed. Raw:', raw);
+  console.error('[EventOS AI] Parse failed — could not extract JSON from response');
   throw new Error('Parse error. Check browser console for details.');
 }
 

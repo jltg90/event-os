@@ -1590,8 +1590,8 @@ function renderTaskList(p){
         ${isDone?`<svg width="12" height="12" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24"><polyline points="20,6 9,17 4,12"/></svg>`:''}
       </div>
       <div style="flex:1">
-        <div class="task-title ${isDone?'done':''}">${tk.title}</div>
-        ${tk.desc?`<div style="font-size:12px;color:var(--muted);margin-top:2px">${tk.desc}</div>`:''}
+        <div class="task-title ${isDone?'done':''}">${esc(tk.title)}</div>
+        ${tk.desc?`<div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(tk.desc)}</div>`:''}
         <div class="task-meta">
           <span style="color:${ov?'var(--danger)':'var(--muted)'};display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>${fmtDate(tk.startDate||tk.dueDate)}${tk.startDate&&tk.dueDate?' - '+fmtDate(tk.dueDate):''}${ov?' ('+t('overdue')+')':''}</span>
           <span style="display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>${esc(tk.assignee||t('unassigned'))}</span>
@@ -1660,12 +1660,12 @@ function renderGantt(p){
           ${isDone?`<svg width="10" height="10" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24"><polyline points="20,6 9,17 4,12"/></svg>`:''}
         </div>
         <div style="display:flex;flex-direction:column;min-width:0">
-          <div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${tk.title}">${tk.title}</div>
+          <div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(tk.title)}">${esc(tk.title)}</div>
           <div style="font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(tk.phase||taskPhaseValue(tk))}</div>
         </div>
       </div>
       <div class="g-bars" style="position:relative">
-        <div class="g-bar" style="left:${l}px;width:${w}px;background:${clr};overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px;color:#fff;font-weight:600;padding:0 8px;box-sizing:border-box;display:flex;align-items:center;min-width:4px;position:absolute" title="${tk.title} â€” ${tk.startDate||''}â†’${tk.dueDate||''} â€” ${tk.phase||taskPhaseValue(tk)} â€” ${taskStatusLabel(tk)}" onclick="openTaskModal('${tk.id}')">${tk.title}</div>
+        <div class=”g-bar” style=”left:${l}px;width:${w}px;background:${clr};overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px;color:#fff;font-weight:600;padding:0 8px;box-sizing:border-box;display:flex;align-items:center;min-width:4px;position:absolute” title=”${esc(tk.title)} — ${tk.startDate||’’}→${tk.dueDate||’’} — ${esc(tk.phase||taskPhaseValue(tk))} — ${esc(taskStatusLabel(tk))}” onclick=”openTaskModal(‘${tk.id}’)”>${esc(tk.title)}</div>
       </div>
     </div>`;
   }).join('');
@@ -1727,7 +1727,7 @@ function renderCal(p){
   for(let i=1;i<=dim;i++){
     const ds=`${yr}-${String(mo+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
     const tks=tbd[ds]||[];
-    cells+=`<div class="cal-cell"><div class="cal-date ${ds===tod?'today':''}">${i}</div>${tks.map(tk=>`<div class="cal-ev" style="background:${taskIsDone(tk)?'#10b981':tk.color||'#c9a84c'};cursor:pointer" title="${tk.title}" onclick="openTaskModal('${tk.id}')">${tk.title}</div>`).join('')}</div>`;
+    cells+=`<div class="cal-cell"><div class="cal-date ${ds===tod?'today':''}">${i}</div>${tks.map(tk=>`<div class="cal-ev" style="background:${taskIsDone(tk)?'#10b981':tk.color||'#c9a84c'};cursor:pointer" title="${esc(tk.title)}" onclick="openTaskModal('${tk.id}')">${esc(tk.title)}</div>`).join('')}</div>`;
   }
   const rem=42-fd-dim;for(let i=0;i<rem;i++)cells+=`<div class="cal-cell"><div class="cal-date om"></div></div>`;
   el.innerHTML=`<div class="cal-wrap">

@@ -1650,7 +1650,7 @@ function renderLItem(item){
     `<div style="position:absolute;inset:0;border-radius:${cornerRadius};background:${item.bg};overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.10)">
         ${cpHTML}
         <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;z-index:2;pointer-events:none">
-          <div class="litem-label" style="color:${textClr};font-size:${fontSize}px;font-weight:300;letter-spacing:0.03em;font-family:'Jost',sans-serif;text-align:center;line-height:1.2">${item.label}</div>
+          <div class="litem-label" style="color:${textClr};font-size:${fontSize}px;font-weight:300;letter-spacing:0.03em;font-family:'Jost',sans-serif;text-align:center;line-height:1.2">${esc(item.label)}</div>
         </div>
       </div>`;
   return `<div class="litem ${LState.sel.includes(item.id)?'sel':''}"

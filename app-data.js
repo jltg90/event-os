@@ -198,6 +198,10 @@
       _lastWixToken = wixToken || "";
     },
 
+    getSessionToken: function(){
+      return _sessionToken || '';
+    },
+
     getProjectsByWixUserId: async function(options){
       var rows = await callConvex("query", "projects:getProjectsByWixUserId", {
         sessionToken: _sessionToken

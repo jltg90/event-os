@@ -23,6 +23,15 @@ export default defineSchema({
     .index("by_token", ["sessionToken"])
     .index("by_user", ["wixUserId"]),
 
+  // Tracks which user uploaded each file — used for ownership checks on access/deletion.
+  file_ownership: defineTable({
+    storageId: v.string(),
+    wixUserId: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_storage_id", ["storageId"])
+    .index("by_user", ["wixUserId"]),
+
   // Companion documents for projects whose main record would exceed Convex's 1 MB limit.
   // Stores large arrays (guests, layoutItems, savedLayouts, layouts) separately.
   // Created automatically when upsertProject detects the document exceeds 700 KB.

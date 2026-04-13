@@ -14,6 +14,36 @@ function validateProjectData(data: unknown): void {
     throw new Error("Project data too large. Please remove some content and try again.");
   }
   checkDepthAndStrings(data, 0);
+  // Strip HTML from user-facing string fields to prevent stored XSS
+  if (data && typeof data === "object") {
+    sanitizeStrings(data as Record<string, unknown>);
+  }
+}
+
+/**
+ * Strip HTML tags from string values in the project data.
+ * Preserves values that look like base64 data or valid HTML-free text.
+ * Only strips <script>, <iframe>, event handler attributes, and dangerous patterns.
+ */
+function sanitizeStrings(obj: Record<string, unknown>): void {
+  for (const key of Object.keys(obj)) {
+    const val = obj[key];
+    if (typeof val === "string") {
+      // Strip <script>, <iframe>, and on* event handlers from string values
+      obj[key] = val
+        .replace(/<script[\s>][\s\S]*?<\/script>/gi, "")
+        .replace(/<iframe[\s>][\s\S]*?<\/iframe>/gi, "")
+        .replace(/\bon\w+\s*=\s*["'][^"']*["']/gi, "");
+    } else if (Array.isArray(val)) {
+      for (const item of val) {
+        if (item && typeof item === "object") {
+          sanitizeStrings(item as Record<string, unknown>);
+        }
+      }
+    } else if (val && typeof val === "object") {
+      sanitizeStrings(val as Record<string, unknown>);
+    }
+  }
 }
 
 function checkDepthAndStrings(val: unknown, depth: number): void {

@@ -991,8 +991,23 @@ function startSyncPoll(){
   }, 300000); // 5 minutes
 }
 
+// Allowed parent origins for postMessage — Wix editor and published sites
+var _ALLOWED_WIX_ORIGINS = ['https://editor.wix.com', 'https://manage.wix.com'];
+function _isAllowedOrigin(origin){
+  if(_ALLOWED_WIX_ORIGINS.indexOf(origin) !== -1) return true;
+  // Allow any *.wix.com or *.editorx.com or *.wixsite.com subdomain
+  return /^https:\/\/[a-z0-9\-]+\.(wix\.com|wixsite\.com|editorx\.com)$/.test(origin);
+}
 window.addEventListener('message', function(event){
   if(!event.data || event.data.type !== 'WIX_USER') return;
+  // Validate origin — only accept identity messages from trusted Wix domains
+  if(!_isAllowedOrigin(event.origin)){
+    // In dev mode, allow any origin so local testing works
+    if(!(window.EVENTOS_CONFIG && window.EVENTOS_CONFIG.devMode)){
+      console.warn('EventOS: blocked postMessage from untrusted origin:', event.origin);
+      return;
+    }
+  }
   var d = event.data;
   if(!d.userId) return;
 
@@ -1005,7 +1020,7 @@ window.addEventListener('message', function(event){
 
   WIX_USER = { userId: newUserId, email: d.email||'', displayName: d.displayName||'', token: d.token||'' };
   DB.cur = newUserId;
-  console.info('EventOS: WIX_USER received — userId:', newUserId, 'hasToken:', !!(d.token));
+  console.info('EventOS: WIX_USER received');
 
   // If already initialised for this user, just keep the stored Wix token fresh
   // so that session renewal (_doReauth) can send a valid signature.
@@ -1017,15 +1032,22 @@ window.addEventListener('message', function(event){
   else window.addEventListener('DOMContentLoaded', initApp, { once: true });
 });
 
+// Send EVENTOS_READY to parent — use '*' only during initial handshake
+// (we don't yet know the parent origin; the WIX_USER reply will be origin-checked)
 window.parent.postMessage('EVENTOS_READY', '*');
 
 setTimeout(function(){
   if(!WIX_USER){
-    console.warn('EventOS: no WIX_USER received after 3s — using dev fallback');
-    WIX_USER = { userId: 'dev_user_local', email: 'dev@local.test', displayName: 'Dev User', token: '' };
-    DB.cur = 'dev_user_local';
-    if(document.readyState !== 'loading') initApp();
-    else window.addEventListener('DOMContentLoaded', initApp, { once: true });
+    if(window.EVENTOS_CONFIG && window.EVENTOS_CONFIG.devMode){
+      console.warn('EventOS: no WIX_USER received after 3s — using dev fallback (devMode enabled)');
+      WIX_USER = { userId: 'dev_user_local', email: 'dev@local.test', displayName: 'Dev User', token: '' };
+      DB.cur = 'dev_user_local';
+      if(document.readyState !== 'loading') initApp();
+      else window.addEventListener('DOMContentLoaded', initApp, { once: true });
+    } else {
+      console.warn('EventOS: no WIX_USER received after 3s — this app must be loaded inside a Wix iframe');
+      showLoadingError('EventOS must be accessed through your Wix site. Please navigate to your site to use EventOS.');
+    }
   }
   else if(!_appInitialized){
     if(document.readyState !== 'loading') initApp();
@@ -1069,8 +1091,8 @@ async function initApp(){
   }
   if(!authOk){
     console.error('EventOS: authentication failed permanently:', lastAuthErr);
-    var detail = (lastAuthErr && lastAuthErr.message) ? ' (' + lastAuthErr.message + ')' : '';
-    showLoadingError('Authentication failed' + detail + '. Please reload the page.');
+    if(lastAuthErr) console.error('EventOS: auth error detail:', lastAuthErr.message);
+    showLoadingError('Authentication failed. Please reload the page.');
     return;
   }
   var ok = await loadProjectsFromCloud(DB.cur);
@@ -1089,7 +1111,7 @@ function doLogout(){
   closeMenu();
   document.getElementById('pg-app').classList.add('hidden');
   document.getElementById('pg-loading').style.display = 'flex';
-  window.parent.postMessage('EVENTOS_LOGOUT', '*');
+  try{ window.parent.postMessage('EVENTOS_LOGOUT', document.referrer || '*'); }catch(e){ /* cross-origin fallback */ }
   toast('Signed out');
 }
 

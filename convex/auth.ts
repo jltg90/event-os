@@ -180,9 +180,15 @@ export const createSession = action({
 
     const allowUnsigned = process.env.ALLOW_UNSIGNED_JWT === "true";
 
-    // Dev bypass: "dev_user_local" is always allowed (named synthetic user for local dev).
-    // Empty claimedUserId requires explicit ALLOW_UNSIGNED_JWT flag.
+    // Dev bypass: "dev_user_local" requires explicit ALLOW_UNSIGNED_JWT flag,
+    // just like the empty-userId path below.  Never active in production.
     if (claimedUserId === "dev_user_local") {
+      if (!allowUnsigned) {
+        throw new Error(
+          "Unauthorized: dev_user_local bypass is disabled. " +
+            "Set ALLOW_UNSIGNED_JWT=true in Convex environment variables for local development.",
+        );
+      }
       const token = await _generateToken();
       await ctx.runMutation(internal.auth._createSessionRecord, {
         sessionToken: token,
@@ -221,8 +227,8 @@ export const createSession = action({
 
       const tokenUserId = extractWixUserId(payload);
       if (!tokenUserId || tokenUserId !== claimedUserId) {
-        console.error("EventOS auth: userId mismatch — token fields:", JSON.stringify(Object.keys(payload)), "extracted:", tokenUserId, "claimed:", claimedUserId);
-        throw new Error("Unauthorized: userId mismatch (token=" + tokenUserId + " claimed=" + claimedUserId + ")");
+        console.error("EventOS auth: userId mismatch — extracted:", tokenUserId, "claimed:", claimedUserId);
+        throw new Error("Unauthorized: userId mismatch");
       }
     } else if (allowUnsigned) {
       // Development mode: no secret configured → decode payload only
@@ -236,7 +242,7 @@ export const createSession = action({
         if (payload) {
           const tokenUserId = extractWixUserId(payload);
           if (tokenUserId && tokenUserId !== claimedUserId) {
-            console.error("EventOS auth (unsigned): userId mismatch — token fields:", JSON.stringify(Object.keys(payload)), "extracted:", tokenUserId, "claimed:", claimedUserId);
+            console.error("EventOS auth (unsigned): userId mismatch — extracted:", tokenUserId, "claimed:", claimedUserId);
             throw new Error("Unauthorized: userId mismatch");
           }
         }
