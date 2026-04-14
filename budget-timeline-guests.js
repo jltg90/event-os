@@ -1665,7 +1665,7 @@ function renderGantt(p){
         </div>
       </div>
       <div class="g-bars" style="position:relative">
-        <div class=”g-bar” style=”left:${l}px;width:${w}px;background:${clr};overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px;color:#fff;font-weight:600;padding:0 8px;box-sizing:border-box;display:flex;align-items:center;min-width:4px;position:absolute” title=”${esc(tk.title)} — ${tk.startDate||’’}→${tk.dueDate||’’} — ${esc(tk.phase||taskPhaseValue(tk))} — ${esc(taskStatusLabel(tk))}” onclick=”openTaskModal(‘${tk.id}’)”>${esc(tk.title)}</div>
+        <div class="g-bar" style="left:${l}px;width:${w}px;background:${clr};overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px;color:#fff;font-weight:600;padding:0 8px;box-sizing:border-box;display:flex;align-items:center;min-width:4px;position:absolute" title="${esc(tk.title)} - ${tk.startDate||''} to ${tk.dueDate||''} - ${esc(tk.phase||taskPhaseValue(tk))} - ${esc(taskStatusLabel(tk))}" onclick="openTaskModal('${tk.id}')">${esc(tk.title)}</div>
       </div>
     </div>`;
   }).join('');
