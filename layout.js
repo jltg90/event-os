@@ -692,7 +692,7 @@ function saveLayoutData(){
 var LState={
   items:[],sel:[],addMode:null,zoom:1,
   pan:{x:0,y:0},panning:false,panStart:{x:0,y:0},
-  dragging:false,dragStart:{x:0,y:0},snapGrid:20,useSnap:false,
+  dragging:false,dragStart:{x:0,y:0},snapGrid:20,useSnap:true,
   canvasW:8000,canvasH:6000,
   floorplan:{img:null,opacity:0.4,scale:1,x:0,y:0,w:0,h:0,locked:false,rotation:0},
   scaleMode:false,scalePoints:[],scalePt1El:null,scalePt2El:null,
@@ -854,7 +854,7 @@ function renderLayout(){
           <div id="add-element-menu" style="display:none;position:absolute;left:0;top:calc(100% + 6px);min-width:200px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px;box-shadow:0 12px 24px rgba(0,0,0,0.12);z-index:50">
             <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start;padding:8px 10px;font-size:12px" onclick="selectAddElement('table')">${LANG==='es'?'Mesa':'Table'}</button>
             <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start;padding:8px 10px;font-size:12px" onclick="selectAddElement('event-element')">${LANG==='es'?'Elemento de evento':'Event element'}</button>
-            <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start;padding:8px 10px;font-size:12px" onclick="selectAddElement('floorplan')">${LState.floorplan.img?(LANG==='es'?'Reemplazar plano':'Replace floorplan'):(LANG==='es'?'Plano de piso':'Floorplan image')}</button>
+            <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start;padding:8px 10px;font-size:12px" onclick="selectAddElement('floorplan')">${LState.floorplan.img?(LANG==='es'?'Reemplazar plano':'Replace floorplan'):(LANG==='es'?'Plano (Imagen)':'Floorplan image')}</button>
             <div style="height:1px;background:var(--border);margin:6px 2px"></div>
             <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start;padding:8px 10px;font-size:12px;color:var(--muted)" onclick="openChairEditor()">${LANG==='es'?'Gestionar sillas':'Manage chairs'}</button>
             <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start;padding:8px 10px;font-size:12px;color:var(--muted)" onclick="openCenterpieceEditor()">${LANG==='es'?'Gestionar centros de mesa':'Manage centerpieces'}</button>
@@ -879,10 +879,10 @@ function renderLayout(){
         </span>
         <div style="flex:1"></div>
         ${(()=>{const q=getLayoutQuoteSummary(LState.items, ensureLayoutQuoteState(p));return (q.total>0||q.extraRows.length)?`<div id="layout-quote-total-pill" style="background:var(--gold-l);border:1px solid rgba(201,168,76,.3);border-radius:20px;padding:4px 14px;font-size:12px;font-weight:600;color:var(--gold-h);cursor:pointer" onclick="showLayoutBudget()" title="${t('layout_quote_open')}">${t('layout_quote_title')}: ${formatCost(q.total)}</div>`:'';})()}
-        <button id="lbtn-snap" onclick="LState.useSnap=!LState.useSnap;renderLayoutUI()" title="Toggle snap to grid"
+        <button id="lbtn-snap" onclick="LState.useSnap=!LState.useSnap;renderLayoutUI()" title="${LANG==='es'?'Alinear a objetos':'Snap to objects'}"
           style="height:28px;padding:0 10px;border:1px solid ${LState.useSnap?'var(--gold)':'var(--border)'};background:${LState.useSnap?'var(--gold-l)':'transparent'};border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;color:${LState.useSnap?'var(--gold-h)':'var(--muted)'};transition:var(--tr);white-space:nowrap"
           onmouseover="this.style.borderColor='var(--gold)'" onmouseout="if(!LState.useSnap)this.style.borderColor='var(--border)'">
-          <span style="display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M1 3.5h10M1 6h10M1 8.5h10M3.5 1v10M6 1v10M8.5 1v10"/></svg>${LState.useSnap?'Snap ON':'Snap OFF'}</span>
+          <span style="display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M1 6h10"/><rect x="2" y="2" width="3" height="3" rx=".5"/><rect x="7" y="7" width="3" height="3" rx=".5"/></svg>${LState.useSnap?'Snap':'Snap'}</span>
         </button>
         ${LState.floorplan.img?`
         <div id="lbtn-floorplan" style="display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:4px 8px;flex-wrap:wrap">
@@ -1168,13 +1168,15 @@ function ensureLayoutQuoteState(p){
 function getLayoutQuoteGroupKey(item){
   return [
     item.shape||'',
+    item._elemKey||'',
     Math.round(item.w||0),
     Math.round(item.h||0),
     item.chairs||0,
     item.bg||'',
     item.bdClr||'',
     item.chairType||'default',
-    item.centerpiece||'none'
+    item.centerpiece||'none',
+    item._quoteGroup||''
   ].join('||');
 }
 
@@ -1204,7 +1206,8 @@ function getLayoutQuoteSummary(items, extras){
       elemGroups[key]={
         key:key,
         shape:item.shape,
-        label:getLayoutShapeLabel(item.shape),
+        _elemKey:item._elemKey||'',
+        label:item._quoteLabel||(item._elemKey?item.label:getLayoutShapeLabel(item.shape)),
         w:item.w||0,
         h:item.h||0,
         bg:item.bg||'#e8e2d8',
@@ -1364,7 +1367,7 @@ function renderLayoutQuoteAutoTable(quote, prefix, readOnly){
   }
 
   function secHeader(label){
-    return '<tr style="background:var(--bg2)"><td colspan="6" style="padding:7px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)">'+label+'</td></tr>';
+    return '<tr style="background:var(--bg2)"><td colspan="'+(readOnly?6:7)+'" style="padding:7px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)">'+label+'</td></tr>';
   }
 
   var body='';
@@ -1379,13 +1382,28 @@ function renderLayoutQuoteAutoTable(quote, prefix, readOnly){
       if(row.chairs>0) tags.push(row.chairs+(isES?' sillas':' chairs')+' \xb7 '+esc(row.chairLabel));
       if(row.centerpieceLabel) tags.push(esc(row.centerpieceLabel));
       var subLabel=tags.length?'<div style="font-size:10px;color:var(--muted);margin-top:2px;font-weight:400">'+tags.join(' \xb7 ')+'</div>':'';
+      var splitMergeBtn='';
+      if(!readOnly){
+        var _hasQG=row.key.indexOf('||')>=0&&row.key.split('||').pop()!=='';
+        if(_hasQG){
+          splitMergeBtn='<td style="padding:4px 6px;text-align:center"><button class="btn btn-ghost btn-sm" onclick="'+pfx+'MergeGroup(\''+row.key.replace(/'/g,"\\'")+'\')" title="'+(isES?'Reagrupar':'Merge')+'" style="font-size:10px;padding:2px 6px">↩</button></td>';
+        } else if(row.qty>1){
+          splitMergeBtn='<td style="padding:4px 6px;text-align:center"><button class="btn btn-ghost btn-sm" onclick="'+pfx+'SplitGroup(\''+row.key.replace(/'/g,"\\'")+'\')" title="'+(isES?'Separar':'Split')+'" style="font-size:10px;padding:2px 6px">✂</button></td>';
+        } else {
+          splitMergeBtn='<td></td>';
+        }
+      }
+      var nameCell=readOnly
+        ?'<td style="padding:9px 10px"><div style="font-size:12px;font-weight:600">'+esc(row.label)+'</div>'+subLabel+'</td>'
+        :'<td style="padding:6px 8px"><input class="input" value="'+esc(row.label)+'" style="font-size:12px;font-weight:600;padding:5px 6px;min-width:100px" onchange="'+pfx+'RenameGroup(\''+row.key.replace(/'/g,"\\'")+'\',this.value)">'+subLabel+'</td>';
       return '<tr style="border-bottom:1px solid var(--bg2)">'+
-        '<td style="padding:9px 10px"><div style="font-size:12px;font-weight:600">'+esc(row.label)+'</div>'+subLabel+'</td>'+
+        nameCell+
         '<td style="padding:5px 10px;text-align:center">'+elemSvg(row)+'</td>'+
         '<td style="padding:9px 10px;font-size:11px;color:var(--muted);white-space:nowrap">'+dims+'</td>'+
         '<td style="padding:9px 10px;text-align:center;font-size:12px">'+row.qty+'</td>'+
         (readOnly?'<td style="padding:9px 10px;font-size:12px">'+formatCost(row.cost)+'</td>':'<td style="padding:6px 8px"><input class="input" type="number" min="0" step="0.01" value="'+row.cost+'" style="font-size:11px;padding:5px 6px;width:90px" onchange="'+pfx+'UpdateGroupCost(\''+row.key+'\',this.value)"></td>')+
         '<td style="padding:9px 10px;text-align:right;font-size:12px;font-weight:700;color:var(--gold-h)">'+formatCost(row.rowTotal)+'</td>'+
+        splitMergeBtn+
       '</tr>';
     }).join('');
   }
@@ -1400,6 +1418,7 @@ function renderLayoutQuoteAutoTable(quote, prefix, readOnly){
         '<td style="padding:9px 10px;text-align:center;font-size:12px">'+row.qty+'</td>'+
         (readOnly?'<td style="padding:9px 10px;font-size:12px">'+formatCost(row.unitPrice)+'</td>':'<td style="padding:6px 8px"><input class="input" type="number" min="0" step="0.01" value="'+row.unitPrice+'" style="font-size:11px;padding:5px 6px;width:90px" title="'+(isES?'Precio por silla':'Price per chair')+'" onchange="'+pfx+'UpdateChairTypeCost(\''+row.key+'\',this.value)"></td>')+
         '<td style="padding:9px 10px;text-align:right;font-size:12px;font-weight:700;color:var(--gold-h)">'+formatCost(row.rowTotal)+'</td>'+
+        (readOnly?'':'<td></td>')+
       '</tr>';
     }).join('');
   }
@@ -1414,6 +1433,7 @@ function renderLayoutQuoteAutoTable(quote, prefix, readOnly){
         '<td style="padding:9px 10px;text-align:center;font-size:12px">'+row.qty+'</td>'+
         (readOnly?'<td style="padding:9px 10px;font-size:12px">'+formatCost(row.unitPrice)+'</td>':'<td style="padding:6px 8px"><input class="input" type="number" min="0" step="0.01" value="'+row.unitPrice+'" style="font-size:11px;padding:5px 6px;width:90px" title="'+(isES?'Precio por centro':'Price per piece')+'" onchange="'+pfx+'UpdateCenterpieceTypeCost(\''+row.key+'\',this.value)"></td>')+
         '<td style="padding:9px 10px;text-align:right;font-size:12px;font-weight:700;color:var(--gold-h)">'+formatCost(row.rowTotal)+'</td>'+
+        (readOnly?'':'<td></td>')+
       '</tr>';
     }).join('');
   }
@@ -1430,10 +1450,11 @@ function renderLayoutQuoteAutoTable(quote, prefix, readOnly){
           '<th style="padding:8px 10px;text-align:center">'+t('layout_quote_quantity')+'</th>'+
           '<th style="padding:8px 10px;text-align:left">'+t('layout_quote_base')+'</th>'+
           '<th style="padding:8px 10px;text-align:right">'+t('layout_quote_row_total')+'</th>'+
+          (readOnly?'':'<th style="padding:8px 6px;text-align:center;width:40px"></th>')+
         '</tr></thead>'+
         '<tbody>'+body+
           '<tr style="background:var(--gold-l)">'+
-            '<td colspan="5" style="padding:9px 12px;font-size:12px;font-weight:700">'+(isES?'Subtotal layout':'Layout subtotal')+'</td>'+
+            '<td colspan="'+(readOnly?5:6)+'" style="padding:9px 12px;font-size:12px;font-weight:700">'+(isES?'Subtotal layout':'Layout subtotal')+'</td>'+
             '<td style="padding:9px 10px;text-align:right;font-size:12px;font-weight:700;color:var(--gold-h)">'+formatCost(layoutSubtotal)+'</td>'+
           '</tr>'+
         '</tbody>'+
@@ -1453,6 +1474,24 @@ function lQuoteUpdateCenterpieceTypeCost(cpKey, val){
   if(!CENTERPIECE_TYPES[cpKey]) return;
   CENTERPIECE_TYPES[cpKey].cost=Math.max(0,Number(val||0));
   saveLayoutStyles();
+  renderLayoutUI();
+}
+
+function lQuoteSplitGroup(groupKey){
+  var matching=LState.items.filter(function(i){return getLayoutQuoteGroupKey(i)===groupKey;});
+  if(matching.length<2) return;
+  matching[0]._quoteGroup='qg_'+Date.now()+Math.random().toString(36).slice(2,6);
+  var p=proj();p.layoutItems=LState.items;saveProj(p);
+  renderLayoutUI();
+}
+
+function lQuoteMergeGroup(groupKey){
+  LState.items.forEach(function(item){
+    if(getLayoutQuoteGroupKey(item)===groupKey){
+      delete item._quoteGroup;
+    }
+  });
+  var p=proj();p.layoutItems=LState.items;saveProj(p);
   renderLayoutUI();
 }
 
@@ -1504,6 +1543,21 @@ function lQuoteUpdateGroupCost(key, value){
   var cost=Math.max(0, Number(value||0));
   p.layoutItems=(p.layoutItems||[]).map(function(item){
     if(getLayoutQuoteGroupKey(item)===key) item.cost=cost;
+    return item;
+  });
+  saveProj(p);
+  LState.items=p.layoutItems;
+  renderLayoutUI();
+}
+
+function lQuoteRenameGroup(key, newName){
+  var name=String(newName||'').trim();
+  if(!name) return;
+  var p=proj();
+  if(!p) return;
+  lHistorySave();
+  p.layoutItems=(p.layoutItems||[]).map(function(item){
+    if(getLayoutQuoteGroupKey(item)===key) item._quoteLabel=name;
     return item;
   });
   saveProj(p);
@@ -2235,6 +2289,7 @@ function doAddEventElement(key){
   var placeY=Math.round(vc.y-def.h/2);
   var newItem={
     id:'li'+Date.now()+Math.random().toString(36).slice(2,6),
+    _elemKey:key,
     shape:info.shape, x:placeX, y:placeY,
     w:def.w, h:def.h, bg:def.bg, bdClr:def.bdClr,
     radius:def.radius||'0px', label:label,
@@ -2400,6 +2455,92 @@ let _lDragItem=null,_lDragOffX=0,_lDragOffY=0,_lDidDrag=false;
 let _lDragStartAnchorX=0,_lDragStartAnchorY=0,_lDragAxisLock=null;
 let _lDragOffsets={};
 let _panning=false,_panStart={x:0,y:0},_panOrigin={x:0,y:0};
+var _lDragSnapTargets=[];
+var _lSnapGuides=[];
+var _SNAP_THRESHOLD=15;
+
+function _getItemSnapPoints(item){
+  var cx=item.x+item.w/2, cy=item.y+item.h/2;
+  var isRound=item.shape==='round-table'||item.radius==='50%'||(LSHAPES_M[item.shape]&&LSHAPES_M[item.shape].radius==='50%');
+  var pts=[];
+  // Center
+  pts.push({x:cx,y:cy,t:'c'});
+  if(isRound){
+    // Quadrant points: N, E, S, W
+    var rx=item.w/2, ry=item.h/2;
+    pts.push({x:cx,y:item.y,t:'n'});        // North
+    pts.push({x:item.x+item.w,y:cy,t:'e'}); // East
+    pts.push({x:cx,y:item.y+item.h,t:'s'}); // South
+    pts.push({x:item.x,y:cy,t:'w'});        // West
+  } else {
+    // Edge midpoints
+    pts.push({x:cx,y:item.y,t:'tc'});             // Top center
+    pts.push({x:cx,y:item.y+item.h,t:'bc'});      // Bottom center
+    pts.push({x:item.x,y:cy,t:'lc'});             // Left center
+    pts.push({x:item.x+item.w,y:cy,t:'rc'});      // Right center
+    // Corners
+    pts.push({x:item.x,y:item.y,t:'tl'});
+    pts.push({x:item.x+item.w,y:item.y,t:'tr'});
+    pts.push({x:item.x,y:item.y+item.h,t:'bl'});
+    pts.push({x:item.x+item.w,y:item.y+item.h,t:'br'});
+  }
+  return pts;
+}
+
+function _cacheSnapTargets(excludeIds){
+  _lDragSnapTargets=[];
+  var excSet={};
+  excludeIds.forEach(function(id){excSet[id]=true;});
+  LState.items.forEach(function(item){
+    if(excSet[item.id]) return;
+    _getItemSnapPoints(item).forEach(function(p){
+      _lDragSnapTargets.push(p);
+    });
+  });
+}
+
+function _objectSnap(rawX, rawY, draggedItem){
+  if(!LState.useSnap) return {x:Math.round(rawX),y:Math.round(rawY)};
+  var thresh=_SNAP_THRESHOLD/LState.zoom;
+  // Compute snap points for dragged item at tentative position
+  var tempItem={x:rawX,y:rawY,w:draggedItem.w,h:draggedItem.h,shape:draggedItem.shape,radius:draggedItem.radius};
+  var srcPts=_getItemSnapPoints(tempItem);
+  var bestDx=null, bestDistX=thresh+1;
+  var bestDy=null, bestDistY=thresh+1;
+  var guideX=null, guideY=null;
+  // Check X alignment independently from Y
+  for(var si=0;si<srcPts.length;si++){
+    var sp=srcPts[si];
+    for(var ti=0;ti<_lDragSnapTargets.length;ti++){
+      var tp=_lDragSnapTargets[ti];
+      var dx=Math.abs(sp.x-tp.x);
+      var dy=Math.abs(sp.y-tp.y);
+      if(dx<bestDistX){
+        bestDistX=dx; bestDx=tp.x-sp.x;
+        guideX={x:tp.x,srcY:sp.y,tgtY:tp.y};
+      }
+      if(dy<bestDistY){
+        bestDistY=dy; bestDy=tp.y-sp.y;
+        guideY={y:tp.y,srcX:sp.x,tgtX:tp.x};
+      }
+    }
+  }
+  var snapX=Math.round(rawX+(bestDistX<=thresh?bestDx:0));
+  var snapY=Math.round(rawY+(bestDistY<=thresh?bestDy:0));
+  // Build guide lines
+  _lSnapGuides=[];
+  if(bestDistX<=thresh&&guideX){
+    var minY=Math.min(guideX.srcY,guideX.tgtY)-20;
+    var maxY=Math.max(guideX.srcY,guideX.tgtY)+20;
+    _lSnapGuides.push({x1:guideX.x,y1:minY,x2:guideX.x,y2:maxY});
+  }
+  if(bestDistY<=thresh&&guideY){
+    var minX=Math.min(guideY.srcX,guideY.tgtX)-20;
+    var maxX=Math.max(guideY.srcX,guideY.tgtX)+20;
+    _lSnapGuides.push({x1:minX,y1:guideY.y,x2:maxX,y2:guideY.y});
+  }
+  return {x:snapX,y:snapY};
+}
 let _spaceDown=false;
 let _marquee=false,_marqueeStart={x:0,y:0};
 let _fpDragging=false,_fpDragOffX=0,_fpDragOffY=0;
@@ -2650,6 +2791,8 @@ function lItemDown(e){
     if(it)_lDragOffsets[sid]={dx:it.x-anchor.x,dy:it.y-anchor.y};
   });
   _lDidDrag=false;
+  _cacheSnapTargets(LState.sel);
+  _lSnapGuides=[];
   document.getElementById('lcanvas').style.pointerEvents='none';
   e.stopPropagation();
   e.preventDefault();
@@ -2829,11 +2972,13 @@ function _lCanvasMoveInner(e){
   if(_lDragItem===null)return;
   const cr=_lGetCanvasRect();
   if(!cr) return;
-  const snap=n=>LState.useSnap?Math.round(n/LState.snapGrid)*LState.snapGrid:Math.round(n);
-  let anchorX=snap((e.clientX-cr.left)/LState.zoom-_lDragOffX);
-  let anchorY=snap((e.clientY-cr.top)/LState.zoom-_lDragOffY);
   const anchor=LState.items.find(i=>i.id===_lDragItem);
   if(!anchor)return;
+  var rawX=Math.round((e.clientX-cr.left)/LState.zoom-_lDragOffX);
+  var rawY=Math.round((e.clientY-cr.top)/LState.zoom-_lDragOffY);
+  var snapped=_objectSnap(rawX,rawY,anchor);
+  let anchorX=snapped.x;
+  let anchorY=snapped.y;
 
   if(e.shiftKey){
     if(!_lDragAxisLock){
@@ -2870,7 +3015,37 @@ function _lCanvasMoveInner(e){
       if(mit){mel.style.left=mit.x+'px';mel.style.top=mit.y+'px';}
     }
   }
+  // Render snap guide lines
+  _renderSnapGuides();
 }
+
+function _renderSnapGuides(){
+  var canvas=document.getElementById('lcanvas');
+  if(!canvas) return;
+  var existing=canvas.querySelectorAll('.snap-guide');
+  for(var i=0;i<existing.length;i++) existing[i].remove();
+  if(!_lSnapGuides.length) return;
+  _lSnapGuides.forEach(function(g){
+    var line=document.createElement('div');
+    line.className='snap-guide';
+    var isVertical=Math.abs(g.x1-g.x2)<1;
+    if(isVertical){
+      line.style.cssText='position:absolute;left:'+g.x1+'px;top:'+g.y1+'px;width:0;height:'+(g.y2-g.y1)+'px;border-left:1px dashed #c9a84c;pointer-events:none;z-index:90;opacity:0.7';
+    } else {
+      line.style.cssText='position:absolute;left:'+g.x1+'px;top:'+g.y1+'px;width:'+(g.x2-g.x1)+'px;height:0;border-top:1px dashed #c9a84c;pointer-events:none;z-index:90;opacity:0.7';
+    }
+    canvas.appendChild(line);
+  });
+}
+
+function _clearSnapGuides(){
+  _lSnapGuides=[];
+  var canvas=document.getElementById('lcanvas');
+  if(!canvas) return;
+  var existing=canvas.querySelectorAll('.snap-guide');
+  for(var i=0;i<existing.length;i++) existing[i].remove();
+}
+
 function lCanvasUp(e){
   var cv=document.getElementById('lcanvas');
   if(cv&&cv.style.pointerEvents==='none') cv.style.pointerEvents='';
@@ -2900,6 +3075,7 @@ function lCanvasUp(e){
       lHistorySave();
     }
     _lDragItem=null;_lDragOffsets={};_lDragAxisLock=null;
+    _clearSnapGuides();
     if(_lDidDrag)updateSelUI();
   }
 }
@@ -4093,11 +4269,17 @@ function openLItemModal(id){
   ${hasChairs?`
   <div class="ig" style="grid-column:1/-1">
     <label style="font-size:10.5px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:.07em;display:block;margin-bottom:8px">${_es?'Estilo de Silla':'Chair Style'}</label>
-    <select class="input" id="li-ctype" style="font-size:12px">${chairOpts}</select>
+    <div style="display:flex;align-items:center;gap:6px">
+      <select class="input" id="li-ctype" style="font-size:12px;flex:1">${chairOpts}</select>
+      <button class="btn btn-ghost btn-sm" type="button" onclick="openChairEditor()" title="${_es?'Gestionar sillas':'Manage Chairs'}" style="white-space:nowrap;font-size:11px;padding:4px 8px">${_es?'Gestionar':'Manage'}</button>
+    </div>
   </div>
   <div class="ig" style="grid-column:1/-1">
     <label style="font-size:10.5px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:.07em;display:block;margin-bottom:8px">${_es?'Centro de Mesa':'Centerpiece'}</label>
-    <select class="input" id="li-cp" style="font-size:12px">${cpOpts}</select>
+    <div style="display:flex;align-items:center;gap:6px">
+      <select class="input" id="li-cp" style="font-size:12px;flex:1">${cpOpts}</select>
+      <button class="btn btn-ghost btn-sm" type="button" onclick="openCenterpieceEditor()" title="${_es?'Gestionar centros de mesa':'Manage Centerpieces'}" style="white-space:nowrap;font-size:11px;padding:4px 8px">${_es?'Gestionar':'Manage'}</button>
+    </div>
   </div>`:''}
   <div style="font-size:10.5px;color:var(--muted);margin-bottom:8px;padding:8px;background:rgba(201,168,76,.06);border-radius:6px;border:1px solid rgba(201,168,76,.15)">
     &#9432; ${_es?`Las <strong>instancias</strong> comparten cambios. Las <strong>copias</strong> quedan separadas.`:`<strong>Instances</strong> share changes. <strong>Copies</strong> stay independent.`}

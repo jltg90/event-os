@@ -2514,7 +2514,8 @@ function defaultChairTypes(){
 }
 function defaultCenterpieceTypes(){
   return {
-    'none': { label: LANG==='es'?'Ninguno':'None', color: null, cost: 0 }
+    'none': { label: LANG==='es'?'Ninguno':'None', color: null, cost: 0 },
+    'default-floral': { label: LANG==='es'?'Arreglo Floral':'Flower Arrangement', color: '#c9a84c', cost: 0 }
   };
 }
 

@@ -3498,13 +3498,16 @@ function _libRenderLayoutWizard(){
       var dispW=Math.round(imgW*fitScale); var dispH=Math.round(imgH*fitScale);
       var svgOverlay='';
       if(pts.length>=1){
-        svgOverlay+='<circle cx="'+pts[0].x+'" cy="'+pts[0].y+'" r="7" fill="var(--gold)" stroke="#fff" stroke-width="2"/>'
-          +'<text x="'+(pts[0].x+10)+'" y="'+(pts[0].y-8)+'" fill="var(--gold-h)" font-size="12" font-weight="700" font-family="monospace">A</text>';
+        var p0x=Math.round(pts[0].rx*dispW), p0y=Math.round(pts[0].ry*dispH);
+        svgOverlay+='<circle cx="'+p0x+'" cy="'+p0y+'" r="7" fill="var(--gold)" stroke="#fff" stroke-width="2"/>'
+          +'<text x="'+(p0x+10)+'" y="'+(p0y-8)+'" fill="var(--gold-h)" font-size="12" font-weight="700" font-family="monospace">A</text>';
       }
       if(pts.length>=2){
-        svgOverlay+='<line x1="'+pts[0].x+'" y1="'+pts[0].y+'" x2="'+pts[1].x+'" y2="'+pts[1].y+'" stroke="var(--gold)" stroke-width="2" stroke-dasharray="5 3"/>'
-          +'<circle cx="'+pts[1].x+'" cy="'+pts[1].y+'" r="7" fill="var(--gold)" stroke="#fff" stroke-width="2"/>'
-          +'<text x="'+(pts[1].x+10)+'" y="'+(pts[1].y-8)+'" fill="var(--gold-h)" font-size="12" font-weight="700" font-family="monospace">B</text>';
+        var p0x2=Math.round(pts[0].rx*dispW), p0y2=Math.round(pts[0].ry*dispH);
+        var p1x=Math.round(pts[1].rx*dispW), p1y=Math.round(pts[1].ry*dispH);
+        svgOverlay+='<line x1="'+p0x2+'" y1="'+p0y2+'" x2="'+p1x+'" y2="'+p1y+'" stroke="var(--gold)" stroke-width="2" stroke-dasharray="5 3"/>'
+          +'<circle cx="'+p1x+'" cy="'+p1y+'" r="7" fill="var(--gold)" stroke="#fff" stroke-width="2"/>'
+          +'<text x="'+(p1x+10)+'" y="'+(p1y-8)+'" fill="var(--gold-h)" font-size="12" font-weight="700" font-family="monospace">B</text>';
       }
       var hint=pts.length===0
         ?(isES?'Haz clic en 2 puntos de tu imagen y especifica la dimensión en metros.':'Click 2 points in your image and specify the dimension in meters.')
@@ -3530,12 +3533,17 @@ function _libRenderLayoutWizard(){
         +(pts.length>0?'<button class="btn btn-ghost btn-sm" onclick="_libLayoutWiz.wizScalePts=[];_libRenderLayoutWizard()">'+(isES?'Reiniciar puntos':'Reset points')+'</button>':'')
         +'<button class="btn btn-ghost btn-sm" onclick="_libLayoutWiz.floorplan=null;_libLayoutWiz.wizScalePts=[];_libLayoutWiz.wizZoom=1;_libRenderLayoutWizard()">'+(isES?'Cambiar imagen':'Change image')+'</button>'
         +'</div>';
+      var baseW=Math.round(imgW*Math.min(PREV_MAX/imgW,PREV_MAX/imgH,1));
+      var baseH=Math.round(imgH*Math.min(PREV_MAX/imgW,PREV_MAX/imgH,1));
+      var viewW=Math.min(baseW,PREV_MAX); var viewH=Math.min(baseH,PREV_MAX);
       body='<div style="font-size:15px;font-weight:700;margin-bottom:4px">'+(isES?'Escala':'Scale')+'</div>'
         +'<div style="font-size:13px;color:var(--muted);margin-bottom:10px">'+hint+'</div>'
         +zoomBar
-        +'<div id="lwiz-fp-preview" onclick="_libWizPickPoint(event,this)" style="position:relative;display:inline-block;cursor:crosshair;border:1px solid var(--border);border-radius:6px;overflow:hidden;user-select:none;max-width:100%">'
+        +'<div id="lwiz-fp-preview" onclick="_libWizPickPoint(event,this)" onwheel="_libWizWheelZoom(event)" style="position:relative;width:'+viewW+'px;height:'+viewH+'px;overflow:auto;cursor:crosshair;border:1px solid var(--border);border-radius:6px;user-select:none">'
+        +'<div style="position:relative;width:'+dispW+'px;height:'+dispH+'px">'
         +'<img src="'+wfp.img+'" style="display:block;width:'+dispW+'px;height:'+dispH+'px;pointer-events:none" draggable="false">'
         +'<svg style="position:absolute;top:0;left:0;pointer-events:none" width="'+dispW+'" height="'+dispH+'">'+svgOverlay+'</svg>'
+        +'</div>'
         +'</div>'
         +distRow
         +resetBtn;
@@ -3561,7 +3569,7 @@ function _libRenderLayoutWizard(){
           :((_libLayoutWiz.floorplan&&_libLayoutWiz.floorplan.img&&!_libLayoutWiz.floorplan.pxPerMeter&&!_libLayoutWiz.floorplanLoading)
             ?'<button class="btn btn-ghost" onclick="_libLayoutWiz.floorplan.pxPerMeter=null;_libLayoutWizGenerate()">'+(isES?'Generar sin escalar':'Don\'t scale and generate layout')+'</button>'
             :'')
-          +'<button class="btn btn-primary" onclick="_libLayoutWizGenerate()" '+((_libLayoutWiz.floorplanLoading)?'disabled style="opacity:.5;cursor:not-allowed"':'')+'>⚡ '+(isES?'Generar Plano':'Generate Layout')+'</button>')
+          +'<button class="btn btn-primary" onclick="_libLayoutWizGenerate()" '+((_libLayoutWiz.floorplanLoading)?'disabled style="opacity:.5;cursor:not-allowed"':'')+'>'+(isES?'Generar Plano':'Generate Layout')+'</button>')
     +'</div>');
 }
 window._libRenderLayoutWizard = _libRenderLayoutWizard;
@@ -3572,7 +3580,7 @@ function _libWizToggleTable(key){
   var _moScrollY=_scrollEl?_scrollEl.scrollTop:0;
   if(!_libLayoutWiz.tables) _libLayoutWiz.tables={};
   var catalogue=[
-    {key:'round-0.8',chairs:4,cols:6},{key:'round-1.0',chairs:6,cols:5},{key:'round-1.2',chairs:8,cols:5},{key:'round-1.5',chairs:10,cols:5},{key:'round-1.6',chairs:12,cols:4},{key:'round-1.8',chairs:14,cols:4},{key:'round-2.0',chairs:16,cols:4},
+    {key:'round-1.2',chairs:4,cols:5},{key:'round-1.5',chairs:6,cols:5},{key:'round-1.8',chairs:8,cols:4},{key:'round-2.0',chairs:10,cols:4},
     {key:'rect-2.44x1.20',chairs:8,cols:4,chairSides:{top:4,bottom:4,left:0,right:0}},{key:'rect-4.88x1.80-12',chairs:12,cols:3,chairSides:{top:6,bottom:6,left:0,right:0}},{key:'rect-4.88x1.80-16',chairs:16,cols:3,chairSides:{top:6,bottom:6,left:2,right:2}},
     {key:'s-table-14',chairs:14,cols:2},{key:'s-table-16',chairs:16,cols:2},
   ];
@@ -3630,15 +3638,15 @@ window._libWizFloorplanUpload = _libWizFloorplanUpload;
 function _libWizPickPoint(e, el){
   var pts=_libLayoutWiz.wizScalePts;
   if(pts.length>=2) return;
-  var rect=el.getBoundingClientRect();
-  var x=Math.round(e.clientX-rect.left);
-  var y=Math.round(e.clientY-rect.top);
-  pts.push({x:x,y:y});
+  var rx=(e.clientX-el.getBoundingClientRect().left+el.scrollLeft)/(el.scrollWidth||1);
+  var ry=(e.clientY-el.getBoundingClientRect().top+el.scrollTop)/(el.scrollHeight||1);
+  pts.push({rx:rx,ry:ry});
   _libLayoutWiz.wizScalePts=pts;
+  var prevSL=el.scrollLeft, prevST=el.scrollTop;
   _libRenderLayoutWizard();
   requestAnimationFrame(function(){
-    var sc=document.getElementById('lwiz-scroll');
-    if(sc) sc.scrollTop=sc.scrollHeight;
+    var el2=document.getElementById('lwiz-fp-preview');
+    if(el2){el2.scrollLeft=prevSL;el2.scrollTop=prevST;}
   });
 }
 window._libWizPickPoint = _libWizPickPoint;
@@ -3649,12 +3657,16 @@ function _libWizApplyScale(){
   var distEl=document.getElementById('lwiz-scale-dist');
   var meters=distEl?parseFloat(distEl.value):0;
   if(!meters||meters<=0) return alert(LANG==='es'?'Ingresa una distancia válida en metros.':'Enter a valid distance in meters.');
-  var pxDist=Math.hypot(pts[1].x-pts[0].x,pts[1].y-pts[0].y);
-  if(pxDist<5) return alert(LANG==='es'?'Los puntos están muy cerca, elige puntos más separados.':'Points are too close, pick points further apart.');
   var wfp=_libLayoutWiz.floorplan;
   var PREV_MAX=460;
   var zoom=_libLayoutWiz.wizZoom||1;
   var fitScale=Math.min(PREV_MAX/wfp.w,PREV_MAX/wfp.h,1)*zoom;
+  var imgW=wfp.w||1, imgH=wfp.h||1;
+  var dispW=Math.round(imgW*fitScale), dispH=Math.round(imgH*fitScale);
+  var p0x=pts[0].rx*dispW, p0y=pts[0].ry*dispH;
+  var p1x=pts[1].rx*dispW, p1y=pts[1].ry*dispH;
+  var pxDist=Math.hypot(p1x-p0x,p1y-p0y);
+  if(pxDist<5) return alert(LANG==='es'?'Los puntos están muy cerca, elige puntos más separados.':'Points are too close, pick points further apart.');
   var naturalPxDist=pxDist/fitScale;
   var fpPPM=naturalPxDist/meters;
   var targetPPM=(typeof DEFAULT_PPM!=='undefined')?DEFAULT_PPM:40;
@@ -3667,15 +3679,62 @@ function _libWizApplyScale(){
 window._libWizApplyScale = _libWizApplyScale;
 
 function _libWizZoom(delta){
+  var el=document.getElementById('lwiz-fp-preview');
+  var cx=0.5, cy=0.5;
+  if(el&&el.scrollWidth>0){
+    cx=(el.scrollLeft+el.clientWidth/2)/(el.scrollWidth||1);
+    cy=(el.scrollTop+el.clientHeight/2)/(el.scrollHeight||1);
+  }
   var z=(_libLayoutWiz.wizZoom||1)+delta;
   if(z<0.25) z=0.25;
   if(z>5) z=5;
-  // Reset picked points when zooming — coordinates would be stale
   _libLayoutWiz.wizZoom=z;
-  _libLayoutWiz.wizScalePts=[];
+  _libLayoutWiz._scrollCenter={cx:cx, cy:cy};
   _libRenderLayoutWizard();
+  requestAnimationFrame(function(){
+    var el2=document.getElementById('lwiz-fp-preview');
+    if(el2&&_libLayoutWiz._scrollCenter){
+      var sc=_libLayoutWiz._scrollCenter;
+      el2.scrollLeft=Math.round(sc.cx*el2.scrollWidth-el2.clientWidth/2);
+      el2.scrollTop=Math.round(sc.cy*el2.scrollHeight-el2.clientHeight/2);
+    }
+  });
 }
 window._libWizZoom = _libWizZoom;
+
+function _libWizWheelZoom(e){
+  e.preventDefault();
+  e.stopPropagation();
+  var el=document.getElementById('lwiz-fp-preview');
+  if(!el) return;
+  var delta=e.deltaY<0?0.15:-0.15;
+  var oldZ=_libLayoutWiz.wizZoom||1;
+  var newZ=Math.max(0.25,Math.min(5,oldZ+delta));
+  if(newZ===oldZ) return;
+  // Cursor position relative to content (in content-space px)
+  var rect=el.getBoundingClientRect();
+  var cursorX=e.clientX-rect.left+el.scrollLeft;
+  var cursorY=e.clientY-rect.top+el.scrollTop;
+  // Ratio of cursor within the content
+  var rx=cursorX/(el.scrollWidth||1);
+  var ry=cursorY/(el.scrollHeight||1);
+  // Cursor offset from viewport top-left (stays fixed)
+  var vpOffX=e.clientX-rect.left;
+  var vpOffY=e.clientY-rect.top;
+  _libLayoutWiz.wizZoom=newZ;
+  _libLayoutWiz._scrollCenter=null;
+  _libRenderLayoutWizard();
+  requestAnimationFrame(function(){
+    var el2=document.getElementById('lwiz-fp-preview');
+    if(!el2) return;
+    // New cursor position in new content-space
+    var newCursorX=rx*el2.scrollWidth;
+    var newCursorY=ry*el2.scrollHeight;
+    el2.scrollLeft=Math.round(newCursorX-vpOffX);
+    el2.scrollTop=Math.round(newCursorY-vpOffY);
+  });
+}
+window._libWizWheelZoom = _libWizWheelZoom;
 
 function _libLayoutWizNext(){
   var w=_libLayoutWiz;
