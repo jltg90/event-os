@@ -2,7 +2,7 @@ var LANG = 'es';
 var CURRENCY={code:'USD',symbol:'$',name:'US Dollar'};
 var DATE_FORMAT = 'DMY';
 var WEEK_START = 0;
-var DEFAULT_OUTLINE_OFFSET = 0.90;
+var DEFAULT_OUTLINE_OFFSET = 1.30;
 var THEME = 'light';
 var CURRENCIES=[
   {code:'USD',symbol:'$',  name:'US Dollar'},

@@ -260,7 +260,7 @@ function buildLayoutSnapshotGraphic(opts){
   if(typeof LSHAPES_M==='undefined' || !LSHAPES_M) LSHAPES_M = getLSHAPES();
   var PPM = (floorplan && floorplan.pxPerMeter) || getPPM();
   var CHAIR_SZ = Math.max(8, Math.round(CHAIR_SIZE_M * PPM));
-  var CHAIR_GAP = Math.max(2, Math.round(0.05 * PPM));
+  var CHAIR_GAP = 0;
   var PAD = CHAIR_SZ + CHAIR_GAP + 4;
   var minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
 
@@ -325,7 +325,7 @@ function buildLayoutSnapshotGraphic(opts){
     if(item.chairs){
       var n = item.chairs;
       var cs = Math.max(4, Math.round(CHAIR_SZ * scale));
-      var gap = Math.max(1, Math.round(CHAIR_GAP * scale));
+      var gap = Math.round(CHAIR_GAP * scale);
       var cType = item.chairType || 'default';
       var ct = CHAIR_TYPES[cType] || CHAIR_TYPES['default'];
       var cfill = ct ? ct.fill : '#e8e4d8';
@@ -381,7 +381,7 @@ function buildLayoutSnapshotGraphic(opts){
 
     // ── Dotted outline ──
     var _isOlTable=['round-table','rect-table','square-table'].includes(item.shape)||(LSHAPES_M[item.shape]&&LSHAPES_M[item.shape]._isCustomTable);
-    var _olOff=item.outlineOffset!=null?item.outlineOffset:0.90;
+    var _olOff=item.outlineOffset!=null?item.outlineOffset:1.30;
     if(_olOff>0 && !isSTable && _isOlTable){
       var _olPx=Math.round(_olOff*PPM*scale);
       if(isRound){
@@ -1681,7 +1681,7 @@ function getChairPx(item){
   return Math.max(8, Math.round(CHAIR_SIZE_M * getPPM()));
 }
 function getChairGap(item){
-  return Math.max(2, Math.round(0.05 * getPPM()));
+  return 0;
 }
 function getChairPad(item){
   if(!item.chairs) return 0;
@@ -1750,7 +1750,7 @@ function renderOutline(item){
   var isTable=['round-table','rect-table','square-table'].includes(item.shape)||(LSHAPES_M[item.shape]&&LSHAPES_M[item.shape]._isCustomTable);
   if(!isTable) return '';
   var off=item.outlineOffset;
-  if(off==null) off=(typeof DEFAULT_OUTLINE_OFFSET!=='undefined'?DEFAULT_OUTLINE_OFFSET:0.90);
+  if(off==null) off=(typeof DEFAULT_OUTLINE_OFFSET!=='undefined'?DEFAULT_OUTLINE_OFFSET:1.30);
   if(off<=0) return '';
   var ppm=getPPM();
   var offPx=Math.round(off*ppm);
@@ -4264,7 +4264,7 @@ function openLItemModal(id){
       <input class="input" id="li-bdc" type="color" value="${item.bdClr}" style="height:38px;padding:2px">
     </div>
     ${isTable?`<div class="ig"><label>${_es?'Línea guía (m)':'Guide line (m)'}</label>
-      <input class="input" id="li-outline" type="number" step="0.05" min="0" max="3" value="${(item.outlineOffset!=null?item.outlineOffset:(typeof DEFAULT_OUTLINE_OFFSET!=='undefined'?DEFAULT_OUTLINE_OFFSET:0.90)).toFixed(2)}">
+      <input class="input" id="li-outline" type="number" step="0.05" min="0" max="3" value="${(item.outlineOffset!=null?item.outlineOffset:(typeof DEFAULT_OUTLINE_OFFSET!=='undefined'?DEFAULT_OUTLINE_OFFSET:1.30)).toFixed(2)}">
     </div>`:''}
   ${hasChairs?`
   <div class="ig" style="grid-column:1/-1">
@@ -4383,7 +4383,7 @@ function saveLItem(id){
   const newChairs=_chEl?+_chEl.value:(item.chairs||0);
   var _olEl=document.getElementById('li-outline');
   var newOutlineOffset=_olEl?parseFloat(_olEl.value):null;
-  if(newOutlineOffset!=null&&isNaN(newOutlineOffset)) newOutlineOffset=(typeof DEFAULT_OUTLINE_OFFSET!=='undefined'?DEFAULT_OUTLINE_OFFSET:0.90);
+  if(newOutlineOffset!=null&&isNaN(newOutlineOffset)) newOutlineOffset=(typeof DEFAULT_OUTLINE_OFFSET!=='undefined'?DEFAULT_OUTLINE_OFFSET:1.30);
   var newChairSides=null;
   var newChairGaps=null;
   var _csTopEl=document.getElementById('li-cs-top');
