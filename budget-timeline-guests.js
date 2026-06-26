@@ -2560,7 +2560,9 @@ function showImportPreview(newGuests){
       const ex=findExistingGuest(p,ng);
       if(ex){
         const changes=computeGuestChanges(ex,ng);
-        if(changes.length) updates.push({id:ex.id,name:ex.name,changes:changes});
+        // Keep a direct reference to the live guest so the apply step can't miss it
+        // (e.g. guests with no/duplicate id).
+        if(changes.length) updates.push({id:ex.id,ref:ex,name:ex.name,changes:changes});
         else identical++;
       } else { identical++; } // intra-batch duplicate of a row already counted as new
     } else {
@@ -2576,8 +2578,8 @@ function showImportPreview(newGuests){
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:10px;flex-wrap:wrap">
       <div style="font-weight:600;font-size:13px;color:var(--gold-h)">&#8635; ${updates.length} ${es?('invitado'+(updates.length>1?'s':'')+' con cambios'):('guest'+(updates.length>1?'s':'')+' with updates')}</div>
       <div style="display:flex;gap:6px">
-        <button type="button" class="btn btn-ghost btn-sm" style="font-size:11px" onclick="importToggleUpdates(true)">${es?'Aceptar todas':'Accept all'}</button>
-        <button type="button" class="btn btn-ghost btn-sm" style="font-size:11px" onclick="importToggleUpdates(false)">${es?'Descartar todas':'Dismiss all'}</button>
+        <button type="button" class="btn btn-ghost btn-sm" style="font-size:11px" onclick="importToggleUpdates(true)">${es?'Marcar todas':'Select all'}</button>
+        <button type="button" class="btn btn-ghost btn-sm" style="font-size:11px" onclick="importToggleUpdates(false)">${es?'Desmarcar todas':'Clear all'}</button>
       </div>
     </div>
     <div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">${es?'Estos invitados ya existen. Revisa los cambios y elige cuáles aplicar:':'These guests already exist. Review the changes and choose which to apply:'}</div>
@@ -2598,8 +2600,11 @@ function showImportPreview(newGuests){
 
   var btnParts=[];
   if(unique.length) btnParts.push(unique.length+' '+(es?'nuevos':'new'));
-  if(updates.length) btnParts.push(updates.length+' '+(es?'actualizaciones':'updates'));
-  const importBtnLabel=(es?'Importar':'Import')+(btnParts.length?(' ('+btnParts.join(' + ')+')'):'');
+  if(updates.length) btnParts.push(updates.length+' '+(es?'cambios':'updates'));
+  // The footer button is the ONLY action that actually applies — give it the "Aceptar" verb
+  // so a user looking to "accept the changes" clicks the button that really applies them.
+  var btnAct = updates.length ? (es?'Aceptar e importar':'Accept & import') : (es?'Importar':'Import');
+  const importBtnLabel=btnAct+(btnParts.length?(' ('+btnParts.join(' · ')+')'):'');
   const canImport = unique.length || updates.length;
 
   openMo(`<div class="mo-title">${es?'Importar Invitados':'Import Guests'}</div>
@@ -2643,7 +2648,8 @@ function doImport(){
   (updates||[]).forEach(function(u,i){
     var chk=document.querySelector('.upd-sel[data-uidx="'+i+'"]');
     if(chk && !chk.checked) return;
-    var ex=p.guests.find(function(g){return g.id===u.id;});
+    // Apply to the live guest object captured at preview time; fall back to id match.
+    var ex=(u.ref && p.guests.indexOf(u.ref)!==-1) ? u.ref : p.guests.find(function(g){return g.id&&g.id===u.id;});
     if(!ex) return;
     u.changes.forEach(function(c){
       if(c.k==='plusOne') ex.plusOne=true;
@@ -2651,7 +2657,11 @@ function doImport(){
     });
     updated++;
   });
-  saveProj(p);closeMo();renderGuests();
+  saveProj(p);
+  // Persist this import right away so the changes can't be lost to the save debounce
+  // (e.g. if the user reloads immediately after importing).
+  if(typeof flushSave==='function') flushSave();
+  closeMo();renderGuests();
   var es=LANG==='es';
   toast(`${added} ${es?'agregados':'imported'}${updated?', '+updated+' '+(es?'actualizados':'updated'):''}`, 's');
   window._pendingImport=null;
