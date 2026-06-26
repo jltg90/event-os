@@ -326,6 +326,8 @@ export const getProjectExtras = authedQuery({
       layoutItems: v.any(),
       savedLayouts: v.any(),
       layouts: v.optional(v.any()),
+      vendors: v.optional(v.any()),
+      moodboard: v.optional(v.any()),
     }),
   ),
   handler: async (ctx, wixUserId, args) => {
@@ -336,11 +338,15 @@ export const getProjectExtras = authedQuery({
       )
       .unique();
     if (!doc) return null;
+    // vendors and moodboard are split into extras for large projects (see
+    // app-data.js upsertProject) — they MUST be returned here or they are lost on reload.
     return {
       guests: doc.guests,
       layoutItems: doc.layoutItems,
       savedLayouts: doc.savedLayouts,
       layouts: doc.layouts ?? undefined,
+      vendors: doc.vendors ?? undefined,
+      moodboard: doc.moodboard ?? undefined,
     };
   },
 });

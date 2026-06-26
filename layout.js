@@ -2610,7 +2610,7 @@ function lUndo(){
   LHistorySaving=false;
   _lHistoryApply(JSON.parse(LHistory[LHistoryPos]));
   LState.sel=[];
-  var p=proj();p.layoutItems=LState.items;saveProj(p);
+  var p=proj();p.layoutItems=LState.items;saveFloorplan();
   renderLayoutCanvas();LHistorySaving=true;toast(LANG==='es'?'Deshacer':'Undo','s');
 }
 function lRedo(){
@@ -2619,7 +2619,7 @@ function lRedo(){
   LHistorySaving=false;
   _lHistoryApply(JSON.parse(LHistory[LHistoryPos]));
   LState.sel=[];
-  var p=proj();p.layoutItems=LState.items;saveProj(p);
+  var p=proj();p.layoutItems=LState.items;saveFloorplan();
   renderLayoutCanvas();LHistorySaving=true;toast(LANG==='es'?'Rehacer':'Redo','s');
 }
 function getLayoutInstanceKey(item){

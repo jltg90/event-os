@@ -49,7 +49,7 @@ function repairMojibakeInDOM(root){
       var repaired = fixMojibake(node.nodeValue);
       if(repaired !== node.nodeValue) node.nodeValue = repaired;
     }
-    var elements = scope.querySelectorAll ? scope.querySelectorAll('[title],[placeholder],input[value],textarea,option]') : [];
+    var elements = scope.querySelectorAll ? scope.querySelectorAll('[title],[placeholder],input[value],textarea,option') : [];
     elements.forEach(function(el){
       if(el.title && /[ÃÂâð]/.test(el.title)) el.title = fixMojibake(el.title);
       if(el.placeholder && /[ÃÂâð]/.test(el.placeholder)) el.placeholder = fixMojibake(el.placeholder);
@@ -243,9 +243,8 @@ var AI_PROXY_URL = EVENTOS_CONFIG.aiProxyUrl || '';
 var EVENTOS_DATA = window.EVENTOS_DATA || null;
 var _saveTimer = null;
 var _saveInFlight = false;
-var _savePending = null; // queued project to save after current completes
+var _pendingSaves = {};  // id -> project: projects waiting on the debounce timer or queued behind an in-flight save
 var _lastSyncTime = null;
-var _pendingProject = null; // project waiting on the debounce timer
 var _syncCycleCount = 0;    // tracks manualSync cycles for periodic reconciliation
 
 var _fileUrlCache = {};
@@ -645,6 +644,9 @@ async function _mergeProjectExtras(projectId, p){
       if(extras.moodboard) p.moodboard = extras.moodboard;
     }
     p._extrasLoaded = true;
+    // If a previous extras save failed, the retry flag was persisted to localStorage.
+    // Restore it so the next save re-attempts the companion (extras) write.
+    try{ if(localStorage.getItem('eventos_extras_pending_'+String(projectId))) p._extrasPending = true; }catch(e){}
   }catch(e){ console.error('EventOS: _mergeProjectExtras:', e); }
 }
 
@@ -695,18 +697,31 @@ async function saveProj(p){
 
   p._pendingSave = true; // Mark as having unsaved local edits
   setSyncStatus('saving');
+  // Debounce per-project: keyed by id so saving several different projects in quick
+  // succession (e.g. bulk edit) doesn't collapse to only the last one reaching Convex.
+  _pendingSaves[p.id] = p;
   clearTimeout(_saveTimer);
-  _pendingProject = p;
-  _saveTimer = setTimeout(function(){ _executeSave(p); }, 1500);
+  _saveTimer = setTimeout(_drainSaves, 1500);
+}
+
+// Kick off the next queued save if nothing is currently in flight.  Each _executeSave
+// calls back into _drainSaves() when it finishes, so the whole queue drains sequentially.
+function _drainSaves(){
+  clearTimeout(_saveTimer);
+  _saveTimer = null;
+  if(_saveInFlight) return; // the in-flight save will re-drain when it finishes
+  var ids = Object.keys(_pendingSaves);
+  if(!ids.length) return;
+  var id = ids[0];
+  var p = _pendingSaves[id];
+  delete _pendingSaves[id];
+  _executeSave(p);
 }
 
 // Core save logic — extracted so flushSave() and the debounce timer share the same path
 async function _executeSave(p){
-  _pendingProject = null;
-  clearTimeout(_saveTimer);
-  _saveTimer = null;
-  // Queue if another save is already in flight
-  if(_saveInFlight){ _savePending = p; return; }
+  // Queue if another save is already in flight (re-drained when it completes)
+  if(_saveInFlight){ _pendingSaves[p.id] = p; return; }
   _saveInFlight = true;
   var maxRetries = 3;
   for(var attempt = 1; attempt <= maxRetries; attempt++){
@@ -724,8 +739,7 @@ async function _executeSave(p){
       _clearTitleUnsaved();
       var now=Date.now(); if(now-_lastSaveToastTime>5000){_lastSaveToastTime=now;if(typeof toast==='function')toast(t('saved'),'s');}
       _saveInFlight = false;
-      // Flush queued save if one was pending during this save
-      if(_savePending){ var next = _savePending; _savePending = null; saveProj(next); }
+      _drainSaves(); // process any other queued projects
       return;
     }catch(e){
       if(e && e.message && e.message.indexOf('__oversize__') !== -1){
@@ -737,6 +751,7 @@ async function _executeSave(p){
         // shouldn't stay stuck permanently.  The next edit will retry the save.
         setTimeout(function(){ setSyncStatus('ok'); }, 8000);
         _saveInFlight = false;
+        _drainSaves();
         return;
       }
       if(e && e.message && e.message.indexOf('__conflict__') !== -1){
@@ -747,10 +762,11 @@ async function _executeSave(p){
           await new Promise(function(r){ setTimeout(r, 1500); });
           continue;
         }
-        _showConflictModal();
+        _showConflictModal(p);
         delete p._pendingSave;
         setSyncStatus('ok');
         _saveInFlight = false;
+        _drainSaves();
         return;
       }
       console.error('saveProj attempt', attempt + '/' + maxRetries + ':', e);
@@ -766,24 +782,21 @@ async function _executeSave(p){
     }
   }
   _saveInFlight = false;
-  if(_savePending){ var next = _savePending; _savePending = null; saveProj(next); }
+  _drainSaves();
 }
 
-// Immediately flush any debounced save — call before navigation, tab switches,
-// page unload, or visibility changes to prevent data loss.
+// Immediately flush any debounced saves — call before navigation, tab switches,
+// page unload, or visibility changes to prevent data loss.  Cancels the debounce
+// and starts draining the pending queue right away.
 function flushSave(){
-  if(_pendingProject){
-    var p = _pendingProject;
-    _pendingProject = null;
-    clearTimeout(_saveTimer);
-    _saveTimer = null;
-    _executeSave(p);
-  }
+  clearTimeout(_saveTimer);
+  _saveTimer = null;
+  _drainSaves();
 }
 
 // Show a locked modal when a save conflict is detected (account open on another device).
 // The user MUST pick an option — clicking outside or pressing Escape won't dismiss it.
-function _showConflictModal(){
+function _showConflictModal(conflictedProject){
   if(typeof openMo !== 'function') return;
   openMo(
     '<div class="mo-title">' + esc(t('conflict_title')) + '</div>'
@@ -816,10 +829,10 @@ function _showConflictModal(){
     }
     // Clear the stale optimistic-lock version so the retry doesn't hit __conflict__ again.
     // We're taking ownership of this project, so it's safe to overwrite unconditionally.
-    var p = proj();
+    // Retry the project that actually conflicted (may be a background save, not the open one).
+    var p = conflictedProject || proj();
     if(p) delete p._expectedVersion;
     closeMo();
-    // Retry saving the current project
     if(p) saveProj(p);
   };
 }
@@ -832,7 +845,7 @@ function saveDB(){
 
 async function delProj(id){
   // Clear any queued save for this project to avoid orphaned writes
-  if(_savePending && _savePending.id === id) _savePending = null;
+  delete _pendingSaves[id];
   if(DB.projects[DB.cur]) delete DB.projects[DB.cur][id];
   cacheDB();
   try{
@@ -870,24 +883,11 @@ async function manualSync(){
             continue;
           }
           if(data._hasExtras){
-            // If extras were already in memory AND the user is not actively editing on
-            // another device (the project just changed remotely), we must decide whether
-            // to keep the old in-memory extras or fetch fresh ones.
-            // For __library__ always fetch fresh extras so layouts/vendor-groups/task-
-            // templates sync across devices.  For regular projects, preserve in-memory
-            // extras if they were already loaded (user may have the project open).
-            var prev = DB.projects[DB.cur] && DB.projects[DB.cur][id];
-            if(prev && prev._extrasLoaded && id !== '__library__'){
-              data.guests       = prev.guests       || [];
-              data.layoutItems  = prev.layoutItems  || [];
-              data.savedLayouts = prev.savedLayouts || [];
-              if(prev.layouts) data.layouts = prev.layouts;
-              if(prev.vendors) data.vendors = prev.vendors;
-              if(prev.moodboard) data.moodboard = prev.moodboard;
-              data._extrasLoaded = true;
-            } else {
-              await _mergeProjectExtras(id, data);
-            }
+            // This project changed remotely and has no pending local edits (projects with
+            // unsaved edits were skipped above).  Fetch fresh extras so remote changes to
+            // guests / layout items (planos) / vendors / moodboard actually sync to this
+            // device — keeping the old in-memory copy would silently hide them.
+            await _mergeProjectExtras(id, data);
           }
           if(!DB.projects[DB.cur]) DB.projects[DB.cur] = {};
           DB.projects[DB.cur][id] = data;
@@ -1198,8 +1198,9 @@ window.addEventListener('online',  function(){ if(DB.cur) manualSync(); });
 window.addEventListener('offline', function(){ setSyncStatus('offline'); });
 window.addEventListener('beforeunload', function(e){
   // Flush debounced saves so the upsert starts before the page unloads
+  var hadDirty = _saveInFlight || Object.keys(_pendingSaves).length > 0;
   flushSave();
-  if(_saveInFlight || _savePending || _pendingProject){
+  if(hadDirty){
     e.preventDefault();
     e.returnValue = '';
   }

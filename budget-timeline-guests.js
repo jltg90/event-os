@@ -2318,6 +2318,13 @@ function processImportFiles(files){
       filesProcessed++;
       if(filesProcessed===files.length)showImportPreview(allParsed);
     };
+    // Without this, a single unreadable file leaves filesProcessed stuck below
+    // files.length and the import preview never opens (silent hang).
+    r.onerror=function(){
+      console.error('Import: failed to read file', file.name);
+      filesProcessed++;
+      if(filesProcessed===files.length)showImportPreview(allParsed);
+    };
     if(isExcel)r.readAsArrayBuffer(file);
     else r.readAsText(file);
   });
@@ -2335,6 +2342,21 @@ function normalizeHeader(h){
     .replace(/_+$/,'');
 }
 
+// Map free-text RSVP values (English or Spanish) to the canonical set the app uses
+// internally: 'confirmed' | 'declined' | 'pending'.  Without this, an imported Spanish
+// "Confirmado"/"Rechazado" is stored verbatim and counted as neither, falling into "pending".
+function normalizeRsvp(raw){
+  var v=String(raw||'').trim().toLowerCase();
+  if(!v) return 'pending';
+  var confirmed=['confirmed','confirm','confirmado','confirmada','yes','y','si','sí','going','attending','attend','accepted','accept','asiste','acepta','aceptado','aceptada'];
+  var declined=['declined','decline','rechazado','rechazada','no','not attending','regrets','cancelled','canceled','cancelado','cancelada','rechaza','no asiste'];
+  if(confirmed.indexOf(v)!==-1) return 'confirmed';
+  if(declined.indexOf(v)!==-1) return 'declined';
+  // Tolerate minor variations / trailing marks (e.g. "confirmed ✓", "asistirá")
+  if(v.indexOf('confirm')===0||v.indexOf('asist')===0||v.indexOf('acept')===0) return 'confirmed';
+  if(v.indexOf('declin')===0||v.indexOf('rechaz')===0||v.indexOf('cancel')===0) return 'declined';
+  return 'pending';
+}
 function rowToGuest(obj,filename){
   const name=fixMojibake(obj.full_name||obj.name||obj.guest_name||obj.nombre||obj.nombre_completo||'');
   if(!name||String(name).trim().length<2)return null;
@@ -2345,7 +2367,7 @@ function rowToGuest(obj,filename){
     email:fixMojibake(String(obj.email||obj.correo||'')).trim(),
     phone:fixMojibake(String(obj.phone||obj.telefono||obj.mobile||'')).trim(),
     category:fixMojibake(String(obj.category||obj.categoria||obj.group||obj.grupo||'')).trim(),
-    rsvp:fixMojibake(String(rsvpRaw)).trim().toLowerCase()||'pending',
+    rsvp:normalizeRsvp(fixMojibake(String(rsvpRaw))),
     table:fixMojibake(String(obj.table_number||obj.table||obj.mesa||'')).trim(),
     plusOne:['yes','1','true','sí','si'].includes(fixMojibake(String(obj.plus_one||obj.plusone||obj.acompanante||'')).toLowerCase().trim()),
     meal:fixMojibake(String(obj.meal_preference||obj.meal||obj.menu||obj.comida||'')).trim(),
@@ -2398,13 +2420,21 @@ function showImportPreview(newGuests){
   if(!newGuests.length)return toast('No valid guests found in file(s)','e');
   const p=proj();
   const dupes=[];const unique=[];
-  // Pre-build Sets for O(1) lookup instead of O(n*m)
-  const existingNames=new Set((p.guests||[]).map(function(g){return g.name.toLowerCase().trim();}));
-  const existingEmails=new Set((p.guests||[]).filter(function(g){return g.email;}).map(function(g){return g.email.toLowerCase();}));
+  // Pre-build Sets for O(1) lookup instead of O(n*m). String()-guarded so a legacy guest
+  // record with a missing name/email can't crash the whole import.
+  const existingNames=new Set((p.guests||[]).map(function(g){return String(g.name||'').toLowerCase().trim();}));
+  const existingEmails=new Set((p.guests||[]).filter(function(g){return g.email;}).map(function(g){return String(g.email).toLowerCase().trim();}));
   newGuests.forEach(ng=>{
-    const isDupe=existingNames.has(ng.name.toLowerCase().trim())
-      || (ng.email && existingEmails.has(ng.email.toLowerCase()));
-    if(isDupe)dupes.push(ng);else unique.push(ng);
+    const nm=String(ng.name||'').toLowerCase().trim();
+    const em=ng.email?String(ng.email).toLowerCase().trim():'';
+    const isDupe=existingNames.has(nm)||(em && existingEmails.has(em));
+    if(isDupe)dupes.push(ng);
+    else{
+      unique.push(ng);
+      // Track accepted rows too, so duplicates *within the same import batch* are caught.
+      if(nm)existingNames.add(nm);
+      if(em)existingEmails.add(em);
+    }
   });
   const srcFiles=[...new Set(newGuests.map(g=>g._src))];
   const dupeHtml=dupes.length?`
@@ -2451,6 +2481,7 @@ function doImport(){
   const {newGuests,unique,dupes}=window._pendingImport;
   const dupeAction=document.querySelector('input[name="dupe-action"]:checked')?.value||'skip';
   const p=proj();let added=0;let updated=0;
+  if(!Array.isArray(p.guests))p.guests=[];
   unique.forEach(ng=>{
     p.guests.push({id:'g'+Date.now()+Math.random().toString(36).slice(2,7),
       name:ng.name,email:ng.email,phone:ng.phone,category:ng.category||'',
@@ -2460,7 +2491,7 @@ function doImport(){
   });
   if(dupeAction==='update'){
     dupes.forEach(ng=>{
-      const ex=p.guests.find(eg=>eg.name.toLowerCase().trim()===ng.name.toLowerCase().trim()||(eg.email&&ng.email&&eg.email.toLowerCase()===ng.email.toLowerCase()));
+      const ex=p.guests.find(eg=>String(eg.name||'').toLowerCase().trim()===String(ng.name||'').toLowerCase().trim()||(eg.email&&ng.email&&String(eg.email).toLowerCase()===String(ng.email).toLowerCase()));
       if(ex){Object.assign(ex,{email:ng.email||ex.email,phone:ng.phone||ex.phone,category:ng.category||ex.category,rsvp:ng.rsvp||ex.rsvp,table:ng.table||ex.table,plusOne:ng.plusOne,meal:ng.meal||ex.meal,dietary:ng.dietary||ex.dietary,notes:ng.notes||ex.notes});updated++;}
     });
   }

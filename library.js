@@ -303,8 +303,11 @@ async function libApplyLayoutExportToEvent(entryId, pid, opts){
     return e.layoutExport && e.layoutExport.layoutId === exp.layoutId;
   });
   if(existingIdx >= 0){
-    // Refresh existing (same library source) — update in place
+    // Refresh existing (same library source) — update in place and make it the active one,
+    // so the active flag stays consistent with p.layoutExport set below (what's rendered).
+    layouts.forEach(function(e){ e.active = false; });
     layouts[existingIdx].layoutExport = exp;
+    layouts[existingIdx].active = true;
   } else {
     // New import — append and deactivate others
     layouts.forEach(function(e){ e.active = false; });
@@ -1857,8 +1860,8 @@ function libDoImportTasksCSV(){
 }
 
 function libLayoutRow(entry, isES){
-  var tables=entry.items.filter(function(i){return i.shape&&i.shape.includes('table');}).length;
-  var seats=entry.items.reduce(function(s,i){return s+(i.chairs||0);},0);
+  var tables=(entry.items||[]).filter(function(i){return i.shape&&i.shape.includes('table');}).length;
+  var seats=(entry.items||[]).reduce(function(s,i){return s+(i.chairs||0);},0);
   return '<tr onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
     +'<td style="padding:11px 12px;width:36px" onclick="event.stopPropagation()">'
     +'<input type="checkbox" class="lib-ly-sel" data-lid="'+entry.id+'" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libUpdateLayoutBulkBtn()">'
@@ -1885,8 +1888,8 @@ function toggleLibLayoutExpand(lid){
   if(card) card.classList.toggle('emc-open',_expandedLibLayoutIds.indexOf(lid)>-1);
 }
 function libLayoutCard(entry, isES){
-  var tables=entry.items.filter(function(i){return i.shape&&i.shape.includes('table');}).length;
-  var seats=entry.items.reduce(function(s,i){return s+(i.chairs||0);},0);
+  var tables=(entry.items||[]).filter(function(i){return i.shape&&i.shape.includes('table');}).length;
+  var seats=(entry.items||[]).reduce(function(s,i){return s+(i.chairs||0);},0);
   var isOpen=_expandedLibLayoutIds.indexOf(entry.id)>-1;
   return `<article class="emc llmc${isOpen?' emc-open':''}" data-lid="${entry.id}">
     <div class="emc-summary" onclick="toggleLibLayoutExpand('${entry.id}')">
@@ -2894,7 +2897,7 @@ function _doLibLoadLayout(entryId){
   var entry = lib.layouts.find(function(e){return e.id===entryId;});
   if(!entry) return;
   var p = proj(); if(!p) return;
-  p.layoutItems = JSON.parse(JSON.stringify(entry.items));
+  p.layoutItems = JSON.parse(JSON.stringify(entry.items||[]));
   // Reset undo history — the layout was fully replaced
   if(typeof lHistoryReset==='function') lHistoryReset();
   var incFloor = document.getElementById('lib-load-floor');
@@ -3960,7 +3963,7 @@ function libOpenLayoutEditor(entryId, _unused, isNew){
     };
   }
   var lp=all['__lib_layout__'];
-  lp.layoutItems=JSON.parse(JSON.stringify(entry.items));
+  lp.layoutItems=JSON.parse(JSON.stringify(entry.items||[]));
   if(entry.chairTypes) lp.chairTypes=JSON.parse(JSON.stringify(entry.chairTypes));
   if(entry.centerpieceTypes) lp.centerpieceTypes=JSON.parse(JSON.stringify(entry.centerpieceTypes));
   lp.floorplan=entry.floorplan?JSON.parse(JSON.stringify(entry.floorplan)):{img:null,pxPerMeter:null};
