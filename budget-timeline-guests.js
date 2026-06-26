@@ -2268,23 +2268,79 @@ function renderGuestMobileCards(guests){
       }).join('') : empty}
     </div>`;
 }
+// Wrap a guest cell value so clicking it edits that field inline (see gInlineEdit).
+function gEditSpan(gid, field, displayVal){
+  var v=(displayVal==null||displayVal==='')?'<span style="opacity:.4">&mdash;</span>':displayVal;
+  return '<span class="gedit" data-gid="'+gid+'" data-field="'+field+'" onclick="gInlineEdit(this)" title="'+(LANG==='es'?'Clic para editar':'Click to edit')+'">'+v+'</span>';
+}
 function buildGuestRows(guests){
   if(!guests.length) return `<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--muted)">${t('no_guests_found')}</td></tr>`;
-  return guests.map(g=>`<tr>
+  return guests.map(g=>`<tr data-gid="${g.id}">
     <td><input type="checkbox" class="guest-sel" data-gid="${g.id}" ${isGuestSelected(g.id)?'checked':''} style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="toggleGuestSelection('${g.id}',this.checked)"></td>
-    <td style="font-weight:600">${guestText(g.name)}</td>
-    <td style="font-size:12px;color:var(--muted)">${guestText(g.email)}${g.phone?'<br>'+guestText(g.phone):''}</td>
-    <td><span class="badge b-gray">${guestValueOrDash(g.category)}</span></td>
-    <td><span class="rb ${guestRsvpClass(g.rsvp)}">${guestText(guestRsvpValue(g.rsvp))}</span></td>
-    <td>${guestValueOrDash(g.table)}</td>
-    <td>${g.plusOne?'&#10003;':''}</td>
-    <td style="font-size:12px">${guestValueOrDash(g.meal)}</td>
-    <td style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${guestText(g.notes)}</td>
+    <td style="font-weight:600">${gEditSpan(g.id,'name',guestText(g.name))}</td>
+    <td style="font-size:12px;color:var(--muted)">${gEditSpan(g.id,'email',guestText(g.email))}<br>${gEditSpan(g.id,'phone',guestText(g.phone))}</td>
+    <td>${gEditSpan(g.id,'category','<span class="badge b-gray">'+guestValueOrDash(g.category)+'</span>')}</td>
+    <td>${gEditSpan(g.id,'rsvp','<span class="rb '+guestRsvpClass(g.rsvp)+'">'+guestText(guestRsvpValue(g.rsvp))+'</span>')}</td>
+    <td>${gEditSpan(g.id,'table',guestText(g.table))}</td>
+    <td>${gEditSpan(g.id,'plusOne',g.plusOne?'&#10003;':'')}</td>
+    <td style="font-size:12px">${gEditSpan(g.id,'meal',guestText(g.meal))}</td>
+    <td style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${gEditSpan(g.id,'notes',guestText(g.notes))}</td>
     <td><div style="display:flex;gap:4px">
       <button class="btn btn-ghost btn-sm btn-icon" onclick="openGuestModal('${g.id}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>
       <button class="btn btn-danger btn-sm btn-icon" onclick="delGuest('${g.id}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
     </div></td>
   </tr>`).join('');
+}
+
+// Inline-edit a single guest field in place. Click a .gedit cell -> swap to an input/select;
+// Enter or blur commits, Escape cancels. The row is rebuilt on commit so badges/pills refresh.
+function gInlineEdit(span){
+  if(!span || span.getAttribute('data-editing')==='1') return;
+  var gid=span.getAttribute('data-gid'), field=span.getAttribute('data-field');
+  var p=proj(); var g=p&&Array.isArray(p.guests)?p.guests.find(function(x){return x.id===gid;}):null;
+  if(!g) return;
+  span.setAttribute('data-editing','1');
+  var es=LANG==='es', cur=g[field]==null?'':g[field], editor;
+  function selOpts(pairs, sel){
+    return pairs.map(function(pr){return '<option value="'+esc(String(pr[0]))+'"'+(String(pr[0])===String(sel)?' selected':'')+'>'+esc(pr[1])+'</option>';}).join('');
+  }
+  if(field==='category'){
+    editor=document.createElement('select'); editor.className='select';
+    editor.innerHTML=selOpts([['',''],['Family',es?'Familia':'Family'],['Friends',es?'Amigos':'Friends'],['Work',es?'Trabajo':'Work'],['VIP','VIP'],['Other',es?'Otro':'Other']], cur);
+  } else if(field==='rsvp'){
+    editor=document.createElement('select'); editor.className='select';
+    editor.innerHTML=selOpts([['pending',es?'Pendiente':'Pending'],['confirmed',es?'Confirmado':'Confirmed'],['declined',es?'Rechazado':'Declined']], guestRsvpValue(cur));
+  } else if(field==='meal'){
+    editor=document.createElement('select'); editor.className='select';
+    editor.innerHTML=selOpts([['',''],['Chicken',es?'Pollo':'Chicken'],['Fish',es?'Pescado':'Fish'],['Beef',es?'Res':'Beef'],['Vegetarian',es?'Vegetariano':'Vegetarian'],['Vegan',es?'Vegano':'Vegan'],['Kids Menu',es?'Menú Niños':'Kids Menu']], cur);
+  } else if(field==='plusOne'){
+    editor=document.createElement('select'); editor.className='select';
+    editor.innerHTML=selOpts([['0',es?'No':'No'],['1',es?'Sí':'Yes']], g.plusOne?'1':'0');
+  } else {
+    editor=document.createElement('input'); editor.className='input'; editor.type=(field==='email'?'email':'text'); editor.value=cur;
+  }
+  editor.style.cssText='width:100%;min-width:70px;font-size:12px;padding:3px 6px';
+  var done=false;
+  function rebuildRow(){ var tr=editor.closest('tr'); if(tr) tr.outerHTML=buildGuestRows([g]); }
+  function commit(){
+    if(done) return; done=true;
+    var nv = (field==='plusOne') ? (editor.value==='1') : editor.value;
+    if(field==='name' && !String(nv).trim()) nv=g.name; // name is required — revert if blanked
+    var changed = (field==='plusOne') ? (g.plusOne!==nv) : (String(g[field]==null?'':g[field])!==String(nv));
+    g[field]=nv;
+    if(changed) saveProj(p);
+    rebuildRow();
+  }
+  function cancel(){ if(done) return; done=true; rebuildRow(); }
+  editor.addEventListener('keydown', function(ev){
+    if(ev.key==='Enter'){ ev.preventDefault(); commit(); }
+    else if(ev.key==='Escape'){ ev.preventDefault(); cancel(); }
+  });
+  editor.addEventListener('blur', commit);
+  if(editor.tagName==='SELECT') editor.addEventListener('change', commit);
+  span.replaceWith(editor);
+  editor.focus();
+  if(editor.select){ try{ editor.select(); }catch(e){} }
 }
 function renderGuestRows(p){
   if(isPhoneViewport()){ renderGuestList(p); return; }
@@ -2312,7 +2368,7 @@ function processImportFiles(files){
       let parsed=[];
       try{
         if(isExcel){parsed=await parseGuestFileExcel(e.target.result,file.name);}
-        else{parsed=parseGuestFileCSV(e.target.result,file.name);}
+        else{parsed=parseGuestFileCSV(decodeCsvBytes(e.target.result),file.name);}
       }catch(err){console.error('Import parse error:',err);}
       allParsed=allParsed.concat(parsed);
       filesProcessed++;
@@ -2325,9 +2381,30 @@ function processImportFiles(files){
       filesProcessed++;
       if(filesProcessed===files.length)showImportPreview(allParsed);
     };
-    if(isExcel)r.readAsArrayBuffer(file);
-    else r.readAsText(file);
+    // Read every file as bytes so CSVs can be decoded with the right charset below.
+    r.readAsArrayBuffer(file);
   });
+}
+
+// Decode raw CSV bytes into a string, auto-detecting the encoding.  Excel on a Spanish
+// Windows commonly saves CSV as Windows-1252/Latin-1 (ñ=0xF1, á=0xE1, …); reading those
+// bytes as UTF-8 corrupts the accents.  We honor a UTF-8 BOM, try strict UTF-8 first, and
+// fall back to Windows-1252 when the bytes aren't valid UTF-8.
+function decodeCsvBytes(buf){
+  var bytes = new Uint8Array(buf);
+  if(typeof TextDecoder === 'undefined'){
+    var s=''; for(var i=0;i<bytes.length;i++) s+=String.fromCharCode(bytes[i]);
+    try{ return decodeURIComponent(escape(s)); }catch(e){ return s; }
+  }
+  if(bytes.length>=3 && bytes[0]===0xEF && bytes[1]===0xBB && bytes[2]===0xBF){
+    return new TextDecoder('utf-8').decode(bytes.subarray(3)); // strip UTF-8 BOM
+  }
+  try{
+    return new TextDecoder('utf-8',{fatal:true}).decode(bytes);
+  }catch(e){
+    try{ return new TextDecoder('windows-1252').decode(bytes); }
+    catch(e2){ return new TextDecoder('utf-8').decode(bytes); }
+  }
 }
 
 function normalizeHeader(h){
@@ -2416,70 +2493,143 @@ function parseGuestFileCSV(text,filename){
   return guests;
 }
 
+// Fields compared when an imported row matches an existing guest (name is the match key,
+// so it's excluded). Labels are localized.
+function guestImportFieldDefs(){
+  var es=LANG==='es';
+  return [
+    {k:'email', label:'Email'},
+    {k:'phone', label: es?'Teléfono':'Phone'},
+    {k:'category', label: es?'Categoría':'Category'},
+    {k:'rsvp', label:'RSVP'},
+    {k:'table', label: es?'Mesa':'Table'},
+    {k:'plusOne', label:'+1', bool:true},
+    {k:'meal', label: es?'Comida':'Meal'},
+    {k:'dietary', label: es?'Restricciones':'Dietary'},
+    {k:'notes', label: es?'Notas':'Notes'}
+  ];
+}
+function findExistingGuest(p, ng){
+  var nm=String(ng.name||'').toLowerCase().trim();
+  var em=ng.email?String(ng.email).toLowerCase().trim():'';
+  return (p.guests||[]).find(function(eg){
+    var en=String(eg.name||'').toLowerCase().trim();
+    var ee=eg.email?String(eg.email).toLowerCase().trim():'';
+    return (nm && en===nm) || (em && ee===em);
+  });
+}
+// Diff an imported row against the existing guest. Empty imported values never overwrite;
+// +1 is only ever added (never auto-removed by an import).
+function computeGuestChanges(existing, imported){
+  var es=LANG==='es', changes=[];
+  guestImportFieldDefs().forEach(function(d){
+    if(d.k==='rsvp'){
+      var nvr=guestRsvpValue(imported.rsvp), ovr=guestRsvpValue(existing.rsvp);
+      if(nvr!==ovr) changes.push({k:'rsvp',label:'RSVP',oldVal:ovr,newVal:nvr,val:nvr});
+      return;
+    }
+    if(d.bool){
+      if(imported.plusOne===true && existing.plusOne!==true)
+        changes.push({k:'plusOne',label:'+1',oldVal:(es?'No':'No'),newVal:(es?'Sí':'Yes'),val:true});
+      return;
+    }
+    var nv=String(imported[d.k]==null?'':imported[d.k]).trim();
+    var ov=String(existing[d.k]==null?'':existing[d.k]).trim();
+    if(nv && nv.toLowerCase()!==ov.toLowerCase())
+      changes.push({k:d.k,label:d.label,oldVal:ov,newVal:nv,val:imported[d.k]});
+  });
+  return changes;
+}
+function importToggleUpdates(checked){
+  document.querySelectorAll('.upd-sel').forEach(function(c){ c.checked=checked; });
+}
+
 function showImportPreview(newGuests){
-  if(!newGuests.length)return toast('No valid guests found in file(s)','e');
+  var es=LANG==='es';
+  if(!newGuests.length)return toast(es?'No se encontraron invitados válidos en el archivo':'No valid guests found in file(s)','e');
   const p=proj();
-  const dupes=[];const unique=[];
-  // Pre-build Sets for O(1) lookup instead of O(n*m). String()-guarded so a legacy guest
-  // record with a missing name/email can't crash the whole import.
+  const unique=[]; const updates=[]; let identical=0;
+  // String()-guarded so a legacy guest record with a missing name/email can't crash import.
   const existingNames=new Set((p.guests||[]).map(function(g){return String(g.name||'').toLowerCase().trim();}));
   const existingEmails=new Set((p.guests||[]).filter(function(g){return g.email;}).map(function(g){return String(g.email).toLowerCase().trim();}));
   newGuests.forEach(ng=>{
     const nm=String(ng.name||'').toLowerCase().trim();
     const em=ng.email?String(ng.email).toLowerCase().trim():'';
     const isDupe=existingNames.has(nm)||(em && existingEmails.has(em));
-    if(isDupe)dupes.push(ng);
-    else{
+    if(isDupe){
+      const ex=findExistingGuest(p,ng);
+      if(ex){
+        const changes=computeGuestChanges(ex,ng);
+        if(changes.length) updates.push({id:ex.id,name:ex.name,changes:changes});
+        else identical++;
+      } else { identical++; } // intra-batch duplicate of a row already counted as new
+    } else {
       unique.push(ng);
-      // Track accepted rows too, so duplicates *within the same import batch* are caught.
-      if(nm)existingNames.add(nm);
+      if(nm)existingNames.add(nm);   // catch duplicates within the same import batch
       if(em)existingEmails.add(em);
     }
   });
   const srcFiles=[...new Set(newGuests.map(g=>g._src))];
-  const dupeHtml=dupes.length?`
-  <div style="background:var(--warn-l);border:1px solid rgba(184,134,26,.3);border-radius:var(--r-sm);padding:14px 16px;margin-bottom:16px">
-    <div style="font-weight:600;font-size:13px;color:var(--warn);margin-bottom:8px">&#9888; ${dupes.length} duplicate guest${dupes.length>1?'s':''} found</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">These guests already exist (matched by name or email):</div>
-    <div style="max-height:110px;overflow-y:auto;font-size:12px;margin-bottom:10px">
-      ${dupes.map(d=>`<div style="padding:3px 0;border-bottom:1px solid rgba(184,134,26,.15)">${d.name}${d.email?' <span style="color:var(--light)">&#183; '+d.email+'</span>':''}</div>`).join('')}
+
+  const updHtml = updates.length ? `
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);padding:14px 16px;margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:10px;flex-wrap:wrap">
+      <div style="font-weight:600;font-size:13px;color:var(--gold-h)">&#8635; ${updates.length} ${es?('invitado'+(updates.length>1?'s':'')+' con cambios'):('guest'+(updates.length>1?'s':'')+' with updates')}</div>
+      <div style="display:flex;gap:6px">
+        <button type="button" class="btn btn-ghost btn-sm" style="font-size:11px" onclick="importToggleUpdates(true)">${es?'Aceptar todas':'Accept all'}</button>
+        <button type="button" class="btn btn-ghost btn-sm" style="font-size:11px" onclick="importToggleUpdates(false)">${es?'Descartar todas':'Dismiss all'}</button>
+      </div>
     </div>
-    <div style="display:flex;gap:16px">
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;font-weight:500">
-        <input type="radio" name="dupe-action" value="skip" checked> Skip duplicates
-      </label>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;font-weight:500">
-        <input type="radio" name="dupe-action" value="update"> Update existing records
-      </label>
+    <div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">${es?'Estos invitados ya existen. Revisa los cambios y elige cuáles aplicar:':'These guests already exist. Review the changes and choose which to apply:'}</div>
+    <div style="max-height:210px;overflow-y:auto;display:flex;flex-direction:column;gap:8px">
+      ${updates.map((u,i)=>`<label style="display:flex;gap:10px;align-items:flex-start;padding:9px 11px;background:var(--card-solid);border:1px solid var(--border);border-radius:var(--r-sm);cursor:pointer">
+        <input type="checkbox" class="upd-sel" data-uidx="${i}" checked style="margin-top:2px;width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer;flex-shrink:0">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:12.5px;margin-bottom:3px">${esc(u.name)}</div>
+          ${u.changes.map(c=>`<div style="font-size:11.5px;line-height:1.5"><span style="color:var(--light)">${esc(c.label)}:</span> <span style="text-decoration:line-through;opacity:.65">${esc(c.oldVal||'—')}</span> &rarr; <span style="color:var(--text);font-weight:500">${esc(String(c.newVal))}</span></div>`).join('')}
+        </div>
+      </label>`).join('')}
     </div>
-  </div>`:'<div style="background:var(--success-l);border:1px solid rgba(45,122,94,.25);border-radius:var(--r-sm);padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--success);font-weight:600">&#10003; No duplicates found</div>';
-  openMo(`<div class="mo-title">Import Guests</div>
+  </div>` : (identical?`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);padding:11px 16px;margin-bottom:16px;font-size:12.5px;color:var(--muted)">${es?'Los invitados que ya existen no tienen cambios.':'No changes for guests that already exist.'}</div>`:'');
+
+  const newCountHtml = unique.length
+    ? `<div style="background:var(--success-l);border:1px solid rgba(45,122,94,.25);border-radius:var(--r-sm);padding:11px 16px;margin-bottom:16px;font-size:13px;color:var(--success);font-weight:600">&#10003; ${unique.length} ${es?('invitado'+(unique.length>1?'s':'')+' nuevo'+(unique.length>1?'s':'')):('new guest'+(unique.length>1?'s':''))}</div>`
+    : '';
+
+  var btnParts=[];
+  if(unique.length) btnParts.push(unique.length+' '+(es?'nuevos':'new'));
+  if(updates.length) btnParts.push(updates.length+' '+(es?'actualizaciones':'updates'));
+  const importBtnLabel=(es?'Importar':'Import')+(btnParts.length?(' ('+btnParts.join(' + ')+')'):'');
+  const canImport = unique.length || updates.length;
+
+  openMo(`<div class="mo-title">${es?'Importar Invitados':'Import Guests'}</div>
   <div style="font-size:13px;color:var(--muted);margin-bottom:14px">
-    Found <strong style="color:var(--text)">${newGuests.length} guest${newGuests.length>1?'s':''}</strong> in ${srcFiles.length} file${srcFiles.length>1?'s':''}
-    &nbsp;&#183;&nbsp; <span style="color:var(--success)">${unique.length} new</span>
-    ${dupes.length?'&nbsp;&#183;&nbsp; <span style="color:var(--warn)">'+dupes.length+' duplicate'+(dupes.length>1?'s':'')+'</span>':''}
+    ${es?'Se encontraron':'Found'} <strong style="color:var(--text)">${newGuests.length} ${es?('invitado'+(newGuests.length>1?'s':'')):('guest'+(newGuests.length>1?'s':''))}</strong> ${es?'en':'in'} ${srcFiles.length} ${es?('archivo'+(srcFiles.length>1?'s':'')):('file'+(srcFiles.length>1?'s':''))}
+    &nbsp;&#183;&nbsp; <span style="color:var(--success)">${unique.length} ${es?'nuevos':'new'}</span>
+    ${updates.length?'&nbsp;&#183;&nbsp; <span style="color:var(--gold-h)">'+updates.length+' '+(es?'con cambios':'updates')+'</span>':''}
+    ${identical?'&nbsp;&#183;&nbsp; <span style="color:var(--light)">'+identical+' '+(es?'sin cambios':'unchanged')+'</span>':''}
   </div>
-  ${dupeHtml}
+  ${newCountHtml}
+  ${updHtml}
   <div style="background:var(--bg2);border-radius:var(--r-sm);padding:12px 16px;font-size:12px;max-height:160px;overflow-y:auto;border:1px solid var(--border)">
-    <div style="font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--light);margin-bottom:8px">Preview</div>
+    <div style="font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--light);margin-bottom:8px">${es?'Vista previa':'Preview'}</div>
     ${newGuests.slice(0,8).map(g=>`<div style="display:flex;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)">
       <span style="font-weight:600;flex:1;font-size:12px">${esc(g.name)}</span>
       <span style="color:var(--muted);font-size:12px">${esc(g.email||'—')}</span>
-      <span class="rb ${g.rsvp==='confirmed'?'rb-c':g.rsvp==='declined'?'rb-d':'rb-p'}">${g.rsvp}</span>
+      <span class="rb ${g.rsvp==='confirmed'?'rb-c':g.rsvp==='declined'?'rb-d':'rb-p'}">${esc(g.rsvp)}</span>
     </div>`).join('')}
-    ${newGuests.length>8?`<div style="padding:6px 0;color:var(--light);font-size:11px">+ ${newGuests.length-8} more...</div>`:''}
+    ${newGuests.length>8?`<div style="padding:6px 0;color:var(--light);font-size:11px">+ ${newGuests.length-8} ${es?'más...':'more...'}</div>`:''}
   </div>
   <div class="mo-foot">
-    <button class="btn btn-ghost" onclick="closeMo()">Cancel</button>
-    <button class="btn btn-primary" onclick="doImport()">Import ${unique.length} New Guest${unique.length!==1?'s':''}</button>
+    <button class="btn btn-ghost" onclick="closeMo()">${es?'Cancelar':'Cancel'}</button>
+    <button class="btn btn-primary" onclick="doImport()" ${canImport?'':'disabled'}>${esc(importBtnLabel)}</button>
   </div>`);
-  window._pendingImport={newGuests,unique,dupes};
+  window._pendingImport={unique,updates};
 }
 
 function doImport(){
   if(!window._pendingImport)return;
-  const {newGuests,unique,dupes}=window._pendingImport;
-  const dupeAction=document.querySelector('input[name="dupe-action"]:checked')?.value||'skip';
+  const {unique,updates}=window._pendingImport;
   const p=proj();let added=0;let updated=0;
   if(!Array.isArray(p.guests))p.guests=[];
   unique.forEach(ng=>{
@@ -2489,14 +2639,21 @@ function doImport(){
       dietary:ng.dietary,notes:ng.notes});
     added++;
   });
-  if(dupeAction==='update'){
-    dupes.forEach(ng=>{
-      const ex=p.guests.find(eg=>String(eg.name||'').toLowerCase().trim()===String(ng.name||'').toLowerCase().trim()||(eg.email&&ng.email&&String(eg.email).toLowerCase()===String(ng.email).toLowerCase()));
-      if(ex){Object.assign(ex,{email:ng.email||ex.email,phone:ng.phone||ex.phone,category:ng.category||ex.category,rsvp:ng.rsvp||ex.rsvp,table:ng.table||ex.table,plusOne:ng.plusOne,meal:ng.meal||ex.meal,dietary:ng.dietary||ex.dietary,notes:ng.notes||ex.notes});updated++;}
+  // Apply only the per-guest updates the user kept checked, and only the changed fields.
+  (updates||[]).forEach(function(u,i){
+    var chk=document.querySelector('.upd-sel[data-uidx="'+i+'"]');
+    if(chk && !chk.checked) return;
+    var ex=p.guests.find(function(g){return g.id===u.id;});
+    if(!ex) return;
+    u.changes.forEach(function(c){
+      if(c.k==='plusOne') ex.plusOne=true;
+      else ex[c.k]=c.val;
     });
-  }
+    updated++;
+  });
   saveProj(p);closeMo();renderGuests();
-  toast(`${added} imported${updated?', '+updated+' updated':''}${dupeAction==='skip'&&dupes.length?', '+dupes.length+' skipped':''}`, 's');
+  var es=LANG==='es';
+  toast(`${added} ${es?'agregados':'imported'}${updated?', '+updated+' '+(es?'actualizados':'updated'):''}`, 's');
   window._pendingImport=null;
 }
 
