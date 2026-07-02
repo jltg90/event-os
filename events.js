@@ -556,7 +556,7 @@ function renderEvents(){
             <span class="badge ${tc[p.type]||'b-gray'}">${tl[p.type]||esc(p.type)}</span>
           </div>
           <div class="ev-hover-detail ev-grid-client" style="font-size:12px;color:var(--muted);margin-bottom:14px">${t('client')}: <span style="color:var(--text);font-weight:500">${esc(p.clientName)}</span></div>
-          ${evcRow('#f7f0de','#a8862e','<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',t('event_date'),fmtDate(p.date))}
+          ${evcRow('#f7f0de','#7a5c2a','<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',t('event_date'),fmtDate(p.date))}
           ${evcRow('#f0fdf4','#10b981','<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7Z"/><circle cx="12" cy="9" r="2.5"/>',t('location'),esc(p.location||'TBD'))}
           ${evcRow('#fdf4e0','#b8861a','<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',t('total_budget'),fmtMoney(p.budget),'ev-hover-detail ev-grid-budget')}
         </div>
@@ -841,15 +841,18 @@ function confirmDelProj(id){
 function _dashDonut(data, colorFn, size){
   var total=data.reduce(function(s,d){return s+d[1];},0);
   if(!total) return '<div style="width:'+size+'px;height:'+size+'px;border-radius:50%;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--muted)">—</div>';
-  var r=size*0.38, circ=2*Math.PI*r, cx=size/2, cy=size/2, sw=size*0.15;
+  var r=size*0.40, circ=2*Math.PI*r, cx=size/2, cy=size/2, sw=size*0.13;
+  // Small surface gap between segments (shows the light track) for a refined, premium ring
+  var gap = data.length>1 ? Math.min(circ*0.035, 5) : 0;
   var rotation=-90;
+  var track='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="var(--bg2)" stroke-width="'+sw+'"/>';
   var circles=data.map(function(d){
-    var pct=d[1]/total, dash=pct*circ;
-    var seg='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+colorFn(d[0])+'" stroke-width="'+sw+'" stroke-dasharray="'+dash.toFixed(2)+' '+(circ-dash).toFixed(2)+'" stroke-dashoffset="'+(circ*0.25).toFixed(2)+'" transform="rotate('+rotation.toFixed(2)+' '+cx+' '+cy+')"/>';
+    var pct=d[1]/total, arc=Math.max(0.5, pct*circ - gap);
+    var seg='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+colorFn(d[0])+'" stroke-width="'+sw+'" stroke-dasharray="'+arc.toFixed(2)+' '+(circ-arc).toFixed(2)+'" stroke-dashoffset="'+(circ*0.25).toFixed(2)+'" transform="rotate('+rotation.toFixed(2)+' '+cx+' '+cy+')" style="transition:stroke-dasharray .6s"/>';
     rotation+=pct*360;
     return seg;
   }).join('');
-  return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'" style="flex-shrink:0">'+circles+'</svg>';
+  return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'" style="flex-shrink:0">'+track+circles+'</svg>';
 }
 function _dashRing(pct, color, size){
   var r=size*0.4, circ=2*Math.PI*r, cx=size/2, cy=size/2, sw=size*0.12;
@@ -937,10 +940,11 @@ function renderDash(){
   });
   var catEntries=Object.entries(catSpend).sort(function(a,b){return b[1].budget-a[1].budget;}).slice(0,5);
   var catMax=catEntries.length?catEntries[0][1].budget:1;
-  var catColors=['#f59e0b','#3b82f6','#10b981','#ec4899','#8b5cf6','#6b7280'];
+  // Sequential champagne ramp (rank 1 darkest → rank 5 lightest) — cohesive with the brand
+  var catColors=['#5E4720','#6C5328','#7A6030','#886D38','#967A40','#A48748'];
   var catBarsHtml=catEntries.map(function(e,i){
     var pct=catMax>0?Math.round(e[1].budget/catMax*100):0;
-    return '<div style="display:grid;grid-template-columns:100px 1fr 60px;align-items:center;gap:8px;margin-bottom:6px">'
+    return '<div class="kpi-catbar" style="display:grid;grid-template-columns:100px 1fr 60px;align-items:center;gap:8px;margin-bottom:6px">'
       +'<div style="font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+esc(e[0])+'">'+esc(e[0])+'</div>'
       +'<div style="background:var(--bg2);border-radius:4px;height:8px;overflow:hidden"><div style="height:100%;border-radius:4px;background:'+catColors[i%catColors.length]+';width:'+pct+'%;transition:width .4s"></div></div>'
       +'<div style="font-size:11px;font-weight:600;color:var(--text);text-align:right">'+formatCost(e[1].budget)+'</div>'
@@ -977,7 +981,7 @@ function renderDash(){
   var dlBadge=dl===0?'b-gold':dl>0?(dl<=7?'b-orange':'b-green'):'b-pink';
   var dlText=dl===0?t('dash_today'):dl>0?dl+' '+t('days_away'):Math.abs(dl)+' '+t('days_ago');
   // Guest donut
-  var rsvpColorFn=function(k){return k==='confirmed'?'#10b981':k==='pending'?'#f59e0b':'#ef4444';};
+  var rsvpColorFn=function(k){return k==='confirmed'?'#3D7A5E':k==='pending'?'#A07818':'#A8403A';};
   var rsvpData=[['confirmed',confirmed],['pending',pending],['declined',declined]].filter(function(d){return d[1]>0;});
   var guestDonut=_dashDonut(rsvpData,rsvpColorFn,64);
   // Render
@@ -998,11 +1002,11 @@ function renderDash(){
   +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:20px">'
     +_dashKPI(t('dash_total_budget'), tb>0?formatCost(tb):'—', t('dash_event_budget'), '#242424')
     +(totalWithPlusOnes>0&&tb>0?_dashKPI(LANG==='es'?'Presupuesto p/Inv.':'Budget / Guest', formatCost(budgetPerGuest), totalWithPlusOnes+' '+(LANG==='es'?'invitados':'guests'), '#242424', LANG==='es'?'Presupuesto ('+formatCost(tb)+') ÷ '+totalWithPlusOnes+' invitados (incl. acompañantes)':'Budget ('+formatCost(tb)+') ÷ '+totalWithPlusOnes+' guests (incl. plus-ones)'):'')
-    +_dashKPI(t('dash_paid'), formatCost(paid), tb>0?budgetPct+'% '+t('dash_of_budget'):'', '#ef4444')
-    +_dashKPI(t('dash_remaining'), formatCost(remaining), tb>0?t('dash_left'):'', remaining>=0?'#10b981':'#ef4444')
-    +_dashKPI(t('dash_guests_total'), guestTotal+(plusOnes?'<span style="font-family:\'DM Sans\',sans-serif;font-size:14px;color:#787470;font-weight:400"> +'+plusOnes+'</span>':''), confirmed+' '+t('dash_confirmed'), '#10b981')
-    +_dashKPI(t('dash_vendors_hired'), hired.length+'<span style="font-family:\'DM Sans\',sans-serif;font-size:14px;color:#787470;font-weight:400">/'+p.vendors.length+'</span>', t('dash_hired'), '#f59e0b')
-    +_dashKPI(t('dash_tasks_progress'), done+'<span style="font-family:\'DM Sans\',sans-serif;font-size:14px;color:#787470;font-weight:400">/'+p.tasks.length+'</span>', tpct+'% '+t('dash_complete'), '#7c3aed')
+    +_dashKPI(t('dash_paid'), formatCost(paid), tb>0?budgetPct+'% '+t('dash_of_budget'):'', '#A8403A')
+    +_dashKPI(t('dash_remaining'), formatCost(remaining), tb>0?t('dash_left'):'', remaining>=0?'#3D7A5E':'#A8403A')
+    +_dashKPI(t('dash_guests_total'), guestTotal+(plusOnes?'<span style="font-family:\'DM Sans\',sans-serif;font-size:14px;color:#787470;font-weight:400"> +'+plusOnes+'</span>':''), confirmed+' '+t('dash_confirmed'), '#3D7A5E')
+    +_dashKPI(t('dash_vendors_hired'), hired.length+'<span style="font-family:\'DM Sans\',sans-serif;font-size:14px;color:#787470;font-weight:400">/'+p.vendors.length+'</span>', t('dash_hired'), '#A07818')
+    +_dashKPI(t('dash_tasks_progress'), done+'<span style="font-family:\'DM Sans\',sans-serif;font-size:14px;color:#787470;font-weight:400">/'+p.tasks.length+'</span>', tpct+'% '+t('dash_complete'), '#A67C3D')
     +_dashKPI(t('dash_tables'), tables||'0', chairs+' '+t('dash_chairs'), '#242424', LANG==='es'?'Total: '+guestTotal+' | Con mesa: '+guestsWithTable+' | Sin mesa: '+guestsWithoutTable:'Total: '+guestTotal+' | Assigned: '+guestsWithTable+' | Unassigned: '+guestsWithoutTable)
   +'</div>'
   // DETAIL GRID
@@ -1016,7 +1020,7 @@ function renderDash(){
           +'<span>'+t('dash_allocated')+'</span>'
           +'<span style="font-weight:600;color:var(--text)">'+formatCost(allocated)+(tb>0?' / '+formatCost(tb):'')+'</span>'
         +'</div>'
-        +'<div class="prog"><div class="prog-f" style="width:'+(allocPct>100?100:allocPct)+'%;background:'+(allocPct>100?'#ef4444':'#f59e0b')+'"></div></div>'
+        +'<div class="prog"><div class="prog-f" style="width:'+(allocPct>100?100:allocPct)+'%;background:'+(allocPct>100?'#A8403A':'#A07818')+'"></div></div>'
       +'</div>'
       // Paid bar
       +'<div style="margin-bottom:12px">'
@@ -1024,10 +1028,10 @@ function renderDash(){
           +'<span>'+t('dash_paid')+'</span>'
           +'<span style="font-weight:600;color:var(--text)">'+formatCost(paid)+(allocated>0?' / '+formatCost(allocated):'')+'</span>'
         +'</div>'
-        +'<div class="prog"><div class="prog-f" style="width:'+(allocated>0?Math.min(100,Math.round(paid/allocated*100)):0)+'%;background:'+(budgetPct>90?'#ef4444':budgetPct>70?'#f59e0b':'#10b981')+'"></div></div>'
+        +'<div class="prog"><div class="prog-f" style="width:'+(allocated>0?Math.min(100,Math.round(paid/allocated*100)):0)+'%;background:'+(budgetPct>90?'#A8403A':budgetPct>70?'#A07818':'#3D7A5E')+'"></div></div>'
       +'</div>'
       // Unallocated
-      +(tb>0?'<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:16px"><span style="color:var(--muted)">'+t('dash_unallocated')+'</span><span style="font-weight:600;color:'+((tb-allocated)>=0?'#10b981':'#ef4444')+'">'+formatCost(tb-allocated)+'</span></div>':'')
+      +(tb>0?'<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:16px"><span style="color:var(--muted)">'+t('dash_unallocated')+'</span><span style="font-weight:600;color:'+((tb-allocated)>=0?'#3D7A5E':'#A8403A')+'">'+formatCost(tb-allocated)+'</span></div>':'')
       // Category breakdown
       +(catEntries.length?'<div style="border-top:1px solid var(--border);padding-top:14px">'
         +'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--light);margin-bottom:10px">'+t('dash_budget_by_category')+'</div>'
@@ -1043,9 +1047,9 @@ function renderDash(){
           ?'<div style="display:flex;align-items:center;gap:16px">'
             +guestDonut
             +'<div style="flex:1">'
-              +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><div style="width:8px;height:8px;border-radius:50%;background:#10b981;flex-shrink:0"></div><span style="font-size:12px;flex:1">'+t('dash_confirmed')+'</span><span style="font-size:12px;font-weight:700">'+confirmed+'</span></div>'
-              +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><div style="width:8px;height:8px;border-radius:50%;background:#f59e0b;flex-shrink:0"></div><span style="font-size:12px;flex:1">'+t('dash_pending')+'</span><span style="font-size:12px;font-weight:700">'+pending+'</span></div>'
-              +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><div style="width:8px;height:8px;border-radius:50%;background:#ef4444;flex-shrink:0"></div><span style="font-size:12px;flex:1">'+t('dash_declined')+'</span><span style="font-size:12px;font-weight:700">'+declined+'</span></div>'
+              +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><div style="width:8px;height:8px;border-radius:50%;background:#3D7A5E;flex-shrink:0"></div><span style="font-size:12px;flex:1">'+t('dash_confirmed')+'</span><span style="font-size:12px;font-weight:700">'+confirmed+'</span></div>'
+              +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><div style="width:8px;height:8px;border-radius:50%;background:#A07818;flex-shrink:0"></div><span style="font-size:12px;flex:1">'+t('dash_pending')+'</span><span style="font-size:12px;font-weight:700">'+pending+'</span></div>'
+              +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><div style="width:8px;height:8px;border-radius:50%;background:#A8403A;flex-shrink:0"></div><span style="font-size:12px;flex:1">'+t('dash_declined')+'</span><span style="font-size:12px;font-weight:700">'+declined+'</span></div>'
               +(plusOnes?'<div style="font-size:11px;color:var(--muted);margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">'+t('dash_plus_ones')+': <strong>'+plusOnes+'</strong></div>':'')
             +'</div>'
           +'</div>'
@@ -1056,11 +1060,11 @@ function renderDash(){
         +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--light);margin-bottom:12px">'+t('dash_tasks_progress')+'</div>'
         +(p.tasks.length>0
           ?'<div style="display:flex;align-items:center;gap:16px">'
-            +_dashRing(tpct,'#7c3aed',56)
+            +_dashRing(tpct,'#A67C3D',56)
             +'<div style="flex:1">'
               +'<div style="font-size:13px;font-weight:600;color:var(--text)">'+done+' / '+p.tasks.length+'</div>'
               +'<div style="font-size:11px;color:var(--muted)">'+t('dash_complete')+'</div>'
-              +(overdue>0?'<div style="font-size:11px;font-weight:600;color:#ef4444;margin-top:6px">⚠ '+overdue+' '+t('dash_overdue')+'</div>':'')
+              +(overdue>0?'<div style="font-size:11px;font-weight:600;color:#A8403A;margin-top:6px">⚠ '+overdue+' '+t('dash_overdue')+'</div>':'')
             +'</div>'
           +'</div>'
           :'<div style="font-size:12px;color:var(--muted)">—</div>')
@@ -1117,12 +1121,13 @@ function renderAppDash(){
   const displayEvents = within30.length >= 3 ? within30 : upcomingEvents.slice(0, Math.max(3, within30.length));
 
   // -- Status donut data --
+  // Cohesive editorial categorical palette (CVD-validated ΔE 27) — muted, on-brand, not neon
   const statusDef = [
-    { key:'to-be-confirmed', clr:'#a78bfa', labelEN:'To be Confirmed', labelES:'Por Confirmar' },
-    { key:'confirmed',       clr:'#34d399', labelEN:'Confirmed',        labelES:'Confirmado' },
-    { key:'in-progress',     clr:'#fbbf24', labelEN:'In Progress',      labelES:'En Progreso' },
-    { key:'completed',       clr:'#60a5fa', labelEN:'Completed',        labelES:'Completado' },
-    { key:'cancelled',       clr:'#f87171', labelEN:'Cancelled',        labelES:'Cancelado' },
+    { key:'to-be-confirmed', clr:'#7E6CA6', labelEN:'To be Confirmed', labelES:'Por Confirmar' },
+    { key:'confirmed',       clr:'#3D7A5E', labelEN:'Confirmed',        labelES:'Confirmado' },
+    { key:'in-progress',     clr:'#A67C3D', labelEN:'In Progress',      labelES:'En Progreso' },
+    { key:'completed',       clr:'#47618A', labelEN:'Completed',        labelES:'Completado' },
+    { key:'cancelled',       clr:'#A8403A', labelEN:'Cancelled',        labelES:'Cancelado' },
   ];
   const statusCounts = {};
   statusDef.forEach(s => { statusCounts[s.key] = 0; });
@@ -1142,17 +1147,19 @@ function renderAppDash(){
         </div>`).join('');
 
   function buildSVGDonut() {
-    if (grandTotal === 0) return `<svg width="110" height="110" viewBox="0 0 110 110"><circle cx="55" cy="55" r="38" fill="none" stroke="#e5e7eb" stroke-width="16"/></svg>`;
-    const r = 38, circ = 2 * Math.PI * r, cx = 55, cy = 55;
+    if (grandTotal === 0) return `<svg width="110" height="110" viewBox="0 0 110 110"><circle cx="55" cy="55" r="38" fill="none" stroke="var(--bg2)" stroke-width="15"/></svg>`;
+    const r = 38, circ = 2 * Math.PI * r, cx = 55, cy = 55, sw = 15;
+    const gap = activeSlices.length > 1 ? 5 : 0; // surface gap between segments
     let rotation = -90;
+    const track = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--bg2)" stroke-width="${sw}"/>`;
     const circles = activeSlices.map(s => {
       const pct = statusCounts[s.key] / grandTotal;
-      const dash = pct * circ;
-      const seg = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${s.clr}" stroke-width="16" stroke-dasharray="${dash.toFixed(2)} ${(circ - dash).toFixed(2)}" stroke-dashoffset="${(circ * 0.25).toFixed(2)}" transform="rotate(${rotation.toFixed(2)} ${cx} ${cy})"/>`;
+      const arc = Math.max(0.5, pct * circ - gap);
+      const seg = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${s.clr}" stroke-width="${sw}" stroke-dasharray="${arc.toFixed(2)} ${(circ - arc).toFixed(2)}" stroke-dashoffset="${(circ * 0.25).toFixed(2)}" transform="rotate(${rotation.toFixed(2)} ${cx} ${cy})"/>`;
       rotation += pct * 360;
       return seg;
     }).join('');
-    return `<svg width="110" height="110" viewBox="0 0 110 110">${circles}</svg>`;
+    return `<svg width="110" height="110" viewBox="0 0 110 110">${track}${circles}</svg>`;
   }
   const donutSVG = buildSVGDonut();
   const donutCard = `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:18px 20px;box-shadow:var(--sh-sm);">

@@ -878,7 +878,7 @@ function renderLayout(){
           ${LState.addMode?`<strong style="color:var(--gold-h)"> | Click canvas to place ${LState.addMode.replace('-',' ')}</strong>`:''}
         </span>
         <div style="flex:1"></div>
-        ${(()=>{const q=getLayoutQuoteSummary(LState.items, ensureLayoutQuoteState(p));return (q.total>0||q.extraRows.length)?`<div id="layout-quote-total-pill" style="background:var(--gold-l);border:1px solid rgba(201,168,76,.3);border-radius:20px;padding:4px 14px;font-size:12px;font-weight:600;color:var(--gold-h);cursor:pointer" onclick="showLayoutBudget()" title="${t('layout_quote_open')}">${t('layout_quote_title')}: ${formatCost(q.total)}</div>`:'';})()}
+        ${(()=>{const q=getLayoutQuoteSummary(LState.items, ensureLayoutQuoteState(p));return (q.total>0||q.extraRows.length)?`<div id="layout-quote-total-pill" style="background:var(--gold-l);border:1px solid rgba(166,124,61,.3);border-radius:20px;padding:4px 14px;font-size:12px;font-weight:600;color:var(--gold-h);cursor:pointer" onclick="showLayoutBudget()" title="${t('layout_quote_open')}">${t('layout_quote_title')}: ${formatCost(q.total)}</div>`:'';})()}
         <button id="lbtn-snap" onclick="LState.useSnap=!LState.useSnap;renderLayoutUI()" title="${LANG==='es'?'Alinear a objetos':'Snap to objects'}"
           style="height:28px;padding:0 10px;border:1px solid ${LState.useSnap?'var(--gold)':'var(--border)'};background:${LState.useSnap?'var(--gold-l)':'transparent'};border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;color:${LState.useSnap?'var(--gold-h)':'var(--muted)'};transition:var(--tr);white-space:nowrap"
           onmouseover="this.style.borderColor='var(--gold)'" onmouseout="if(!LState.useSnap)this.style.borderColor='var(--border)'">
@@ -1056,7 +1056,7 @@ function renderLayoutMobileQuickBar(){
   var hasFloorplan=!!(LState.floorplan&&LState.floorplan.img);
   return `<div class="layout-mobile-quickbar">
     <div class="layout-mobile-quickrow">
-      <button class="layout-mobile-btn" onclick="toggleAddElementMenu()">${LANG==='es'?'Agregar':'Add'}</button>
+      <button class="layout-mobile-btn lm-primary" onclick="toggleAddElementMenu()">${LANG==='es'?'Agregar':'Add'}</button>
       <button class="layout-mobile-btn" onclick="lZoom(0,'fit')">${LANG==='es'?'Ajustar':'Fit'}</button>
       <button class="layout-mobile-btn" onclick="lZoom(-0.1)">-</button>
       <button class="layout-mobile-btn" onclick="lZoom(0.1)">+</button>
@@ -1250,10 +1250,10 @@ function getLayoutQuoteSummary(items, extras){
   }).sort(function(a,b){ return a.label.localeCompare(b.label); });
 
   var centerpieceRows=Object.keys(cpCounts).map(function(cpKey){
-    var def=CENTERPIECE_TYPES[cpKey]||{label:cpKey,color:'#c9a84c',cost:0};
+    var def=CENTERPIECE_TYPES[cpKey]||{label:cpKey,color:'#a67c3d',cost:0};
     var qty=cpCounts[cpKey];
     var unitPrice=Number(def.cost||0);
-    return {key:cpKey, label:def.label||cpKey, color:def.color||'#c9a84c', qty:qty, unitPrice:unitPrice, rowTotal:qty*unitPrice};
+    return {key:cpKey, label:def.label||cpKey, color:def.color||'#a67c3d', qty:qty, unitPrice:unitPrice, rowTotal:qty*unitPrice};
   }).sort(function(a,b){ return a.label.localeCompare(b.label); });
 
   var extraRows=extras.map(function(extra,index){
@@ -2198,7 +2198,7 @@ function doAddTablesToLayout(){
     var cat=catalogueMap[key]; if(!cat) return;
     var shape=shapeMap[cat.cat]||'round-table';
     var tw=Math.round(cat.wM*ppm); var th=Math.round(cat.hM*ppm);
-    var defShape=SHAPES[shape]||{bg:'#f0ece0',bdClr:'#c9a84c'};
+    var defShape=SHAPES[shape]||{bg:'#f0ece0',bdClr:'#a67c3d'};
     var pad=sel.chairs||cat.chairs?Math.round(CHAIR_SIZE_M*ppm)+Math.round(0.05*ppm):0;
     var cellW=tw+pad*2+spacing; var cellH=th+pad*2+spacing;
     for(var i=0;i<sel.n;i++){
@@ -2207,7 +2207,7 @@ function doAddTablesToLayout(){
       newItems.push({
         id:'li'+Date.now()+Math.random().toString(36).slice(2,6),
         shape:shape, x:Math.round(curX+pad), y:Math.round(curY+pad),
-        w:tw, h:th, bg:defShape.bg||'#f0ece0', bdClr:defShape.bdClr||'#c9a84c',
+        w:tw, h:th, bg:defShape.bg||'#f0ece0', bdClr:defShape.bdClr||'#a67c3d',
         radius:cat.cat==='round'?'50%':'0px',
         label:String(tableNum), chairs:cat.chairs,
         chairSides:cat.chairSides||null,
@@ -2877,7 +2877,7 @@ function lCanvasDown(e){
     let mq=document.getElementById('lmarquee');
     if(!mq){
       mq=document.createElement('div');mq.id='lmarquee';
-      mq.style.cssText='position:absolute;border:1.5px dashed var(--gold);background:rgba(201,168,76,.08);pointer-events:none;z-index:100;display:none';
+      mq.style.cssText='position:absolute;border:1.5px dashed var(--gold);background:rgba(166,124,61,.08);pointer-events:none;z-index:100;display:none';
       canvas.appendChild(mq);
     }
     mq.style.display='none';
@@ -3030,9 +3030,9 @@ function _renderSnapGuides(){
     line.className='snap-guide';
     var isVertical=Math.abs(g.x1-g.x2)<1;
     if(isVertical){
-      line.style.cssText='position:absolute;left:'+g.x1+'px;top:'+g.y1+'px;width:0;height:'+(g.y2-g.y1)+'px;border-left:1px dashed #c9a84c;pointer-events:none;z-index:90;opacity:0.7';
+      line.style.cssText='position:absolute;left:'+g.x1+'px;top:'+g.y1+'px;width:0;height:'+(g.y2-g.y1)+'px;border-left:1px dashed #a67c3d;pointer-events:none;z-index:90;opacity:0.7';
     } else {
-      line.style.cssText='position:absolute;left:'+g.x1+'px;top:'+g.y1+'px;width:'+(g.x2-g.x1)+'px;height:0;border-top:1px dashed #c9a84c;pointer-events:none;z-index:90;opacity:0.7';
+      line.style.cssText='position:absolute;left:'+g.x1+'px;top:'+g.y1+'px;width:'+(g.x2-g.x1)+'px;height:0;border-top:1px dashed #a67c3d;pointer-events:none;z-index:90;opacity:0.7';
     }
     canvas.appendChild(line);
   });
@@ -3163,7 +3163,7 @@ function openChairEditor(){
         '<div style="font-size:11px;font-weight:700;color:var(--gold-h);margin-bottom:8px">'+(isES?'Agregar silla personalizada':'Add custom chair')+'</div>'+
         '<div style="display:flex;gap:6px;align-items:center">'+
           '<input class="input" id="ch-new-label" placeholder="'+(isES?'Nombre (requerido)':'Name (required)')+'" style="flex:1;font-size:11px">'+
-          '<input class="input" type="color" id="ch-new-fill" value="#c9a84c" style="width:34px;height:34px;padding:2px;flex-shrink:0" title="'+(isES?'Color (requerido)':'Color (required)')+'">'+
+          '<input class="input" type="color" id="ch-new-fill" value="#a67c3d" style="width:34px;height:34px;padding:2px;flex-shrink:0" title="'+(isES?'Color (requerido)':'Color (required)')+'">'+
           '<input class="input" type="number" min="0" step="0.01" id="ch-new-cost" placeholder="$/'+( isES?'silla':'chair')+'" value="0" style="width:72px;font-size:11px">'+
           '<button class="btn btn-ghost btn-sm" onclick="addNewChairType()" style="white-space:nowrap">'+t('add')+'</button>'+
         '</div>'+
@@ -3535,7 +3535,7 @@ function openGeneralLayoutModal(){
       </div>
     </div>
   </div>
-  <div style="background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.2);border-radius:8px;padding:10px;font-size:11px;color:var(--muted);margin-bottom:16px">
+  <div style="background:rgba(166,124,61,.08);border:1px solid rgba(166,124,61,.2);border-radius:8px;padding:10px;font-size:11px;color:var(--muted);margin-bottom:16px">
     &#9432; This will replace your current layout. Tables are arranged in a grid; center elements are placed in the middle.
   </div>
   <div class="mo-foot">
@@ -3835,7 +3835,9 @@ function removeFloorplan(){
     onConfirm:function(){
       var idbKey=LState.floorplan._idb;
       var storageId=LState.floorplan._storageId;
-      LState.floorplan={img:null,opacity:0.4,scale:1,x:0,y:0,w:0,h:0};
+      // Reset to the same shape used everywhere else so no key (locked/rotation/pxPerMeter)
+      // is left undefined after a remove → re-add cycle.
+      LState.floorplan={img:null,opacity:0.4,scale:1,x:0,y:0,w:0,h:0,locked:false,rotation:0,pxPerMeter:null};
       LState.scaleMode=false;LState.scalePoints=[];
       var p=proj();delete p.floorplan;saveProj(p);
       if(idbKey) _fpDelete(idbKey).catch(function(){});
@@ -4281,7 +4283,7 @@ function openLItemModal(id){
       <button class="btn btn-ghost btn-sm" type="button" onclick="openCenterpieceEditor()" title="${_es?'Gestionar centros de mesa':'Manage Centerpieces'}" style="white-space:nowrap;font-size:11px;padding:4px 8px">${_es?'Gestionar':'Manage'}</button>
     </div>
   </div>`:''}
-  <div style="font-size:10.5px;color:var(--muted);margin-bottom:8px;padding:8px;background:rgba(201,168,76,.06);border-radius:6px;border:1px solid rgba(201,168,76,.15)">
+  <div style="font-size:10.5px;color:var(--muted);margin-bottom:8px;padding:8px;background:rgba(166,124,61,.06);border-radius:6px;border:1px solid rgba(166,124,61,.15)">
     &#9432; ${_es?`Las <strong>instancias</strong> comparten cambios. Las <strong>copias</strong> quedan separadas.`:`<strong>Instances</strong> share changes. <strong>Copies</strong> stay independent.`}
   </div>
   <div class="mo-foot">
@@ -4857,7 +4859,7 @@ function _exportLayoutFullInner(layoutName){
   .preview-wrap{border:1px solid #eee6da;border-radius:14px;background:#fff;padding:12px}
   .preview-img{display:block;width:100%;height:auto;border-radius:10px}
   .footer{display:flex;justify-content:flex-end;margin-top:24px}
-  .print-btn{padding:12px 26px;background:#c9a84c;border:none;border-radius:10px;color:#fff;font-weight:700;cursor:pointer}
+  .print-btn{padding:12px 26px;background:#a67c3d;border:none;border-radius:10px;color:#fff;font-weight:700;cursor:pointer}
   @media print{
     body{background:#fff;padding:0}
     .page{max-width:none}
@@ -5046,11 +5048,11 @@ function exportEventLayoutSnapshot(){
 
   var css='*{box-sizing:border-box;margin:0;padding:0}'
     +'body{font-family:"Segoe UI",system-ui,Arial,sans-serif;color:#241f17;background:#f6f1e8;font-size:13px;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
-    +'.cover{background:#fff;padding:52px 56px 44px;border-bottom:4px solid #c9a84c}'
-    +'.brand{font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#c9a84c;margin-bottom:28px}'
+    +'.cover{background:#fff;padding:52px 56px 44px;border-bottom:4px solid #a67c3d}'
+    +'.brand{font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#a67c3d;margin-bottom:28px}'
     +'.lname{font-size:36px;font-weight:700;letter-spacing:-.5px;color:#241f17;margin-bottom:8px}'
     +'.evname{font-size:15px;color:#6f665c;margin-bottom:20px}'
-    +'.rule{width:48px;height:3px;background:#c9a84c;border-radius:2px;margin-bottom:20px}'
+    +'.rule{width:48px;height:3px;background:#a67c3d;border-radius:2px;margin-bottom:20px}'
     +'.meta{font-size:11px;color:#b0a898}'
     +'.body{padding:36px 48px}'
     +'.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:24px}'
@@ -5071,7 +5073,7 @@ function exportEventLayoutSnapshot(){
     +'.total-row td{background:#fbf5e7;font-weight:700}'
     +'.strong{font-weight:700;color:#8a6a1d}'
     +'.mb{margin-bottom:16px}'
-    +'.print-btn{margin-top:20px;padding:10px 22px;background:#c9a84c;border:none;border-radius:8px;color:#fff;font-weight:700;cursor:pointer;font-size:13px}'
+    +'.print-btn{margin-top:20px;padding:10px 22px;background:#a67c3d;border:none;border-radius:8px;color:#fff;font-weight:700;cursor:pointer;font-size:13px}'
     +'@media print{body{background:#fff}.body{background:#fff}.print-btn{display:none}}';
 
   var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+_e(name)+' — '+_e(p.name||'')+'</title><style>'+css+'</style></head><body>'
@@ -5296,7 +5298,7 @@ function _renderLayoutTourStep(){
   // Progress dots
   var dots='';
   for(var i=0;i<total;i++){
-    dots+='<span style="width:'+(i===_lTourIndex?'18':'7')+'px;height:7px;border-radius:4px;background:'+(i===_lTourIndex?'var(--gold,#c9a84c)':'rgba(201,168,76,.3)')+';display:inline-block;transition:width .25s,background .25s"></span>';
+    dots+='<span style="width:'+(i===_lTourIndex?'18':'7')+'px;height:7px;border-radius:4px;background:'+(i===_lTourIndex?'var(--gold,#a67c3d)':'rgba(166,124,61,.3)')+';display:inline-block;transition:width .25s,background .25s"></span>';
   }
 
   // Spotlight rect
@@ -5349,7 +5351,7 @@ function _renderLayoutTourStep(){
     +    '<div style="display:flex;gap:4px;align-items:center;flex:1;min-width:0;overflow:hidden">'+dots+'</div>'
     +    '<div style="display:flex;gap:8px;align-items:center;flex-shrink:0">'
     +      prevBtn
-    +      '<button onclick="_lTourNext()" style="border:none;background:var(--gold,#c9a84c);color:#fff;border-radius:8px;padding:6px 18px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">'+nextLabel+'</button>'
+    +      '<button onclick="_lTourNext()" style="border:none;background:var(--gold,#a67c3d);color:#fff;border-radius:8px;padding:6px 18px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">'+nextLabel+'</button>'
     +    '</div>'
     +  '</div>'
     +'</div>'

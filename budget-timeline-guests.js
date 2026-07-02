@@ -533,7 +533,7 @@ function renderVendorMobileCards(vendors, tab){
   const isES = LANG==='es';
   if(!vendors.length) return `<div class="card" style="text-align:center;padding:40px;color:var(--muted)">${t(tab==='hired'?'no_hired_vendors':'no_comparison_vendors')}</div>`;
   return `<div class="mobile-section-toolbar">
-      <div id="vendor-bulk-bar" class="mobile-inline-actions" style="display:${vendorSelectionCount()?'flex':'none'};padding:12px 14px;border:1px solid rgba(201,168,76,.28);border-radius:16px;background:var(--gold-l)">
+      <div id="vendor-bulk-bar" class="mobile-inline-actions" style="display:${vendorSelectionCount()?'flex':'none'};padding:12px 14px;border:1px solid rgba(166,124,61,.28);border-radius:16px;background:var(--gold-l)">
         <span id="vendor-bulk-count" style="font-size:12px;font-weight:700;color:var(--gold-h)">${vendorSelectionCount()} ${isES?'seleccionado(s)':'selected'}</span>
         <button class="btn btn-ghost btn-sm" onclick="openBulkVendorEditModal()">${isES?'Editar':'Edit'}</button>
         <button class="btn btn-danger btn-sm" onclick="bulkDeleteVendors()">${isES?'Eliminar':'Delete'}</button>
@@ -985,7 +985,7 @@ function timelineTemplateAddDays(d, days){
 }
 function timelineTemplateColor(task){
   const text = ((task.assignee||'')+' '+(task.title||'')).toLowerCase();
-  if(/finance|budget|payment/.test(text)) return '#c9a84c';
+  if(/finance|budget|payment/.test(text)) return '#a67c3d';
   if(/guest|invitation|registration|communication|rsvp/.test(text)) return '#f59e0b';
   if(/creative|design|decor|branding|photo|video|signage/.test(text)) return '#ec4899';
   if(/operations|logistics|venue|production|catering|vendor|rental|transport/.test(text)) return '#10b981';
@@ -1467,7 +1467,7 @@ function renderTimeline(){
     ${statCard(t('total_tasks'),'#f5f3ff','#7c3aed','<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',p.tasks.length,t('tasks_sub'),'0','#7c3aed')}
     ${statCard(t('completed_tasks'),'#ecfdf5','#10b981','<polyline points="20,6 9,17 4,12"/>',done,t('done'),pct,'#10b981')}
     ${statCard(t('overdue_tasks'),'#fff0f0','#ef4444','<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/>',ov,t('tasks_overdue_sub'),'0','#ef4444')}
-    ${statCard(t('progress'),'#f7f0de','#a8862e','<circle cx="12" cy="12" r="10"/>',pct+'%',t('completed_tasks'),pct,'#c9a84c')}
+    ${statCard(t('progress'),'#f7f0de','#7a5c2a','<circle cx="12" cy="12" r="10"/>',pct+'%',t('completed_tasks'),pct,'#a67c3d')}
   </div>
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px">
     <div class="vtabs" style="margin-bottom:0">
@@ -1727,7 +1727,7 @@ function renderCal(p){
   for(let i=1;i<=dim;i++){
     const ds=`${yr}-${String(mo+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
     const tks=tbd[ds]||[];
-    cells+=`<div class="cal-cell"><div class="cal-date ${ds===tod?'today':''}">${i}</div>${tks.map(tk=>`<div class="cal-ev" style="background:${taskIsDone(tk)?'#10b981':tk.color||'#c9a84c'};cursor:pointer" title="${esc(tk.title)}" onclick="openTaskModal('${tk.id}')">${esc(tk.title)}</div>`).join('')}</div>`;
+    cells+=`<div class="cal-cell"><div class="cal-date ${ds===tod?'today':''}">${i}</div>${tks.map(tk=>`<div class="cal-ev" style="background:${taskIsDone(tk)?'#10b981':tk.color||'#a67c3d'};cursor:pointer" title="${esc(tk.title)}" onclick="openTaskModal('${tk.id}')">${esc(tk.title)}</div>`).join('')}</div>`;
   }
   const rem=42-fd-dim;for(let i=0;i<rem;i++)cells+=`<div class="cal-cell"><div class="cal-date om"></div></div>`;
   el.innerHTML=`<div class="cal-wrap">
@@ -1752,7 +1752,7 @@ function delTask(tid){
 }
 function openTaskModal(tid){
   const p=proj();const tk=tid?p.tasks.find(x=>x.id===tid):null;
-  const colors=['#7c3aed','#c9a84c','#10b981','#f59e0b','#ec4899','#ef4444'];
+  const colors=['#7c3aed','#a67c3d','#10b981','#f59e0b','#ec4899','#ef4444'];
   openMo(`<div class="mo-title">${tk?t('edit_task'):t('add_task')}</div>
   <div class="ig" style="margin-bottom:12px"><label>${t('task_title_lbl')} *</label><input class="input" id="tk-title" value="${esc(tk?.title||'')}" placeholder="${t('task_title_lbl')}"></div>
   <div class="ig" style="margin-bottom:12px"><label>${t('description_lbl')}</label><textarea class="textarea" id="tk-desc" rows="2" placeholder="Describe the task...">${tk?.desc||''}</textarea></div>
@@ -2239,7 +2239,7 @@ function renderGuestMobileCards(guests){
           </label>
         </div>
       </div>
-      <div id="guest-bulk-bar" class="mobile-inline-actions" style="display:${guestSelectionCount()?'flex':'none'};padding:12px 14px;border:1px solid rgba(201,168,76,.28);border-radius:16px;background:var(--gold-l)">
+      <div id="guest-bulk-bar" class="mobile-inline-actions" style="display:${guestSelectionCount()?'flex':'none'};padding:12px 14px;border:1px solid rgba(166,124,61,.28);border-radius:16px;background:var(--gold-l)">
         <span id="guest-bulk-count" style="font-size:12px;font-weight:700;color:var(--gold-h)">${guestSelectionCount()} ${isES?'seleccionado(s)':'selected'}</span>
         <button class="btn btn-ghost btn-sm" onclick="openBulkGuestEditModal()">${isES?'Editar':'Edit'}</button>
         <button class="btn btn-danger btn-sm" onclick="bulkDeleteGuests()">${isES?'Eliminar':'Delete'}</button>
@@ -2253,14 +2253,14 @@ function renderGuestMobileCards(guests){
         return `<article class="mobile-record-card" onclick="openGuestModal('${g.id}')" style="padding:14px 16px">
           <div style="display:flex;align-items:center;gap:10px">
             <label onclick="event.stopPropagation()" style="display:flex;align-items:center;justify-content:center;flex-shrink:0">
-              <input type="checkbox" class="guest-sel" data-gid="${g.id}" ${isGuestSelected(g.id)?'checked':''} style="width:16px;height:16px;accent-color:#242424;cursor:pointer" onchange="toggleGuestSelection('${g.id}',this.checked)">
+              <input type="checkbox" class="guest-sel" data-gid="${g.id}" ${isGuestSelected(g.id)?'checked':''} style="width:18px;height:18px;accent-color:var(--gold-h);cursor:pointer" onchange="toggleGuestSelection('${g.id}',this.checked)">
             </label>
             <div style="flex:1;min-width:0">
               <div style="font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;color:#242424;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${guestText(g.name)}</div>
               <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;font-family:'DM Sans',sans-serif;font-size:12px;color:#787470;margin-top:3px">
                 <span>${guestValueOrDash(g.category)}</span>
                 ${g.table?'<span>· '+t('table_header')+' '+guestText(g.table)+'</span>':''}
-                <span class="rb ${guestRsvpClass(g.rsvp)}" style="margin-left:auto">${guestText(guestRsvpValue(g.rsvp))}</span>
+                <span class="rb rb-tap ${guestRsvpClass(g.rsvp)}" onclick="event.stopPropagation();cycleGuestRsvp('${g.id}')" style="margin-left:auto" title="${isES?'Toca para cambiar el RSVP':'Tap to change RSVP'}">${guestText(guestRsvpValue(g.rsvp))}</span>
               </div>
             </div>
           </div>
@@ -2268,6 +2268,20 @@ function renderGuestMobileCards(guests){
       }).join('') : empty}
     </div>`;
 }
+// Mobile quick-edit: tapping a guest's RSVP pill cycles pending -> confirmed -> declined.
+function cycleGuestRsvp(gid){
+  var p=proj(); if(!p||!Array.isArray(p.guests)) return;
+  var g=p.guests.find(function(x){return x.id===gid;}); if(!g) return;
+  var order=['pending','confirmed','declined'];
+  var next=order[(order.indexOf(guestRsvpValue(g.rsvp))+1)%order.length];
+  g.rsvp=next;
+  saveProj(p);
+  renderGuests();
+  var es=LANG==='es';
+  var label=next==='confirmed'?(es?'Confirmado':'Confirmed'):next==='declined'?(es?'Rechazado':'Declined'):(es?'Pendiente':'Pending');
+  toast(g.name+': '+label,'s');
+}
+window.cycleGuestRsvp = cycleGuestRsvp;
 // Wrap a guest cell value so clicking it edits that field inline (see gInlineEdit).
 function gEditSpan(gid, field, displayVal){
   var v=(displayVal==null||displayVal==='')?'<span style="opacity:.4">&mdash;</span>':displayVal;
@@ -2713,7 +2727,7 @@ function defaultChairTypes(){
 function defaultCenterpieceTypes(){
   return {
     'none': { label: LANG==='es'?'Ninguno':'None', color: null, cost: 0 },
-    'default-floral': { label: LANG==='es'?'Arreglo Floral':'Flower Arrangement', color: '#c9a84c', cost: 0 }
+    'default-floral': { label: LANG==='es'?'Arreglo Floral':'Flower Arrangement', color: '#a67c3d', cost: 0 }
   };
 }
 

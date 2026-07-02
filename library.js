@@ -1476,7 +1476,7 @@ function libEditGroupTask(entryId,tid){
   var entry=lib.tasks.find(function(e){return e.id===entryId;}); if(!entry) return;
   var tk=(entry.tasks||[]).find(function(t){return t.id===tid;}); if(!tk) return;
   var isES=LANG==='es';
-  var colors=['#7c3aed','#c9a84c','#10b981','#f59e0b','#ec4899','#ef4444'];
+  var colors=['#7c3aed','#a67c3d','#10b981','#f59e0b','#ec4899','#ef4444'];
   openMo('<div class="mo-title">'+(isES?'Editar Tarea':'Edit Task')+'</div>'
     +'<div class="ig" style="margin-bottom:12px"><label>'+(isES?'Título *':'Title *')+'</label><input class="input" id="egt-title" value="'+esc(tk.title||'')+'"></div>'
     +'<div class="ig" style="margin-bottom:12px"><label>'+(isES?'Descripción':'Description')+'</label><textarea class="textarea" id="egt-desc" rows="2">'+esc(tk.desc||'')+'</textarea></div>'
@@ -1528,7 +1528,7 @@ function libOpenTaskModalForGroup(entryId, tid){
   var entry=lib.tasks.find(function(e){return e.id===entryId;}); if(!entry) return;
   var tk=tid?(entry.tasks||[]).find(function(x){return x.id===tid;}):null;
   var isES=LANG==='es';
-  var colors=['#7c3aed','#c9a84c','#10b981','#f59e0b','#ec4899','#ef4444'];
+  var colors=['#7c3aed','#a67c3d','#10b981','#f59e0b','#ec4899','#ef4444'];
   openMo('<div class="mo-title">'+(tk?(isES?'Editar Tarea':'Edit Task'):(isES?'Agregar Tarea':'Add Task'))+'</div>'
     +'<div class="ig" style="margin-bottom:12px"><label>'+(isES?'Título *':'Title *')+'</label><input class="input" id="ltm-title" value="'+esc((tk&&tk.title)||'')+'" placeholder="'+(isES?'Título de la tarea':'Task title')+'"></div>'
     +'<div class="ig" style="margin-bottom:12px"><label>'+(isES?'Descripción':'Description')+'</label><textarea class="textarea" id="ltm-desc" rows="2">'+esc((tk&&tk.desc)||'')+'</textarea></div>'
@@ -1600,7 +1600,7 @@ function libToggleAllTasks(checked){
 }
 function libAddGlobalTask(){
   var isES=LANG==='es';
-  var colors=['#7c3aed','#c9a84c','#10b981','#f59e0b','#ec4899','#ef4444'];
+  var colors=['#7c3aed','#a67c3d','#10b981','#f59e0b','#ec4899','#ef4444'];
   openMo('<div class="mo-title">'+(isES?'Agregar Tarea':'Add Task')+'</div>'
     +'<div class="ig" style="margin-bottom:12px"><label>'+(isES?'Título *':'Title *')+'</label><input class="input" id="glt-title" placeholder="'+(isES?'Título de la tarea':'Task title')+'"></div>'
     +'<div class="ig" style="margin-bottom:12px"><label>'+(isES?'Descripción':'Description')+'</label><textarea class="textarea" id="glt-desc" rows="2" placeholder="'+(isES?'Describe la tarea...':'Describe the task...')+'"></textarea></div>'
@@ -1635,7 +1635,7 @@ function libSaveGlobalTask(){
 function libEditGlobalTask(tid){
   var lib=getLib(); var tk=(lib.globalTasks||[]).find(function(t){return t.id===tid;}); if(!tk) return;
   var isES=LANG==='es';
-  var colors=['#7c3aed','#c9a84c','#10b981','#f59e0b','#ec4899','#ef4444'];
+  var colors=['#7c3aed','#a67c3d','#10b981','#f59e0b','#ec4899','#ef4444'];
   openMo('<div class="mo-title">'+(isES?'Editar Tarea':'Edit Task')+'</div>'
     +'<div class="ig" style="margin-bottom:12px"><label>'+(isES?'Título *':'Title *')+'</label><input class="input" id="glt-title" value="'+esc(tk.title||'')+'" placeholder="'+(isES?'Título de la tarea':'Task title')+'"></div>'
     +'<div class="ig" style="margin-bottom:12px"><label>'+(isES?'Descripción':'Description')+'</label><textarea class="textarea" id="glt-desc" rows="2">'+esc(tk.desc||'')+'</textarea></div>'
@@ -1801,7 +1801,7 @@ function libDoAddTasksToEvents(){
 function libDownloadTaskTemplate(){
   var csv='Title,Description,Due Date,Assignee,Color\n'
     +'"Initial Client Meeting","Review vision and event requirements","2024-03-01","Event Coordinator","#7c3aed"\n'
-    +'"Venue Selection","Research and visit venue options","2024-03-15","Venue Manager","#c9a84c"\n';
+    +'"Venue Selection","Research and visit venue options","2024-03-15","Venue Manager","#a67c3d"\n';
   var blob=new Blob([csv],{type:'text/csv'});
   var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
   a.download='task_template.csv'; a.click();
@@ -3838,7 +3838,7 @@ function _libLayoutWizGenerate(){
     var tg=tables[key]; if(!tg||!tg.n) return;
     var cm=catalogueMap[key]||{shape:'round-table',wM:1.5,hM:1.5,round:true};
     var tw=Math.round(cm.wM*ppm); var th=Math.round(cm.hM*ppm);
-    var defBg=cm.round?'#f0ece0':'#f0ece0'; var defBd='#c9a84c';
+    var defBg=cm.round?'#f0ece0':'#f0ece0'; var defBd='#a67c3d';
     var defShape=SHAPES&&SHAPES[cm.shape]?SHAPES[cm.shape]:{w:tw,h:th,bg:defBg,bdClr:defBd};
     var pad=tg.chairs?Math.round(CHAIR_SIZE_M*ppm)+Math.round(0.05*ppm):0;
     var cellW=tw+pad*2+tableSpacing; var cellH=th+pad*2+tableSpacing;

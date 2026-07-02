@@ -235,7 +235,7 @@ function toggleMBFolder(id){
 }
 
 function openNewFolderModal(){
-  const colors=['#f59e0b','#10b981','#c9a84c','#7c3aed','#ec4899','#ef4444','#06b6d4','#6b7280'];
+  const colors=['#f59e0b','#10b981','#a67c3d','#7c3aed','#ec4899','#ef4444','#06b6d4','#6b7280'];
   openMo(`<div class="mo-title">${t('new_folder')}</div>
   <div class="ig" style="margin-bottom:16px"><label>Folder Name *</label><input class="input" id="mf-name" placeholder="e.g. Floral Inspiration, Venue Ideas..."></div>
   <div class="ig" style="margin-bottom:4px"><label>Folder Color</label></div>
@@ -1471,7 +1471,7 @@ function renderAIPreviewContent(key, data){
       html += aiPreviewSection('Keywords',
         '<div style="display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px">'+
         (data.keywords||[]).map(function(k){
-          return '<span style="padding:3px 10px;border-radius:20px;background:var(--gold-l);border:1px solid rgba(201,168,76,.3);font-size:11px;color:var(--gold-h)">'+esc(k)+'</span>';
+          return '<span style="padding:3px 10px;border-radius:20px;background:var(--gold-l);border:1px solid rgba(166,124,61,.3);font-size:11px;color:var(--gold-h)">'+esc(k)+'</span>';
         }).join('')+
         '</div>');
     }
@@ -1508,7 +1508,7 @@ function applyAIPreview(){
   else if(key === 'timeline'){
     var base = new Date(); function dStr(n){var d=new Date(base);d.setDate(d.getDate()+n);return d.toISOString().split('T')[0];}
     var tasks = (data.tasks||[]).map(function(t,i){
-      return { id:'ait'+Date.now()+i, title:t.title||'Task', desc:t.desc||'', assignee:t.assignee||'Event Coordinator', dueDate:t.dueDate||dStr(i*7), done:false, color:t.color||'#c9a84c' };
+      return { id:'ait'+Date.now()+i, title:t.title||'Task', desc:t.desc||'', assignee:t.assignee||'Event Coordinator', dueDate:t.dueDate||dStr(i*7), done:false, color:t.color||'#a67c3d' };
     });
     p.tasks = tasks;
   }
@@ -1561,7 +1561,7 @@ async function callAIForAction(key, userMsg, p){
 
     budget: langInstr+'You are a luxury event planner. Given the event details and guest count, suggest realistic vendor budget allocations. Return ONLY a raw JSON object (no markdown, no code fences, no explanation) with: { "vendors": [ { "name": string, "category": string, "budget": number (in MXN), "notes": string } ], "total": number }. Include 5-8 key vendors relevant to the event type. Use MXN peso amounts appropriate for Mexico.',
 
-    timeline: langInstr+'You are an event planning expert. Generate a realistic task timeline for the event. Return ONLY a raw JSON object (no markdown, no code fences, no explanation) with: { "tasks": [ { "title": string, "desc": string, "assignee": string, "dueDate": "YYYY-MM-DD", "color": "#hexcolor", "done": false } ] }. Generate 10-15 tasks spread from today to the event date. Colors: #7c3aed for admin, #10b981 for vendor, #f59e0b for guest, #ec4899 for creative, #c9a84c for logistics.',
+    timeline: langInstr+'You are an event planning expert. Generate a realistic task timeline for the event. Return ONLY a raw JSON object (no markdown, no code fences, no explanation) with: { "tasks": [ { "title": string, "desc": string, "assignee": string, "dueDate": "YYYY-MM-DD", "color": "#hexcolor", "done": false } ] }. Generate 10-15 tasks spread from today to the event date. Colors: #7c3aed for admin, #10b981 for vendor, #f59e0b for guest, #ec4899 for creative, #a67c3d for logistics.',
 
     guests: langInstr+'You are a seating arrangement expert. Given the guest list, assign each guest to a numbered table (1–N) based on their category, relationships hinted in notes, and RSVP status. Exclude declined guests. Return ONLY a raw JSON object (no markdown, no code fences, no explanation) with: { "assignments": [ { "name": string, "table": number } ] }. Group families together, VIPs at low-numbered tables.',
 

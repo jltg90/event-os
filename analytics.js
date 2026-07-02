@@ -204,7 +204,7 @@ function renderAnalytics(){
 
   el.innerHTML = `
   <!-- KPI CARDS -->
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px">
+  <div class="an-kpi" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px">
     <div class="card" style="padding:18px;text-align:center">
       <div style="font-family:'DM Sans',sans-serif;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#787470;margin-bottom:8px">${t('analytics_events')}</div>
       <div style="font-size:22px;font-weight:600;color:#242424;font-family:'DM Sans',sans-serif">${inPeriod.length}</div>
@@ -228,7 +228,7 @@ function renderAnalytics(){
   </div>
 
   <!-- CHARTS ROW -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+  <div class="an-2col" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
 
     <!-- Event Timeline -->
     <div class="card" style="padding:20px;grid-column:1/-1">
@@ -251,7 +251,7 @@ function renderAnalytics(){
   </div>
 
   <!-- TOP VENDORS + EVENT LIST -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+  <div class="an-2col" style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
 
     <!-- Top vendor categories -->
     <div class="card" style="padding:20px">
@@ -373,11 +373,11 @@ function generateExportPDF(){
     body{font-family:'Segoe UI',system-ui,Arial,sans-serif;color:#241f17;background:#f6f1e8;font-size:13px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     a{color:inherit;text-decoration:none}
 
-    .cover{background:#fff;padding:60px 56px 48px;border-bottom:4px solid #c9a84c;page-break-after:always;break-after:page}
-    .cover-brand{font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#c9a84c;margin-bottom:36px}
+    .cover{background:#fff;padding:60px 56px 48px;border-bottom:4px solid #a67c3d;page-break-after:always;break-after:page}
+    .cover-brand{font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#a67c3d;margin-bottom:36px}
     .cover-name{font-size:40px;font-weight:700;letter-spacing:-.5px;line-height:1.1;color:#241f17;margin-bottom:8px}
     .cover-sub{font-size:16px;color:#6f665c;margin-bottom:24px}
-    .cover-rule{width:56px;height:3px;background:#c9a84c;border-radius:2px;margin-bottom:28px}
+    .cover-rule{width:56px;height:3px;background:#a67c3d;border-radius:2px;margin-bottom:28px}
     .cover-facts{display:flex;flex-wrap:wrap;gap:28px}
     .cover-fact-l{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#b0a898;margin-bottom:3px}
     .cover-fact-v{font-size:13px;font-weight:600;color:#241f17}
@@ -387,7 +387,7 @@ function generateExportPDF(){
 
     .sec{margin-bottom:44px;break-inside:avoid}
     .sec-hd{display:flex;align-items:center;gap:10px;margin-bottom:20px}
-    .sec-bar{width:4px;height:20px;background:#c9a84c;border-radius:2px;flex-shrink:0}
+    .sec-bar{width:4px;height:20px;background:#a67c3d;border-radius:2px;flex-shrink:0}
     .sec-title{font-size:15px;font-weight:700;color:#241f17;letter-spacing:-.2px}
 
     .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:18px}
@@ -451,7 +451,7 @@ function generateExportPDF(){
     @media print{
       body{background:#fff}
       .body{background:#fff;padding:28px 36px}
-      .cover{border-bottom:3px solid #c9a84c}
+      .cover{border-bottom:3px solid #a67c3d}
       .sec,.layout-card,.mb-folder{break-inside:avoid}
     }
   `;
@@ -667,7 +667,7 @@ function generateExportPDF(){
         const imgs = folder.images.filter(img=>img.url||img.src);
         return `<div class="mb-folder">
           <div class="mb-fhd">
-            <div class="mb-dot" style="background:${_esc(folder.color||'#c9a84c')}"></div>
+            <div class="mb-dot" style="background:${_esc(folder.color||'#a67c3d')}"></div>
             <div class="mb-fname">${_esc(folder.name)}</div>
             <div class="mb-fcount">${imgs.length} ${isES?'imágenes':'images'}</div>
           </div>

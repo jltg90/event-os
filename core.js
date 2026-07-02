@@ -1508,7 +1508,7 @@ function defaultTasks(){
     {id:'t9',title:'Enviar Invitaciones',desc:'Enviar invitaciones con fecha límite de RSVP',assignee:'Coordinador de Evento',dueDate:d(35),done:false,color:'#f59e0b'},
     {id:'t10',title:'Contrato y Depósito del Venue',desc:'Finalizar contrato del venue',assignee:'Gestor de Proveedores',dueDate:d(45),done:false,color:'#10b981'},
     {id:'t11',title:'Conteo Final de Invitados',desc:'Confirmar número de personas con proveedores',assignee:'Coordinador de Evento',dueDate:d(70),done:false,color:'#f59e0b'},
-    {id:'t12',title:'Coordinación el Día del Evento',desc:'Coordinación y ejecución en sitio',assignee:'Coordinador de Evento',dueDate:d(90),done:false,color:'#c9a84c'},
+    {id:'t12',title:'Coordinación el Día del Evento',desc:'Coordinación y ejecución en sitio',assignee:'Coordinador de Evento',dueDate:d(90),done:false,color:'#a67c3d'},
   ] : [
     {id:'t1',title:'Initial Client Meeting',desc:'Review event vision and requirements',assignee:'Event Coordinator',dueDate:d(-30),done:true,color:'#7c3aed'},
     {id:'t2',title:'Confirm Budget & Scope',desc:'Finalize budget allocations',assignee:'Event Coordinator',dueDate:d(-20),done:true,color:'#7c3aed'},
@@ -1521,7 +1521,7 @@ function defaultTasks(){
     {id:'t9',title:'Send Invitations',desc:'Mail invitations with RSVP deadline',assignee:'Event Coordinator',dueDate:d(35),done:false,color:'#f59e0b'},
     {id:'t10',title:'Venue Contract & Deposit',desc:'Finalize venue contract',assignee:'Vendor Manager',dueDate:d(45),done:false,color:'#10b981'},
     {id:'t11',title:'Final Guest Count',desc:'Confirm headcount with vendors',assignee:'Event Coordinator',dueDate:d(70),done:false,color:'#f59e0b'},
-    {id:'t12',title:'Day-of Coordination',desc:'On-site coordination and execution',assignee:'Event Coordinator',dueDate:d(90),done:false,color:'#c9a84c'},
+    {id:'t12',title:'Day-of Coordination',desc:'On-site coordination and execution',assignee:'Event Coordinator',dueDate:d(90),done:false,color:'#a67c3d'},
   ];
 }
 
@@ -1967,7 +1967,7 @@ function _renderWelcomeTourStep(){
   var total=_wtSteps.length;
   var dots='';
   for(var i=0;i<total;i++){
-    dots+='<span style="width:'+(i===_wtIndex?'18':'7')+'px;height:7px;border-radius:4px;background:'+(i===_wtIndex?'var(--gold,#c9a84c)':'rgba(201,168,76,.3)')+';display:inline-block;transition:width .25s,background .25s"></span>';
+    dots+='<span style="width:'+(i===_wtIndex?'18':'7')+'px;height:7px;border-radius:4px;background:'+(i===_wtIndex?'var(--gold,#a67c3d)':'rgba(166,124,61,.3)')+';display:inline-block;transition:width .25s,background .25s"></span>';
   }
   var spotRect=null;
   if(targetEl){
@@ -2013,7 +2013,7 @@ function _renderWelcomeTourStep(){
     +    '<div style="display:flex;gap:4px;align-items:center;flex:1;min-width:0;overflow:hidden">'+dots+'</div>'
     +    '<div style="display:flex;gap:8px;align-items:center;flex-shrink:0">'
     +      prevBtn
-    +      '<button onclick="_wtNext()" style="border:none;background:var(--gold,#c9a84c);color:#fff;border-radius:8px;padding:6px 18px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">'+nextLabel+'</button>'
+    +      '<button onclick="_wtNext()" style="border:none;background:var(--gold,#a67c3d);color:#fff;border-radius:8px;padding:6px 18px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">'+nextLabel+'</button>'
     +    '</div>'
     +  '</div>'
     +  skipBtn
