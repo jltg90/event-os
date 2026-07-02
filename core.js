@@ -642,6 +642,7 @@ async function _mergeProjectExtras(projectId, p){
       if(extras.layouts) p.layouts = extras.layouts;
       if(extras.vendors) p.vendors = extras.vendors;
       if(extras.moodboard) p.moodboard = extras.moodboard;
+      if(extras.eventLayouts) p.eventLayouts = extras.eventLayouts;
     }
     p._extrasLoaded = true;
     // If a previous extras save failed, the retry flag was persisted to localStorage.

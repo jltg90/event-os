@@ -328,6 +328,7 @@ export const getProjectExtras = authedQuery({
       layouts: v.optional(v.any()),
       vendors: v.optional(v.any()),
       moodboard: v.optional(v.any()),
+      eventLayouts: v.optional(v.any()),
     }),
   ),
   handler: async (ctx, wixUserId, args) => {
@@ -338,7 +339,7 @@ export const getProjectExtras = authedQuery({
       )
       .unique();
     if (!doc) return null;
-    // vendors and moodboard are split into extras for large projects (see
+    // vendors/moodboard/eventLayouts are split into extras for large projects (see
     // app-data.js upsertProject) — they MUST be returned here or they are lost on reload.
     return {
       guests: doc.guests,
@@ -347,6 +348,7 @@ export const getProjectExtras = authedQuery({
       layouts: doc.layouts ?? undefined,
       vendors: doc.vendors ?? undefined,
       moodboard: doc.moodboard ?? undefined,
+      eventLayouts: doc.eventLayouts ?? undefined,
     };
   },
 });
@@ -361,6 +363,7 @@ export const upsertProjectExtras = authedMutation({
       layouts: v.optional(v.any()),
       vendors: v.optional(v.any()),
       moodboard: v.optional(v.any()),
+      eventLayouts: v.optional(v.any()),
     }),
   },
   returns: v.null(),
@@ -388,6 +391,9 @@ export const upsertProjectExtras = authedMutation({
     }
     if (args.extras.moodboard !== undefined) {
       patch.moodboard = args.extras.moodboard;
+    }
+    if (args.extras.eventLayouts !== undefined) {
+      patch.eventLayouts = args.extras.eventLayouts;
     }
     if (existing) {
       await ctx.db.patch(existing._id, patch);

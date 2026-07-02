@@ -162,12 +162,14 @@
     // Strip the layout snapshot image — it's a large SVG that can be regenerated from the
     // library entry on the next render.  Keep the rest of layoutExport (layoutId, summary, etc.)
     // so the viewer knows which library layout it came from.
-    if(copy.layoutExport && copy.layoutExport.image){
+    // Keep the image for "_detached" exports — those are self-contained snapshots of a
+    // library layout that was deleted, so there is no source entry to regenerate them from.
+    if(copy.layoutExport && copy.layoutExport.image && !copy.layoutExport._detached){
       delete copy.layoutExport.image;
     }
-    // Also strip images from all eventLayouts entries
+    // Also strip images from all eventLayouts entries (except detached snapshots)
     (copy.eventLayouts || []).forEach(function(entry){
-      if(entry.layoutExport && entry.layoutExport.image){
+      if(entry.layoutExport && entry.layoutExport.image && !entry.layoutExport._detached){
         delete entry.layoutExport.image;
       }
     });
@@ -263,6 +265,12 @@
         if(cleaned.moodboard){
           extras.moodboard = cleaned.moodboard;
           cleaned.moodboard = {folders:[],uncategorized:[]};
+        }
+        // eventLayouts can grow large, especially when they hold detached (self-contained)
+        // layout snapshots whose images are intentionally kept (not stripped).
+        if(cleaned.eventLayouts && cleaned.eventLayouts.length){
+          extras.eventLayouts = cleaned.eventLayouts;
+          cleaned.eventLayouts = [];
         }
         cleaned.guests = [];
         cleaned.layoutItems = [];

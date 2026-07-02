@@ -242,7 +242,7 @@ function libResolveLayoutFloorplan(entry){
 function libBuildMigratedLayoutEntry(p){
   var isES=LANG==='es';
   return {
-    id:'ll_mig_'+Date.now(),
+    id:'ll_mig_'+Date.now()+Math.random().toString(36).slice(2,7),
     name:(p.name||'Event')+' - '+(isES?'Migrado':'Migrated')+' '+formatDMY(today()),
     notes:isES?'Migrado automaticamente desde el evento':'Auto-migrated from event',
     location:p.location||'',
@@ -2161,7 +2161,62 @@ function libFilterMoodboards(q){
 
 function libMbBackToFolders(){ _mbOpenFolderId=null; renderLibrary(); }
 
+// Count how many currently-loaded events reference this library layout (by layoutId).
+function _libCountLayoutRefs(entryId){
+  var all=(typeof uproj==='function')?uproj():{}; var n=0;
+  Object.keys(all).forEach(function(pid){
+    if(pid==='__library__'||pid==='__lib_layout__') return;
+    var p=all[pid]; if(!p) return;
+    var hit=(p.layoutExport && p.layoutExport.layoutId===entryId) ||
+      (Array.isArray(p.eventLayouts) && p.eventLayouts.some(function(e){return e.layoutExport&&e.layoutExport.layoutId===entryId;}));
+    if(hit) n++;
+  });
+  return n;
+}
+// Before a library layout is deleted, freeze a self-contained snapshot (image + summary)
+// into every event that uses it, so those events keep showing their layout — no data loss.
+function _libDetachLayoutFromEvents(entryId){
+  var lib=getLib();
+  var entry=(lib.layouts||[]).find(function(e){return e.id===entryId;});
+  if(!entry || typeof createLayoutExportPayload!=='function') return 0;
+  var frozen=null; // regenerate once; reuse the same snapshot for all references
+  function snap(){ if(!frozen) frozen=createLayoutExportPayload(entry); return frozen; }
+  var all=(typeof uproj==='function')?uproj():{}; var affected=0;
+  Object.keys(all).forEach(function(pid){
+    if(pid==='__library__'||pid==='__lib_layout__') return;
+    var p=all[pid]; if(!p) return;
+    var touched=false;
+    (p.eventLayouts||[]).forEach(function(elEntry){
+      if(elEntry.layoutExport && elEntry.layoutExport.layoutId===entryId){
+        var s=snap(); if(s){ elEntry.layoutExport=Object.assign({},s,{_detached:true}); touched=true; }
+      }
+    });
+    if(p.layoutExport && p.layoutExport.layoutId===entryId){
+      var s2=snap(); if(s2){ p.layoutExport=Object.assign({},s2,{_detached:true}); touched=true; }
+    }
+    if(touched){ affected++; if(typeof saveProj==='function') saveProj(p); }
+  });
+  return affected;
+}
 function libDelete(type, id){
+  if(type==='layouts'){
+    var refs=_libCountLayoutRefs(id);
+    var msg = LANG==='es'
+      ? (refs>0 ? ('Este layout se usa en '+refs+' evento'+(refs>1?'s':'')+'. Se guardará una copia independiente (imagen y resumen) en cada uno para no perder nada, y luego se quitará de la biblioteca.') : 'Esta acción no se puede deshacer.')
+      : (refs>0 ? ('This layout is used by '+refs+' event'+(refs>1?'s':'')+'. A self-contained copy (image and summary) will be saved into each so nothing is lost, then it will be removed from the library.') : 'This action cannot be undone.');
+    openConfirmModal({
+      title:t('lib_delete_confirm'),
+      message:msg,
+      onConfirm:function(){
+        if(refs>0) _libDetachLayoutFromEvents(id);
+        var lib=getLib();
+        lib.layouts = lib.layouts.filter(function(e){return e.id!==id;});
+        saveLib(lib); renderLibrary();
+        toast(LANG==='es'?'Eliminado de biblioteca':'Removed from library');
+      }
+    });
+    return;
+  }
   openConfirmModal({
     title:t('lib_delete_confirm'),
     message:LANG==='es'?'Esta acción no se puede deshacer.':'This action cannot be undone.',
@@ -2169,7 +2224,6 @@ function libDelete(type, id){
       var lib = getLib();
       if(type==='vendors')     lib.vendors     = lib.vendors.filter(function(e){return e.id!==id;});
       else if(type==='tasks')  lib.tasks       = lib.tasks.filter(function(e){return e.id!==id;});
-      else if(type==='layouts')lib.layouts     = lib.layouts.filter(function(e){return e.id!==id;});
       else if(type==='moodboards')lib.moodboards = lib.moodboards.filter(function(e){return e.id!==id;});
       else if(type.endsWith('_pack')){
         var baseType = type.replace('_pack','');
@@ -2311,7 +2365,7 @@ function libSaveLayoutDo(){
   var floorplan = (incFloor&&incFloor.checked) ? JSON.parse(JSON.stringify(LState.floorplan)) : null;
   var lib = getLib();
   lib.layouts.push({
-    id:'ll'+Date.now(), name:name, notes:notes, location:location, guests:guests,
+    id:'ll'+Date.now()+Math.random().toString(36).slice(2,7), name:name, notes:notes, location:location, guests:guests,
     date:formatDMY(today()),
     updatedAt:new Date().toISOString(),
     items: JSON.parse(JSON.stringify(p.layoutItems||[])),
@@ -2893,19 +2947,24 @@ function libLoadLayout(entryId){
     +'</div>');
 }
 function _doLibLoadLayout(entryId){
+  var p = proj(); if(!p) return;
+  // Load into the event through the current multi-layout model so it becomes a proper
+  // read-only export entry (eventLayouts) — the old raw-item copy below made renderLayout
+  // treat the event as un-migrated and spawned duplicate 'll_mig_' library entries.
+  if(typeof libApplyLayoutExportToEvent==='function'){
+    libApplyLayoutExportToEvent(entryId, p.id, {toastSuccess:true});
+    return;
+  }
+  // Legacy fallback (only if the modern path is unavailable)
   var lib = getLib();
   var entry = lib.layouts.find(function(e){return e.id===entryId;});
   if(!entry) return;
-  var p = proj(); if(!p) return;
   p.layoutItems = JSON.parse(JSON.stringify(entry.items||[]));
-  // Reset undo history — the layout was fully replaced
   if(typeof lHistoryReset==='function') lHistoryReset();
   var incFloor = document.getElementById('lib-load-floor');
   if(entry.floorplan && (!incFloor || incFloor.checked)){
-    // Set p.floorplan so renderLayout's existing resolution logic handles __stored__ / __idb__
     p.floorplan = JSON.parse(JSON.stringify(entry.floorplan));
   } else {
-    // Checkbox unchecked or no floorplan — clear it
     delete p.floorplan;
     LState.floorplan = {img:null,opacity:0.4,scale:1,x:0,y:0,w:0,h:0,locked:false,rotation:0};
   }
@@ -3922,10 +3981,11 @@ function _libLayoutWizGenerate(){
   var name=libUniqueLayoutName(isES?'Plano '+formatDMY(today()):'Layout '+formatDMY(today()));
   var guests=w.guests||'';
   var tables=tableCount;
-  var entryId='ll'+Date.now();
+  var entryId='ll'+Date.now()+Math.random().toString(36).slice(2,7);
   lib.layouts.push({
     id:entryId, name:name, notes:'', location:'', guests:String(guests),
     date:formatDMY(today()),
+    updatedAt:new Date().toISOString(), // so events detect same-day edits and re-sync
     items:JSON.parse(JSON.stringify(items)),
     floorplan:_libLayoutWiz.floorplan?JSON.parse(JSON.stringify(_libLayoutWiz.floorplan)):null,
     pxPerMeter:(_libLayoutWiz.floorplan&&_libLayoutWiz.floorplan.pxPerMeter)||null
@@ -4217,7 +4277,7 @@ function libDuplicateLayout(entryId){
   var newName=libUniqueLayoutName(baseName+' ('+(isES?'copia':'copy')+')');
   var newEntry=JSON.parse(JSON.stringify(entry));
   newEntry.updatedAt=new Date().toISOString();
-  newEntry.id='ll'+Date.now();
+  newEntry.id='ll'+Date.now()+Math.random().toString(36).slice(2,7);
   newEntry.name=newName;
   newEntry.date=formatDMY(today());
   if(newEntry.floorplan&&newEntry.floorplan._idb&&typeof _fpLoad==='function'){

@@ -44,6 +44,7 @@ export default defineSchema({
     layouts: v.optional(v.any()),
     vendors: v.optional(v.any()),
     moodboard: v.optional(v.any()),
+    eventLayouts: v.optional(v.any()),
     updatedAt: v.number(),
   })
     .index("by_wix_user_project", ["wixUserId", "projectId"]),
