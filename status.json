@@ -7,7 +7,7 @@
   "descripcion_corta": "SaaS de planeación de eventos para profesionales: presupuesto, proveedores, cronograma de tareas, lista de invitados, diseño de floor plan en 3D, moodboards y exportación a PDF. Auth vía Wix, datos en Convex Cloud.",
   "estado_general": "en_desarrollo",
   "urls": {
-    "produccion": "https://jltg90.github.io/event-os/",
+    "produccion": "https://topinfra.mx/event-os",
     "staging": "",
     "repo": "https://github.com/jltg90/event-os"
   },
@@ -27,8 +27,8 @@
     "deploy_produccion": "completado"
   },
   "publico_en_portafolio": true,
-  "screenshot": "",
+  "screenshot": "/screenshots/event-os.png",
   "ultima_sesion": "2026-07-23",
   "siguiente_paso": "Definir modelo de roles/permisos multiusuario y estrategia de monetización (pagos). Confirmar responsive móvil. Migrado a git + GitHub el 2026-07-23: código canónico vivía sin git en G:\\My Drive\\TopInfra\\26_EventOS\\Versions-v2\\260326-1 Codex, ahora también en C:\\dev\\event-os.",
-  "notas": "Frontend vanilla JS (sin framework), backend Convex (serverless DB + funciones TypeScript), 3D floor plan con Three.js r128, export a Excel (xlsx) y PDF. Auth vía Wix (user ID pasado desde el contexto de embedding). Desplegado en GitHub Pages (jltg90.github.io/event-os), no en Vercel. Verificado 2026-07-23: contenido de Drive y del repo son idénticos (solo diferían en CRLF/LF) — el repo ya era un backup fiel, no se necesitó push de contenido nuevo. Se agregó .gitignore (node_modules, .env*, convex/_generated, credenciales) que antes no existía en el repo."
+  "notas": "Frontend vanilla JS (sin framework), backend Convex (serverless DB + funciones TypeScript), 3D floor plan con Three.js r128, export a Excel (xlsx) y PDF. Auth vía Wix (user ID pasado desde el contexto de embedding). El producto vive embebido en topinfra.mx/event-os (Wix) — GitHub Pages (jltg90.github.io/event-os) sigue existiendo pero ya no es la URL pública oficial. Verificado 2026-07-23: contenido de Drive y del repo son idénticos (solo diferían en CRLF/LF) — el repo ya era un backup fiel, no se necesitó push de contenido nuevo. Se agregó .gitignore (node_modules, .env*, convex/_generated, credenciales) que antes no existía en el repo. La captura es la pantalla de acceso (login con Google) — la app requiere sesión real, no hay vista pública del dashboard interno (mismo patrón que reclutamiento-poc)."
 }
