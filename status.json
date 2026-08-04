@@ -1,4 +1,5 @@
 {
+  "_generado": "GENERADO por la plataforma Cuadra — no editar a mano. La fuente de verdad es la tabla `proyectos` en Convex; para cambiar algo, hazlo en la plataforma o con scripts/actualizar-estado.mjs.",
   "proyecto": "event-os",
   "nombre_display": "EventOS — Planeación de Eventos",
   "cliente": "EventOS",
@@ -8,23 +9,22 @@
   "estado_general": "en_desarrollo",
   "urls": {
     "produccion": "https://topinfra.mx/event-os",
-    "staging": "",
     "repo": "https://github.com/jltg90/event-os"
   },
   "modulos": {
     "auth_login": "completado",
-    "roles_permisos": "pendiente",
-    "seguridad": "completado",
     "base_datos": "completado",
-    "ui_principal": "completado",
     "dashboard_admin": "no_aplica",
-    "pagos": "pendiente",
+    "deploy_produccion": "completado",
     "notificaciones": "pendiente",
+    "pagos": "pendiente",
     "reportes": "completado",
     "responsive_movil": "pendiente",
+    "roles_permisos": "pendiente",
+    "seguridad": "completado",
     "seo": "no_aplica",
     "testing": "pendiente",
-    "deploy_produccion": "completado"
+    "ui_principal": "completado"
   },
   "publico_en_portafolio": true,
   "screenshot": "/screenshots/event-os.png",
