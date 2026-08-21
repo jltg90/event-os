@@ -1393,6 +1393,29 @@ function _mountClerkSignIn(clerk){
   host.innerHTML = '';
   try{ clerk.mountSignIn(host); }
   catch(e){ console.error('EventOS: no se pudo montar el login de Clerk', e); }
+
+  // Red de seguridad: si Clerk no logra pintar el formulario aquí dentro, mete un
+  // iframe a su Account Portal — que responde con X-Frame-Options y el navegador
+  // muestra "no se puede abrir esta página".  Lo detectamos y ofrecemos abrirlo
+  // como navegación normal, que sí funciona.
+  setTimeout(function(){
+    var framed = host.querySelector('iframe');
+    if(!framed) return;
+    var src = framed.getAttribute('src') || '';
+    if(src.indexOf('accounts.dev') === -1 && src.indexOf('/sign-in') === -1) return;
+    console.warn('EventOS: Clerk embebió su Account Portal (' + src + '). ' +
+      'Se sustituye por una redirección de primer nivel.');
+    host.innerHTML = '';
+    var btn = document.createElement('button');
+    btn.className = 'btn btn-primary';
+    btn.style.cssText = 'padding:12px 28px;font-size:14px';
+    btn.textContent = LANG === 'en' ? 'Sign in' : 'Iniciar sesión';
+    btn.onclick = function(){
+      if(clerk.redirectToSignIn) clerk.redirectToSignIn();
+      else window.location.href = src;
+    };
+    host.appendChild(btn);
+  }, 1500);
 }
 
 // Punto de entrada real de la aplicacion.

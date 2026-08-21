@@ -7,7 +7,7 @@
 <title>EventOS</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,600&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=Jost:wght@300;400;500;600;700&family=Raleway:wght@200;300;400;500&display=swap" rel="stylesheet">
 <script>try{var k=Object.keys(localStorage).find(function(k){return k.indexOf('eventos_settings_')===0;});if(k){var s=JSON.parse(localStorage.getItem(k));if(s&&s.theme==='dark')document.documentElement.classList.add('dark');}}catch(e){}</script>
-<link rel="stylesheet" href="styles.css?v=20260820-2">
+<link rel="stylesheet" href="styles.css?v=20260820-3">
 <script>
 // Lazy-load heavy libraries on demand
 var _lazyScripts = {};
@@ -43,7 +43,7 @@ function ensureChairImages(){
   });
 }
 </script>
-<script src="app-config.js?v=20260820-2"></script>
+<script src="app-config.js?v=20260820-3"></script>
 <script>
 // ─── Carga de Clerk ─────────────────────────────────────────────────────────
 // Clerk se inyecta desde JS (y no con dos <script> fijos) porque su URL depende
@@ -77,12 +77,27 @@ window.__clerkReady = (function(){
       });
     })
     .then(function(){
-      return window.Clerk.load({ ui: { ClerkUI: window.__internal_ClerkUICtor } });
+      if(!window.Clerk) throw new Error('clerk.browser.js cargó pero no definió window.Clerk');
+      if(!window.__internal_ClerkUICtor){
+        console.error('EventOS: el bundle de UI de Clerk no se registró. Sin él, Clerk ' +
+          'intenta abrir su Account Portal dentro de un iframe y el navegador lo bloquea.');
+      }
+      // `signInUrl` es clave: sin él Clerk no sabe dónde vive el formulario y se va
+      // a su portal alojado (<slug>.accounts.dev), que se niega a ser embebido.
+      // Apuntándolo a esta misma página, todo el flujo se queda aquí.
+      var here = window.location.origin + window.location.pathname;
+      return window.Clerk.load({
+        ui: { ClerkUI: window.__internal_ClerkUICtor },
+        signInUrl: here,
+        signUpUrl: here,
+        afterSignInUrl: here,
+        afterSignUpUrl: here
+      });
     })
     .then(function(){ return window.Clerk; });
 })();
 </script>
-<script src="app-data.js?v=20260820-2"></script>
+<script src="app-data.js?v=20260820-3"></script>
 </head>
 <body>
 <div id="toast-c" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -461,14 +476,14 @@ window.__clerkReady = (function(){
   </div>
 </div>
 
-<script src="lang.js?v=20260820-2"></script>
-<script src="core.js?v=20260820-2"></script>
-<script src="events.js?v=20260820-2"></script>
-<script src="budget-timeline-guests.js?v=20260820-2"></script>
-<script src="layout.js?v=20260820-2"></script>
-<script src="misc.js?v=20260820-2"></script>
-<script src="analytics.js?v=20260820-2"></script>
-<script src="library.js?v=20260820-2"></script>
+<script src="lang.js?v=20260820-3"></script>
+<script src="core.js?v=20260820-3"></script>
+<script src="events.js?v=20260820-3"></script>
+<script src="budget-timeline-guests.js?v=20260820-3"></script>
+<script src="layout.js?v=20260820-3"></script>
+<script src="misc.js?v=20260820-3"></script>
+<script src="analytics.js?v=20260820-3"></script>
+<script src="library.js?v=20260820-3"></script>
 
 <!-- -- MOBILE DRAWER -------------------------------------------- -->
 <div id="mob-drawer" class="mob-drawer hidden" onclick="closeMobDrawerIfOverlay(event)">
