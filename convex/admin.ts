@@ -198,6 +198,10 @@ export const mergeTenants = internalMutation({
     fromTenantId: v.string(),
     toTenantId: v.string(),
     dryRun: v.optional(v.boolean()),
+    // Si se indica, solo se mueven estos projectId.  Sirve para dejar atrás los
+    // pseudo-proyectos internos (__feedback__, __lib_layout__) y las pruebas, que
+    // si no aparecerían como eventos sueltos en la lista del usuario.
+    onlyProjectIds: v.optional(v.array(v.string())),
   },
   returns: v.object({
     dryRun: v.boolean(),
@@ -229,7 +233,15 @@ export const mergeTenants = internalMutation({
     let extrasMoved = 0;
     let filesReassigned = 0;
 
+    const only = args.onlyProjectIds && args.onlyProjectIds.length
+      ? new Set(args.onlyProjectIds)
+      : null;
+
     for (const doc of source) {
+      if (only && !only.has(doc.projectId)) {
+        skipped.push(doc.projectId + " (fuera de onlyProjectIds)");
+        continue;
+      }
       if (destIds.has(doc.projectId)) {
         skipped.push(doc.projectId + " (el destino ya tiene uno con ese id)");
         continue;
