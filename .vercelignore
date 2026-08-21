@@ -1,0 +1,10 @@
+# Solo se publica el frontend estático.  Todo lo de abajo no tiene por qué
+# viajar al hosting (el backend vive en Convex, no aquí).
+node_modules
+convex
+scripts
+.env*
+*.md
+!index.html
+.git
+Screenshot*.png
