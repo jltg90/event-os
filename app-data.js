@@ -2,12 +2,17 @@
   var EVENTOS_CONFIG = window.EVENTOS_CONFIG || {};
   var CONVEX_URL = (EVENTOS_CONFIG.convexUrl || "").replace(/\/+$/, "");
 
-  // Session state — set by authenticate() and refreshed automatically
-  var _sessionToken = null;
-  var _sessionExpiresAt = 0;
-  var _lastWixToken = null;
-  var _lastWixUserId = null;
-  var _reauthInFlight = null; // deduplicate concurrent re-auth attempts
+  // ─── Identidad ────────────────────────────────────────────────────────────
+  //
+  // Antes esta capa emitia y administraba un `sessionToken` propio que viajaba
+  // como argumento en cada llamada, y lo renovaba a mano con el JWT de Wix.
+  //
+  // Ahora la identidad la lleva Clerk: pedimos un JWT corto con la plantilla
+  // `convex` y lo mandamos en la cabecera Authorization.  Clerk cachea y renueva
+  // solo, asi que desaparece toda la maquinaria de renovacion — y con ella el
+  // problema de que un token guardado se quedara rancio.
+  var CLERK_JWT_TEMPLATE = "convex";
+  var _tenantId = null;
 
   function isConfigured(){
     return !!CONVEX_URL;
@@ -17,58 +22,89 @@
     return "Missing app configuration. Check app-config.js for convexUrl and reload.";
   }
 
-  // Internal: call createSession and store result. Deduplicates concurrent calls.
-  function _doReauth(){
-    if(_reauthInFlight) return _reauthInFlight;
-    _reauthInFlight = (async function(){
-      try{
-        var res = await fetch(CONVEX_URL + "/api/action", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            path: "auth:createSession",
-            args: { wixToken: _lastWixToken || "", claimedUserId: _lastWixUserId || "" },
-            format: "json"
-          })
-        });
-        var payload = await res.json().catch(function(){ return null; });
-        if(res.ok && payload && payload.status === "success" && payload.value && payload.value.token){
-          _sessionToken = payload.value.token;
-          _sessionExpiresAt = payload.value.expiresAt;
-        }
-      }catch(e){
-        console.warn("EventOS: session renewal failed", e);
-      }finally{
-        _reauthInFlight = null;
-      }
-    })();
-    return _reauthInFlight;
+  function _clerk(){
+    return (typeof window !== "undefined" && window.Clerk) ? window.Clerk : null;
   }
 
+  /**
+   * JWT vigente de Clerk.  `skipCache` fuerza uno nuevo: se usa en el reintento
+   * tras un 401, para el caso de que el cacheado acabe de expirar.
+   */
+  async function _getAuthToken(skipCache){
+    var clerk = _clerk();
+    if(!clerk || !clerk.session) return null;
+    try{
+      return await clerk.session.getToken({
+        template: CLERK_JWT_TEMPLATE,
+        skipCache: !!skipCache
+      });
+    }catch(e){
+      console.warn("EventOS: could not get Clerk token", e);
+      return null;
+    }
+  }
+
+  function _isAuthError(err){
+    var m = err && err.message ? String(err.message) : '';
+    return m.indexOf('Unauthorized') !== -1 || m.indexOf('HTTP 401') !== -1;
+  }
+
+  // Envuelve _callConvexOnce con un reintento unico ante error de autenticacion:
+  // si la sesion expiro (o fue revocada desde otro dispositivo) se renueva y se
+  // repite la llamada, en vez de romper la app hasta que el usuario recargue.
+  // Un unico reintento ante error de autenticacion, pidiendole a Clerk un token
+  // fresco (skipCache).  Cubre el caso de que el token cacheado expire justo entre
+  // que se construye la peticion y llega al servidor.
   async function callConvex(kind, path, args, options){
+    try{
+      return await _callConvexOnce(kind, path, args, options);
+    }catch(err){
+      if(!_isAuthError(err)) throw err;
+      var fresh = await _getAuthToken(true);
+      if(!fresh) throw err;
+      return await _callConvexOnce(kind, path, args, options, fresh);
+    }
+  }
+
+  async function _callConvexOnce(kind, path, args, options, forcedToken){
     if(!isConfigured()) throw new Error(getConfigErrorMessage());
 
-    // Proactively renew session when < 5 minutes from expiry
-    if(_sessionToken && _lastWixUserId && Date.now() >= _sessionExpiresAt - 5 * 60 * 1000){
-      await _doReauth();
-    }
-
+    var token = forcedToken || await _getAuthToken(false);
     var fetchOptions = options || {};
-    // Use caller's signal or create a 15-second timeout
-    var signal = fetchOptions.signal;
-    if(!signal && typeof AbortSignal !== 'undefined' && AbortSignal.timeout){
-      signal = AbortSignal.timeout(15000);
-    }
-    var res = await fetch(CONVEX_URL + "/api/" + kind, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        path: path,
-        args: args || {},
-        format: "json"
-      }),
-      signal: signal
+    var body = JSON.stringify({
+      path: path,
+      args: args || {},
+      format: "json"
     });
+
+    // Guardado de emergencia (beforeunload / pagehide): sin `keepalive` el navegador
+    // cancela el fetch al descargar la pagina y la escritura nunca llega.
+    // El limite de keepalive es ~64 KB, asi que solo se usa cuando el cuerpo cabe;
+    // para blobs mas grandes existe la recuperacion via localStorage en core.js.
+    var KEEPALIVE_MAX_BYTES = 60000;
+    var useKeepalive = !!fetchOptions.keepalive && body.length <= KEEPALIVE_MAX_BYTES;
+
+    var headers = { "Content-Type": "application/json" };
+    // Convex verifica este JWT contra convex/auth.config.ts y rellena
+    // ctx.auth.getUserIdentity().  Ya no mandamos ningun token como argumento.
+    if(token) headers["Authorization"] = "Bearer " + token;
+
+    var reqInit = {
+      method: "POST",
+      headers: headers,
+      body: body
+    };
+    if(useKeepalive){
+      reqInit.keepalive = true;   // sin signal: un timeout abortaria el envio de salida
+    } else {
+      // Use caller's signal or create a 15-second timeout
+      var signal = fetchOptions.signal;
+      if(!signal && typeof AbortSignal !== 'undefined' && AbortSignal.timeout){
+        signal = AbortSignal.timeout(15000);
+      }
+      reqInit.signal = signal;
+    }
+    var res = await fetch(CONVEX_URL + "/api/" + kind, reqInit);
     var payload = await res.json().catch(function(){ return null; });
     if(!res.ok){
       var errMsg = (payload && payload.errorMessage) ? payload.errorMessage : "status " + res.status;
@@ -132,6 +168,8 @@
     delete copy._extrasLoaded;
     delete copy._pendingSave;
     delete copy._extrasPending;
+    delete copy._fromCache;
+    delete copy._migrating;
     // NOTE: _expectedVersion is intentionally kept in the blob — the server reads it
     // for optimistic-lock conflict detection.  It is deleted from the in-memory project
     // after each successful save (in core.js _executeSave) to prevent staleness.
@@ -180,51 +218,67 @@
     isConfigured: isConfigured,
     getConfigErrorMessage: getConfigErrorMessage,
 
-    // Exchange a Wix instance token for a server-issued session token.
-    // Must be called once during app init before any project API calls.
-    authenticate: async function(wixToken, wixUserId){
-      // Store credentials so _doReauth() can silently renew without bothering core.js
-      _lastWixToken = wixToken || "";
-      _lastWixUserId = wixUserId || "";
-      var result = await callConvex("action", "auth:createSession", {
-        wixToken: _lastWixToken,
-        claimedUserId: _lastWixUserId
-      });
-      _sessionToken = result.token;
-      _sessionExpiresAt = result.expiresAt;
+    /**
+     * Se llama una vez tras iniciar sesion en Clerk.
+     *
+     * Resuelve el "tenant" del usuario: para un cliente heredado de Wix devuelve
+     * su wixUserId de siempre (enlazado por email desde legacy_links); para uno
+     * nuevo, su propio id de Clerk.  Ese valor es el que la app usa como DB.cur.
+     */
+    /**
+     * bootstrapIdentity es una ACTION porque necesita consultar la API de Clerk
+     * para el enlace automático de los clientes heredados (los que entraban con
+     * Google en la versión de Wix).  Si falla, se cae a ensureIdentity, que hace
+     * lo mismo pero solo con el mapeo manual por correo.
+     */
+    ensureIdentity: async function(options){
+      var profile;
+      try{
+        profile = await callConvex("action", "auth:bootstrapIdentity", {}, options);
+      }catch(e){
+        console.warn("EventOS: bootstrapIdentity failed, falling back", e);
+        profile = await callConvex("mutation", "auth:ensureIdentity", {}, options);
+      }
+      _tenantId = profile.tenantId;
+      return profile;
     },
 
-    // Call this whenever Wix rotates the instance token (new WIX_USER message, same user).
-    // Keeps _lastWixToken current so session renewal uses a valid signature.
-    updateWixToken: function(wixToken){
-      _lastWixToken = wixToken || "";
+    getTenantId: function(){
+      return _tenantId || '';
     },
 
-    getSessionToken: function(){
-      return _sessionToken || '';
+    // Token de Clerk para servicios externos (el proxy de IA).  Es asincrono
+    // porque Clerk puede tener que renovarlo.
+    getAuthToken: function(skipCache){
+      return _getAuthToken(!!skipCache);
+    },
+
+    isSignedIn: function(){
+      var clerk = _clerk();
+      return !!(clerk && clerk.session);
+    },
+
+    signOut: async function(){
+      _tenantId = null;
+      var clerk = _clerk();
+      if(clerk && clerk.signOut) await clerk.signOut();
     },
 
     getProjectsByWixUserId: async function(options){
-      var rows = await callConvex("query", "projects:getProjectsByWixUserId", {
-        sessionToken: _sessionToken
-      }, options);
+      var rows = await callConvex("query", "projects:getProjectsByWixUserId", {}, options);
       return normalizeProjectRows(rows);
     },
     getChangedProjectIds: async function(since, options){
       return await callConvex("query", "projects:getChangedProjectIds", {
-        sessionToken: _sessionToken,
         since: since
       }, options);
     },
     getProjectMetaByWixUserId: async function(options){
-      var rows = await callConvex("query", "projects:getProjectMetaByWixUserId", {
-        sessionToken: _sessionToken
-      }, options);
+      var rows = await callConvex("query", "projects:getProjectMetaByWixUserId", {}, options);
       return normalizeProjectRows(rows);
     },
     getProjectById: async function(projectId, options){
       var row = await callConvex("query", "projects:getProjectById", {
-        sessionToken: _sessionToken,
         projectId: projectId
       }, options);
       if(!row || !row.data) return null;
@@ -287,13 +341,11 @@
         // but don't lose the main save. On next load the app will re-merge from
         // the in-memory copy and retry the extras on the following save.
         await callConvex("mutation", "projects:upsertProject", {
-          sessionToken: _sessionToken,
           project: cleaned
         }, options);
 
         try {
           await callConvex("mutation", "projects:upsertProjectExtras", {
-            sessionToken: _sessionToken,
             projectId: String(cleaned.id || ""),
             extras: extras
           });
@@ -317,25 +369,36 @@
       }
 
       await callConvex("mutation", "projects:upsertProject", {
-        sessionToken: _sessionToken,
         project: cleaned
       }, options);
     },
     getProjectExtras: async function(projectId, options){
       return await callConvex("query", "projects:getProjectExtras", {
-        sessionToken: _sessionToken,
         projectId: projectId
       }, options);
     },
     deleteProject: async function(projectId, options){
       return await callConvex("mutation", "projects:deleteProject", {
-        sessionToken: _sessionToken,
         projectId: projectId
       }, options);
     },
-    closeOtherSessions: async function(options){
-      return await callConvex("mutation", "auth:closeOtherSessions", {
-        sessionToken: _sessionToken
+    // closeOtherSessions / revokeSession se retiraron: las sesiones ya no son
+    // nuestras, las administra Clerk (signOut cierra la del dispositivo, y el
+    // usuario puede cerrar las demas desde su perfil de Clerk).
+    // Borra archivos que el cliente acaba de desvincular del proyecto.
+    deleteFilesForProject: async function(storageIds, options){
+      if(!storageIds || !storageIds.length) return 0;
+      return await callConvex("mutation", "projects:deleteFilesForProject", {
+        storageIds: storageIds
+      }, options);
+    },
+    // Reclama la propiedad de archivos antiguos (subidos antes de que existiera
+    // file_ownership) verificando en el servidor que el proyecto del usuario los
+    // referencia.  Sin esto, endurecer el control de acceso romperia esas imagenes.
+    claimFileOwnership: async function(storageIds, options){
+      if(!storageIds || !storageIds.length) return 0;
+      return await callConvex("mutation", "files:claimOwnership", {
+        storageIds: storageIds
       }, options);
     },
     // --- File Storage API ---
@@ -354,11 +417,11 @@
       }
     },
     generateUploadUrl: async function(options){
-      return await callConvex("mutation", "files:generateUploadUrl", { sessionToken: _sessionToken }, options);
+      return await callConvex("mutation", "files:generateUploadUrl", {}, options);
     },
     uploadFile: async function(fileOrBlob, options){
       this._validateUpload(fileOrBlob);
-      var uploadUrl = await callConvex("mutation", "files:generateUploadUrl", { sessionToken: _sessionToken }, options);
+      var uploadUrl = await callConvex("mutation", "files:generateUploadUrl", {}, options);
       var res = await fetch(uploadUrl, {
         method: "POST",
         headers: { "Content-Type": fileOrBlob.type || "application/octet-stream" },
@@ -368,8 +431,16 @@
       if(!res.ok) throw new Error("File upload failed: HTTP " + res.status);
       var json = await res.json();
       var storageId = json.storageId;
-      // Server-side validation — deletes file if invalid
-      var validation = await callConvex("mutation", "files:validateUpload", { storageId: storageId, sessionToken: _sessionToken }, options);
+      // Validacion en servidor.  Si la llamada falla (red, sesion) el archivo queda
+      // subido pero SIN registro de propiedad: hay que borrarlo o se vuelve un
+      // huerfano inaccesible que igual consume cuota.
+      var validation;
+      try{
+        validation = await callConvex("mutation", "files:validateUpload", { storageId: storageId }, options);
+      }catch(validationErr){
+        try{ await callConvex("mutation", "files:discardUpload", { storageId: storageId }); }catch(e2){}
+        throw validationErr;
+      }
       if(!validation.valid) throw new Error(validation.reason || "File rejected by server");
       return storageId;
     },
@@ -378,14 +449,14 @@
       return await window.EVENTOS_DATA.uploadFile(blob, options);
     },
     getFileUrl: async function(storageId, options){
-      return await callConvex("query", "files:getFileUrl", { storageId: storageId, sessionToken: _sessionToken }, options);
+      return await callConvex("query", "files:getFileUrl", { storageId: storageId }, options);
     },
     getFileUrls: async function(storageIds, options){
       if(!storageIds || !storageIds.length) return [];
-      return await callConvex("query", "files:getFileUrls", { storageIds: storageIds, sessionToken: _sessionToken }, options);
+      return await callConvex("query", "files:getFileUrls", { storageIds: storageIds }, options);
     },
     deleteFile: async function(storageId, options){
-      return await callConvex("mutation", "files:deleteFile", { storageId: storageId, sessionToken: _sessionToken }, options);
+      return await callConvex("mutation", "files:deleteFile", { storageId: storageId }, options);
     },
     isBase64Image: isBase64Image,
     base64ToBlob: base64ToBlob

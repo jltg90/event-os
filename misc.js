@@ -1,4 +1,4 @@
-﻿var mbOpenFolders = {};
+var mbOpenFolders = {};
 var _lightboxItems = [];
 var _lightboxIndex = 0;
 function isPhoneViewport(){
@@ -159,7 +159,7 @@ function mbImageCard(img, ii, folderId, total){
       ondrop="mbDrop(event,'${fKey}',${ii})">
     <div class="media-zoom" style="position:relative;overflow:hidden;cursor:zoom-in;flex:1;min-height:0"
          onclick="mbOpenLightboxIdx(${ii},${fidJs})">
-      <img src="${img.src}" class="media-zoom-img" style="width:100%;height:100%;object-fit:cover;display:block" loading="lazy">
+      <img src="${img.src}" class="media-zoom-img" alt="${esc(img.name||(LANG==='es'?'Imagen del moodboard':'Moodboard image'))}" style="width:100%;height:100%;object-fit:cover;display:block" loading="lazy">
       <div class="media-zoom-overlay">
         <svg width="28" height="28" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 3.5 3.5"/><path d="M11 8v6M8 11h6"/></svg>
       </div>
@@ -257,10 +257,10 @@ function selectMBFolderColor(el,c){
 
 function createMBFolder(){
   const name=gv('mf-name').trim();
-  if(!name)return toast('Folder name required','e');
+  if(!name)return toast(LANG==='es'?'El nombre de la carpeta es requerido':'Folder name required','e');
   const p=proj(); const mb=getMB(p);
   mb.folders.push({id:'mf'+Date.now(),name,color:gv('mf-color'),images:[]});
-  saveProj(p); closeMo(); renderMoodboard(); toast('Folder created','s');
+  saveProj(p); closeMo(); renderMoodboard(); toast(LANG==='es'?'Carpeta creada':'Folder created','s');
 }
 
 function renameFolderModal(fid){
@@ -275,29 +275,46 @@ function renameFolderModal(fid){
   </div>`);
 }
 function saveFolderRename(fid){
-  const name=gv('mfr-name').trim();if(!name)return toast('Name required','e');
+  const name=gv('mfr-name').trim();if(!name)return toast(LANG==='es'?'El nombre es requerido':'Name required','e');
   const p=proj();const mb=getMB(p);
   const f=mb.folders.find(f=>f.id===fid);if(f)f.name=name;
-  saveProj(p);closeMo();renderMoodboard();toast('Folder renamed','s');
+  saveProj(p);closeMo();renderMoodboard();toast(LANG==='es'?'Carpeta renombrada':'Folder renamed','s');
 }
 
 function deleteMBFolder(fid){
-  const p=proj();const mb=getMB(p);
+  const p=proj();if(!p)return;
+  const mb=getMB(p);
   const folder=mb.folders.find(f=>f.id===fid);
   if(!folder)return;
-  const msg=`Delete folder "${folder.name}"?${folder.images.length?` (${folder.images.length} image${folder.images.length>1?'s':''} will be deleted too)`:''}`;
-  openMo(`<div class="mo-title" style="color:#ef4444">Delete Folder</div>
-  <p style="font-size:14px;color:var(--muted);margin-bottom:24px">${msg}</p>
-  <div class="mo-foot">
-    <button class="btn btn-ghost" onclick="closeMo()">Cancel</button>
-    <button class="btn btn-danger" onclick="closeMo();_doDeleteMBFolder('${fid}')">Delete</button>
-  </div>`);
+  const isES=LANG==='es';
+  const n=(folder.images||[]).length;
+  // openConfirmModal escapa titulo y mensaje: antes folder.name se inyectaba crudo
+  // en el HTML del modal (XSS almacenado via nombre de carpeta).
+  const extra=n ? (isES ? ` (se eliminarán también ${n} imagen${n>1?'es':''})`
+                        : ` (${n} image${n>1?'s':''} will be deleted too)`) : '';
+  openConfirmModal({
+    title: isES ? 'Eliminar carpeta' : 'Delete folder',
+    message: (isES ? `¿Eliminar la carpeta "${folder.name}"?` : `Delete folder "${folder.name}"?`) + extra,
+    confirmLabel: t('delete'),
+    danger: true,
+    onConfirm: function(){ _doDeleteMBFolder(fid); }
+  });
 }
 function _doDeleteMBFolder(fid){
-  const p=proj();const mb=getMB(p);
+  const p=proj();if(!p)return;
+  const mb=getMB(p);
   const folder=mb.folders.find(f=>f.id===fid);if(!folder)return;
+  // Los archivos de las imagenes tambien se van: borrar solo la carpeta dejaba los
+  // blobs huerfanos en Convex Storage para siempre.
+  var storageIds=(folder.images||[]).map(function(img){ return img && img.storageId; }).filter(Boolean);
   mb.folders=mb.folders.filter(f=>f.id!==fid);
-  saveProj(p);renderMoodboard();toast('Folder deleted');
+  saveProj(p);renderMoodboard();
+  if(storageIds.length && EVENTOS_DATA && EVENTOS_DATA.deleteFilesForProject){
+    EVENTOS_DATA.deleteFilesForProject(storageIds).catch(function(e){
+      console.warn('EventOS: could not delete folder files', e);
+    });
+  }
+  toast(LANG==='es'?'Carpeta eliminada':'Folder deleted');
 }
 
 async function addMBImages(input, folderId){
@@ -322,7 +339,7 @@ async function addMBImages(input, folderId){
       const img={id:'mi'+Date.now()+uploaded,src:url,storageId:storageId,name:f.name.replace(/\.[^/.]+$/,''),mimeType:f.type||'image/*'};
       const folder=mb.folders.find(fo=>fo.id===folderId);if(folder)folder.images.push(img);
       uploaded++;
-    }catch(e){console.error('Upload error:',e);toast('Upload error: '+f.name,'e');}
+    }catch(e){console.error('Upload error:',e);toast((LANG==='es'?'Error al subir: ':'Upload error: ')+f.name,'e');}
   }
   if(uploaded>0){
     if(folderId&&!mbOpenFolders[folderId])mbOpenFolders[folderId]=true;
@@ -347,7 +364,7 @@ async function _doDelMBImg(idx, folderId){
   if(removed && removed.storageId){
     EVENTOS_DATA.deleteFile(removed.storageId).catch(function(e){console.error('Failed to delete file:',e);});
   }
-  saveProj(p);renderMoodboard();toast('Image deleted');
+  saveProj(p);renderMoodboard();toast(LANG==='es'?'Imagen eliminada':'Image deleted');
 }
 
 function renameMBImg(idx, folderId, name){
@@ -379,7 +396,7 @@ function doMoveMBImage(idx, fromId, toId){
   else{const f=mb.folders.find(f=>f.id===fromId);if(f){img=f.images.splice(idx,1)[0];}}
   if(!img){closeMo();return;}
   const tf=mb.folders.find(f=>f.id===toId);if(tf){tf.images.push(img);mbOpenFolders[toId]=true;}
-  saveProj(p);closeMo();renderMoodboard();toast('Image moved','s');
+  saveProj(p);closeMo();renderMoodboard();toast(LANG==='es'?'Imagen movida':'Image moved','s');
 }
 
 let _mbDragSrc={fid:null,idx:0};
@@ -393,6 +410,12 @@ function mbDrop(e,fid,idx){
   }
 }
 
+// ── Visor 3D (GLB/GLTF) ────────────────────────────────────────────────────
+// OJO: este bloque NO esta conectado a ninguna UI.  index.html no contiene los
+// elementos que usa (#three-canvas, #v3d-wrap, #v3d-upload, #v3d-hud, ...), asi que
+// hoy es codigo inerte.  Se conserva porque la funcionalidad esta completa; para
+// activarla hay que anadir ese markup.  Mientras tanto, todas las funciones
+// degradan sin lanzar en vez de romper la app.
 let V3D = {
   renderer:null, scene:null, camera:null, controls:null,
   animId:null, models:[], activeModel:null,
@@ -588,21 +611,21 @@ function loadGLBFile(input){
     if(loading)document.getElementById('v3d-load-msg').textContent='Parsing model...';
     setTimeout(()=>loadGLBBuffer(e.target.result,file.name,file.size),50);
   };
-  reader.onerror=()=>{toast('Failed to read file','e');if(loading)loading.classList.add('hidden');};
+  reader.onerror=()=>{toast(LANG==='es'?'No se pudo leer el archivo':'Failed to read file','e');if(loading)loading.classList.add('hidden');};
   reader.readAsArrayBuffer(file);
 }
 
 function v3dHandleDrop(e){
   e.preventDefault();
   const file=e.dataTransfer.files[0];
-  if(!file||(!file.name.endsWith('.glb')&&!file.name.endsWith('.gltf'))){toast('Please drop a GLB or GLTF file','e');return;}
+  if(!file||(!file.name.endsWith('.glb')&&!file.name.endsWith('.gltf'))){toast(LANG==='es'?'Suelta un archivo GLB o GLTF':'Please drop a GLB or GLTF file','e');return;}
   const dt=new DataTransfer();dt.items.add(file);
   const fakeInput={files:dt.files};
   loadGLBFile(fakeInput);
 }
 
 function loadGLBBuffer(buffer, filename, filesize){
-  if(!V3D.scene){toast('Viewer not ready, please try again','e');return;}
+  if(!V3D.scene){toast(LANG==='es'?'El visor no está listo, intenta de nuevo':'Viewer not ready, please try again','e');return;}
 
   if(!window.THREE_GLTFLoader){
     // TODO: compute actual SRI hash with: curl -s <URL> | openssl dgst -sha384 -binary | openssl base64 -A
@@ -610,7 +633,7 @@ function loadGLBBuffer(buffer, filename, filesize){
       'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js',
       null  // SRI hash needs to be computed and added here
     ).then(function(){ window.THREE_GLTFLoader=true; _doLoadGLB(buffer,filename,filesize); })
-     .catch(function(){ toast('Could not load GLTFLoader — check your internet connection','e'); });
+     .catch(function(){ toast(LANG==='es'?'No se pudo cargar GLTFLoader — revisa tu conexión':'Could not load GLTFLoader — check your internet connection','e'); });
   } else {
     _doLoadGLB(buffer,filename,filesize);
   }
@@ -651,7 +674,7 @@ function _doLoadGLB(buffer,filename,filesize){
       if(loading)loading.classList.add('hidden');
       if(hud){hud.classList.remove('hidden');document.getElementById('v3d-model-name').textContent=filename;}
 
-      const p=proj();if(!p.models3d)p.models3d=[];
+      const p=proj();if(!p)return;if(!p.models3d)p.models3d=[];
       const sizeStr=filesize?(filesize>1048576?(filesize/1048576).toFixed(1)+'MB':(filesize/1024).toFixed(0)+'KB'):'';
       const existing=p.models3d.findIndex(m=>m.name===filename);
       if(existing===-1)p.models3d.push({id:'m'+Date.now(),name:filename,size:sizeStr,loaded:new Date().toISOString()});
@@ -667,15 +690,28 @@ function _doLoadGLB(buffer,filename,filesize){
   }catch(err){
     console.error(err);
     if(loading)loading.classList.add('hidden');
-    toast('Failed to load model: '+err.message,'e');
+    toast((LANG==='es'?'No se pudo cargar el modelo: ':'Failed to load model: ')+err.message,'e');
     const uz=document.getElementById('v3d-upload');if(uz)uz.style.display='flex';
   }
 }
 
 function del3DModel(idx){
-  if(!confirm('Remove this model from the list?'))return;
-  const p=proj();if(!p.models3d)return;
-  p.models3d.splice(idx,1);saveProj(p);renderViewer3D();
+  const p=proj();
+  if(!p || !Array.isArray(p.models3d) || !p.models3d[idx]) return;
+  // Antes usaba confirm() nativo (que un iframe sin allow-modals devuelve false en
+  // silencio) y despues llamaba a renderViewer3D(), que NO EXISTE -> ReferenceError
+  // justo despues de haber modificado y guardado el proyecto.
+  openConfirmModal({
+    title: LANG==='es' ? 'Quitar modelo' : 'Remove model',
+    message: LANG==='es' ? '¿Quitar este modelo de la lista?' : 'Remove this model from the list?',
+    confirmLabel: t('delete'),
+    danger: true,
+    onConfirm: function(){
+      p.models3d.splice(idx,1);
+      saveProj(p);
+      if(typeof render3DModelList === 'function') render3DModelList();
+    }
+  });
 }
 
 let _moMouseDownOnOverlay=false;
@@ -776,7 +812,7 @@ function downloadGuestTemplate(){
   const a = document.createElement('a');
   a.href=url; a.download='EventOS_Guests_Template.xlsx';
   a.click(); URL.revokeObjectURL(url);
-  toast('Template downloaded!','s');
+  toast(LANG==='es'?'¡Plantilla descargada!':'Template downloaded!','s');
 }
 function renderLightboxDock(){
   var dockWrap = document.getElementById('lightbox-dock-wrap');
@@ -1087,9 +1123,23 @@ function openDateField(id){
 function daysAway(d){ const dt=new Date(d+'T12:00:00');const n=new Date();n.setHours(0,0,0,0);dt.setHours(0,0,0,0);return Math.round((dt-n)/86400000); }
 function fmtDate(s){ if(!s)return'—'; return formatDMY(s); }
 function fmtDateShort(s){ if(!s)return'—'; return formatDMY(s); }
-function fmtMoney(n){ return'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:0}); }
+// Antes tenia el simbolo '$' y el locale 'en-US' fijos, con lo cual el selector de
+// moneda no afectaba a ninguno de los ~40 sitios que usan fmtMoney.  Ahora delega
+// en la moneda activa igual que formatCost.
+function fmtMoney(n){
+  var sym = (typeof CURRENCY !== 'undefined' && CURRENCY && CURRENCY.symbol) ? CURRENCY.symbol : '$';
+  var loc = (typeof currencyLocale === 'function') ? currencyLocale() : 'en-US';
+  var num = Number(n);
+  if(!isFinite(num)) num = 0;
+  return sym + num.toLocaleString(loc, {minimumFractionDigits:0, maximumFractionDigits:2});
+}
 function gv(id){ const el=document.getElementById(id);return el?el.value:''; }
-function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+// `String(s||'')` convertia 0 y false en cadena vacia: cualquier valor numerico
+// cero renderizaba en blanco.  Solo null/undefined deben volverse ''.
+function esc(s){
+  if(s === null || s === undefined) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
 function secureId(prefix){
   var arr=new Uint8Array(8); crypto.getRandomValues(arr);
   return (prefix||'')+Date.now().toString(36)+Array.from(arr,function(b){return b.toString(36);}).join('').slice(0,8);
@@ -1103,9 +1153,12 @@ function openMobDrawer(){
   var d = document.getElementById('mob-drawer');
   if(!d) return;
   d.classList.remove('hidden');
-  if(WIX_USER){
-    var name  = WIX_USER.displayName || WIX_USER.email || DB.cur || '?';
-    var email = WIX_USER.email || DB.cur || '';
+  if(USER_PROFILE || (window.Clerk && window.Clerk.user)){
+    var clerkUser = (window.Clerk && window.Clerk.user) || null;
+    var name  = (clerkUser && (clerkUser.fullName || clerkUser.firstName)) ||
+                (USER_PROFILE && (USER_PROFILE.name || USER_PROFILE.email)) || DB.cur || '?';
+    var email = (clerkUser && clerkUser.primaryEmailAddress && clerkUser.primaryEmailAddress.emailAddress) ||
+                (USER_PROFILE && USER_PROFILE.email) || '';
     var av    = name[0].toUpperCase();
     var mobAv    = document.getElementById('mob-uav');
     var mobName  = document.getElementById('mob-uname');
@@ -1119,9 +1172,9 @@ function openMobDrawer(){
     var inProject = CID && !document.getElementById('pg-project').classList.contains('hidden');
     projNav.style.display = inProject ? 'block' : 'none';
   }
-  var cl = document.getElementById('mob-currency-label');
-  var cbl = document.getElementById('currency-label');
-  if(cl && cbl) cl.textContent = 'Currency: ' + cbl.textContent;
+  if(typeof updateCurrencyLabels === 'function') updateCurrencyLabels();
+  var mlb = document.getElementById('mob-lang-label');
+  if(mlb) mlb.textContent = LANG==='es' ? 'English / Inglés' : 'Español / Spanish';
   document.body.classList.add('modal-open');
   setTimeout(function(){
     var panel = document.getElementById('mob-drawer-panel');
@@ -1162,8 +1215,17 @@ document.addEventListener('click', function(e){
   if(lb && !lb.contains(e.target)){ lb.parentNode.removeChild(lb); }
 }, true);
 function showChairImg(key){
-  var imgSrc = CHAIR_IMAGES[key];
-  if(!imgSrc){ console.warn('No image for key:', key); return; }
+  var imgSrc = (window.CHAIR_IMAGES || {})[key];
+  if(!imgSrc){
+    // Todavia no se ha descargado el archivo de imagenes: pedirlo y reintentar.
+    if(!window.CHAIR_IMAGES_LOADED && typeof ensureChairImages === 'function' && typeof CHAIR_IMAGE_KEYS !== 'undefined' && CHAIR_IMAGE_KEYS.indexOf(key) !== -1){
+      ensureChairImages().then(function(){ showChairImg(key); }).catch(function(){
+        toast(LANG==='es'?'No se pudieron cargar las imágenes de sillas':'Could not load chair images','e');
+      });
+      return;
+    }
+    console.warn('No image for key:', key); return;
+  }
   var label = (CHAIR_TYPES[key]||{}).label || key;
   var existing = document.getElementById('chair-lb');
   if(existing) existing.parentNode.removeChild(existing);
@@ -1586,19 +1648,53 @@ async function callAIForAction(key, userMsg, p){
     throw new Error('AI proxy not configured.');
   }
 
-  var sessionToken = (typeof EVENTOS_DATA !== 'undefined' && EVENTOS_DATA.getSessionToken) ? EVENTOS_DATA.getSessionToken() : '';
-  var resp = await fetch(AI_PROXY_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + sessionToken
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1000,
-      messages: messages,
-    })
-  });
+  // Token de Clerk (antes era el sessionToken propio de Convex).  Se manda al
+  // Worker para que pueda verificar quien llama; es asincrono porque Clerk
+  // renueva el JWT cuando hace falta.
+  var authToken = '';
+  try{
+    if(typeof EVENTOS_DATA !== 'undefined' && EVENTOS_DATA.getAuthToken){
+      authToken = (await EVENTOS_DATA.getAuthToken()) || '';
+    }
+  }catch(e){ console.warn('EventOS: no se pudo obtener token para la IA', e); }
+
+  // max_tokens: 1000 truncaba la respuesta en cuanto la lista de invitados o de
+  // tareas crecia, y el JSON cortado terminaba en "Parse error" — justo en los
+  // eventos grandes, que es donde la funcion mas sirve.  max_tokens es un techo,
+  // solo se factura lo que realmente se genera.
+  var AI_MAX_TOKENS = 16000;
+  var AI_TIMEOUT_MS = 90000;
+
+  var aiSignal;
+  if(typeof AbortSignal !== 'undefined' && AbortSignal.timeout){
+    // Antes no habia timeout: una peticion colgada dejaba la UI esperando para siempre.
+    aiSignal = AbortSignal.timeout(AI_TIMEOUT_MS);
+  }
+
+  var resp;
+  try{
+    resp = await fetch(AI_PROXY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + authToken
+      },
+      body: JSON.stringify({
+        model: 'claude-opus-5',
+        max_tokens: AI_MAX_TOKENS,
+        // Estas son tareas de generacion cortas y bien especificadas: 'low' baja
+        // coste y latencia sin perder calidad en este tipo de salida.
+        output_config: { effort: 'low' },
+        messages: messages,
+      }),
+      signal: aiSignal
+    });
+  }catch(netErr){
+    if(netErr && netErr.name === 'TimeoutError'){
+      throw new Error(isSpanish ? 'La IA tardó demasiado en responder. Intenta de nuevo.' : 'The AI took too long to respond. Please try again.');
+    }
+    throw netErr;
+  }
 
   if(!resp.ok){
     var errData = await resp.json().catch(function(){return {};});
@@ -1614,7 +1710,21 @@ async function callAIForAction(key, userMsg, p){
     throw new Error(msg);
   }
 
-  var raw = (data.content||[]).map(function(c){return c.text||'';}).join('');
+  // stop_reason 'refusal' llega con HTTP 200: hay que mirarlo antes de leer content.
+  if(data.stop_reason === 'refusal'){
+    throw new Error(isSpanish
+      ? 'La IA no pudo procesar esta solicitud. Reformúlala e intenta de nuevo.'
+      : 'The AI could not process this request. Please rephrase and try again.');
+  }
+  if(data.stop_reason === 'max_tokens'){
+    console.warn('[EventOS AI] respuesta truncada por max_tokens');
+  }
+
+  // Solo los bloques de texto: los bloques de "thinking" no traen .text.
+  var raw = (data.content||[])
+    .filter(function(c){ return c && c.type === 'text'; })
+    .map(function(c){ return c.text || ''; })
+    .join('');
   if(window.EVENTOS_CONFIG && window.EVENTOS_CONFIG.devMode) console.log('[EventOS AI] Raw text:', raw.slice(0, 200));
 
   if(!raw.trim()){
@@ -1672,7 +1782,14 @@ window.addEventListener('DOMContentLoaded', function(){
 
 
 window.SCI={};
-(function(){Object.keys(CHAIR_IMAGES).forEach(function(k){window.SCI[k]=function(){showChairImg(k);};});})();
+// Se construye desde CHAIR_IMAGE_KEYS (lista ligera del bundle principal) y no desde
+// CHAIR_IMAGES, que en este punto todavia esta vacio: el blob se carga bajo demanda.
+(function(){
+  var keys = (typeof CHAIR_IMAGE_KEYS !== 'undefined' && CHAIR_IMAGE_KEYS.length)
+    ? CHAIR_IMAGE_KEYS
+    : Object.keys(window.CHAIR_IMAGES || {});
+  keys.forEach(function(k){ window.SCI[k]=function(){ showChairImg(k); }; });
+})();
 
 function toggleSidebar(){
   const sb = document.getElementById('app-sidebar');
@@ -1793,7 +1910,7 @@ function openFeedbackAdmin(){
         <span style="font-size:11px;color:var(--muted);margin-left:auto">${e.timestamp?new Date(e.timestamp).toLocaleDateString():''}</span>
       </div>
       <div style="font-size:13px;color:var(--text);line-height:1.5;margin-bottom:6px">${esc(e.description)}</div>
-      ${e.screenshot?'<div style="margin-bottom:8px"><img src="'+e.screenshot+'" style="max-width:100%;max-height:200px;border-radius:8px;border:1px solid var(--border);cursor:pointer" onclick="openLightbox(this.src,\'Feedback screenshot\')"></div>':''}
+      ${e.screenshot?'<div style="margin-bottom:8px"><img src="'+e.screenshot+'" alt="'+esc(LANG==='es'?'Captura del reporte':'Feedback screenshot')+'" style="max-width:100%;max-height:200px;border-radius:8px;border:1px solid var(--border);cursor:pointer" onclick="openLightbox(this.src,\'Feedback screenshot\')"></div>':''}
       <div style="font-size:10px;color:var(--light)">${esc((e.context||{}).viewport||'')} · ${esc((e.context||{}).appVersion||'')} · ${esc((e.context||{}).page||'')}${(e.context||{}).tab?' / '+esc(e.context.tab):''}</div>
       <div style="display:flex;gap:6px;margin-top:8px">
         <button class="btn btn-ghost btn-sm" style="font-size:10px" onclick="setFeedbackStatus('${e.id}','reviewed')">${isES?'Revisado':'Reviewed'}</button>

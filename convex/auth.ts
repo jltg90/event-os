@@ -1,109 +1,340 @@
-import { action, mutation, internalMutation } from "./_generated/server";
+import { action, mutation, internalMutation, internalQuery, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 
-// 24 hours in milliseconds
-const SESSION_TTL = 24 * 60 * 60 * 1000;
-
-// ─── Internal helper ──────────────────────────────────────────────────────────
-
 /**
- * Read from the sessions table and return the verified wixUserId.
- * Call this at the top of every protected query/mutation handler.
+ * ─── Identidad (Clerk) ────────────────────────────────────────────────────────
+ *
+ * Antes: la pagina padre de Wix mandaba un JWT por postMessage, este archivo
+ * verificaba la firma HMAC contra WIX_APP_SECRET y emitia un `sessionToken`
+ * propio que viajaba como argumento en cada llamada.
+ *
+ * Ahora: el cliente manda el JWT de Clerk en la cabecera `Authorization: Bearer`.
+ * Convex verifica la firma contra `auth.config.ts` y nos entrega la identidad ya
+ * validada.  Ni emitimos ni almacenamos sesiones — eso es trabajo de Clerk.
+ *
+ * ─── El concepto de "tenant" ──────────────────────────────────────────────────
+ *
+ * Todas las tablas de datos particionan por un campo llamado `wixUserId`.  Ese
+ * nombre es historico: hoy significa "id del inquilino" y nada mas.
+ *
+ *   - Usuario nuevo        → tenantId = subject de Clerk. Sin fila en `identities`.
+ *   - Cliente heredado     → tenantId = su wixUserId de siempre, resuelto por la
+ *                            fila de `identities` que se crea en su primer login.
+ *
+ * Asi ningun documento existente se reescribe y la migracion es reversible:
+ * basta borrar o corregir una fila de `identities`.
  */
-export async function requireAuth(
-  ctx: { db: any },
-  sessionToken: string,
-): Promise<string> {
-  if (!sessionToken) throw new Error("Unauthorized: missing session token");
 
-  const session = await ctx.db
-    .query("sessions")
-    .withIndex("by_token", (q: any) => q.eq("sessionToken", sessionToken))
-    .unique();
+export type Identity = {
+  subject: string;
+  email?: string;
+  name?: string;
+};
 
-  if (!session) throw new Error("Unauthorized: invalid session");
-  if (session.expiresAt < Date.now()) throw new Error("Unauthorized: session expired");
-
-  return session.wixUserId;
+/** Lee la identidad verificada por Convex, o lanza. */
+async function requireIdentity(ctx: any): Promise<Identity> {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    throw new Error("Unauthorized: no valid session. Sign in again.");
+  }
+  return {
+    subject: identity.subject,
+    email: (identity.email || identity.emailAddress || undefined) as string | undefined,
+    name: (identity.name || identity.givenName || undefined) as string | undefined,
+  };
 }
 
-// ─── Internal mutation: write session record ──────────────────────────────────
+/**
+ * Resuelve el tenantId del usuario que llama.
+ *
+ * Solo lee: se puede usar desde queries.  El enlace de los clientes heredados lo
+ * crea `ensureIdentity` (mutation) al arrancar la app, antes de cualquier query.
+ */
+export async function requireAuth(ctx: { db: any; auth: any }): Promise<string> {
+  const identity = await requireIdentity(ctx);
+  const link = await ctx.db
+    .query("identities")
+    .withIndex("by_subject", (q: any) => q.eq("subject", identity.subject))
+    .unique();
+  return link ? link.tenantId : identity.subject;
+}
 
-export const _createSessionRecord = internalMutation({
-  args: {
-    sessionToken: v.string(),
-    wixUserId: v.string(),
-    expiresAt: v.number(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    // Keep the last 5 sessions per user (allows multi-device), prune the rest
+/**
+ * Punto de entrada de la app: se llama una vez tras iniciar sesion.
+ *
+ * 1. Si ya existe el enlace, lo devuelve.
+ * 2. Si no, busca en `legacy_links` por email — es el caso de un cliente que
+ *    venia de Wix y acaba de registrarse en Clerk — y crea el enlace.
+ * 3. Si no hay nada, es un usuario nuevo: tenantId = su propio subject.
+ *
+ * Devuelve el perfil que la interfaz necesita para pintar la cabecera.
+ */
+export const ensureIdentity = mutation({
+  args: {},
+  returns: v.object({
+    tenantId: v.string(),
+    subject: v.string(),
+    email: v.union(v.string(), v.null()),
+    name: v.union(v.string(), v.null()),
+    linkedLegacy: v.boolean(),
+  }),
+  handler: async (ctx) => {
+    const identity = await requireIdentity(ctx);
+    const email = (identity.email || "").trim().toLowerCase();
+
     const existing = await ctx.db
-      .query("sessions")
-      .withIndex("by_user", (q: any) => q.eq("wixUserId", args.wixUserId))
-      .collect();
-    const sorted = existing.sort((a: any, b: any) => b.expiresAt - a.expiresAt);
-    const toDelete = sorted.slice(4); // keep 4 + the new one = 5 total
-    await Promise.all(toDelete.map((s: any) => ctx.db.delete(s._id)));
+      .query("identities")
+      .withIndex("by_subject", (q: any) => q.eq("subject", identity.subject))
+      .unique();
 
-    await ctx.db.insert("sessions", {
-      sessionToken: args.sessionToken,
-      wixUserId: args.wixUserId,
-      expiresAt: args.expiresAt,
+    if (existing) {
+      // Mantener el email al dia por si lo cambio en Clerk.
+      if (email && existing.email !== email) {
+        await ctx.db.patch(existing._id, { email });
+      }
+      return {
+        tenantId: existing.tenantId,
+        subject: identity.subject,
+        email: identity.email ?? null,
+        name: identity.name ?? null,
+        linkedLegacy: existing.linkedFrom === "legacy",
+      };
+    }
+
+    let tenantId = identity.subject;
+    let linkedFrom = "new";
+
+    if (email) {
+      const pending = await ctx.db
+        .query("legacy_links")
+        .withIndex("by_email", (q: any) => q.eq("email", email))
+        .unique();
+      // Un mapeo solo se puede reclamar una vez.
+      if (pending && !pending.claimedAt) {
+        tenantId = pending.tenantId;
+        linkedFrom = "legacy";
+        await ctx.db.patch(pending._id, {
+          claimedAt: Date.now(),
+          claimedBy: identity.subject,
+        });
+      }
+    }
+
+    await ctx.db.insert("identities", {
+      subject: identity.subject,
+      tenantId,
+      email: email || undefined,
+      linkedAt: Date.now(),
+      linkedFrom,
     });
 
-    return null;
+    return {
+      tenantId,
+      subject: identity.subject,
+      email: identity.email ?? null,
+      name: identity.name ?? null,
+      linkedLegacy: linkedFrom === "legacy",
+    };
   },
 });
 
-// ─── Revoke other sessions (keep only the caller's) ──────────────────────────
+// ─── Enlace automático por cuenta de Google ──────────────────────────────────
+//
+// Los tenants heredados de Wix son, en su mayoría, IDs de cuenta de Google (el
+// login de la página anterior era "entrar con Google").  Si la misma persona entra
+// ahora con Google en Clerk, podemos reconocerla por ese mismo identificador y
+// devolverle sus datos SIN que nadie tenga que mapear correos a mano.
+//
+// El identificador NO puede venir del navegador — eso permitiría a cualquiera
+// reclamar el espacio de otro escribiendo su ID.  Se obtiene llamando a la API de
+// Clerk desde el servidor, usando el `subject` ya verificado del JWT.
 
-export const revokeOtherSessions = internalMutation({
+export const getLinkBySubject = internalQuery({
+  args: { subject: v.string() },
+  returns: v.union(v.null(), v.object({ tenantId: v.string(), linkedFrom: v.union(v.string(), v.null()) })),
+  handler: async (ctx, args) => {
+    const link = await ctx.db
+      .query("identities")
+      .withIndex("by_subject", (q: any) => q.eq("subject", args.subject))
+      .unique();
+    return link ? { tenantId: link.tenantId, linkedFrom: link.linkedFrom ?? null } : null;
+  },
+});
+
+/**
+ * Crea el enlace de una cuenta nueva, eligiendo tenant en este orden:
+ *   1. Un `candidateId` (ID de proveedor social) que ya sea dueño de proyectos.
+ *   2. Un mapeo manual por email en `legacy_links`.
+ *   3. Su propio subject de Clerk (usuario nuevo).
+ *
+ * Un tenant solo se puede reclamar UNA vez: si ya tiene fila en `identities`, se
+ * ignora.  Así dos personas no pueden acabar compartiendo los mismos datos.
+ */
+export const createLinkVerified = internalMutation({
   args: {
-    wixUserId: v.string(),
-    keepToken: v.string(),
+    subject: v.string(),
+    email: v.optional(v.string()),
+    candidateIds: v.array(v.string()),
   },
-  returns: v.number(),
+  returns: v.object({ tenantId: v.string(), linkedFrom: v.string() }),
   handler: async (ctx, args) => {
-    const sessions = await ctx.db
-      .query("sessions")
-      .withIndex("by_user", (q: any) => q.eq("wixUserId", args.wixUserId))
-      .collect();
-    let revoked = 0;
-    for (const s of sessions) {
-      if (s.sessionToken !== args.keepToken) {
-        await ctx.db.delete(s._id);
-        revoked++;
+    const existing = await ctx.db
+      .query("identities")
+      .withIndex("by_subject", (q: any) => q.eq("subject", args.subject))
+      .unique();
+    if (existing) {
+      return { tenantId: existing.tenantId, linkedFrom: existing.linkedFrom ?? "new" };
+    }
+
+    const email = (args.email || "").trim().toLowerCase();
+    let tenantId = args.subject;
+    let linkedFrom = "new";
+
+    // 1. ¿Alguno de sus IDs sociales es dueño de proyectos y está libre?
+    for (const candidate of args.candidateIds) {
+      if (!candidate || candidate === args.subject) continue;
+      const owned = await ctx.db
+        .query("projects")
+        .withIndex("by_wix_user", (q: any) => q.eq("wixUserId", candidate))
+        .first();
+      if (!owned) continue;
+      const taken = await ctx.db
+        .query("identities")
+        .withIndex("by_tenant", (q: any) => q.eq("tenantId", candidate))
+        .first();
+      if (taken) continue;   // ya lo reclamó otra cuenta
+      tenantId = candidate;
+      linkedFrom = "google";
+      break;
+    }
+
+    // 2. Mapeo manual por email (para tenants que no son IDs de Google).
+    if (linkedFrom === "new" && email) {
+      const pending = await ctx.db
+        .query("legacy_links")
+        .withIndex("by_email", (q: any) => q.eq("email", email))
+        .unique();
+      if (pending && !pending.claimedAt) {
+        tenantId = pending.tenantId;
+        linkedFrom = "legacy";
+        await ctx.db.patch(pending._id, { claimedAt: Date.now(), claimedBy: args.subject });
       }
     }
-    return revoked;
+
+    await ctx.db.insert("identities", {
+      subject: args.subject,
+      tenantId,
+      email: email || undefined,
+      linkedAt: Date.now(),
+      linkedFrom,
+    });
+    return { tenantId, linkedFrom };
   },
 });
 
-// ─── Public mutation: close all other sessions for this user ─────────────────
+/**
+ * Punto de entrada de la app.  Sustituye a `ensureIdentity` cuando hay
+ * CLERK_SECRET_KEY configurada, porque puede consultar las cuentas sociales.
+ */
+export const bootstrapIdentity = action({
+  args: {},
+  returns: v.object({
+    tenantId: v.string(),
+    subject: v.string(),
+    email: v.union(v.string(), v.null()),
+    name: v.union(v.string(), v.null()),
+    linkedLegacy: v.boolean(),
+  }),
+  handler: async (ctx): Promise<any> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthorized: no valid session. Sign in again.");
+    const subject = identity.subject;
+    const email = ((identity.email as string) || "").trim().toLowerCase();
+    const name = (identity.name as string) || null;
 
-export const closeOtherSessions = mutation({
-  args: { sessionToken: v.string() },
-  returns: v.number(),
-  handler: async (ctx, args) => {
-    const wixUserId = await requireAuth(ctx, args.sessionToken);
-    const sessions = await ctx.db
-      .query("sessions")
-      .withIndex("by_user", (q: any) => q.eq("wixUserId", wixUserId))
-      .collect();
-    let revoked = 0;
-    for (const s of sessions) {
-      if (s.sessionToken !== args.sessionToken) {
-        await ctx.db.delete(s._id);
-        revoked++;
-      }
+    const existing = await ctx.runQuery(internal.auth.getLinkBySubject, { subject });
+    if (existing) {
+      return {
+        tenantId: existing.tenantId,
+        subject,
+        email: (identity.email as string) ?? null,
+        name,
+        linkedLegacy: existing.linkedFrom === "legacy" || existing.linkedFrom === "google",
+      };
     }
-    return revoked;
+
+    // IDs de las cuentas sociales conectadas, obtenidos del servidor de Clerk.
+    const candidateIds: string[] = [];
+    const secret = process.env.CLERK_SECRET_KEY;
+    if (secret) {
+      try {
+        const res = await fetch("https://api.clerk.com/v1/users/" + encodeURIComponent(subject), {
+          headers: { Authorization: "Bearer " + secret },
+        });
+        if (res.ok) {
+          const user: any = await res.json();
+          for (const acc of user.external_accounts || []) {
+            const pid = acc.provider_user_id || acc.providerUserId;
+            if (pid) candidateIds.push(String(pid));
+          }
+        } else {
+          console.warn("EventOS auth: Clerk API respondió " + res.status + " al leer cuentas externas");
+        }
+      } catch (e) {
+        console.warn("EventOS auth: no se pudieron leer las cuentas externas de Clerk", e);
+      }
+    } else {
+      console.warn(
+        "EventOS auth: CLERK_SECRET_KEY no está configurada — el enlace automático " +
+          "de los clientes heredados de Google no puede funcionar.",
+      );
+    }
+
+    const created = await ctx.runMutation(internal.auth.createLinkVerified, {
+      subject,
+      email: email || undefined,
+      candidateIds,
+    });
+
+    return {
+      tenantId: created.tenantId,
+      subject,
+      email: (identity.email as string) ?? null,
+      name,
+      linkedLegacy: created.linkedFrom === "legacy" || created.linkedFrom === "google",
+    };
   },
 });
 
-// ─── Scheduled cleanup ────────────────────────────────────────────────────────
+/** Perfil del usuario actual, sin efectos secundarios. */
+export const me = query({
+  args: {},
+  returns: v.union(
+    v.null(),
+    v.object({
+      tenantId: v.string(),
+      subject: v.string(),
+      email: v.union(v.string(), v.null()),
+      name: v.union(v.string(), v.null()),
+    }),
+  ),
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+    const tenantId = await requireAuth(ctx);
+    return {
+      tenantId,
+      subject: identity.subject,
+      email: (identity.email as string) ?? null,
+      name: (identity.name as string) ?? null,
+    };
+  },
+});
+
+// ─── Limpieza de la tabla `sessions` deprecada ───────────────────────────────
+// Se conserva mientras queden filas del esquema anterior.  El cron la vacia sola;
+// cuando `sessions` este a cero se pueden borrar tabla, cron y esta funcion.
 
 export const cleanupExpiredSessions = internalMutation({
   args: {},
@@ -118,159 +349,3 @@ export const cleanupExpiredSessions = internalMutation({
     return null;
   },
 });
-
-// ─── Wix token verification ───────────────────────────────────────────────────
-
-/**
- * Decode the base64url-encoded payload of a JWT without verifying the signature.
- * Returns the parsed object or null on failure.
- */
-function decodeJwtPayload(token: string): any | null {
-  try {
-    const parts = token.split(".");
-    if (parts.length < 2) return null;
-    // base64url → base64
-    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const json = atob(base64);
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Verify the HMAC-SHA256 signature of a JWT using the Web Crypto API.
- * Returns true if signature is valid, false otherwise.
- */
-async function verifyJwtHmac(token: string, secret: string): Promise<boolean> {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return false;
-
-    const encoder = new TextEncoder();
-    const data = encoder.encode(parts[0] + "." + parts[1]);
-    const sigBase64 = parts[2].replace(/-/g, "+").replace(/_/g, "/");
-    const sig = Uint8Array.from(atob(sigBase64), (c) => c.charCodeAt(0));
-
-    const key = await crypto.subtle.importKey(
-      "raw",
-      encoder.encode(secret),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["verify"],
-    );
-
-    return await crypto.subtle.verify("HMAC", key, sig, data);
-  } catch {
-    return false;
-  }
-}
-
-// ─── Public action: exchange Wix token for session token ─────────────────────
-
-export const createSession = action({
-  args: {
-    wixToken: v.string(),
-    claimedUserId: v.string(),
-  },
-  returns: v.object({ token: v.string(), expiresAt: v.number() }),
-  handler: async (ctx, args) => {
-    const { wixToken, claimedUserId } = args;
-    const expiresAt = Date.now() + SESSION_TTL;
-
-    const allowUnsigned = process.env.ALLOW_UNSIGNED_JWT === "true";
-
-    // Dev bypass: "dev_user_local" requires explicit ALLOW_UNSIGNED_JWT flag,
-    // just like the empty-userId path below.  Never active in production.
-    if (claimedUserId === "dev_user_local") {
-      if (!allowUnsigned) {
-        throw new Error(
-          "Unauthorized: dev_user_local bypass is disabled. " +
-            "Set ALLOW_UNSIGNED_JWT=true in Convex environment variables for local development.",
-        );
-      }
-      const token = await _generateToken();
-      await ctx.runMutation(internal.auth._createSessionRecord, {
-        sessionToken: token,
-        wixUserId: "dev_user_local",
-        expiresAt,
-      });
-      return { token, expiresAt };
-    }
-    if (claimedUserId === "") {
-      if (!allowUnsigned) {
-        throw new Error("Unauthorized: dev bypass is disabled in production. Set ALLOW_UNSIGNED_JWT=true for development.");
-      }
-      const token = await _generateToken();
-      await ctx.runMutation(internal.auth._createSessionRecord, {
-        sessionToken: token,
-        wixUserId: "dev_user_local",
-        expiresAt,
-      });
-      return { token, expiresAt };
-    }
-
-    const appSecret = process.env.WIX_APP_SECRET;
-
-    // Extract user ID from a Wix JWT payload, checking all known field names
-    function extractWixUserId(payload: any): string {
-      return payload.uid || payload.sub || payload.memberId || payload.contactId || "";
-    }
-
-    if (appSecret) {
-      // Full HMAC-SHA256 verification
-      const valid = await verifyJwtHmac(wixToken, appSecret);
-      if (!valid) throw new Error("Unauthorized: invalid Wix token signature");
-
-      const payload = decodeJwtPayload(wixToken);
-      if (!payload) throw new Error("Unauthorized: malformed Wix token");
-
-      const tokenUserId = extractWixUserId(payload);
-      if (!tokenUserId || tokenUserId !== claimedUserId) {
-        console.error("EventOS auth: userId mismatch — extracted:", tokenUserId, "claimed:", claimedUserId);
-        throw new Error("Unauthorized: userId mismatch");
-      }
-    } else if (allowUnsigned) {
-      // Development mode: no secret configured → decode payload only
-      console.warn(
-        "EventOS: WIX_APP_SECRET is not set. Wix token signature is NOT verified. " +
-          "Set WIX_APP_SECRET in Convex environment variables for production.",
-      );
-
-      if (wixToken) {
-        const payload = decodeJwtPayload(wixToken);
-        if (payload) {
-          const tokenUserId = extractWixUserId(payload);
-          if (tokenUserId && tokenUserId !== claimedUserId) {
-            console.error("EventOS auth (unsigned): userId mismatch — extracted:", tokenUserId, "claimed:", claimedUserId);
-            throw new Error("Unauthorized: userId mismatch");
-          }
-        }
-      }
-    } else {
-      throw new Error(
-        "Unauthorized: WIX_APP_SECRET must be configured. " +
-          "Set it in Convex environment variables, or set ALLOW_UNSIGNED_JWT=true for development.",
-      );
-    }
-
-    const token = await _generateToken();
-    await ctx.runMutation(internal.auth._createSessionRecord, {
-      sessionToken: token,
-      wixUserId: claimedUserId,
-      expiresAt,
-    });
-
-    return { token, expiresAt };
-  },
-});
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-async function _generateToken(): Promise<string> {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}

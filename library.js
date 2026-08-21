@@ -1,4 +1,4 @@
-﻿
+
 var _libTab = 'vendors';
 var _mbOpenFolderId = null;
 var _libOpenVendorGroupId = null;
@@ -1084,15 +1084,47 @@ function libPreviewCSV(input){
     reader.readAsBinaryString(file);
   }
 }
+/**
+ * Tokenizador CSV conforme a RFC 4180.
+ *
+ * El parser anterior hacia split('\n') y luego una regex por linea, asi que:
+ *  - un campo entrecomillado con salto de linea partia la fila en dos;
+ *  - las comillas escapadas ("") quedaban a medias;
+ *  - con CRLF colaba un \r al final de cada ultimo campo.
+ * Devuelve un array de filas, cada una array de celdas.
+ */
+function parseCsvRows(text){
+  var rows=[], row=[], field='', inQuotes=false;
+  // Quita el BOM que Excel pone al inicio de los CSV que exporta.
+  if(text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  for(var i=0;i<text.length;i++){
+    var ch=text[i];
+    if(inQuotes){
+      if(ch === '"'){
+        if(text[i+1] === '"'){ field+='"'; i++; }   // comilla escapada
+        else inQuotes=false;
+      } else field+=ch;
+      continue;
+    }
+    if(ch === '"'){ inQuotes=true; continue; }
+    if(ch === ','){ row.push(field); field=''; continue; }
+    if(ch === '\r'){ if(text[i+1] === '\n') i++; rows.push(row.concat(field)); row=[]; field=''; continue; }
+    if(ch === '\n'){ rows.push(row.concat(field)); row=[]; field=''; continue; }
+    field+=ch;
+  }
+  if(field !== '' || row.length) rows.push(row.concat(field));
+  // Descarta filas totalmente vacias (linea final, separadores sueltos).
+  return rows.filter(function(r){ return r.some(function(c){ return String(c).trim() !== ''; }); });
+}
+
 function parseCsvToVendors(csvText){
-  var lines=csvText.trim().split('\n');
-  if(lines.length<2) return [];
-  var headers=lines[0].split(',').map(function(h){return h.replace(/"/g,'').trim().toLowerCase();});
+  var rows=parseCsvRows(String(csvText||''));
+  if(rows.length<2) return [];
+  var headers=rows[0].map(function(h){return String(h||'').trim().toLowerCase();});
   var validStatuses=['pending','hired','in-progress','paid','cancelled'];
   var results=[];
-  for(var i=1;i<lines.length;i++){
-    var cols=lines[i].match(/(".*?"|[^,]+|(?<=,)(?=,)|^(?=,))/g)||lines[i].split(',');
-    cols=cols.map(function(c){return (c||'').replace(/^"|"$/g,'').trim();});
+  for(var i=1;i<rows.length;i++){
+    var cols=rows[i].map(function(c){return String(c==null?'':c).trim();});
     var obj={};
     headers.forEach(function(h,idx){obj[h]=cols[idx]||'';});
     // Accept both old 'name' header and new 'vendor name' header
@@ -2103,16 +2135,25 @@ function libRenameEditingLayout(entryId){
   toast(LANG==='es'?'Plano actualizado':'Layout updated','s');
 }
 window.libRenameEditingLayout = libRenameEditingLayout;
+// NOTA: hoy ningun modal genera los inputs ely-*.  Si alguna vez se invoca sin ese
+// markup, la version anterior escribia '' en location/guests/notes y BORRABA esos
+// datos.  Ahora aborta en vez de destruir, y solo toca los campos que existen.
 function libSaveEditLayout(entryId){
-  var name=((document.getElementById('ely-name')||{}).value||'').trim();
+  var nameEl=document.getElementById('ely-name');
+  if(!nameEl){
+    console.warn('EventOS: libSaveEditLayout llamado sin el formulario ely-* en el DOM');
+    return toast(LANG==='es'?'Formulario no disponible':'Form not available','e');
+  }
+  var name=(nameEl.value||'').trim();
   if(!name) return toast(LANG==='es'?'El nombre es requerido':'Name is required','e');
   if(!libEnsureUniqueLayoutName(name, entryId)) return;
   var lib=getLib();
   var entry=lib.layouts.find(function(e){return e.id===entryId;}); if(!entry) return;
   entry.name=name;
-  entry.location=(document.getElementById('ely-location')||{}).value||'';
-  entry.guests=(document.getElementById('ely-guests')||{}).value||'';
-  entry.notes=(document.getElementById('ely-notes')||{}).value||'';
+  var setIf=function(id, key){ var el=document.getElementById(id); if(el) entry[key]=el.value||''; };
+  setIf('ely-location','location');
+  setIf('ely-guests','guests');
+  setIf('ely-notes','notes');
   entry.updatedAt=new Date().toISOString();
   saveLib(lib); closeMo(); renderLibrary();
   toast(LANG==='es'?'Plano actualizado':'Layout updated','s');
@@ -2601,7 +2642,7 @@ function libMoodboardUploadImages(id){
           // Show confirm modal with previews
           var thumbs=previews.map(function(src){
             return '<div style="aspect-ratio:1;border-radius:8px;overflow:hidden;background:#f0f0f0">'
-              +'<img src="'+src+'" style="width:100%;height:100%;object-fit:cover;display:block"></div>';
+              +'<img src="'+src+'" alt="'+esc(LANG==='es'?'Imagen':'Image')+'" style="width:100%;height:100%;object-fit:cover;display:block"></div>';
           }).join('');
           openMo('<div class="mo-title">'
             +'<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="margin-right:8px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
@@ -2781,7 +2822,7 @@ function renderLibMoodboards(lib){
         var spanClass = typeof mbSpanClass === 'function' ? mbSpanClass(i, images.length) : '';
         return '<div class="mb-card mb-bento-item '+spanClass+'" onclick="libMbLightbox(\''+_mbOpenFolderId+'\','+i+')">'
           +'<div class="media-zoom" style="position:relative;overflow:hidden;cursor:zoom-in;flex:1;min-height:0">'
-          +'<img src="'+src+'" class="media-zoom-img" style="width:100%;height:100%;object-fit:cover;display:block" draggable="false">'
+          +'<img src="'+src+'" class="media-zoom-img" alt="'+esc(LANG==='es'?'Imagen ampliada':'Zoomed image')+'" style="width:100%;height:100%;object-fit:cover;display:block" draggable="false">'
           +'<div class="media-zoom-overlay"></div>'
           +'<div class="mb-meta"><div class="mb-meta-title">'+esc(entry.name)+'</div><div class="mb-meta-sub">'+(isES?'Moodboard':'Moodboard')+'</div></div>'
           +'</div>'
@@ -3603,7 +3644,7 @@ function _libRenderLayoutWizard(){
         +zoomBar
         +'<div id="lwiz-fp-preview" onclick="_libWizPickPoint(event,this)" onwheel="_libWizWheelZoom(event)" style="position:relative;width:'+viewW+'px;height:'+viewH+'px;overflow:auto;cursor:crosshair;border:1px solid var(--border);border-radius:6px;user-select:none">'
         +'<div style="position:relative;width:'+dispW+'px;height:'+dispH+'px">'
-        +'<img src="'+wfp.img+'" style="display:block;width:'+dispW+'px;height:'+dispH+'px;pointer-events:none" draggable="false">'
+        +'<img src="'+wfp.img+'" alt="'+esc(LANG==='es'?'Plano del venue':'Venue floorplan')+'" style="display:block;width:'+dispW+'px;height:'+dispH+'px;pointer-events:none" draggable="false">'
         +'<svg style="position:absolute;top:0;left:0;pointer-events:none" width="'+dispW+'" height="'+dispH+'">'+svgOverlay+'</svg>'
         +'</div>'
         +'</div>'
@@ -3689,7 +3730,9 @@ function _libWizFloorplanUpload(input){
     img.onerror=function(){
       _libLayoutWiz.floorplanLoading=false;
       _libRenderLayoutWizard();
-      alert(LANG==='es'?'Error al cargar la imagen.':'Error loading image.');
+      // alert() nativo: dentro de un iframe sin allow-modals no se muestra nada y
+      // el usuario se queda sin saber que fallo.  toast() siempre es visible.
+      toast(LANG==='es'?'Error al cargar la imagen.':'Error loading image.','e');
     };
     img.src=origData;
   };
@@ -3718,7 +3761,7 @@ function _libWizApplyScale(){
   if(pts.length<2) return;
   var distEl=document.getElementById('lwiz-scale-dist');
   var meters=distEl?parseFloat(distEl.value):0;
-  if(!meters||meters<=0) return alert(LANG==='es'?'Ingresa una distancia válida en metros.':'Enter a valid distance in meters.');
+  if(!meters||meters<=0) return toast(LANG==='es'?'Ingresa una distancia válida en metros.':'Enter a valid distance in meters.','e');
   var wfp=_libLayoutWiz.floorplan;
   var PREV_MAX=460;
   var zoom=_libLayoutWiz.wizZoom||1;
@@ -3728,7 +3771,7 @@ function _libWizApplyScale(){
   var p0x=pts[0].rx*dispW, p0y=pts[0].ry*dispH;
   var p1x=pts[1].rx*dispW, p1y=pts[1].ry*dispH;
   var pxDist=Math.hypot(p1x-p0x,p1y-p0y);
-  if(pxDist<5) return alert(LANG==='es'?'Los puntos están muy cerca, elige puntos más separados.':'Points are too close, pick points further apart.');
+  if(pxDist<5) return toast(LANG==='es'?'Los puntos están muy cerca, elige puntos más separados.':'Points are too close, pick points further apart.','e');
   var naturalPxDist=pxDist/fitScale;
   var fpPPM=naturalPxDist/meters;
   var targetPPM=(typeof DEFAULT_PPM!=='undefined')?DEFAULT_PPM:40;

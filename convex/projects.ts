@@ -21,27 +21,46 @@ function validateProjectData(data: unknown): void {
 }
 
 /**
- * Strip HTML tags from string values in the project data.
- * Preserves values that look like base64 data or valid HTML-free text.
- * Only strips <script>, <iframe>, event handler attributes, and dangerous patterns.
+ * Limpia HTML peligroso de TODOS los strings alcanzables desde el blob del proyecto.
+ *
+ * Defensa en profundidad: el frontend escapa con esc() al renderizar, pero esto cubre
+ * los sitios que se olviden.  Respecto a la version anterior arregla dos huecos:
+ *  - los strings sueltos dentro de arrays no se saneaban (solo los objetos);
+ *  - los handlers on* SIN comillas pasaban intactos (`<img src=x onerror=alert(1)>`).
  */
-function sanitizeStrings(obj: Record<string, unknown>): void {
-  for (const key of Object.keys(obj)) {
-    const val = obj[key];
-    if (typeof val === "string") {
-      // Strip <script>, <iframe>, and on* event handlers from string values
-      obj[key] = val
-        .replace(/<script[\s>][\s\S]*?<\/script>/gi, "")
-        .replace(/<iframe[\s>][\s\S]*?<\/iframe>/gi, "")
-        .replace(/\bon\w+\s*=\s*["'][^"']*["']/gi, "");
-    } else if (Array.isArray(val)) {
-      for (const item of val) {
-        if (item && typeof item === "object") {
-          sanitizeStrings(item as Record<string, unknown>);
-        }
-      }
-    } else if (val && typeof val === "object") {
-      sanitizeStrings(val as Record<string, unknown>);
+const SCRIPT_RE = /<script[\s>][\s\S]*?<\/script>/gi;
+const IFRAME_RE = /<iframe[\s>][\s\S]*?<\/iframe>/gi;
+const ON_ATTR_QUOTED_RE = /\son\w+\s*=\s*(["'])[\s\S]*?\1/gi;
+const ON_ATTR_BARE_RE = /\son\w+\s*=\s*[^\s"'>]+/gi;
+const JS_URL_RE = /(href|src|xlink:href)\s*=\s*(["']?)\s*javascript:/gi;
+
+function sanitizeString(val: string): string {
+  // Las data: URLs (imagenes base64) se dejan intactas: los regex nunca aciertan ahi
+  // y recorrer cientos de KB por cada guardado es caro.
+  if (val.length > 256 && val.startsWith("data:")) return val;
+  return val
+    .replace(SCRIPT_RE, "")
+    .replace(IFRAME_RE, "")
+    .replace(ON_ATTR_QUOTED_RE, "")
+    .replace(ON_ATTR_BARE_RE, "")
+    .replace(JS_URL_RE, "$1=$2");
+}
+
+function sanitizeStrings(node: unknown): void {
+  if (Array.isArray(node)) {
+    for (let i = 0; i < node.length; i++) {
+      const item = node[i];
+      if (typeof item === "string") node[i] = sanitizeString(item);
+      else if (item && typeof item === "object") sanitizeStrings(item);
+    }
+    return;
+  }
+  if (node && typeof node === "object") {
+    const obj = node as Record<string, unknown>;
+    for (const key of Object.keys(obj)) {
+      const val = obj[key];
+      if (typeof val === "string") obj[key] = sanitizeString(val);
+      else if (val && typeof val === "object") sanitizeStrings(val);
     }
   }
 }
@@ -71,16 +90,20 @@ function checkDepthAndStrings(val: unknown, depth: number): void {
 }
 
 // Auth wrapper helpers — reduce boilerplate across handlers
+// `wixUserId` en estas firmas es el TENANT del usuario que llama.  El nombre es
+// historico (ver convex/auth.ts); ya no tiene nada que ver con Wix.
+// La identidad llega en la cabecera Authorization, no como argumento: por eso ya
+// no hay `sessionToken` en los args.
 function authedQuery<Args extends Record<string, any>, Returns>(config: {
   args: Args;
   returns: any;
   handler: (ctx: any, wixUserId: string, args: any) => Promise<Returns>;
 }) {
   return query({
-    args: { sessionToken: v.string(), ...config.args },
+    args: { ...config.args },
     returns: config.returns,
     handler: async (ctx: any, args: any) => {
-      const wixUserId = await requireAuth(ctx, args.sessionToken);
+      const wixUserId = await requireAuth(ctx);
       return config.handler(ctx, wixUserId, args);
     },
   });
@@ -92,10 +115,10 @@ function authedMutation<Args extends Record<string, any>, Returns>(config: {
   handler: (ctx: any, wixUserId: string, args: any) => Promise<Returns>;
 }) {
   return mutation({
-    args: { sessionToken: v.string(), ...config.args },
+    args: { ...config.args },
     returns: config.returns,
     handler: async (ctx: any, args: any) => {
-      const wixUserId = await requireAuth(ctx, args.sessionToken);
+      const wixUserId = await requireAuth(ctx);
       return config.handler(ctx, wixUserId, args);
     },
   });
@@ -206,6 +229,64 @@ export const upsertProject = authedMutation({
   },
 });
 
+// Recorre un blob de proyecto y junta todos los ids de Convex Storage a los que
+// apunta (imagenes de moodboard, recibos de pago, planos).  Generico a proposito:
+// cualquier campo con uno de estos nombres queda cubierto sin tocar esta funcion.
+const STORAGE_ID_KEYS = new Set(["storageId", "receiptStorageId", "_storageId"]);
+const MAX_FILES_PER_DELETE = 500;
+
+export function collectStorageIds(node: unknown, out: Set<string>, depth = 0): void {
+  if (depth > 20 || out.size >= 5000) return;
+  if (Array.isArray(node)) {
+    for (const item of node) collectStorageIds(item, out, depth + 1);
+    return;
+  }
+  if (node && typeof node === "object") {
+    const obj = node as Record<string, unknown>;
+    for (const key of Object.keys(obj)) {
+      const val = obj[key];
+      if (typeof val === "string" && STORAGE_ID_KEYS.has(key) && val) out.add(val);
+      else if (val && typeof val === "object") collectStorageIds(val, out, depth + 1);
+    }
+  }
+}
+
+/**
+ * Borra archivos + su registro de ownership.  Tolerante a ids ya inexistentes.
+ *
+ * `allowUnowned` solo se activa desde deleteProject, donde los ids salieron del
+ * propio documento del usuario y por tanto son demostrablemente suyos aunque sean
+ * legacy (subidos antes de que existiera file_ownership).  Desde una llamada
+ * publica NUNCA se permite: seria un IDOR para borrar archivos ajenos por id.
+ */
+async function deleteStorageIds(
+  ctx: any,
+  wixUserId: string,
+  ids: Set<string>,
+  allowUnowned = false,
+): Promise<number> {
+  let deleted = 0;
+  for (const id of ids) {
+    const ownership = await ctx.db
+      .query("file_ownership")
+      .withIndex("by_storage_id", (q: any) => q.eq("storageId", id))
+      .unique();
+    if (ownership) {
+      if (ownership.wixUserId !== wixUserId) continue;
+    } else if (!allowUnowned) {
+      continue;
+    }
+    try {
+      await ctx.storage.delete(id as any);
+      deleted++;
+    } catch (e) {
+      // El archivo ya no existe: no es motivo para abortar el borrado del proyecto.
+    }
+    if (ownership) await ctx.db.delete(ownership._id);
+  }
+  return deleted;
+}
+
 export const deleteProject = authedMutation({
   args: {
     projectId: v.string(),
@@ -219,11 +300,48 @@ export const deleteProject = authedMutation({
       )
       .unique();
 
-    if (existing) {
-      await ctx.db.delete(existing._id);
+    // El documento companion DEBE morir con el proyecto.  Si sobrevive y el usuario
+    // vuelve a crear un proyecto con el mismo id, _mergeProjectExtras le inyectaria
+    // los invitados y planos del proyecto borrado.
+    const extras = await ctx.db
+      .query("project_extras")
+      .withIndex("by_wix_user_project", (q: any) =>
+        q.eq("wixUserId", wixUserId).eq("projectId", args.projectId),
+      )
+      .unique();
+
+    // Archivos referenciados por el proyecto: sin esto quedan huerfanos para siempre.
+    const ids = new Set<string>();
+    if (existing) collectStorageIds(existing.data, ids);
+    if (extras) {
+      collectStorageIds(extras.guests, ids);
+      collectStorageIds(extras.vendors, ids);
+      collectStorageIds(extras.moodboard, ids);
+      collectStorageIds(extras.layouts, ids);
+      collectStorageIds(extras.savedLayouts, ids);
+      collectStorageIds(extras.layoutItems, ids);
+      collectStorageIds(extras.eventLayouts, ids);
     }
+    if (ids.size) await deleteStorageIds(ctx, wixUserId, ids, true);
+
+    if (extras) await ctx.db.delete(extras._id);
+    if (existing) await ctx.db.delete(existing._id);
 
     return null;
+  },
+});
+
+// Borra un conjunto explicito de archivos que el cliente acaba de quitar del
+// proyecto (por ejemplo, al eliminar una carpeta completa de moodboard).
+export const deleteFilesForProject = authedMutation({
+  args: {
+    storageIds: v.array(v.string()),
+  },
+  returns: v.number(),
+  handler: async (ctx, wixUserId, args) => {
+    const ids = new Set<string>(args.storageIds.filter(Boolean).slice(0, MAX_FILES_PER_DELETE));
+    if (!ids.size) return 0;
+    return await deleteStorageIds(ctx, wixUserId, ids);
   },
 });
 

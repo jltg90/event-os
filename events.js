@@ -1,4 +1,4 @@
-﻿// --- WIZARD STATE ---------------------------------------------------------
+// --- WIZARD STATE ---------------------------------------------------------
 var _wiz = null;
 document.addEventListener('keydown', function(e){
   if(!_wiz || e.key !== 'Enter' || e.shiftKey) return;
@@ -332,7 +332,7 @@ function _wizFinish() {
 
 async function saveEvent(id){
   const name=gv('e-name'),client=gv('e-client'),date=parseUserDate(gv('e-date'));
-  if(!name||!client||!date)return toast('Name, client and date required','e');
+  if(!name||!client||!date)return toast(LANG==='es'?'Nombre, cliente y fecha son requeridos':'Name, client and date required','e');
   if(+gv('e-budget') < 0) return toast(LANG==='es'?'El presupuesto no puede ser negativo':'Budget cannot be negative','e');
   var p=id?uproj()[id]:null;
   const data={name,clientName:client,date,description:gv('e-desc'),type:gv('e-type'),location:gv('e-location'),budget:+gv('e-budget')||0,status:gv('e-status')};
@@ -366,8 +366,8 @@ function renderEvents(){
   const esEl=document.getElementById('event-search');
   if(esEl) esEl.placeholder=LANG==='es'?'Buscar eventos...':'Search events...';
   const efFrom=document.getElementById('ef-from'); const efTo=document.getElementById('ef-to');
-  if(efFrom&&!efFrom.value&&_efFr){ efFrom.value=formatDMY(_efFr.toISOString().slice(0,10)); }
-  if(efTo&&!efTo.value&&_efTo){ efTo.value=formatDMY(_efTo.toISOString().slice(0,10)); }
+  if(efFrom&&!efFrom.value&&_efFr){ efFrom.value=formatDMY(toLocalYMD(_efFr)); }
+  if(efTo&&!efTo.value&&_efTo){ efTo.value=formatDMY(toLocalYMD(_efTo)); }
   const efBtn=document.getElementById('ef-alltime');
   if(efBtn) efBtn.classList.toggle('active',_efAt);
   const evGridBtn=document.getElementById('ev-view-grid');
@@ -391,7 +391,7 @@ function renderEvents(){
     const fFrom=_efFr||fp; const fTo=_efTo||ff;
     list=list.filter(p=>{
       if(!p.date)return false;
-      const d=new Date(p.date); d.setHours(0,0,0,0);
+      const d=startOfLocalDay(p.date); if(!d) return _efAt;
       return d>=fFrom&&d<=fTo;
     });
   }
@@ -826,7 +826,7 @@ async function dupProj(id){
   }
   const c=JSON.parse(JSON.stringify(p));c.id='p'+Date.now();c.name=p.name+' (Copy)';
   delete c._metaOnly;
-  saveProj(c);renderEvents();toast('Event duplicated','s');
+  saveProj(c);renderEvents();toast(LANG==='es'?'Evento duplicado':'Event duplicated','s');
 }
 
 function confirmDelProj(id){
@@ -959,7 +959,7 @@ function renderDash(){
   // Tasks
   var done=p.tasks.filter(function(tk){return tk.done;}).length;
   var tpct=p.tasks.length?Math.round(done/p.tasks.length*100):0;
-  var today=new Date().toISOString().slice(0,10);
+  var today=toLocalYMD(new Date());
   var overdue=p.tasks.filter(function(tk){return !tk.done&&tk.dueDate&&tk.dueDate<today;}).length;
   // Layout
   var litems=p.layoutItems||[];

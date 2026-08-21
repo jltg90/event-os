@@ -12,23 +12,23 @@
     "repo": "https://github.com/jltg90/event-os"
   },
   "modulos": {
-    "auth_login": "completado",
+    "auth_login": "en_progreso",
     "base_datos": "completado",
     "dashboard_admin": "no_aplica",
     "deploy_produccion": "completado",
     "notificaciones": "pendiente",
     "pagos": "pendiente",
     "reportes": "completado",
-    "responsive_movil": "pendiente",
+    "responsive_movil": "en_progreso",
     "roles_permisos": "pendiente",
-    "seguridad": "completado",
+    "seguridad": "en_progreso",
     "seo": "no_aplica",
     "testing": "pendiente",
     "ui_principal": "completado"
   },
   "publico_en_portafolio": true,
   "screenshot": "/screenshots/event-os.png",
-  "ultima_sesion": "2026-07-23",
-  "siguiente_paso": "Definir modelo de roles/permisos multiusuario y estrategia de monetización (pagos). Confirmar responsive móvil. Migrado a git + GitHub el 2026-07-23: código canónico vivía sin git en G:\\My Drive\\TopInfra\\26_EventOS\\Versions-v2\\260326-1 Codex, ahora también en C:\\dev\\event-os.",
-  "notas": "Frontend vanilla JS (sin framework), backend Convex (serverless DB + funciones TypeScript), 3D floor plan con Three.js r128, export a Excel (xlsx) y PDF. Auth vía Wix (user ID pasado desde el contexto de embedding). El producto vive embebido en topinfra.mx/event-os (Wix) — GitHub Pages (jltg90.github.io/event-os) sigue existiendo pero ya no es la URL pública oficial. Verificado 2026-07-23: contenido de Drive y del repo son idénticos (solo diferían en CRLF/LF) — el repo ya era un backup fiel, no se necesitó push de contenido nuevo. Se agregó .gitignore (node_modules, .env*, convex/_generated, credenciales) que antes no existía en el repo. La captura es la pantalla de acceso (login con Google) — la app requiere sesión real, no hay vista pública del dashboard interno (mismo patrón que reclutamiento-poc)."
+  "ultima_sesion": "2026-08-20",
+  "siguiente_paso": "MIGRACION WIX -> CLERK: el codigo ya esta migrado; faltan pasos de configuracion que solo puede hacer el dueno. Seguir MIGRACION-CLERK.md en la raiz del repo: (1) crear la plantilla JWT llamada exactamente \"convex\" en Clerk; (2) pegar clerkPublishableKey en app-config.js; (3) en Convex anadir CLERK_JWT_ISSUER_DOMAIN y BORRAR WIX_APP_SECRET y ALLOW_UNSIGNED_JWT; (4) npx convex dev --once para desplegar el backend; (5) correr admin:inventory y registrar con admin:linkLegacyEmail el correo de cada cliente existente para que herede su tenant (sin esto sus eventos quedan invisibles); (6) git push para desplegar el frontend en Vercel; (7) verificar con admin:listLinks. Tambien pendiente: actualizar urls.produccion con la URL real de Vercel, y confirmar que el Worker de IA acepta model=claude-opus-5 + output_config.",
+  "notas": "Frontend vanilla JS (sin framework), backend Convex (serverless DB + funciones TypeScript), 3D floor plan con Three.js r128, export a Excel (xlsx) y PDF. Auth vía Wix (user ID pasado desde el contexto de embedding). El producto vive embebido en topinfra.mx/event-os (Wix) — GitHub Pages (jltg90.github.io/event-os) sigue existiendo pero ya no es la URL pública oficial. Verificado 2026-07-23: contenido de Drive y del repo son idénticos (solo diferían en CRLF/LF) — el repo ya era un backup fiel, no se necesitó push de contenido nuevo. Se agregó .gitignore (node_modules, .env*, convex/_generated, credenciales) que antes no existía en el repo. La captura es la pantalla de acceso (login con Google) — la app requiere sesión real, no hay vista pública del dashboard interno (mismo patrón que reclutamiento-poc). | Auditoria 2026-08-20: se corrigieron 40 bugs (6 criticos de perdida de datos, 14 de funcionalidad/seguridad, 20 de calidad). Lo importante para futuras sesiones: el respaldo ya no exporta stubs vacios; el bloqueo optimista ya no se anula solo; deleteProject borra tambien project_extras y los archivos; las fechas civiles usan parseLocalDate/toLocalYMD (lang.js) y NUNCA new Date(fecha); el dinero se formatea solo con fmtMoney/formatCost; nada de alert/confirm nativos (iframe de Wix). No hay tests ni node_modules: el chequeo previo a desplegar esta documentado en CLAUDE.md. | 2026-08-20 (2a sesion) MIGRACION DE AUTENTICACION: la app dejo de estar embebida en Wix y ahora es una pagina propia en Vercel. Se elimino todo el apreton de manos por postMessage (WIX_USER/EVENTOS_READY), la verificacion HMAC del JWT de Wix y la tabla de sesiones propia. Entra Clerk via @clerk/clerk-js por CDN; el JWT viaja en la cabecera Authorization: Bearer y Convex lo valida contra convex/auth.config.ts. CLAVE PARA FUTURAS SESIONES: el campo wixUserId de las tablas ya NO significa \"usuario de Wix\", significa TENANT, y sale siempre de requireAuth(ctx). Los clientes heredados conservan sus datos gracias a las tablas identities (clerk subject -> tenant) y legacy_links (email -> tenant); NO se reescribio ningun documento. Se anadio vercel.json con cabeceras de cache (index.html sin cache, .js inmutables por el ?v=)."
 }

@@ -1,4 +1,4 @@
-﻿
+
 function fixMojibake(str){
   if(typeof str !== 'string') return str;
   var fixed = str;
@@ -22,7 +22,7 @@ function fixMojibake(str){
     'VariaciÃ³n':'Variación','UbicaciÃ³n':'Ubicación','CuadrÃ­cula':'Cuadrícula',
     'AnalÃ­tica':'Analítica','AÃ±o':'Año','PrÃ³ximos':'Próximos','mÃ¡s':'más',
     'aquÃ­':'aquí','PerÃ­odo':'Período','CategorÃ­as':'Categorías','LÃ­nea':'Línea',
-    'PresentaciÃ³n':'Presentación','Sesión':'Sesión'
+    'PresentaciÃ³n':'Presentación'
   };
   Object.keys(replacements).forEach(function(key){
     fixed = fixed.split(key).join(replacements[key]);
@@ -61,24 +61,50 @@ function repairMojibakeInDOM(root){
   }catch(e){}
 }
 var _mojibakeObserver = null;
+var _mojibakeCleanStreak = 0;
+// Tras esta racha de mutaciones sin encontrar nada corrupto, el observer se apaga.
+// Los literales del codigo fuente ya estan limpios; esto solo queda como red de
+// seguridad para datos antiguos guardados con la codificacion rota, y no tiene por
+// que seguir recorriendo el DOM durante toda la sesion.
+var _MOJIBAKE_MAX_CLEAN_STREAK = 400;
+
 function startMojibakeObserver(){
   try{
     if(_mojibakeObserver || typeof document === 'undefined' || !document.body || typeof MutationObserver === 'undefined') return;
     repairMojibakeInDOM(document.body);
     _mojibakeObserver = new MutationObserver(function(mutations){
       try{
+        var touched = false;
         mutations.forEach(function(mutation){
           mutation.addedNodes && mutation.addedNodes.forEach(function(node){
             if(node.nodeType === 3){
-              if(node.nodeValue && /[ÃÂâð]/.test(node.nodeValue)) node.nodeValue = fixMojibake(node.nodeValue);
+              if(node.nodeValue && /[ÃÂâð]/.test(node.nodeValue)){
+                node.nodeValue = fixMojibake(node.nodeValue);
+                touched = true;
+              }
               return;
             }
-            if(node.nodeType === 1) repairMojibakeInDOM(node);
+            if(node.nodeType !== 1) return;
+            // Un unico test sobre textContent evita montar un TreeWalker sobre cada
+            // subarbol insertado.  En vistas grandes (un plano con 200 mesas) esto
+            // era el coste real del parche.
+            var txt = node.textContent;
+            if(txt && /[ÃÂâð]/.test(txt)){
+              repairMojibakeInDOM(node);
+              touched = true;
+            }
           });
           if(mutation.type === 'characterData' && mutation.target && mutation.target.nodeValue && /[ÃÂâð]/.test(mutation.target.nodeValue)){
             mutation.target.nodeValue = fixMojibake(mutation.target.nodeValue);
+            touched = true;
           }
         });
+        if(touched){
+          _mojibakeCleanStreak = 0;
+        } else if(++_mojibakeCleanStreak >= _MOJIBAKE_MAX_CLEAN_STREAK){
+          _mojibakeObserver.disconnect();
+          _mojibakeObserver = null;
+        }
       }catch(e){}
     });
     _mojibakeObserver.observe(document.body, { childList:true, subtree:true, characterData:true });
@@ -192,6 +218,10 @@ function applyTranslations(){
   document.querySelectorAll('.umenu-item').forEach(el=>{
     if(el.dataset.i18n) el.textContent = t(el.dataset.i18n);
   });
+  // El atributo lang del documento estaba fijo en "en" aunque el idioma por defecto
+  // de la app es español: los lectores de pantalla leian el español con fonetica
+  // inglesa.  Se sincroniza con LANG en cada aplicacion de traducciones.
+  if(document.documentElement) document.documentElement.lang = LANG;
   const lb = document.getElementById('lang-btn');
   if(lb) lb.title = LANG==='en' ? 'Cambiar a Español' : 'Switch to English';
   const mlb = document.getElementById('mob-lang-label');
@@ -205,7 +235,9 @@ function applyTranslations(){
 
 
 var DB  = { cur: null, projects: {} };
-var WIX_USER = null;
+// Perfil del usuario firmado, tal y como lo devuelve Clerk + auth:ensureIdentity.
+// Sustituye al antiguo WIX_USER; se rellena en initApp().
+// (WIX_USER retirado en la migracion a Clerk: usar USER_PROFILE)
 
 // ── Centralized State ──────────────────────────────────────────────────────
 // AppState wraps existing globals into a single observable object.
@@ -266,8 +298,38 @@ function _fileUrlCacheSet(id, url){
 }
 var _loadedProjects = {}; // { userId: Set<projectId> } — tracks which projects have full data loaded
 
+// Los archivos subidos antes de que existiera la tabla file_ownership no tienen dueno
+// registrado.  El backend ya no los sirve por defecto (antes "sin registro" = permitido,
+// lo que dejaba leer y borrar archivos ajenos), asi que hay que reclamarlos: el servidor
+// solo concede la propiedad si el id aparece en los documentos del propio usuario.
+var _claimedLegacyFiles = false;
+async function _claimLegacyFileOwnership(ids){
+  if(_claimedLegacyFiles || !ids || !ids.length) return;
+  if(!EVENTOS_DATA || !EVENTOS_DATA.claimFileOwnership) return;
+  _claimedLegacyFiles = true;   // un intento por sesion: es una migracion, no un bucle
+  try{
+    var n = await EVENTOS_DATA.claimFileOwnership(ids);
+    if(n) console.info('EventOS: reclamados', n, 'archivo(s) heredados');
+  }catch(e){ console.warn('EventOS: claimFileOwnership failed', e); }
+}
+
+// Pide las URLs y, si alguna vuelve null porque el archivo no tiene dueno registrado,
+// reclama la propiedad y reintenta una sola vez.
+async function _getFileUrlsWithClaim(ids){
+  var urls = await EVENTOS_DATA.getFileUrls(ids);
+  var missing = [];
+  ids.forEach(function(id, i){ if(!urls[i]) missing.push(id); });
+  if(missing.length && !_claimedLegacyFiles){
+    await _claimLegacyFileOwnership(missing);
+    urls = await EVENTOS_DATA.getFileUrls(ids);
+  }
+  return urls;
+}
+
 function hasRequiredConfig(){
-  return !!(EVENTOS_DATA && EVENTOS_DATA.isConfigured && EVENTOS_DATA.isConfigured() && AI_PROXY_URL);
+  // El proxy de IA ya NO es requisito: es una funcion opcional y su ausencia
+  // impedia arrancar la app entera.  Lo imprescindible es la URL de Convex.
+  return !!(EVENTOS_DATA && EVENTOS_DATA.isConfigured && EVENTOS_DATA.isConfigured());
 }
 
 function getConfigErrorMessage(){
@@ -296,23 +358,104 @@ function _projectToMetaStub(p){
   };
 }
 
-function cacheDB(){
-  try{
-    if(!DB.cur) return;
-    var projects = DB.projects[DB.cur] || {};
-    var toCache = {};
-    Object.keys(projects).forEach(function(pid){
-      var p = projects[pid];
-      // Keep __library__ fully cached (templates, not large user data)
-      toCache[pid] = (pid === '__library__') ? p : _projectToMetaStub(p);
-    });
-    localStorage.setItem('eventos_cache_'+DB.cur, JSON.stringify(toCache));
-  }catch(e){ console.warn('EventOS: saveCache failed', e); }
+// Presupuesto de espacio para los proyectos que se cachean COMPLETOS.
+// Antes el cache guardaba solo stubs de metadata, asi que sin conexion la lista de
+// eventos se veia pero abrir cualquiera fallaba con "err_network": el modo offline
+// existia en la UI pero no en los datos.  Ahora se guardan enteros el proyecto
+// abierto y los ultimos usados, hasta agotar el presupuesto.
+var _CACHE_FULL_BUDGET_BYTES = 3 * 1024 * 1024;
+var _CACHE_MAX_FULL_PROJECTS = 5;
+var _recentProjectIds = [];   // ids abiertos recientemente, mas reciente primero
+
+function _touchRecentProject(pid){
+  if(!pid || pid === '__lib_layout__') return;
+  var i = _recentProjectIds.indexOf(pid);
+  if(i > -1) _recentProjectIds.splice(i, 1);
+  _recentProjectIds.unshift(pid);
+  if(_recentProjectIds.length > 20) _recentProjectIds.length = 20;
 }
+
+// cacheDB serializa proyectos completos, asi que puede costar varios MB.  saveProj()
+// la llama en CADA edicion; sin este throttle el tipeo en un proyecto grande se nota.
+var _cacheTimer = null;
+function cacheDB(){
+  if(_cacheTimer) return;
+  _cacheTimer = setTimeout(function(){ _cacheTimer = null; _cacheDBNow(); }, 1500);
+}
+function cacheDBNow(){
+  if(_cacheTimer){ clearTimeout(_cacheTimer); _cacheTimer = null; }
+  _cacheDBNow();
+}
+function _cacheDBNow(){
+  if(!DB.cur) return;
+  var projects = DB.projects[DB.cur] || {};
+  var key = 'eventos_cache_'+DB.cur;
+
+  // Orden de prioridad para guardar completo: biblioteca, proyecto abierto, recientes.
+  var priority = ['__library__'];
+  if(CID) priority.push(CID);
+  _recentProjectIds.forEach(function(pid){ if(priority.indexOf(pid) === -1) priority.push(pid); });
+
+  function build(maxFull, budget){
+    var toCache = {};
+    var used = 0, fullCount = 0;
+    priority.forEach(function(pid){
+      var p = projects[pid];
+      if(!p || p._metaOnly) return;
+      if(fullCount >= maxFull) return;
+      // Copia sin banderas transitorias: si _pendingSave viajara al cache, al
+      // restaurarlo la app creeria que hay cambios sin guardar y bloquearia para
+      // siempre la sincronizacion desde el servidor.
+      var copy;
+      var s;
+      try{
+        copy = JSON.parse(JSON.stringify(p));
+        delete copy._pendingSave; delete copy._migrating; delete copy._fromCache;
+        s = JSON.stringify(copy);
+      }catch(e){ return; }
+      if(used + s.length > budget) return;
+      used += s.length;
+      fullCount++;
+      toCache[pid] = copy;
+    });
+    Object.keys(projects).forEach(function(pid){
+      if(toCache[pid]) return;
+      toCache[pid] = _projectToMetaStub(projects[pid]);
+    });
+    return toCache;
+  }
+
+  // Degradacion progresiva ante QuotaExceededError: menos proyectos completos,
+  // y en el peor caso solo stubs (el comportamiento anterior).
+  var plans = [
+    [_CACHE_MAX_FULL_PROJECTS, _CACHE_FULL_BUDGET_BYTES],
+    [2, Math.floor(_CACHE_FULL_BUDGET_BYTES / 2)],
+    [1, Math.floor(_CACHE_FULL_BUDGET_BYTES / 4)],
+    [0, 0]
+  ];
+  for(var i = 0; i < plans.length; i++){
+    try{
+      localStorage.setItem(key, JSON.stringify(build(plans[i][0], plans[i][1])));
+      return;
+    }catch(e){
+      if(i === plans.length - 1) console.warn('EventOS: saveCache failed', e);
+    }
+  }
+}
+
 function loadCache(userId){
   try{
     var s = localStorage.getItem('eventos_cache_'+userId);
-    if(s){ DB.projects[userId] = JSON.parse(s); return true; }
+    if(!s) return false;
+    var parsed = JSON.parse(s);
+    // Marca lo que viene del cache: la carga de fondo debe poder pisarlo con la
+    // version del servidor, cosa que no ocurriria si pareciera un proyecto ya
+    // completo y fresco en memoria.
+    Object.keys(parsed).forEach(function(pid){
+      if(parsed[pid] && !parsed[pid]._metaOnly) parsed[pid]._fromCache = true;
+    });
+    DB.projects[userId] = parsed;
+    return true;
   }catch(e){ console.warn('EventOS: loadCache failed', e); }
   return false;
 }
@@ -346,7 +489,7 @@ async function resolveStorageUrls(p){
   var unique = []; var seen = {};
   ids.forEach(function(id){ if(!seen[id]){ seen[id]=true; unique.push(id); } });
   try{
-    var urls = await EVENTOS_DATA.getFileUrls(unique);
+    var urls = await _getFileUrlsWithClaim(unique);
     unique.forEach(function(id, i){ if(urls[i]) _fileUrlCacheSet(id, urls[i]); });
   }catch(e){ console.error('resolveStorageUrls:', e); return; }
   // Populate src fields from cache
@@ -394,7 +537,7 @@ async function resolveAllProjectUrls(userId){
   var unique = []; var seen = {};
   allIds.forEach(function(id){ if(!seen[id]){ seen[id]=true; unique.push(id); } });
   try{
-    var urls = await EVENTOS_DATA.getFileUrls(unique);
+    var urls = await _getFileUrlsWithClaim(unique);
     unique.forEach(function(id, i){ if(urls[i]) _fileUrlCacheSet(id, urls[i]); });
   }catch(e){ console.error('resolveAllProjectUrls:', e); return; }
   // Populate all projects
@@ -422,7 +565,18 @@ async function resolveAllProjectUrls(userId){
 
 // Lazy migration: upload base64 images to Convex file storage in the background
 async function migrateBase64Images(p){
+  // El guard _migrating existia pero NUNCA se asignaba, asi que dos pasadas
+  // concurrentes podian subir la misma imagen dos veces.
   if(!p || typeof p !== 'object' || p._migrating) return;
+  p._migrating = true;
+  try{
+    return await _migrateBase64ImagesInner(p);
+  } finally {
+    delete p._migrating;
+  }
+}
+
+async function _migrateBase64ImagesInner(p){
   var dirty = false;
   var isBase64 = EVENTOS_DATA.isBase64Image;
 
@@ -598,7 +752,11 @@ async function _loadFullProjectsBackground(userId){
         // by cacheDB(), so without this exception it would never pick up server changes.
         // Respect _pendingSave to avoid clobbering unsaved local edits.
         var forceSync = (pid === '__library__' && !(inMem && inMem._pendingSave));
-        if(!inMem || inMem._metaOnly || forceSync) DB.projects[userId][pid] = projects[pid];
+        // _fromCache: copia restaurada de localStorage.  Es util offline pero puede
+        // estar obsoleta, asi que la version del servidor manda (salvo que haya
+        // ediciones locales sin guardar).
+        var staleCache = !!(inMem && inMem._fromCache && !inMem._pendingSave);
+        if(!inMem || inMem._metaOnly || staleCache || forceSync) DB.projects[userId][pid] = projects[pid];
       });
       if(DB.projects[userId]['__library__']) DB.projects[userId]['__library__']._seeded = true;
       if(!_loadedProjects[userId]) _loadedProjects[userId] = new Set();
@@ -649,6 +807,56 @@ async function _mergeProjectExtras(projectId, p){
     // Restore it so the next save re-attempts the companion (extras) write.
     try{ if(localStorage.getItem('eventos_extras_pending_'+String(projectId))) p._extrasPending = true; }catch(e){}
   }catch(e){ console.error('EventOS: _mergeProjectExtras:', e); }
+}
+
+/**
+ * Garantiza que TODOS los proyectos del usuario esten completos en memoria.
+ *
+ * Analytics y el dashboard suman invitados, proveedores y tareas leyendo los
+ * proyectos en memoria.  Los stubs (_metaOnly) y los proyectos grandes (_hasExtras
+ * sin extras cargados) tienen esos arrays vacios, asi que los KPIs salian en CERO
+ * justo para los eventos mas grandes.  Devuelve true si cargo algo (hay que
+ * re-renderizar).
+ */
+var _ensureExtrasInFlight = null;
+async function _ensureAllProjectsComplete(){
+  if(_ensureExtrasInFlight) return _ensureExtrasInFlight;
+  _ensureExtrasInFlight = (async function(){
+    try{
+      var projects = DB.projects[DB.cur];
+      if(!projects) return false;
+      var ids = Object.keys(projects).filter(function(pid){
+        if(pid === '__lib_layout__') return false;
+        var p = projects[pid];
+        if(!p) return false;
+        return p._metaOnly || (p._hasExtras && !p._extrasLoaded);
+      });
+      if(!ids.length) return false;
+      setSyncStatus('syncing');
+      for(var i = 0; i < ids.length; i++){
+        var pid = ids[i];
+        var p = projects[pid];
+        if(!p) continue;
+        if(p._metaOnly){
+          await loadProjectById(pid);
+          p = DB.projects[DB.cur] && DB.projects[DB.cur][pid];
+        }
+        if(p && p._hasExtras && !p._extrasLoaded){
+          await _mergeProjectExtras(pid, p);
+        }
+      }
+      cacheDB();
+      setSyncStatus('ok');
+      return true;
+    }catch(e){
+      console.error('EventOS: _ensureAllProjectsComplete:', e);
+      setSyncStatus('ok');
+      return false;
+    }finally{
+      _ensureExtrasInFlight = null;
+    }
+  })();
+  return _ensureExtrasInFlight;
 }
 
 async function loadProjectById(projectId){
@@ -730,6 +938,7 @@ async function _executeSave(p){
       await EVENTOS_DATA.upsertProject(p);
       _lastSyncTime = Date.now();
       delete p._pendingSave;
+      _clearPersistedPending(p.id);
       // Clear the optimistic-lock version after a successful save.  The server's
       // updatedAt just changed but we don't know the new value, so delete it to
       // avoid sending a stale version on the next save.  manualSync will re-stamp
@@ -756,17 +965,15 @@ async function _executeSave(p){
         return;
       }
       if(e && e.message && e.message.indexOf('__conflict__') !== -1){
-        console.warn('EventOS: save conflict for project', p.id, '— retrying');
-        // Clear stale version so the retry skips the server-side optimistic lock check
-        delete p._expectedVersion;
-        if(attempt < maxRetries){
-          await new Promise(function(r){ setTimeout(r, 1500); });
-          continue;
-        }
-        _showConflictModal(p);
-        delete p._pendingSave;
-        setSyncStatus('ok');
+        // NO reintentar borrando _expectedVersion: eso saltaba el bloqueo optimista del
+        // servidor y sobrescribia en silencio los cambios del otro dispositivo.  El
+        // conflicto es una decision del usuario, no algo que se resuelva reintentando.
+        console.warn('EventOS: save conflict for project', p.id, '— asking the user');
+        // _pendingSave se conserva a proposito: los cambios locales siguen sin guardar
+        // hasta que el usuario elija.  Eso evita que la reconciliacion los borre.
+        setSyncStatus('error');
         _saveInFlight = false;
+        _showConflictModal(p);
         _drainSaves();
         return;
       }
@@ -795,6 +1002,94 @@ function flushSave(){
   _drainSaves();
 }
 
+// ── Red de seguridad para el cierre de pagina ──────────────────────────────
+// Un fetch normal se cancela cuando el navegador descarga la pagina, asi que
+// llamar a flushSave() en beforeunload NO garantizaba nada.  Ahora hay dos capas:
+//   1. `keepalive: true` para cuerpos pequenos (<60 KB), que el navegador termina
+//      de enviar aunque la pagina muera.
+//   2. Una copia en localStorage de todo lo pendiente, que se reintenta al volver
+//      a abrir la app.  Esta capa cubre los proyectos grandes, donde keepalive no
+//      aplica por el limite de tamano.
+function _pendingKey(userId){ return 'eventos_pending_' + (userId || 'local'); }
+
+var _PENDING_MAX_BYTES = 3 * 1024 * 1024;
+
+function _persistPendingSaves(){
+  try{
+    if(!DB.cur) return;
+    var ids = Object.keys(_pendingSaves);
+    if(!ids.length) return;
+    var bag = {};
+    var total = 0;
+    for(var i = 0; i < ids.length; i++){
+      var p = _pendingSaves[ids[i]];
+      if(!p || p._metaOnly || p.id === '__lib_layout__') continue;
+      var s = JSON.stringify(p);
+      if(total + s.length > _PENDING_MAX_BYTES){
+        console.warn('EventOS: pending-save backup truncated at', ids[i]);
+        break;
+      }
+      total += s.length;
+      bag[ids[i]] = p;
+    }
+    if(Object.keys(bag).length) localStorage.setItem(_pendingKey(DB.cur), JSON.stringify(bag));
+  }catch(e){ console.warn('EventOS: could not persist pending saves', e); }
+}
+
+function _clearPersistedPending(projectId){
+  try{
+    if(!DB.cur) return;
+    var raw = localStorage.getItem(_pendingKey(DB.cur));
+    if(!raw) return;
+    var bag = JSON.parse(raw);
+    if(!bag || !(projectId in bag)) return;
+    delete bag[projectId];
+    if(Object.keys(bag).length) localStorage.setItem(_pendingKey(DB.cur), JSON.stringify(bag));
+    else localStorage.removeItem(_pendingKey(DB.cur));
+  }catch(e){}
+}
+
+// Reintenta los guardados que quedaron a medias en una sesion anterior.
+async function _recoverPendingSaves(userId){
+  var bag = null;
+  try{
+    var raw = localStorage.getItem(_pendingKey(userId));
+    if(!raw) return;
+    bag = JSON.parse(raw);
+  }catch(e){ return; }
+  if(!bag) return;
+  var ids = Object.keys(bag);
+  if(!ids.length){ try{ localStorage.removeItem(_pendingKey(userId)); }catch(e){} return; }
+  console.info('EventOS: recovering', ids.length, 'unsaved project(s) from the previous session');
+  if(!DB.projects[userId]) DB.projects[userId] = {};
+  ids.forEach(function(pid){
+    var p = bag[pid];
+    if(!p || !p.id) return;
+    // La copia local gana sobre lo que haya en el servidor: son ediciones que el
+    // usuario hizo y que nunca llegaron a guardarse.
+    delete p._expectedVersion;
+    DB.projects[userId][p.id] = p;
+    saveProj(p);
+  });
+  flushSave();
+}
+
+// Guardado de emergencia: se dispara en pagehide / visibilitychange(hidden).
+function _flushOnUnload(){
+  cacheDBNow();          // el throttle no debe comerse la ultima escritura
+  _persistPendingSaves();
+  var ids = Object.keys(_pendingSaves);
+  for(var i = 0; i < ids.length; i++){
+    var p = _pendingSaves[ids[i]];
+    if(!p || p._metaOnly || p.id === '__lib_layout__') continue;
+    try{
+      // Sin await: la pagina se esta yendo.  keepalive hace el trabajo cuando cabe.
+      EVENTOS_DATA.upsertProject(p, { keepalive: true }).then(function(){}, function(){});
+    }catch(e){}
+  }
+  flushSave();
+}
+
 // Show a locked modal when a save conflict is detected (account open on another device).
 // The user MUST pick an option — clicking outside or pressing Escape won't dismiss it.
 function _showConflictModal(conflictedProject){
@@ -805,34 +1100,67 @@ function _showConflictModal(conflictedProject){
     + esc(t('conflict_message'))
     + '</div>'
     + '<div class="mo-foot">'
-    + '<button class="btn btn-ghost" id="_conflict-dismiss-btn">' + esc(t('conflict_dismiss')) + '</button>'
-    + '<button class="btn btn-primary" id="_conflict-close-sessions-btn">' + esc(t('conflict_close_sessions')) + '</button>'
+    + '<button class="btn btn-ghost" id="_conflict-dismiss-btn">' + esc(t('conflict_discard')) + '</button>'
+    + '<button class="btn btn-primary" id="_conflict-overwrite-btn">' + esc(t('conflict_overwrite')) + '</button>'
     + '</div>'
   );
   // Lock the modal so only the explicit buttons can close it
   if(typeof _moLocked !== 'undefined') _moLocked = true;
 
+  // "Descartar mis cambios": trae la version del servidor y tira la copia local.
+  // Antes este boton solo cerraba el modal y dejaba el proyecto marcado como limpio
+  // sin haberlo guardado — es decir, perdia los cambios en silencio.
   var dismissBtn = document.getElementById('_conflict-dismiss-btn');
-  if(dismissBtn) dismissBtn.onclick = function(){ closeMo(); };
+  if(dismissBtn) dismissBtn.onclick = async function(){
+    dismissBtn.disabled = true;
+    var btnB = document.getElementById('_conflict-overwrite-btn');
+    if(btnB) btnB.disabled = true;
+    dismissBtn.textContent = LANG==='es' ? 'Recargando...' : 'Reloading...';
+    var pid = (conflictedProject && conflictedProject.id) || CID;
+    if(typeof _moLocked !== 'undefined') _moLocked = false;
+    closeMo();
+    if(pid){
+      delete _pendingSaves[pid];
+      var fresh = await loadProjectById(pid);
+      if(fresh){
+        toast(t('conflict_discarded'), 's');
+        if(CID === pid && typeof renderPNav === 'function'){
+          // Se re-pinta la pestana activa directamente en vez de con switchTab(),
+          // que ademas dispara el aviso de "cambios sin guardar" del editor de planos
+          // y abriria otro modal encima de este.
+          renderPNav();
+          var renderers = {
+            dashboard: typeof renderDash==='function'?renderDash:null,
+            budget: typeof renderBudget==='function'?renderBudget:null,
+            timeline: typeof renderTimeline==='function'?renderTimeline:null,
+            guests: typeof renderGuests==='function'?renderGuests:null,
+            layout: typeof renderLayout==='function'?renderLayout:null,
+            moodboard: typeof renderMoodboard==='function'?renderMoodboard:null
+          };
+          if(typeof clearLayoutDirty === 'function') clearLayoutDirty();
+          var fn = renderers[CTAB];
+          if(fn) fn();
+        }
+        else renderEvents();
+      } else {
+        toast(t('err_network'), 'e');
+      }
+    }
+    setSyncStatus('ok');
+  };
 
-  var btn = document.getElementById('_conflict-close-sessions-btn');
-  if(btn) btn.onclick = async function(){
+  // "Sobrescribir con mis cambios".  El boton anterior era "cerrar las otras
+  // sesiones", que dependia de la tabla `sessions` propia; con Clerk las sesiones
+  // ya no son nuestras, asi que la accion util es simplemente ganar el conflicto.
+  var btn = document.getElementById('_conflict-overwrite-btn');
+  if(btn) btn.onclick = function(){
     btn.disabled = true;
     if(dismissBtn) dismissBtn.disabled = true;
-    btn.textContent = LANG==='es' ? 'Cerrando sesiones...' : 'Closing sessions...';
-    try{
-      await EVENTOS_DATA.closeOtherSessions();
-      toast(t('conflict_sessions_closed'), 's');
-    }catch(e){
-      console.warn('closeOtherSessions failed (non-critical):', e);
-      // Even if the API call fails (e.g. no other sessions exist), proceed with
-      // the save retry — the user chose to continue on this device.
-    }
-    // Clear the stale optimistic-lock version so the retry doesn't hit __conflict__ again.
-    // We're taking ownership of this project, so it's safe to overwrite unconditionally.
-    // Retry the project that actually conflicted (may be a background save, not the open one).
+    // El usuario eligio explicitamente sobrescribir: solo aqui es legitimo quitar
+    // el bloqueo optimista.
     var p = conflictedProject || proj();
     if(p) delete p._expectedVersion;
+    if(typeof _moLocked !== 'undefined') _moLocked = false;
     closeMo();
     if(p) saveProj(p);
   };
@@ -848,7 +1176,14 @@ async function delProj(id){
   // Clear any queued save for this project to avoid orphaned writes
   delete _pendingSaves[id];
   if(DB.projects[DB.cur]) delete DB.projects[DB.cur][id];
-  cacheDB();
+  var i = _recentProjectIds.indexOf(id);
+  if(i > -1) _recentProjectIds.splice(i, 1);
+  // Escritura inmediata (sin throttle): si el usuario recarga justo despues, el
+  // proyecto borrado no debe reaparecer desde el cache.
+  cacheDBNow();
+  // Tambien hay que limpiar la copia de recuperacion y la bandera de extras.
+  _clearPersistedPending(id);
+  try{ localStorage.removeItem('eventos_extras_pending_'+String(id)); }catch(e){}
   try{
     await EVENTOS_DATA.deleteProject(id);
   }catch(e){ console.error('delProj:', e); }
@@ -977,7 +1312,7 @@ function _checkForNewVersion(){
     var m = txt.match(/buildVersion\s*:\s*['"]([^'"]+)['"]/);
     if(m && m[1] && m[1] !== myVersion){
       _versionBannerShown = true;
-      toast('A new version of EventOS is available. Please refresh your browser.', 'e');
+      toast(LANG==='es'?'Hay una nueva versión de EventOS. Recarga la página.':'A new version of EventOS is available. Please refresh your browser.', 'e');
     }
   }).catch(function(){});
 }
@@ -992,122 +1327,192 @@ function startSyncPoll(){
   }, 300000); // 5 minutes
 }
 
-// Allowed parent origins for postMessage — Wix editor, published sites, and infra domains
-function _isAllowedOrigin(origin){
-  if(!origin) return false;
-  // Wix infrastructure uses many subdomains — allow all known Wix-owned domains
-  if(/^https:\/\/[a-z0-9\-\.]+\.(wix\.com|wixsite\.com|editorx\.com|parastorage\.com|wix-code\.com|wixapps\.net)$/.test(origin)) return true;
-  // Allow localhost / file:// for local development
-  if(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
-  if(origin === 'null' || origin === 'file://') return true;
-  return false;
+// Borra todo el estado ligado al usuario actual.  Se usa al cambiar de cuenta y al
+// cerrar sesion: cualquier resto (proyectos en memoria, cola de guardado, URLs de
+// archivos cacheadas) pertenece a la cuenta anterior y no debe cruzarse con la nueva.
+function _resetUserState(){
+  if(_syncPollTimer){ clearInterval(_syncPollTimer); _syncPollTimer = null; }
+  if(_cacheTimer){ clearTimeout(_cacheTimer); _cacheTimer = null; }
+  clearTimeout(_saveTimer); _saveTimer = null;
+  _pendingSaves = {};
+  _saveInFlight = false;
+  _recentProjectIds = [];
+  DB.projects = {};
+  DB.cur = null;
+  _loadedProjects = {};
+  _fileUrlCache = {};
+  _fileUrlCacheKeys = [];
+  _claimedLegacyFiles = false;   // la reclamacion de archivos es por usuario
+  _lastSyncTime = null;
+  _syncCycleCount = 0;
+  _appInitialized = false;
+  CID = null;
+  CTAB = 'dashboard';
+  _clearTitleUnsaved();
 }
-window.addEventListener('message', function(event){
-  if(!event.data || event.data.type !== 'WIX_USER') return;
-  // Log origin for debugging — helps identify new Wix domains that need allowlisting
-  if(!_isAllowedOrigin(event.origin)){
-    console.warn('EventOS: postMessage from unrecognized origin:', event.origin, '— allowing (identity verified server-side via JWT)');
+
+// ─── Arranque con Clerk ──────────────────────────────────────────────────────
+//
+// Antes: la app vivia embebida en una pagina de Wix que le mandaba la identidad
+// por postMessage (`WIX_USER`), y este archivo tenia una lista de origenes de
+// confianza para filtrar ese mensaje.
+//
+// Ahora EventOS es una pagina propia: no hay ventana padre ni apreton de manos.
+// Clerk resuelve la sesion en el navegador, y el "tenant" (la llave con la que
+// se particionan los datos) lo devuelve el servidor en auth:ensureIdentity —
+// asi un cliente que venia de Wix sigue viendo sus mismos proyectos.
+
+function _isLocalHost(){
+  try{
+    return location.protocol === 'file:' ||
+      /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  }catch(e){ return false; }
+}
+
+var USER_PROFILE = null;   // { tenantId, subject, email, name, linkedLegacy }
+
+function _showSignIn(message){
+  var load = document.getElementById('pg-loading');
+  var app  = document.getElementById('pg-app');
+  var signin = document.getElementById('pg-signin');
+  if(load) load.style.display = 'none';
+  if(app) app.classList.add('hidden');
+  if(signin) signin.style.display = 'flex';
+  var err = document.getElementById('signin-error');
+  if(err){
+    if(message){ err.textContent = message; err.style.display = 'block'; }
+    else err.style.display = 'none';
   }
-  var d = event.data;
-  if(!d.userId) return;
+  var sub = document.getElementById('signin-sub');
+  if(sub) sub.textContent = LANG === 'en' ? 'Event planning' : 'Planeación de eventos';
+}
 
-  var newUserId = d.userId;
+function _mountClerkSignIn(clerk){
+  var host = document.getElementById('clerk-signin');
+  if(!host || !clerk || !clerk.mountSignIn) return;
+  host.innerHTML = '';
+  try{ clerk.mountSignIn(host); }
+  catch(e){ console.error('EventOS: no se pudo montar el login de Clerk', e); }
+}
 
-  if(_appInitialized && DB.cur !== newUserId){
-    _appInitialized = false;
-    DB.cur = null;
+// Punto de entrada real de la aplicacion.
+(function bootstrap(){
+  function start(){
+    var pending = window.__clerkReady;
+    if(!pending){
+      _showSignIn('Falta configurar Clerk. Revisa clerkPublishableKey en app-config.js.');
+      return;
+    }
+    pending.then(function(clerk){
+      // Reaccionar a login / logout sin recargar la pagina.
+      if(clerk.addListener){
+        clerk.addListener(function(){
+          var signedIn = !!(clerk.session && clerk.user);
+          if(signedIn && !_appInitialized){ initApp(); }
+          else if(!signedIn && _appInitialized){
+            _resetUserState();
+            USER_PROFILE = null;
+            _showSignIn();
+            _mountClerkSignIn(clerk);
+          }
+        });
+      }
+      if(clerk.session && clerk.user){ initApp(); }
+      else { _showSignIn(); _mountClerkSignIn(clerk); }
+    }).catch(function(e){
+      console.error('EventOS: Clerk no cargo', e);
+      _showSignIn(
+        (e && e.message ? e.message : 'No se pudo cargar el sistema de acceso.') +
+        ' / Could not load sign-in.'
+      );
+    });
   }
-
-  WIX_USER = { userId: newUserId, email: d.email||'', displayName: d.displayName||'', token: d.token||'' };
-  DB.cur = newUserId;
-  console.info('EventOS: WIX_USER received');
-
-  // If already initialised for this user, just keep the stored Wix token fresh
-  // so that session renewal (_doReauth) can send a valid signature.
-  if(_appInitialized && typeof EVENTOS_DATA !== 'undefined' && EVENTOS_DATA.updateWixToken){
-    EVENTOS_DATA.updateWixToken(d.token || '');
-  }
-
-  if(document.readyState !== 'loading') initApp();
-  else window.addEventListener('DOMContentLoaded', initApp, { once: true });
-});
-
-// Send EVENTOS_READY to parent — use '*' only during initial handshake
-// (we don't yet know the parent origin; the WIX_USER reply will be origin-checked)
-window.parent.postMessage('EVENTOS_READY', '*');
-
-setTimeout(function(){
-  if(!WIX_USER){
-    console.warn('EventOS: no WIX_USER received after 3s — using dev fallback');
-    WIX_USER = { userId: 'dev_user_local', email: 'dev@local.test', displayName: 'Dev User', token: '' };
-    DB.cur = 'dev_user_local';
-    if(document.readyState !== 'loading') initApp();
-    else window.addEventListener('DOMContentLoaded', initApp, { once: true });
-  }
-  else if(!_appInitialized){
-    if(document.readyState !== 'loading') initApp();
-    else window.addEventListener('DOMContentLoaded', initApp, { once: true });
-  }
-}, 3000);
+  if(document.readyState !== 'loading') start();
+  else window.addEventListener('DOMContentLoaded', start, { once: true });
+})();
 
 var _appInitialized = false;
 async function initApp(){
   if(_appInitialized) return;
   _appInitialized = true;
+
   var pgApp = document.getElementById('pg-app');
   var pgLoad = document.getElementById('pg-loading');
+  var pgSignin = document.getElementById('pg-signin');
+  if(pgSignin) pgSignin.style.display = 'none';
   if(pgApp) pgApp.classList.add('hidden');
   if(pgLoad) pgLoad.style.display = 'flex';
   var errEl = document.getElementById('pg-loading-error');
   if(errEl) errEl.style.display = 'none';
+
   if(!hasRequiredConfig()){
     showLoadingError(getConfigErrorMessage());
     return;
   }
   startMojibakeObserver();
-  var isDevMode = (DB.cur === 'dev_user_local');
-  var authRetries = 3;
-  var authOk = false;
-  var lastAuthErr = null;
-  while(authRetries > 0 && !authOk){
+
+  // Resolver identidad -> tenant.  Es la unica llamada que DEBE pasar antes de
+  // tocar cualquier dato: DB.cur sale de aqui.
+  var profile = null;
+  var attempts = 3;
+  var lastErr = null;
+  while(attempts > 0 && !profile){
     try{
-      await EVENTOS_DATA.authenticate(WIX_USER ? WIX_USER.token || '' : '', DB.cur);
-      authOk = true;
-    }catch(authErr){
-      lastAuthErr = authErr;
-      authRetries--;
-      console.warn('EventOS: authenticate attempt failed (' + (3 - authRetries) + '/3):', authErr && authErr.message ? authErr.message : authErr);
-      // Don't retry server-side auth rejections — only retry on network / transient errors
-      if(authErr && authErr.message && (authErr.message.indexOf('Unauthorized') !== -1 || authErr.message.indexOf('mismatch') !== -1)){
-        authRetries = 0;
-      }
-      if(authRetries > 0) await new Promise(function(r){ setTimeout(r, 1500); });
+      profile = await EVENTOS_DATA.ensureIdentity();
+    }catch(e){
+      lastErr = e;
+      attempts--;
+      console.warn('EventOS: ensureIdentity failed (' + (3 - attempts) + '/3):', e && e.message ? e.message : e);
+      // Un rechazo de identidad no se arregla reintentando.
+      if(e && e.message && e.message.indexOf('Unauthorized') !== -1) attempts = 0;
+      if(attempts > 0) await new Promise(function(r){ setTimeout(r, 1200); });
     }
   }
-  if(!authOk){
-    console.error('EventOS: authentication failed permanently:', lastAuthErr);
-    if(lastAuthErr) console.error('EventOS: auth error detail:', lastAuthErr.message);
-    showLoadingError('Authentication failed. Please reload the page.');
+  if(!profile){
+    console.error('EventOS: no se pudo resolver la identidad:', lastErr);
+    _appInitialized = false;
+    _showSignIn(
+      LANG === 'en'
+        ? 'We could not verify your account. Please sign in again.'
+        : 'No pudimos verificar tu cuenta. Vuelve a iniciar sesión.'
+    );
+    var clerk = window.Clerk;
+    if(clerk) _mountClerkSignIn(clerk);
     return;
   }
+
+  USER_PROFILE = profile;
+  DB.cur = profile.tenantId;
+  if(profile.linkedLegacy){
+    console.info('EventOS: cuenta enlazada con los datos heredados del tenant', profile.tenantId);
+  }
+
   var ok = await loadProjectsFromCloud(DB.cur);
-  if(ok !== false || isDevMode) enterApp();
+  // Reintenta lo que quedo sin guardar si la sesion anterior murio a media escritura.
+  try{ await _recoverPendingSaves(DB.cur); }catch(e){ console.warn('EventOS: _recoverPendingSaves', e); }
+  if(ok !== false) enterApp();
 }
 
 var CID = null;
 var CTAB = 'dashboard';
 
-function doLogout(){
-  if(_syncPollTimer){ clearInterval(_syncPollTimer); _syncPollTimer=null; }
-  DB.cur = null;
-  DB.projects = {};
-  WIX_USER = null;
-  _appInitialized = false;
+async function doLogout(){
+  // Guardar antes de tirar el estado: sin esto, cualquier edicion dentro de la
+  // ventana de debounce (1.5 s) se perderia al cerrar sesion.
+  try{ flushSave(); }catch(e){ console.warn('EventOS: flush on logout failed', e); }
   closeMenu();
-  document.getElementById('pg-app').classList.add('hidden');
-  document.getElementById('pg-loading').style.display = 'flex';
-  try{ window.parent.postMessage('EVENTOS_LOGOUT', document.referrer || '*'); }catch(e){ /* cross-origin fallback */ }
-  toast('Signed out');
+  _resetUserState();
+  USER_PROFILE = null;
+  var appEl = document.getElementById('pg-app');
+  if(appEl) appEl.classList.add('hidden');
+  toast(t('signed_out'));
+  // Clerk cierra la sesion y dispara su listener, que nos lleva a la pantalla de
+  // acceso.  Ya no hay token propio que revocar ni ventana padre a la que avisar.
+  try{
+    if(EVENTOS_DATA && EVENTOS_DATA.signOut) await EVENTOS_DATA.signOut();
+  }catch(e){ console.warn('EventOS: signOut failed', e); }
+  _showSignIn();
+  if(window.Clerk) _mountClerkSignIn(window.Clerk);
 }
 
 function enterApp(){
@@ -1117,11 +1522,16 @@ function enterApp(){
   applyTranslations();
   var loadingEl = document.getElementById('pg-loading');
   var appEl = document.getElementById('pg-app');
+  var signinEl = document.getElementById('pg-signin');
+  if(signinEl) signinEl.style.display = 'none';
   if(loadingEl) loadingEl.style.display = 'none';
   if(appEl) appEl.classList.remove('hidden');
   setTimeout(updateAIFabVisibility, 200);
-  var name    = (WIX_USER && WIX_USER.displayName) ? WIX_USER.displayName : (WIX_USER && WIX_USER.email ? WIX_USER.email : DB.cur);
-  var email   = (WIX_USER && WIX_USER.email) ? WIX_USER.email : DB.cur;
+  var clerkUser = (window.Clerk && window.Clerk.user) || null;
+  var name    = (clerkUser && (clerkUser.fullName || clerkUser.firstName)) ||
+                (USER_PROFILE && (USER_PROFILE.name || USER_PROFILE.email)) || DB.cur;
+  var email   = (clerkUser && clerkUser.primaryEmailAddress && clerkUser.primaryEmailAddress.emailAddress) ||
+                (USER_PROFILE && USER_PROFILE.email) || '';
   var initial = (name && name.length) ? name[0].toUpperCase() : '?';
   var uav = document.getElementById('uav');
   var uname = document.getElementById('uname');
@@ -1198,9 +1608,8 @@ function setSyncDot(state){ setSyncStatus(state); }
 window.addEventListener('online',  function(){ if(DB.cur) manualSync(); });
 window.addEventListener('offline', function(){ setSyncStatus('offline'); });
 window.addEventListener('beforeunload', function(e){
-  // Flush debounced saves so the upsert starts before the page unloads
   var hadDirty = _saveInFlight || Object.keys(_pendingSaves).length > 0;
-  flushSave();
+  _flushOnUnload();
   if(hadDirty){
     e.preventDefault();
     e.returnValue = '';
@@ -1209,10 +1618,10 @@ window.addEventListener('beforeunload', function(e){
 // Flush saves when tab becomes hidden (user switches apps, minimizes, or Wix navigates).
 // On mobile browsers especially, a hidden tab can be killed without further notice.
 document.addEventListener('visibilitychange', function(){
-  if(document.visibilityState === 'hidden') flushSave();
+  if(document.visibilityState === 'hidden') _flushOnUnload();
 });
 // pagehide fires more reliably than beforeunload in iframes and on mobile Safari
-window.addEventListener('pagehide', function(){ flushSave(); });
+window.addEventListener('pagehide', function(){ _flushOnUnload(); });
 
 function toggleMenu(){ document.getElementById('umenu').classList.toggle('hidden'); }
 function closeMenu(){ document.getElementById('umenu').classList.add('hidden'); }
@@ -1230,6 +1639,8 @@ function showPage(p){
   // Flush any pending debounced save before navigating away from current page
   flushSave();
   _currentPage = p;
+  // Fuera de un proyecto se usa la moneda por defecto del usuario.
+  if(p !== 'project' && typeof applyProjectCurrency === 'function') applyProjectCurrency(null);
   _saveLastView();
   if(p !== 'project' && typeof closeProjectTabMenu === 'function') closeProjectTabMenu();
   // If the user navigates away from the library while the layout editor is open,
@@ -1242,18 +1653,41 @@ function showPage(p){
   });
   const pg=document.getElementById('pg-'+p);if(pg)pg.classList.remove('hidden');
   document.querySelectorAll('.sidebar-item').forEach(el=>el.classList.remove('active'));
-  const smap={dashboard:'snav-dashboard',events:'snav-events',analytics:'snav-analytics',library:'snav-library'};
-  const sid=smap[p]||null; if(sid){const se=document.getElementById(sid);if(se)se.classList.add('active');}
-  if(p==='dashboard') renderAppDash();
+  // 'library' apuntaba a snav-library, un id que no existe en index.html: al entrar
+  // a la Biblioteca no se marcaba ningun item del sidebar.  Los items reales de
+  // biblioteca son snav-vendors / snav-tasks / snav-layouts / snav-moodboard y los
+  // gestiona sidebarSwitchTab(); aqui solo quedan las paginas de nivel superior.
+  const smap={dashboard:'snav-dashboard',events:'snav-events',analytics:'snav-analytics'};
+  // La Biblioteca no tiene un item propio en el sidebar: se representa con la
+  // pestana activa (proveedores / tareas / planos / moodboard).  El mapeo anterior
+  // apuntaba a 'snav-library', un id inexistente, y no se marcaba nada.
+  const libNav={vendors:'snav-vendors',tasks:'snav-tasks',layouts:'snav-layouts',moodboards:'snav-moodboard'};
+  const sid = p==='library'
+    ? (libNav[typeof _libTab!=='undefined' ? _libTab : 'vendors'] || 'snav-vendors')
+    : (smap[p]||null);
+  if(sid){const se=document.getElementById(sid);if(se)se.classList.add('active');}
+  if(p==='dashboard'){
+    renderAppDash();
+    // Las vistas agregadas necesitan los proyectos completos, no los stubs.
+    _ensureAllProjectsComplete().then(function(changed){
+      if(changed && _currentPage==='dashboard') renderAppDash();
+    });
+  }
   else if(p==='events') renderEvents();
   else if(p==='project'){ renderPNav(); switchTab('dashboard'); setTimeout(_updateTabIndicator, 50); }
-  else if(p==='analytics') renderAnalytics();
+  else if(p==='analytics'){
+    renderAnalytics();
+    _ensureAllProjectsComplete().then(function(changed){
+      if(changed && _currentPage==='analytics') renderAnalytics();
+    });
+  }
   else if(p==='library') renderLibrary();
 }
 async function openProject(id){
   // Flush any pending save for the previously open project before switching
   flushSave();
   CID = id;
+  _touchRecentProject(id);
   var p = DB.projects[DB.cur] && DB.projects[DB.cur][id];
   if(p && p._metaOnly){
     // Full data not yet loaded — fetch it before rendering the project page
@@ -1272,6 +1706,9 @@ async function openProject(id){
     await _mergeProjectExtras(id, p);
     setSyncStatus('ok');
   }
+  // Cada proyecto puede tener su propia moneda; sin esto se quedaba la del proyecto
+  // anterior (o la de fabrica) sin importar lo que el usuario hubiera elegido.
+  if(typeof applyProjectCurrency === 'function') applyProjectCurrency(proj());
   showPage('project');
 }
 
@@ -1371,7 +1808,8 @@ function _updateTabIndicator(){
   var tRect = activeTab.getBoundingClientRect();
   indicator.style.left = (tRect.left - cRect.left) + 'px';
   indicator.style.width = tRect.width + 'px';
-  indicator.style.background = '#242424';
+  // El color lo decide el CSS (.ptabs-indicator / html.dark .ptabs-indicator).
+  // Fijarlo aqui a '#242424' lo dejaba negro tambien en tema oscuro.
 }
 
 // Hover background animation for tabs
@@ -1417,7 +1855,10 @@ function createSampleProject(email){
   const p={
     id:'sample_'+Date.now(), name:'Summer Gala 2026', clientName:'Sample Client',
     description:'A stunning summer gala event', date:'2026-06-15', location:'The Grand Garden Hall',
-    budget:25000, type:'social', status:'planning',
+    // 'planning' no es un estado valido: los mapas de estado usan 'to-be-confirmed',
+    // 'confirmed', 'in-progress', 'completed' y 'cancelled'.  Con 'planning' el
+    // proyecto salia sin etiqueta ni color en analytics.
+    budget:25000, type:'social', status:'to-be-confirmed',
     vendors:defaultVendors(), vendorsInitialized:true,
     tasks:defaultTasks(), guests:sampleGuests(), layoutItems:[], layoutQuoteExtras:[], layoutExport:null,
     moodboard:{ folders:[], uncategorized:[] },
@@ -1534,12 +1975,14 @@ function ensureDefaultVendors(p){
     p.vendorsInitialized = true;
     return true;
   }
+  // `changed` se devolvia siempre false aunque p.vendors SI se reasignaba, asi que
+  // renderBudget() nunca persistia la normalizacion.  Ahora se marca de verdad.
   var changed = false;
   p.vendors = current.map(function(v){
     if(!(v && /^dv\d+$/.test(v.id||''))) return v;
     var def = defaults.find(function(d){ return d.id === v.id; });
     if(!def) return v;
-    return Object.assign({}, def, {
+    var merged = Object.assign({}, def, {
       contact: v.contact || '',
       phone: v.phone || '',
       budget: v.budget || 0,
@@ -1548,6 +1991,11 @@ function ensureDefaultVendors(p){
       vendorStatus: v.vendorStatus,
       notes: v.notes || ''
     });
+    if(!changed && (merged.name !== v.name || merged.category !== v.category ||
+       merged.subcategory !== v.subcategory || merged.services !== v.services)){
+      changed = true;
+    }
+    return merged;
   });
   return changed;
 }
@@ -1566,12 +2014,16 @@ function ensureDefaultTasks(p){
     if(!(tk && /^t\d{1,2}$/.test(tk.id||''))) return tk;
     var def = defaults.find(function(d){ return d.id === tk.id; });
     if(!def) return tk;
-    return Object.assign({}, def, {
+    var merged = Object.assign({}, def, {
       done: !!tk.done,
       dueDate: tk.dueDate || def.dueDate,
       startDate: tk.startDate || def.startDate || '',
       color: tk.color || def.color
     });
+    // Mismo bug que en ensureDefaultVendors: se reasignaba p.tasks pero se
+    // devolvia false, asi que la normalizacion no se guardaba.
+    if(!changed && (merged.title !== tk.title || merged.desc !== tk.desc)) changed = true;
+    return merged;
   });
   return changed;
 }
@@ -1684,7 +2136,7 @@ EventOS.register('core', {
 var _ob = null; // onboarding state
 
 function _showOnboardingWizard(){
-  _ob = { step:0, type:'', name:'', clientName:(WIX_USER&&WIX_USER.displayName)||'', date:'', location:'', budget:'', goals:[], otherLabel:'' };
+  _ob = { step:0, type:'', name:'', clientName:(USER_PROFILE&&(USER_PROFILE.name||USER_PROFILE.email))||'', date:'', location:'', budget:'', goals:[], otherLabel:'' };
   _renderOnboarding();
 }
 

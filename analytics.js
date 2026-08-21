@@ -35,7 +35,8 @@ function renderAnalytics(){
   const to   = _aAt ? farFuture: (_aTo  ||farFuture);
   const inPeriod = allProjects.filter(p=>{
     if(!p.date) return _aAt;
-    const d=new Date(p.date); d.setHours(0,0,0,0);
+    const d=startOfLocalDay(p.date);
+    if(!d) return _aAt;
     return d>=from && d<=to;
   });
   updateAnalyticsLabels();
@@ -44,10 +45,10 @@ function renderAnalytics(){
   const sub=document.getElementById('analytics-sub');if(sub)sub.textContent=t('analytics_sub');
   const fromEl=document.getElementById('ap-from'); const toEl=document.getElementById('ap-to');
   if(fromEl&&!fromEl.value&&_aFr){
-    fromEl.value=formatDMY(_aFr.toISOString().slice(0,10));
+    fromEl.value=formatDMY(toLocalYMD(_aFr));
   }
   if(toEl&&!toEl.value&&_aTo){
-    toEl.value=formatDMY(_aTo.toISOString().slice(0,10));
+    toEl.value=formatDMY(toLocalYMD(_aTo));
   }
 
   const el = document.getElementById('analytics-content');
@@ -97,7 +98,8 @@ function renderAnalytics(){
   var monthTotals = {};
   inPeriod.forEach(function(p){
     if(!p.date) return;
-    var d = new Date(p.date);
+    var d = parseLocalDate(p.date);
+    if(!d) return;
     var key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
     if(!monthByType[key]) monthByType[key] = {};
     var evType = (p.type||'other').replace(/^other:.*/,'other');
@@ -481,7 +483,7 @@ function generateExportPDF(){
   if(incDash){
     const pct  = tb>0 ? Math.min(100,Math.round(paid/tb*100)) : 0;
     const tpct = (p.tasks||[]).length ? Math.round(done/(p.tasks||[]).length*100) : 0;
-    const overdueCt = (p.tasks||[]).filter(tk=>!tk.done&&tk.dueDate&&new Date(tk.dueDate)<new Date()).length;
+    const overdueCt = (p.tasks||[]).filter(isTaskOverdue).length;
 
     html += sec(t('section_dashboard'), null, `
       <div class="stats">
@@ -546,8 +548,8 @@ function generateExportPDF(){
 
   // ── Task Timeline ─────────────────────────────────────────────────────────
   if(incTimeline){
-    const overdue  = (p.tasks||[]).filter(tk=>!tk.done&&tk.dueDate&&new Date(tk.dueDate)<new Date());
-    const pending  = (p.tasks||[]).filter(tk=>!tk.done&&(!tk.dueDate||new Date(tk.dueDate)>=new Date()));
+    const overdue  = (p.tasks||[]).filter(isTaskOverdue);
+    const pending  = (p.tasks||[]).filter(tk=>!tk.done&&!isTaskOverdue(tk));
     const sorted   = [...overdue, ...pending, ...(p.tasks||[]).filter(tk=>tk.done)];
 
     html += sec(t('section_timeline'), (p.tasks||[]).length+' '+(isES?'tareas':'tasks'), `
@@ -564,7 +566,7 @@ function generateExportPDF(){
           <th>${t('status')}</th>
         </tr></thead>
         <tbody>${sorted.map(tk=>{
-          const isOv = !tk.done&&tk.dueDate&&new Date(tk.dueDate)<new Date();
+          const isOv = isTaskOverdue(tk);
           const st   = tk.done ? badge(isES?'Completo':'Done','badge-g')
                      : isOv    ? badge(isES?'Vencida':'Overdue','badge-r')
                                : badge(isES?'Pendiente':'Pending','badge-y');
@@ -673,7 +675,7 @@ function generateExportPDF(){
           </div>
           <div class="mb-grid">${imgs.map(img=>`
             <div class="mb-cell">
-              <div class="mb-img-box"><img class="mb-img" src="${img.url||img.src}" onerror="this.style.display='none'"></div>
+              <div class="mb-img-box"><img class="mb-img" src="${img.url||img.src}" alt="${_esc(img.name||(isES?'Imagen del moodboard':'Moodboard image'))}" onerror="this.style.display='none'"></div>
               ${img.name?`<div class="mb-cap">${_esc(img.name)}</div>`:''}
             </div>`).join('')}
           </div>
@@ -688,7 +690,7 @@ function generateExportPDF(){
         </div>
         <div class="mb-grid">${uncatImgs.map(img=>`
           <div class="mb-cell">
-            <div class="mb-img-box"><img class="mb-img" src="${img.url||img.src}" onerror="this.style.display='none'"></div>
+            <div class="mb-img-box"><img class="mb-img" src="${img.url||img.src}" alt="${_esc(img.name||(isES?'Imagen del moodboard':'Moodboard image'))}" onerror="this.style.display='none'"></div>
             ${img.name?`<div class="mb-cap">${_esc(img.name)}</div>`:''}
           </div>`).join('')}
         </div>

@@ -1742,7 +1742,7 @@ function _renderSTableBody(item){
     +'<path d="'+topPath+botPath+'Z" fill="'+item.bg+'"/>'
     +'</svg>'
     +'<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;pointer-events:none">'
-    +'<div class="litem-label" style="color:'+item.bdClr+';font-size:'+(item.fontSize||Math.max(7,Math.min(14,Math.round((w/getPPM())*8))))+'px;font-weight:300;letter-spacing:0.03em;font-family:Jost,sans-serif;text-align:center;line-height:1.2">'+item.label+'</div>'
+    +'<div class="litem-label" style="color:'+item.bdClr+';font-size:'+(item.fontSize||Math.max(7,Math.min(14,Math.round((w/getPPM())*8))))+'px;font-weight:300;letter-spacing:0.03em;font-family:Jost,sans-serif;text-align:center;line-height:1.2">'+esc(item.label)+'</div>'
     +'</div></div>';
 }
 
@@ -2107,7 +2107,7 @@ function _renderAddTableModalBody(){
         var cnt=(_addTableSelection[item.key]||{}).n||0;
         return '<div onclick="_addTableToggle(\''+item.key+'\')" style="cursor:pointer;padding:8px 6px 6px;border:2px solid '+(sel?'var(--gold)':'var(--border)')+';border-radius:10px;background:'+(sel?'var(--gold-l)':'var(--card)')+';text-align:center;transition:.15s;min-width:72px;position:relative">'
           +_addTableDrawSVG(item,sel)
-          +'<div style="margin-top:5px;font-size:12px;font-weight:600;color:var(--text);line-height:1.2">'+item.label+'</div>'
+          +'<div style="margin-top:5px;font-size:12px;font-weight:600;color:var(--text);line-height:1.2">'+esc(item.label)+'</div>'
           +'<div style="font-size:10px;color:var(--muted);margin-top:1px">'+(item.dim||'')+'</div>'
           +(sel
             ?'<div onclick="event.stopPropagation()" style="margin-top:5px"><input type="number" min="1" value="'+cnt+'" onchange="_addTableSelection[\''+item.key+'\'].n=parseInt(this.value)||1;_renderAddTableModalBody()" oninput="_addTableSelection[\''+item.key+'\'].n=parseInt(this.value)||1" style="width:48px;text-align:center;padding:3px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:700;background:var(--bg)"><div style="font-size:9px;color:var(--muted);margin-top:1px">'+(isES?'cantidad':'qty')+'</div></div>'
@@ -3194,14 +3194,14 @@ function deleteChairType(key){
 
 function addNewChairType(){
   var lbl=(document.getElementById('ch-new-label')||{value:''}).value.trim();
-  if(!lbl)return toast('Enter a name','e');
+  if(!lbl)return toast(LANG==='es'?'Ingresa un nombre':'Enter a name','e');
   var fill=(document.getElementById('ch-new-fill')||{value:'#e8d8c8'}).value;
   var cost=+(document.getElementById('ch-new-cost')||{value:0}).value||0;
   var key='custom-'+Date.now();
   CHAIR_TYPES[key]={label:lbl,fill:fill,stroke:fill,costPerChair:cost};
   var p=proj();if(!p.chairTypes)p.chairTypes={};
   p.chairTypes[key]=CHAIR_TYPES[key];saveProj(p);
-  closeMo();openChairEditor();toast('Chair style added','s');
+  closeMo();openChairEditor();toast(LANG==='es'?'Estilo de silla agregado':'Chair style added','s');
 }
 
 function saveChairEditor(){
@@ -3214,7 +3214,7 @@ function saveChairEditor(){
     if(cost) CHAIR_TYPES[k].costPerChair=+cost.value||0;
   });
   var p=proj();p.chairTypes=JSON.parse(JSON.stringify(CHAIR_TYPES));saveProj(p);
-  closeMo();renderLayout();toast('Chair styles saved','s');
+  closeMo();renderLayout();toast(LANG==='es'?'Estilos de silla guardados':'Chair styles saved','s');
 }
 
 function openCenterpieceEditor(){
@@ -3278,14 +3278,14 @@ function deleteCenterpieceType(key){
 
 function addNewCenterpieceType(){
   var lbl=(document.getElementById('cp-new-label')||{value:''}).value.trim();
-  if(!lbl)return toast('Enter a name','e');
+  if(!lbl)return toast(LANG==='es'?'Ingresa un nombre':'Enter a name','e');
   var color=(document.getElementById('cp-new-color')||{value:'#e05080'}).value;
   var cost=+(document.getElementById('cp-new-cost')||{value:0}).value||0;
   var key='custom-'+Date.now();
   CENTERPIECE_TYPES[key]={label:lbl,color:color,cost:cost};
   var p=proj();if(!p.centerpieceTypes)p.centerpieceTypes={};
   p.centerpieceTypes[key]=CENTERPIECE_TYPES[key];saveProj(p);
-  closeMo();openCenterpieceEditor();toast('Centerpiece added','s');
+  closeMo();openCenterpieceEditor();toast(LANG==='es'?'Centro de mesa agregado':'Centerpiece added','s');
 }
 
 function saveCenterpieceEditor(){
@@ -3298,7 +3298,7 @@ function saveCenterpieceEditor(){
     if(cost) CENTERPIECE_TYPES[k].cost=+cost.value||0;
   });
   var p=proj();p.centerpieceTypes=JSON.parse(JSON.stringify(CENTERPIECE_TYPES));saveProj(p);
-  closeMo();renderLayout();toast('Centerpieces saved','s');
+  closeMo();renderLayout();toast(LANG==='es'?'Centros de mesa guardados':'Centerpieces saved','s');
 }
 
 function toggleSbSection(id){
@@ -3319,7 +3319,7 @@ function openTableTypesEditor(){
     var shapeVal=isRound?'round':(isSquare?'square':'rect');
     return `
     <div style="display:grid;grid-template-columns:110px 80px 65px 65px 50px 80px 34px;gap:5px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
-      <input class="input" style="font-size:11px;padding:4px 8px" id="tt-${k}-label" value="${s.label}" placeholder="Name">
+      <input class="input" style="font-size:11px;padding:4px 8px" id="tt-${k}-label" value="${esc(s.label)}" placeholder="Name">
       <select class="input" style="font-size:11px;padding:3px 4px" id="tt-${k}-shape">
         <option value="round" ${shapeVal==='round'?'selected':''}>${t('shape_round')}</option>
         <option value="rect" ${shapeVal==='rect'?'selected':''}>${t('shape_rect')}</option>
@@ -3364,7 +3364,7 @@ function openTableTypesEditor(){
 
 function addCustomTable(){
   var lbl=(document.getElementById('tt-new-label')||{value:''}).value.trim();
-  if(!lbl)return toast('Enter a name','e');
+  if(!lbl)return toast(LANG==='es'?'Ingresa un nombre':'Enter a name','e');
   var shEl=document.getElementById('tt-new-shape');
   var sh=shEl?shEl.value:'rect';
   var wm=+document.getElementById('tt-new-w').value||1.5;
@@ -3416,7 +3416,7 @@ function openElementTypesEditor(){
   var elemKeys=Object.keys(LSHAPES_M).filter(k=>!['round-table','rect-table','square-table'].includes(k)&&!LSHAPES_M[k]._isCustomTable);
   var rows=elemKeys.filter(k=>LSHAPES_M[k]).map(k=>{var s=LSHAPES_M[k];return `
     <div style="display:grid;grid-template-columns:1fr 80px 80px 60px 40px;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
-      <input class="input" style="font-size:11px;padding:4px 8px" id="et-${k}-label" value="${s.label}" placeholder="Name">
+      <input class="input" style="font-size:11px;padding:4px 8px" id="et-${k}-label" value="${esc(s.label)}" placeholder="Name">
       <input class="input" type="number" step="0.1" style="font-size:11px;padding:4px 6px" id="et-${k}-w" value="${s.wm}">
       <input class="input" type="number" step="0.1" style="font-size:11px;padding:4px 6px" id="et-${k}-h" value="${s.hm}">
       <input class="input" type="number" step="0.01" style="font-size:11px;padding:4px 6px" id="et-${k}-price" value="${s.price||0}" placeholder="0">
@@ -3451,7 +3451,7 @@ function openElementTypesEditor(){
 
 function addCustomElement(){
   var lbl=(document.getElementById('et-new-label')||{value:''}).value.trim();
-  if(!lbl)return toast('Enter a name','e');
+  if(!lbl)return toast(LANG==='es'?'Ingresa un nombre':'Enter a name','e');
   var key='custom-elem-'+Date.now();
   LSHAPES_M[key]={label:lbl,wm:+document.getElementById('et-new-w').value||2.0,hm:+document.getElementById('et-new-h').value||1.0,bg:document.getElementById('et-new-bg').value||'#d0e8d0',bdClr:'#4a7a4a',radius:'0px',chairs:0,_isCustomElem:true};
   LSHAPES=getLSHAPES();
@@ -3484,13 +3484,13 @@ function saveElementTypes(){
 }
 
 function openGeneralLayoutModal(){
-  var chairOpts=Object.entries(CHAIR_TYPES).map(([k,v])=>`<option value="${k}">${v.label}${v.costPerChair>0?' ($'+v.costPerChair+'/silla)':''}</option>`).join('');
-  var cpOpts=Object.entries(CENTERPIECE_TYPES).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('');
-  openMo(`<div class="mo-title">? Create General Layout</div>
+  var chairOpts=Object.entries(CHAIR_TYPES).map(([k,v])=>`<option value="${esc(k)}">${esc(v.label)}${v.costPerChair>0?' ($'+v.costPerChair+'/silla)':''}</option>`).join('');
+  var cpOpts=Object.entries(CENTERPIECE_TYPES).map(([k,v])=>`<option value="${esc(k)}">${esc(v.label)}</option>`).join('');
+  openMo(`<div class="mo-title">🏛️ Create General Layout</div>
   <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Configure your venue layout. Default: 30 round tables (6×5), dance floor, shot bar, dinner platform and DJ booth in center.</div>
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
     <div style="border:1px solid var(--border);border-radius:10px;padding:12px">
-      <div style="font-weight:700;font-size:12px;color:var(--gold-h);margin-bottom:10px">? Round Tables</div>
+      <div style="font-weight:700;font-size:12px;color:var(--gold-h);margin-bottom:10px">⭕ Round Tables</div>
       <div class="ig"><label># Tables</label><input class="input" type="number" id="gl-round-n" value="30" min="0"></div>
       <div class="ig"><label>Chairs each</label><input class="input" type="number" id="gl-round-chairs" value="10" min="0" max="30"></div>
       <div class="ig"><label>Columns</label><input class="input" type="number" id="gl-round-cols" value="6" min="1"></div>
@@ -3498,7 +3498,7 @@ function openGeneralLayoutModal(){
       <div class="ig"><label>Centerpiece</label><select class="input" id="gl-round-cp" style="font-size:11px">${cpOpts}</select></div>
     </div>
     <div style="border:1px solid var(--border);border-radius:10px;padding:12px">
-      <div style="font-weight:700;font-size:12px;color:var(--gold-h);margin-bottom:10px">? Rect Tables</div>
+      <div style="font-weight:700;font-size:12px;color:var(--gold-h);margin-bottom:10px">▭ Rect Tables</div>
       <div class="ig"><label># Tables</label><input class="input" type="number" id="gl-rect-n" value="0" min="0"></div>
       <div class="ig"><label>Chairs each</label><input class="input" type="number" id="gl-rect-chairs" value="12" min="0" max="30"></div>
       <div class="ig"><label>Columns</label><input class="input" type="number" id="gl-rect-cols" value="4" min="1"></div>
@@ -3506,7 +3506,7 @@ function openGeneralLayoutModal(){
       <div class="ig"><label>Centerpiece</label><select class="input" id="gl-rect-cp" style="font-size:11px">${cpOpts}</select></div>
     </div>
     <div style="border:1px solid var(--border);border-radius:10px;padding:12px">
-      <div style="font-weight:700;font-size:12px;color:var(--gold-h);margin-bottom:10px">? Square Tables</div>
+      <div style="font-weight:700;font-size:12px;color:var(--gold-h);margin-bottom:10px">◻️ Square Tables</div>
       <div class="ig"><label># Tables</label><input class="input" type="number" id="gl-sq-n" value="0" min="0"></div>
       <div class="ig"><label>Chairs each</label><input class="input" type="number" id="gl-sq-chairs" value="8" min="0" max="30"></div>
       <div class="ig"><label>Columns</label><input class="input" type="number" id="gl-sq-cols" value="4" min="1"></div>
@@ -3540,7 +3540,7 @@ function openGeneralLayoutModal(){
   </div>
   <div class="mo-foot">
     <button class="btn btn-ghost" onclick="closeMo()">Cancel</button>
-    <button class="btn btn-primary" onclick="generateGeneralLayout()">? Generate Layout</button>
+    <button class="btn btn-primary" onclick="generateGeneralLayout()">✨ Generate Layout</button>
   </div>`);
 }
 
@@ -3672,7 +3672,7 @@ function generateGeneralLayout(){
   lHistorySave();
   renderLayout();
   setTimeout(function(){lZoom(0,'fit');},120);
-  toast('Layout generated: '+total+' tables','s');
+  toast((LANG==='es'?'Plano generado: ':'Layout generated: ')+total+(LANG==='es'?' mesas':' tables'),'s');
 }
 
 function toggleMeasureMode(){
@@ -3687,7 +3687,7 @@ function clearMeasurements(){
   _measurePoints=[];
   _measurePreviewMouse=null;
   renderLayout();
-  toast('Measurements cleared','s');
+  toast(LANG==='es'?'Mediciones borradas':'Measurements cleared','s');
 }
 function toggleFloorplanLock(){
   LState.floorplan.locked=!LState.floorplan.locked;
@@ -3823,7 +3823,7 @@ function handleFloorplanUpload(e){
 
 function handleFloorplanDrop(e){
   var file=e.dataTransfer&&e.dataTransfer.files[0];
-  if(!file||!file.type.startsWith('image/'))return toast('Please drop an image file','e');
+  if(!file||!file.type.startsWith('image/'))return toast(LANG==='es'?'Suelta un archivo de imagen':'Please drop an image file','e');
   var fakeEvt={target:{files:[file],value:''},preventDefault:function(){}};
   handleFloorplanUpload(fakeEvt);
 }
@@ -3900,10 +3900,10 @@ function applyScaleCalibration(){
   if(LState.scalePoints.length<2)return;
   var distEl=document.getElementById('scale-dist');
   var realMeters=distEl?+distEl.value:0;
-  if(!realMeters||realMeters<=0)return toast('Enter a valid real-world distance','e');
+  if(!realMeters||realMeters<=0)return toast(LANG==='es'?'Ingresa una distancia real válida':'Enter a valid real-world distance','e');
   var pt1=LState.scalePoints[0],pt2=LState.scalePoints[1];
   var pxDist=Math.hypot(pt2.x-pt1.x,pt2.y-pt1.y);
-  if(pxDist<5)return toast('Points are too close together','e');
+  if(pxDist<5)return toast(LANG==='es'?'Los puntos están demasiado cerca':'Points are too close together','e');
   var fpPPM=pxDist/realMeters;
   var ratio=DEFAULT_PPM/fpPPM;
   var midX=(pt1.x+pt2.x)/2;
@@ -3917,16 +3917,18 @@ function applyScaleCalibration(){
   LState.scalePoints=[];
   saveFloorplan();
   renderLayout();
-  toast('Floorplan scaled to match layout ('+DEFAULT_PPM+' px/m)','s');
+  toast((LANG==='es'?'Plano escalado para coincidir con el layout (':'Floorplan scaled to match layout (')+DEFAULT_PPM+' px/m)','s');
 }
 
+// NOTA: no hay UI que genere los inputs qc-*, asi que esta funcion no es alcanzable
+// hoy.  Se conserva completa (el algoritmo de rejilla es util) y aborta limpiamente.
 function quickCreate(){
   var typeEl=document.getElementById('qc-type');
   var nEl=document.getElementById('qc-n');
   var chairsEl=document.getElementById('qc-chairs');
   var colsEl=document.getElementById('qc-cols');
   var spacingEl=document.getElementById('qc-spacing');
-  if(!typeEl||!nEl||!chairsEl)return toast('Quick Create controls not found','e');
+  if(!typeEl||!nEl||!chairsEl)return toast(LANG==='es'?'No se encontraron los controles de creación rápida':'Quick Create controls not found','e');
   var shape=typeEl.value;
   var n=Math.max(1,Math.min(100,+nEl.value||8));
   var chairs=Math.max(0,Math.min(30,+chairsEl.value||8));
@@ -3935,7 +3937,7 @@ function quickCreate(){
   var spacing=Math.round(spacingM*getPPM());
   LSHAPES=getLSHAPES();
   var def=LSHAPES[shape];
-  if(!def)return toast('Unknown table type','e');
+  if(!def)return toast(LANG==='es'?'Tipo de mesa desconocido':'Unknown table type','e');
   var _qcMinSide=Math.min(def.w,def.h);
   var _qcChairPx=Math.max(8,Math.round(_qcMinSide*0.22));
   var _qcGapPx=Math.max(1,Math.round(_qcMinSide*0.04));
@@ -3964,7 +3966,7 @@ function quickCreate(){
   LState.sel=newItems.map(function(i){return i.id;});
   var p=proj();p.layoutItems=LState.items;saveProj(p);
   lHistorySave();renderLayout();
-  toast('Created '+n+' '+shape.replace(/-/g,' ')+(n>1?'s':''),'s');
+  toast((LANG==='es'?'Se crearon ':'Created ')+n+' '+shape.replace(/-/g,' ')+(n>1?'s':''),'s');
 }
 
 function updateFontSizeUI(){
@@ -4047,8 +4049,8 @@ function doRotate(deg){
   rotateSelected(deg);
 }
 function rotateSelected(deg){
-  if(!LState.sel.length)return toast('Select items to rotate','e');
-  if(!deg||isNaN(deg))return toast('Enter a valid angle','e');
+  if(!LState.sel.length)return toast(LANG==='es'?'Selecciona elementos para rotar':'Select items to rotate','e');
+  if(!deg||isNaN(deg))return toast(LANG==='es'?'Ingresa un ángulo válido':'Enter a valid angle','e');
   var selItems=LState.items.filter(function(i){return LState.sel.indexOf(i.id)>=0;});
   if(selItems.length===1){
     var item=selItems[0];
@@ -4078,11 +4080,11 @@ function rotateSelected(deg){
   var p=proj();p.layoutItems=LState.items;saveProj(p);
   lHistorySave();
   renderLayout();
-  toast('Rotated '+deg+'°','s');
+  toast((LANG==='es'?'Rotado ':'Rotated ')+deg+'°','s');
 }
 
 function alignSelected(mode){
-  if(LState.sel.length<2)return toast('Select 2+ items to align','e');
+  if(LState.sel.length<2)return toast(LANG==='es'?'Selecciona 2 o más elementos para alinear':'Select 2+ items to align','e');
   var selItems=LState.items.filter(function(i){return LState.sel.indexOf(i.id)>=0;});
   var minX=Math.min.apply(null,selItems.map(function(i){return i.x;}));
   var minY=Math.min.apply(null,selItems.map(function(i){return i.y;}));
@@ -4110,7 +4112,7 @@ function alignSelected(mode){
   }
   var p=proj();p.layoutItems=LState.items;saveProj(p);
   lHistorySave();
-  renderLayout();toast('Aligned','s');
+  renderLayout();toast(LANG==='es'?'Alineado':'Aligned','s');
 }
 
 function renderLPropsPanel(){
@@ -4122,10 +4124,18 @@ function renderLPropsPanel(){
   const cpType=item.centerpiece||'none';
 
   const chairOpts=Object.entries(CHAIR_TYPES).map(([k,v])=>
-    `<option value="${k}" ${cType===k?'selected':''}>${v.label}</option>`).join('');
-  const selectedChairImg = CHAIR_IMAGES[cType] || null;
+    `<option value="${esc(k)}" ${cType===k?'selected':''}>${esc(v.label)}</option>`).join('');
+  // Las imagenes viven en chair-images.js (carga diferida).  Si aun no estan, se
+  // piden y se vuelve a pintar el panel; mientras tanto simplemente no hay preview.
+  const selectedChairImg = (window.CHAIR_IMAGES || {})[cType] || null;
+  if(!selectedChairImg && !window.CHAIR_IMAGES_LOADED && typeof ensureChairImages === 'function' &&
+     typeof CHAIR_IMAGE_KEYS !== 'undefined' && CHAIR_IMAGE_KEYS.indexOf(cType) !== -1){
+    ensureChairImages().then(function(){
+      if(typeof renderLPropsPanel === 'function') renderLPropsPanel();
+    }).catch(function(){});
+  }
   const cpOpts=Object.entries(CENTERPIECE_TYPES).map(([k,v])=>
-    `<option value="${k}" ${cpType===k?'selected':''}>${v.label}</option>`).join('');
+    `<option value="${esc(k)}" ${cpType===k?'selected':''}>${esc(v.label)}</option>`).join('');
 
   panel.innerHTML=`
     <div class="lsb-prop"><label>${t('label')}</label>
@@ -4209,9 +4219,9 @@ function openLItemModal(id){
   const isTable=['round-table','rect-table','square-table'].includes(item.shape)||(LSHAPES_M[item.shape]&&LSHAPES_M[item.shape]._isCustomTable);
   const hasChairs=item.chairs>0;
   const chairOpts=Object.entries(CHAIR_TYPES).map(([k,v])=>
-    `<option value="${k}" ${(item.chairType||'default')===k?'selected':''}>${v.label}</option>`).join('');
+    `<option value="${esc(k)}" ${(item.chairType||'default')===k?'selected':''}>${esc(v.label)}</option>`).join('');
   const cpOpts=Object.entries(CENTERPIECE_TYPES).map(([k,v])=>
-    `<option value="${k}" ${(item.centerpiece||'none')===k?'selected':''}>${v.label}</option>`).join('');
+    `<option value="${esc(k)}" ${(item.centerpiece||'none')===k?'selected':''}>${esc(v.label)}</option>`).join('');
 
 
   const _es = LANG==='es';
@@ -4471,7 +4481,7 @@ function saveLItem(id){
   closeMo();renderLayout();
   const selExtra=LState.sel.filter(sid=>{const si=LState.items.find(i=>i.id===sid);return si&&!_matchesType(si);}).length;
   const totalUpdated=sameType.length+selExtra;
-  toast('Applied to '+totalUpdated+' item'+(totalUpdated!==1?'s':''),'s');
+  toast(LANG==='es' ? ('Aplicado a '+totalUpdated+' elemento'+(totalUpdated!==1?'s':'')) : ('Applied to '+totalUpdated+' item'+(totalUpdated!==1?'s':'')),'s');
 }
 
 
@@ -4973,7 +4983,7 @@ function _exportLayoutFullInner(layoutName){
   a.href=URL.createObjectURL(blob);
   a.download=`Layout_${name.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.html`;
   a.click();
-  toast(isES?'Exportaci�n descargada':'Export downloaded','s');
+  toast(isES?'Exportación descargada':'Export downloaded','s');
 }
 
 function exportLayoutPDF(){ exportLayoutFull(); }

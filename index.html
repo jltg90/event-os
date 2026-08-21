@@ -1,5 +1,5 @@
-﻿<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="es">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,7 +7,7 @@
 <title>EventOS</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,600&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=Jost:wght@300;400;500;600;700&family=Raleway:wght@200;300;400;500&display=swap" rel="stylesheet">
 <script>try{var k=Object.keys(localStorage).find(function(k){return k.indexOf('eventos_settings_')===0;});if(k){var s=JSON.parse(localStorage.getItem(k));if(s&&s.theme==='dark')document.documentElement.classList.add('dark');}}catch(e){}</script>
-<link rel="stylesheet" href="styles.css?v=20260702-4">
+<link rel="stylesheet" href="styles.css?v=20260820-2">
 <script>
 // Lazy-load heavy libraries on demand
 var _lazyScripts = {};
@@ -25,12 +25,67 @@ function lazyLoadScript(url, integrity){
 }
 function ensureThreeJS(){ return typeof THREE !== 'undefined' ? Promise.resolve() : lazyLoadScript('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js','sha384-CI3ELBVUz9XQO+97x6nwMDPosPR5XvsxW2ua7N1Xeygeh1IxtgqtCkGfQY9WWdHu'); }
 function ensureXLSX(){ return typeof XLSX !== 'undefined' ? Promise.resolve() : lazyLoadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js','sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw'); }
+// Imagenes de sillas (~630 KB en base64).  Estaban dentro de budget-timeline-guests.js,
+// donde se descargaban y parseaban en TODAS las cargas aunque el usuario nunca abriera
+// el editor de planos.  Ahora se piden solo cuando hacen falta.
+// window.CHAIR_IMAGES_LOADED evita bucles: una vez intentada la carga, los
+// consumidores no vuelven a pedirla aunque falte una clave concreta.
+window.CHAIR_IMAGES_LOADED = false;
+function ensureChairImages(){
+  if(window.CHAIR_IMAGES_LOADED) return Promise.resolve();
+  if(window.CHAIR_IMAGES && Object.keys(window.CHAIR_IMAGES).length){
+    window.CHAIR_IMAGES_LOADED = true;
+    return Promise.resolve();
+  }
+  var v = (window.EVENTOS_CONFIG && window.EVENTOS_CONFIG.buildVersion) || '1';
+  return lazyLoadScript('chair-images.js?v=' + v).then(function(){
+    window.CHAIR_IMAGES_LOADED = true;
+  });
+}
 </script>
-<script src="app-config.js?v=20260702-4"></script>
-<script src="app-data.js?v=20260702-4"></script>
+<script src="app-config.js?v=20260820-2"></script>
+<script>
+// ─── Carga de Clerk ─────────────────────────────────────────────────────────
+// Clerk se inyecta desde JS (y no con dos <script> fijos) porque su URL depende
+// del Frontend API de tu cuenta.  Asi toda la configuracion vive en un unico
+// sitio, app-config.js, igual que convexUrl y aiProxyUrl.
+window.__clerkReady = (function(){
+  var cfg = window.EVENTOS_CONFIG || {};
+  var fapi = cfg.resolveClerkFapi ? cfg.resolveClerkFapi() : '';
+  if(!fapi || !cfg.clerkPublishableKey){
+    return Promise.reject(new Error(
+      'Falta configurar Clerk: pon tu clerkPublishableKey en app-config.js.'
+    ));
+  }
+  function load(src, attrs){
+    return new Promise(function(resolve, reject){
+      var s = document.createElement('script');
+      s.src = src;
+      s.crossOrigin = 'anonymous';
+      s.async = true;
+      if(attrs) Object.keys(attrs).forEach(function(k){ s.setAttribute(k, attrs[k]); });
+      s.onload = resolve;
+      s.onerror = function(){ reject(new Error('No se pudo cargar ' + src)); };
+      document.head.appendChild(s);
+    });
+  }
+  // El bundle de UI debe estar listo antes de llamar a Clerk.load().
+  return load('https://' + fapi + '/npm/@clerk/ui@1/dist/ui.browser.js')
+    .then(function(){
+      return load('https://' + fapi + '/npm/@clerk/clerk-js@6/dist/clerk.browser.js', {
+        'data-clerk-publishable-key': cfg.clerkPublishableKey
+      });
+    })
+    .then(function(){
+      return window.Clerk.load({ ui: { ClerkUI: window.__internal_ClerkUICtor } });
+    })
+    .then(function(){ return window.Clerk; });
+})();
+</script>
+<script src="app-data.js?v=20260820-2"></script>
 </head>
 <body>
-<div id="toast-c" role="status" aria-live="polite"></div>
+<div id="toast-c" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <!-- LOADING SCREEN (shown while waiting for Wix user identity) -->
 <div id="pg-loading" style="min-height:100dvh;display:flex;align-items:center;justify-content:center;background:var(--bg);flex-direction:column;gap:16px">
@@ -39,7 +94,17 @@ function ensureXLSX(){ return typeof XLSX !== 'undefined' ? Promise.resolve() : 
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
     Loading your workspace...
   </div>
-  <div id="pg-loading-error" style="display:none;max-width:340px;text-align:center;padding:16px 20px;background:#fff8f8;border:1px solid #fecaca;border-radius:10px;font-size:13px;color:#b91c1c;margin-top:8px"></div>
+  <div id="pg-loading-error" style="display:none;max-width:340px;text-align:center;padding:16px 20px;background:var(--danger-bg,#fff8f8);border:1px solid #fecaca;border-radius:10px;font-size:13px;color:#b91c1c;margin-top:8px"></div>
+</div>
+
+<!-- PANTALLA DE ACCESO (Clerk) -->
+<div id="pg-signin" style="display:none;min-height:100dvh;align-items:center;justify-content:center;background:var(--bg);flex-direction:column;gap:26px;padding:24px">
+  <div style="text-align:center">
+    <div style="font-family:'Cormorant Garamond',serif;font-size:44px;font-weight:400;color:var(--text);letter-spacing:-.01em">Event<span style="color:var(--gold,#DFD7C9);font-style:italic">OS</span></div>
+    <div id="signin-sub" style="font-family:'DM Sans',sans-serif;font-size:13px;color:var(--muted);margin-top:6px">Planeación de eventos</div>
+  </div>
+  <div id="clerk-signin"></div>
+  <div id="signin-error" style="display:none;max-width:380px;text-align:center;padding:14px 18px;background:var(--danger-bg,#fff8f8);border:1px solid #fecaca;border-radius:10px;font-size:13px;color:#b91c1c;line-height:1.5"></div>
 </div>
 
 <!-- APP -->
@@ -151,6 +216,7 @@ function ensureXLSX(){ return typeof XLSX !== 'undefined' ? Promise.resolve() : 
             <div class="umenu-item" onclick="showPage('events');closeMenu()"><svg width="15" height="15" fill="none" stroke="#464646" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> <span data-i18n="my_events">My Events</span></div>
             <div class="umenu-item" onclick="openLibrary();closeMenu()"><svg width="15" height="15" fill="none" stroke="#464646" stroke-width="1.8" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg> <span id="lib-menu-label">My Library</span></div>
             <div class="umenu-item" onclick="showPage('analytics');closeMenu()"><svg width="15" height="15" fill="none" stroke="#464646" stroke-width="1.8" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg> <span id="analytics-menu-label">Analytics</span></div>
+            <div class="umenu-item" onclick="openCurrencyPicker();closeMenu()"><svg width="15" height="15" fill="none" stroke="#464646" stroke-width="1.8" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> <span data-i18n="currency">Currency</span><span style="margin-left:auto;font-size:11px;font-weight:600;color:#787470" id="currency-label">USD</span></div>
             <div class="umenu-item" style="color:#a8403a;border-top:1px solid rgba(36,36,36,.06)" onclick="doLogout()"><svg width="15" height="15" fill="none" stroke="#a8403a" stroke-width="1.8" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> <span data-i18n="sign_out">Sign Out</span></div>
           </div>
         </div>
@@ -395,14 +461,14 @@ function ensureXLSX(){ return typeof XLSX !== 'undefined' ? Promise.resolve() : 
   </div>
 </div>
 
-<script src="lang.js?v=20260702-4"></script>
-<script src="core.js?v=20260702-4"></script>
-<script src="events.js?v=20260702-4"></script>
-<script src="budget-timeline-guests.js?v=20260702-4"></script>
-<script src="layout.js?v=20260702-4"></script>
-<script src="misc.js?v=20260702-4"></script>
-<script src="analytics.js?v=20260702-4"></script>
-<script src="library.js?v=20260702-4"></script>
+<script src="lang.js?v=20260820-2"></script>
+<script src="core.js?v=20260820-2"></script>
+<script src="events.js?v=20260820-2"></script>
+<script src="budget-timeline-guests.js?v=20260820-2"></script>
+<script src="layout.js?v=20260820-2"></script>
+<script src="misc.js?v=20260820-2"></script>
+<script src="analytics.js?v=20260820-2"></script>
+<script src="library.js?v=20260820-2"></script>
 
 <!-- -- MOBILE DRAWER -------------------------------------------- -->
 <div id="mob-drawer" class="mob-drawer hidden" onclick="closeMobDrawerIfOverlay(event)">
@@ -500,6 +566,14 @@ function ensureXLSX(){ return typeof XLSX !== 'undefined' ? Promise.resolve() : 
       </svg>
       <span data-i18n="settings">Settings</span>
     </button>
+    <button class="mob-drawer-item" onclick="toggleLang();closeMobDrawer()">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      <span id="mob-lang-label">Español / Spanish</span>
+    </button>
+    <button class="mob-drawer-item" onclick="openCurrencyPicker();closeMobDrawer()">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      <span id="mob-currency-label">Currency</span>
+    </button>
     <div style="flex:1"></div>
     <div class="mob-drawer-divider"></div>
     <button class="mob-drawer-item" style="color:var(--danger)" onclick="doLogout()">
@@ -524,7 +598,7 @@ function ensureXLSX(){ return typeof XLSX !== 'undefined' ? Promise.resolve() : 
       <div class="ai-panel-title" id="ai-panel-title">AI Assistant</div>
       <div class="ai-panel-sub">Powered by Claude</div>
     </div>
-    <button onclick="closeAIPanel()" class="ai-close-btn">
+    <button onclick="closeAIPanel()" class="ai-close-btn" aria-label="Cerrar asistente / Close assistant">
       <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
     </button>
   </div>
@@ -539,7 +613,7 @@ function ensureXLSX(){ return typeof XLSX !== 'undefined' ? Promise.resolve() : 
     <textarea id="ai-prompt" placeholder="Ask anything about your event..." rows="1"
       oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"
       onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAIPrompt();}"></textarea>
-    <button class="ai-send-btn" id="ai-send-btn" onclick="sendAIPrompt()">
+    <button class="ai-send-btn" id="ai-send-btn" onclick="sendAIPrompt()" aria-label="Enviar / Send">
       <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
     </button>
   </div>

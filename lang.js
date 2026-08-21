@@ -1,4 +1,55 @@
 var LANG = 'es';
+
+/**
+ * Convierte 'YYYY-MM-DD' en un Date LOCAL al mediodia.
+ *
+ * `new Date('2026-07-01')` se interpreta como medianoche UTC, que en UTC-6 (Mexico)
+ * es el 30 de junio a las 18:00.  Eso hacia que un evento del dia 1 cayera en el mes
+ * anterior en las graficas y que una tarea con vencimiento HOY apareciera vencida
+ * todo el dia.  El mediodia deja 12 h de margen en ambos sentidos, asi que la fecha
+ * civil se conserva en cualquier zona horaria del planeta.
+ *
+ * Los valores que ya traen hora (ISO completo) se pasan tal cual.
+ */
+function parseLocalDate(s){
+  if(s instanceof Date) return s;
+  if(typeof s !== 'string' || !s) return null;
+  var m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(m) return new Date(+m[1], +m[2] - 1, +m[3], 12, 0, 0, 0);
+  var d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/** Medianoche local de la fecha civil representada por `s`. */
+function startOfLocalDay(s){
+  var d = parseLocalDate(s);
+  if(!d) return null;
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+/**
+ * Date -> 'YYYY-MM-DD' usando la fecha LOCAL.
+ * `toISOString().slice(0,10)` convierte a UTC primero, asi que un Date creado como
+ * medianoche local (o 23:59:59) devolvia el dia anterior o el siguiente segun la
+ * zona horaria del usuario.
+ */
+function toLocalYMD(d){
+  if(!(d instanceof Date) || isNaN(d.getTime())) return '';
+  return d.getFullYear() + '-' +
+    String(d.getMonth()+1).padStart(2,'0') + '-' +
+    String(d.getDate()).padStart(2,'0');
+}
+
+/** true si la tarea esta vencida segun la fecha civil local (no segun UTC). */
+function isTaskOverdue(tk){
+  if(!tk || tk.done || !tk.dueDate) return false;
+  var due = startOfLocalDay(tk.dueDate);
+  if(!due) return false;
+  var todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  return due < todayStart;
+}
 var CURRENCY={code:'USD',symbol:'$',name:'US Dollar'};
 var DATE_FORMAT = 'DMY';
 var WEEK_START = 0;
@@ -19,24 +70,60 @@ var CURRENCIES=[
   {code:'AUD',symbol:'$',  name:'Australian Dollar'},
   {code:'CHF',symbol:'Fr',  name:'Swiss Franc'},
 ];
+// Moneda por defecto del usuario (se guarda en settings).  Cada proyecto puede
+// sobreescribirla con su propio `currency`.
+var DEFAULT_CURRENCY = { code:'USD', symbol:'$', name:'US Dollar' };
+
+function findCurrency(code){
+  return CURRENCIES.find(function(cu){ return cu.code === code; }) || null;
+}
+
+// Locale de formato ligado al idioma activo: antes estaba fijo en 'en-US'.
+function currencyLocale(){ return (typeof LANG !== 'undefined' && LANG === 'es') ? 'es-MX' : 'en-US'; }
+
 function formatCost(n){
   var num=parseFloat(n)||0;
-  return CURRENCY.symbol+num.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:2});
+  return CURRENCY.symbol+num.toLocaleString(currencyLocale(),{minimumFractionDigits:0,maximumFractionDigits:2});
 }
+
+// Aplica la moneda del proyecto (o la del usuario si el proyecto no tiene una).
+// Se llama al abrir un proyecto y al volver a la lista de eventos.
+function applyProjectCurrency(p){
+  var found = (p && p.currency && findCurrency(p.currency.code)) || findCurrency(DEFAULT_CURRENCY.code) || CURRENCIES[0];
+  CURRENCY = found;
+  updateCurrencyLabels();
+}
+
+function updateCurrencyLabels(){
+  var lbl=document.getElementById('currency-label');
+  if(lbl) lbl.textContent = CURRENCY.code;
+  var mob=document.getElementById('mob-currency-label');
+  if(mob) mob.textContent = t('currency') + ': ' + CURRENCY.symbol + ' ' + CURRENCY.code;
+}
+
 function openCurrencyPicker(){
   var opts=CURRENCIES.map(function(cu){return '<option value="'+cu.code+'" '+(CURRENCY.code===cu.code?'selected':'')+'>'+cu.symbol+' '+cu.code+' - '+cu.name+'</option>';}).join('');
-  openMo('<div class="mo-title">💱 Currency</div><p class="s-hint">Select the currency used for all prices in this project.</p><div class="ig"><label>Currency</label><select class="input" id="currency-sel" style="font-size:13px">'+opts+'</select></div><div class="mo-foot"><button class="btn btn-ghost" onclick="closeMo()">Cancel</button><button class="btn btn-primary" onclick="applyCurrency()">Apply</button></div>');
+  var scope = (typeof proj==='function' && proj()) ? t('currency_scope_project') : t('currency_scope_default');
+  openMo('<div class="mo-title">💱 '+esc(t('currency'))+'</div><p class="s-hint">'+esc(scope)+'</p><div class="ig"><label>'+esc(t('currency'))+'</label><select class="input" id="currency-sel" style="font-size:13px">'+opts+'</select></div><div class="mo-foot"><button class="btn btn-ghost" onclick="closeMo()">'+esc(t('cancel'))+'</button><button class="btn btn-primary" onclick="applyCurrency()">'+esc(t('apply'))+'</button></div>');
 }
 function applyCurrency(){
   var sel=document.getElementById('currency-sel');if(!sel)return;
-  var found=CURRENCIES.find(function(cu){return cu.code===sel.value;});if(!found)return;
+  var found=findCurrency(sel.value);if(!found)return;
   CURRENCY=found;
-  var lbl=document.getElementById('currency-label');if(lbl)lbl.textContent=found.code;
-  var p=proj&&proj();if(p){p.currency=found;saveProj(p);}
+  var p=(typeof proj==='function') ? proj() : null;
+  if(p){ p.currency=found; saveProj(p); }
+  else { DEFAULT_CURRENCY=found; }
+  // Persistir SIEMPRE la eleccion como default del usuario: antes no se guardaba
+  // en ningun lado y se perdia en cada recarga.
+  DEFAULT_CURRENCY=found;
+  saveSettings();
+  updateCurrencyLabels();
   closeMo();
   var page=document.querySelector('.pg:not(.hidden)');
   if(page&&page.id==='pg-project'){var active=document.querySelector('.ptab.active');if(active){var tab=active.dataset.tab;var fns={dashboard:renderDash,budget:renderBudget,timeline:renderTimeline,guests:renderGuests,layout:renderLayout,moodboard:renderMoodboard};if(fns[tab])fns[tab]();}}
-  toast('Currency: '+found.code+' ('+found.symbol+')','s');
+  else if(page&&page.id==='pg-analytics'&&typeof renderAnalytics==='function') renderAnalytics();
+  else if(page&&page.id==='pg-events'&&typeof renderEvents==='function') renderEvents();
+  toast(t('currency')+': '+found.code+' ('+found.symbol+')','s');
 }
 
 var TRANSLATIONS = {
@@ -44,8 +131,13 @@ var TRANSLATIONS = {
     'back_to_events': 'Back to Events',
     'my_events': 'My Events',
     'sign_out': 'Sign Out',
+    'signed_out': 'Signed out',
     'save': 'Save',
     'cancel': 'Cancel',
+    'apply': 'Apply',
+    'currency': 'Currency',
+    'currency_scope_project': 'Currency used for all prices in this event.',
+    'currency_scope_default': 'Default currency for new events.',
     'delete': 'Delete',
     'edit': 'Edit',
     'close': 'Close',
@@ -548,6 +640,13 @@ var TRANSLATIONS = {
     'conflict_title': 'Account open elsewhere',
     'conflict_message': 'This account is open on another device, which may cause your changes to not be saved correctly. You can close all other sessions and continue working here.',
     'conflict_dismiss': 'Dismiss',
+    'conflict_discard': 'Discard my changes',
+    'conflict_overwrite': 'Keep my changes',
+    'signin_title': 'Sign in to EventOS',
+    'conflict_discarded': 'Your local changes were discarded and the server version was loaded.',
+    'elements': 'Elements',
+    'layout_total_seats': 'Total seats',
+    'assigned_to': 'Assigned to',
     'conflict_close_sessions': 'Continue here & close other sessions',
     'conflict_sessions_closed': 'Other sessions closed. You can continue working here.',
     'sync_remote_update': 'This event was updated from another device. Your view has been refreshed.',
@@ -593,8 +692,13 @@ var TRANSLATIONS = {
     'back_to_events': 'Volver a Eventos',
     'my_events': 'Mis Eventos',
     'sign_out': 'Cerrar Sesión',
+    'signed_out': 'Sesión cerrada',
     'save': 'Guardar',
     'cancel': 'Cancelar',
+    'apply': 'Aplicar',
+    'currency': 'Moneda',
+    'currency_scope_project': 'Moneda usada para todos los precios de este evento.',
+    'currency_scope_default': 'Moneda predeterminada para eventos nuevos.',
     'delete': 'Eliminar',
     'edit': 'Editar',
     'close': 'Cerrar',
@@ -1097,6 +1201,13 @@ var TRANSLATIONS = {
     'conflict_title': 'Cuenta abierta en otro lugar',
     'conflict_message': 'Esta cuenta está abierta en otro dispositivo, lo que puede causar que tus cambios no se guarden correctamente. Puedes cerrar las otras sesiones y continuar trabajando aquí.',
     'conflict_dismiss': 'Cerrar',
+    'conflict_discard': 'Descartar mis cambios',
+    'conflict_overwrite': 'Conservar mis cambios',
+    'signin_title': 'Entrar a EventOS',
+    'conflict_discarded': 'Se descartaron tus cambios locales y se cargó la versión del servidor.',
+    'elements': 'Elementos',
+    'layout_total_seats': 'Asientos totales',
+    'assigned_to': 'Asignado a',
     'conflict_close_sessions': 'Continuar aquí y cerrar otras sesiones',
     'conflict_sessions_closed': 'Otras sesiones cerradas. Puedes continuar trabajando aquí.',
     'sync_remote_update': 'Este evento fue actualizado desde otro dispositivo. Tu vista se ha actualizado.',
@@ -1157,6 +1268,11 @@ function loadSettings(){
       if(typeof s.defaultEventType==='string') window._settingsDefaultEventType = s.defaultEventType;
       if(typeof s.defaultOutlineOffset==='number'&&s.defaultOutlineOffset>=0) DEFAULT_OUTLINE_OFFSET = s.defaultOutlineOffset;
       if(s.weekStart===0||s.weekStart===1) WEEK_START = s.weekStart;
+      // La moneda no se persistia: se perdia en cada recarga.
+      if(s.currencyCode){
+        var savedCur = findCurrency(s.currencyCode);
+        if(savedCur){ DEFAULT_CURRENCY = savedCur; CURRENCY = savedCur; }
+      }
     } else {
       // Migrate legacy lang key
       try{
@@ -1166,6 +1282,7 @@ function loadSettings(){
     }
   }catch(e){ console.warn('EventOS: loadSettings failed', e); }
   _applyThemeClass();
+  if(typeof updateCurrencyLabels === 'function') updateCurrencyLabels();
 }
 
 function saveSettings(){
@@ -1176,7 +1293,8 @@ function saveSettings(){
       theme: THEME,
       defaultEventType: window._settingsDefaultEventType||'',
       defaultOutlineOffset: DEFAULT_OUTLINE_OFFSET,
-      weekStart: WEEK_START
+      weekStart: WEEK_START,
+      currencyCode: (DEFAULT_CURRENCY && DEFAULT_CURRENCY.code) || 'USD'
     }));
   }catch(e){ console.warn('EventOS: saveSettings failed', e); }
 }
@@ -1318,19 +1436,66 @@ function _setWeekStart(val){
 
 /* ── Export / Import backup ── */
 
-function exportBackup(){
+// Carga completa (incluyendo el documento companion project_extras) de TODOS los
+// proyectos del usuario.  Sin esto el respaldo se llevaria stubs _metaOnly y arrays
+// vacios para los proyectos grandes, produciendo un archivo que parece valido pero
+// no tiene invitados, planos ni moodboard.
+async function _hydrateAllProjectsForBackup(){
+  var projects = DB.projects && DB.projects[DB.cur];
+  if(!projects) return [];
+  var pending = [];
+  var pids = Object.keys(projects);
+  for(var i=0;i<pids.length;i++){
+    var pid = pids[i];
+    if(pid === '__lib_layout__') continue;
+    var p = projects[pid];
+    if(p && p._metaOnly){
+      if(typeof loadProjectById === 'function'){
+        var loaded = await loadProjectById(pid);
+        if(!loaded || loaded._metaOnly){ pending.push(pid); continue; }
+        p = DB.projects[DB.cur][pid];
+      } else { pending.push(pid); continue; }
+    }
+    if(p && p._hasExtras && !p._extrasLoaded && typeof _mergeProjectExtras === 'function'){
+      await _mergeProjectExtras(pid, p);
+      if(!p._extrasLoaded) pending.push(pid);
+    }
+  }
+  return pending;
+}
+
+async function exportBackup(){
   try{
     var projects = DB.projects && DB.projects[DB.cur];
     if(!projects||!Object.keys(projects).length){
       toast(LANG==='es'?'No hay eventos para exportar':'No events to export','e');
       return;
     }
+    toast(LANG==='es'?'Preparando respaldo…':'Preparing backup…');
+    var incompletos = await _hydrateAllProjectsForBackup();
+    if(incompletos.length){
+      // Nunca escribimos un respaldo parcial en silencio: es peor que no tener respaldo.
+      toast(LANG==='es'
+        ? 'No se pudo descargar todo ('+incompletos.length+' evento(s)). Revisa tu conexion e intenta de nuevo.'
+        : 'Could not load everything ('+incompletos.length+' event(s)). Check your connection and try again.','e');
+      return;
+    }
+    projects = DB.projects[DB.cur];
+    var limpio = {};
+    Object.keys(projects).forEach(function(pid){
+      if(pid === '__lib_layout__') return;
+      var copia = JSON.parse(JSON.stringify(projects[pid]));
+      // Banderas transitorias que no deben viajar en el archivo
+      delete copia._metaOnly; delete copia._extrasLoaded; delete copia._extrasPending;
+      delete copia._pendingSave; delete copia._expectedVersion; delete copia._hasExtras;
+      limpio[pid] = copia;
+    });
     var backup={
       _type:'eventos_backup',
       _version:1,
       _exportedAt:new Date().toISOString(),
       _userId:DB.cur||'unknown',
-      projects: JSON.parse(JSON.stringify(projects))
+      projects: limpio
     };
     var blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
     var url=URL.createObjectURL(blob);
@@ -1363,22 +1528,26 @@ function importBackup(){
           toast(LANG==='es'?'Archivo no válido':'Invalid backup file','e');
           return;
         }
-        if(!confirm(t('settings_import_confirm'))) return;
-        if(!DB.projects) DB.projects={};
-        if(!DB.projects[DB.cur]) DB.projects[DB.cur]={};
-        var imported=0;
-        Object.keys(data.projects).forEach(function(pid){
-          DB.projects[DB.cur][pid]=data.projects[pid];
-          imported++;
+        // Rechaza archivos que solo traen stubs de metadata: restaurarlos borraria
+        // los datos reales del proyecto en la nube.
+        var pids = Object.keys(data.projects).filter(function(pid){ return pid !== '__lib_layout__'; });
+        var stubs = pids.filter(function(pid){
+          var p = data.projects[pid];
+          return !p || typeof p !== 'object' || p._metaOnly === true || !p.id;
         });
-        // Save each imported project to the backend
-        Object.keys(data.projects).forEach(function(pid){
-          var p=DB.projects[DB.cur][pid];
-          if(p&&typeof saveProj==='function') saveProj(p);
+        if(!pids.length || stubs.length){
+          toast(LANG==='es'
+            ? 'El respaldo esta incompleto ('+stubs.length+' evento(s) sin datos). No se restauro nada.'
+            : 'This backup is incomplete ('+stubs.length+' event(s) have no data). Nothing was restored.','e');
+          return;
+        }
+        openConfirmModal({
+          title: LANG==='es' ? 'Restaurar respaldo' : 'Restore backup',
+          message: t('settings_import_confirm'),
+          confirmLabel: LANG==='es' ? 'Restaurar' : 'Restore',
+          danger: true,
+          onConfirm: function(){ _applyBackup(data, pids); }
         });
-        toast(t('settings_import_success')+' ('+imported+')','s');
-        closeMo();
-        if(typeof showPage==='function') showPage('events');
       }catch(e2){
         console.error('importBackup',e2);
         toast(LANG==='es'?'Error al restaurar':'Restore failed','e');
@@ -1387,4 +1556,34 @@ function importBackup(){
     reader.readAsText(file);
   };
   inp.click();
+}
+
+// Aplica un respaldo ya validado.  Se ejecuta solo tras la confirmacion del usuario.
+function _applyBackup(data, pids){
+  try{
+    if(!DB.projects) DB.projects={};
+    if(!DB.projects[DB.cur]) DB.projects[DB.cur]={};
+    var imported=0;
+    pids.forEach(function(pid){
+      var p = JSON.parse(JSON.stringify(data.projects[pid]));
+      // El id manda sobre la llave del objeto: evita escribir bajo una llave ajena.
+      p.id = String(p.id);
+      delete p._metaOnly; delete p._extrasLoaded; delete p._extrasPending;
+      delete p._pendingSave; delete p._expectedVersion; delete p._hasExtras;
+      DB.projects[DB.cur][p.id] = p;
+      imported++;
+    });
+    if(typeof cacheDB==='function') cacheDB();
+    pids.forEach(function(pid){
+      var p=DB.projects[DB.cur][String(data.projects[pid].id)];
+      if(p&&typeof saveProj==='function') saveProj(p);
+    });
+    if(typeof flushSave==='function') flushSave();
+    toast(t('settings_import_success')+' ('+imported+')','s');
+    closeMo();
+    if(typeof showPage==='function') showPage('events');
+  }catch(e){
+    console.error('_applyBackup',e);
+    toast(LANG==='es'?'Error al restaurar':'Restore failed','e');
+  }
 }
