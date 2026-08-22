@@ -36,3 +36,9 @@ desktop.ini
 
 .vercel
 .env*
+
+# Salidas del banco de pruebas visual (scripts/preview): perfiles de Chrome,
+# capturas y carpetas de resultados. Son artefactos locales, nunca se versionan.
+scripts/preview/.chrome-*/
+scripts/preview/shots/
+scripts/preview/sweep/

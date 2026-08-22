@@ -179,15 +179,28 @@ lee esta sección: casi todo lo que necesitas ya existe como token o como clase.
 
 ### Verificación visual (banco de pruebas headless)
 
-No hay tests. Para comprobar de verdad un cambio de UI hay un banco de pruebas que
-sirve la app real con Clerk y Convex sustituidos por dobles con datos semilla, la
+No hay tests unitarios, pero **sí hay un banco de pruebas visual** en
+[scripts/preview/](scripts/preview/) (no se publica: `scripts` está en `.vercelignore`).
+Sirve la app real con Clerk y Convex sustituidos por dobles con datos semilla, la
 abre en Chrome headless, navega a la vista que pidas, captura un PNG y lista los
-errores de consola. Está en el scratchpad de la sesión (`scratchpad/harness/`:
-`server.mjs`, `stub.js`, `shot.mjs`, `README.md`) — **si vas a hacer trabajo de UI,
-recréalo o pide que te lo pasen**: encontró tres errores de sintaxis y un fallo de
-arranque que `node --check` no veía. Lo que hay que mirar en cada captura: `ERRORS`
-en 0, `scrollW` no mayor que `clientW` (si no, hay desbordamiento horizontal), y el
-PNG abierto de verdad, en español, inglés, tema oscuro y a 390px de ancho.
+errores de consola. **Úsalo siempre que toques UI**: en el rediseño encontró tres
+errores de sintaxis, un fallo de arranque y dos bugs de lógica que `node --check`
+no ve.
+
+```bash
+node scripts/preview/server.mjs &                 # deja el servidor en :8123
+node scripts/preview/probe.mjs                    # 17 comprobaciones funcionales
+node scripts/preview/sweep.mjs --only=es          # las 10 vistas de una pasada
+node scripts/preview/shot.mjs mi-vista "lang=es" --page=project --tab=budget
+node scripts/preview/live.mjs                     # contra produccion, sin dobles
+node scripts/preview/check-i18n.mjs               # claves de traduccion simetricas
+```
+
+Lee `scripts/preview/README.md` para las opciones (`--page`, `--tab`, `--pid`,
+`theme=dark`, `empty=1`, `--w/--h`, `--cdp` si lanzas varios a la vez). En cada
+captura hay que mirar tres cosas: `ERRORS` en 0, `scrollW` no mayor que `clientW`
+(si no, hay desbordamiento horizontal) y **el PNG abierto de verdad** — en español,
+inglés, tema oscuro y a 390px de ancho.
 
 ## Deployment & Data Safety Rules
 
