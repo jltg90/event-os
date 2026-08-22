@@ -145,6 +145,23 @@ function loadFloorplanImg(layoutId, callback){
     .catch(function(){ callback(null); });
 }
 
+// Estructura base de la pagina de biblioteca (espejo de #pg-library en index.html).
+// Se reinyecta cuando el editor de planos ocupa toda la pagina y luego se cierra.
+function _libPageShellHTML(){
+  return '<div class="page-shell">'
+    +'<div class="rd-page-head">'
+      +'<div>'
+        +'<div class="rd-eyebrow" data-i18n="lib_eyebrow">'+esc(t('lib_eyebrow'))+'</div>'
+        +'<h1 class="rd-h1" id="lib-page-title">'+esc(t('lib_title'))+'</h1>'
+        +'<p class="rd-sub" id="lib-page-sub" style="display:none"></p>'
+      +'</div>'
+      +'<div class="rd-actions" id="lib-add-btns"></div>'
+    +'</div>'
+    +'<div style="display:none" id="lib-tabs"></div>'
+    +'<div id="lib-content"></div>'
+  +'</div>';
+}
+
 function openLibrary(){
   // If a library layout editor is open, close it cleanly before navigating
   if(typeof _libEditingLayoutId!=='undefined' && _libEditingLayoutId){
@@ -152,36 +169,44 @@ function openLibrary(){
     _libEditingLayoutId=null;
     // Restore pg-library to its normal structure
     var pgLib=document.getElementById('pg-library');
-    if(pgLib){
-      pgLib.innerHTML=
-        '<div style="max-width:1200px;margin:0 auto;padding:32px 24px;width:100%">'
-        +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px">'
-        +'<div><h1 class="editorial-title" id="lib-page-title" style="font-family:\'Cormorant Garamond\',serif;font-size:28px;font-weight:700">Layouts</h1>'
-        +'<p id="lib-page-sub" style="display:none"></p></div>'
-        +'<div style="display:flex;gap:8px;flex-wrap:wrap" id="lib-add-btns"></div>'
-        +'</div>'
-        +'<div style="display:none" id="lib-tabs"></div>'
-        +'<div id="lib-content"></div>'
-        +'</div>';
-    }
+    if(pgLib) pgLib.innerHTML=_libPageShellHTML();
   }
   showPage('library');
 }
 
 function updateLibraryLabels(){
   var el=document.getElementById('lib-menu-label'); if(el) el.textContent=t('lib_title');
-  var titles={vendors:LANG==='es'?'Proveedores':'Vendors', tasks:LANG==='es'?'Tareas':'Tasks', layouts:LANG==='es'?'Layouts':'Layouts', moodboards:'Moodboards'};
+  var isES=LANG==='es';
+  var subs={
+    index:       t('lib_sub'),
+    vendors:     isES?'Grupos de proveedores con contacto, servicios y tarifas listos para reutilizar.':'Vendor groups with contact, services and rates ready to reuse.',
+    tasks:       isES?'Plantillas de cronograma con fases, responsables y duraciones.':'Timeline templates with phases, owners and durations.',
+    layouts:     isES?'Distribuciones de salón guardadas con mesas, sillas y elementos.':'Saved floor plans with tables, chairs and elements.',
+    tables:      isES?'Tipos de mesa guardados para reutilizar en cualquier plano.':'Saved table types to reuse in any floor plan.',
+    elements:    isES?'Elementos de plano guardados para reutilizar en cualquier evento.':'Saved plan elements to reuse in any event.',
+    chairs:      isES?'Estilos de silla guardados para reutilizar en cualquier plano.':'Saved chair styles to reuse in any floor plan.',
+    centerpieces:isES?'Centros de mesa guardados para reutilizar en cualquier plano.':'Saved centerpieces to reuse in any floor plan.',
+    moodboards:  isES?'Direcciones visuales y paletas para presentar a tus clientes.':'Visual directions and palettes to present to your clients.'
+  };
+  var titles={
+    index:t('lib_title'), vendors:t('lib_vendors'), tasks:t('lib_tasks'), layouts:libLayoutsLabel(),
+    tables:t('lib_tables'), elements:t('lib_elements'), chairs:t('lib_chairs'),
+    centerpieces:t('lib_centerpieces'), moodboards:t('lib_moodboards')
+  };
   libSetPageTitle(titles[_libTab]||t('lib_title'));
-  var ps=document.getElementById('lib-page-sub');   if(ps) ps.style.display='none';
+  var ps=document.getElementById('lib-page-sub');
+  if(ps){
+    var sub=subs[_libTab]||t('lib_sub');
+    ps.textContent=sub;
+    ps.style.display=sub?'':'none';
+  }
 }
 
 function libSetPageTitle(title){
   var pt=document.getElementById('lib-page-title');
   if(!pt) return;
   pt.textContent=title;
-  pt.classList.remove('editorial-title');
-  void pt.offsetWidth;
-  pt.classList.add('editorial-title');
+  pt.classList.add('rd-h1');
 }
 
 
@@ -382,22 +407,87 @@ function libLayoutZoomExtents(){
   if(typeof lZoom==='function') lZoom(0,'fit');
 }
 
+// ── Iconos inline del rediseno (24x24, stroke currentColor) ──────────────
+var LIB_ICONS = {
+  vendors:'<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+  tasks:'<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+  layout:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>',
+  mood:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="9" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="16" width="7" height="5" rx="1"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  back:'<path d="m15 18-6-6 6-6"/>',
+  search:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>',
+  edit:'<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/>',
+  copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  trash:'<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/>',
+  upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
+  dots:'<circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="19" cy="12" r="1" fill="currentColor"/>',
+  open:'<path d="M5 12h14M12 5l7 7-7 7"/>',
+  send:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="14 7 19 12 14 17"/><line x1="19" y1="12" x2="9" y2="12"/>',
+  cube:'<path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5M2 12l10 5 10-5"/>'
+};
+function libIcon(key, size, sw){
+  var p=LIB_ICONS[key]; if(!p) return '';
+  var s=size||16;
+  return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="'+(sw||1.9)+'" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+p+'</svg>';
+}
+
+// Fila de pestanas de la biblioteca (pildoras .rd-filter con conteo).
+function libTabsHTML(lib){
+  var tabs=[
+    {key:'index',        lbl:t('lib_title'),         cnt:null},
+    {key:'vendors',      lbl:t('lib_vendors'),       cnt:lib.vendors.length},
+    {key:'tasks',        lbl:t('lib_tasks'),         cnt:(lib.tasks||[]).length},
+    {key:'layouts',      lbl:libLayoutsLabel(),      cnt:lib.layouts.length},
+    {key:'moodboards',   lbl:t('lib_moodboards'),    cnt:(lib.moodboards||[]).length},
+    {key:'tables',       lbl:t('lib_tables'),        cnt:Object.keys(lib.tables||{}).length},
+    {key:'elements',     lbl:t('lib_elements'),      cnt:Object.keys(lib.elements||{}).length},
+    {key:'chairs',       lbl:t('lib_chairs'),        cnt:Object.keys(lib.chairs||{}).length},
+    {key:'centerpieces', lbl:t('lib_centerpieces'),  cnt:Object.keys(lib.centerpieces||{}).length}
+  ];
+  return '<div class="rd-filterbar lib-tabs">'+tabs.map(function(tb){
+    return '<button type="button" class="rd-filter'+(_libTab===tb.key?' active':'')+'" onclick="setLibTab(\''+tb.key+'\')">'
+      +esc(tb.lbl)+(tb.cnt===null?'':'<span class="cnt">'+tb.cnt+'</span>')+'</button>';
+  }).join('')+'</div>';
+}
+
+// Portada de la biblioteca: cuatro tarjetas grandes con conteos.
+function renderLibIndex(lib){
+  var isES=LANG==='es';
+  var vendorCount=0;
+  lib.vendors.forEach(function(e){ vendorCount+=(e.vendors||[]).length; });
+  var cards=[
+    {key:'vendors', icon:'vendors', tone:'accent', title:t('lib_vendors'),
+      desc:isES?'Fichas con contacto, categoría y tarifas de referencia listas para reutilizar.':'Cards with contact, category and reference rates ready to reuse.',
+      count:vendorCount, unit:isES?'proveedores':'vendors'},
+    {key:'tasks', icon:'tasks', tone:'success', title:t('lib_tasks'),
+      desc:isES?'Plantillas de cronograma por tipo de evento, con fases y responsables.':'Timeline templates by event type, with phases and owners.',
+      count:(lib.tasks||[]).length, unit:isES?'plantillas':'templates'},
+    {key:'layouts', icon:'layout', tone:'info', title:libLayoutsLabel(),
+      desc:isES?'Distribuciones de salón guardadas con mesas, sillas y elementos.':'Saved floor plans with tables, chairs and elements.',
+      count:lib.layouts.length, unit:isES?'planos':'plans'},
+    {key:'moodboards', icon:'mood', tone:'champagne', title:t('lib_moodboards'),
+      desc:isES?'Direcciones visuales y paletas para presentar a tus clientes.':'Visual directions and palettes to present to your clients.',
+      count:(lib.moodboards||[]).length, unit:isES?'tableros':'boards'}
+  ];
+  return '<div class="lib-index-grid">'+cards.map(function(c){
+    var tn=rdTone(c.tone);
+    return '<section class="rd-card pad-lg hover click lib-index-card" onclick="setLibTab(\''+c.key+'\')">'
+      +'<div class="lib-index-ico" style="background:'+tn.bg+';color:'+tn.fg+'">'+libIcon(c.icon,18)+'</div>'
+      +'<h2 class="rd-h3 lib-index-title">'+esc(c.title)+'</h2>'
+      +'<p class="lib-index-desc">'+esc(c.desc)+'</p>'
+      +'<div class="lib-index-foot">'
+        +'<span class="lib-index-num rd-num">'+c.count+'</span>'
+        +'<span class="lib-index-unit">'+esc(c.unit)+'</span>'
+        +'<div class="rd-spacer"></div>'
+        +'<span class="btn btn-sm">'+(isES?'Abrir':'Open')+'</span>'
+      +'</div></section>';
+  }).join('')+'</div>';
+}
+
 function renderLibrary(){
   updateLibraryLabels();
   var lib = getLib();
-  var vendorCount = lib.vendors.length;
-  var taskCount = (lib.tasks||[]).length;
-
-  var tabs = [
-    {key:'vendors',    icon:'🏢', lbl:t('lib_vendors'),     cnt: vendorCount},
-    {key:'tasks',      icon:'📅', lbl:t('lib_tasks'),       cnt: taskCount},
-    {key:'layouts',    icon:'📐', lbl:t('lib_layouts'),     cnt: lib.layouts.length},
-    {key:'tables',     icon:'⬡',  lbl:t('lib_tables'),      cnt: Object.keys(lib.tables).length},
-    {key:'elements',   icon:'🪴', lbl:t('lib_elements'),    cnt: Object.keys(lib.elements).length},
-    {key:'chairs',     icon:'🪑', lbl:t('lib_chairs'),      cnt: Object.keys(lib.chairs).length},
-    {key:'centerpieces',icon:'💐',lbl:t('lib_centerpieces'),cnt: Object.keys(lib.centerpieces).length},
-    {key:'moodboards', icon:'🎨', lbl:t('lib_moodboards'),  cnt: lib.moodboards.length},
-  ];
+  var isES = LANG==='es';
 
   // Tab bar hidden — navigation is via sidebar only
 
@@ -408,84 +498,162 @@ function renderLibrary(){
     centerpieces:'lib_add_types', moodboards:'lib_add_moodboard'
   };
   if(addEl){
-    if(_libTab==='vendors'){
+    if(_libTab==='index'){
+      addEl.innerHTML='';
+    } else if(_libTab==='vendors'){
       if(_libOpenVendorGroupId){
         addEl.innerHTML =
-          '<button class="btn btn-ghost" style="gap:5px" onclick="libBackToVendorGroups()">'
-          +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>'
-          +(t('lib_back'))+'</button>'
-          +' <button class="btn btn-primary btn-create-gradient" onclick="libOpenVendorModalForGroup(\''+_libOpenVendorGroupId+'\')">'
-          +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
-          +(t('lib_add_vendor'))+'</button>';
+          '<button class="btn" onclick="libBackToVendorGroups()">'
+          +libIcon('back',13,2.2)+(t('lib_back'))+'</button>'
+          +'<button class="btn btn-primary" onclick="libOpenVendorModalForGroup(\''+_libOpenVendorGroupId+'\')">'
+          +libIcon('plus',14,2.4)+(t('lib_add_vendor'))+'</button>';
       } else {
         addEl.innerHTML =
-          '<button class="btn btn-primary btn-create-gradient" onclick="libNewVendorGroupModal()">'
-          +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
-          +(t('lib_new_group'))+'</button>';
+          '<button class="btn" onclick="libImportCSV()">'+(isES?'Importar CSV':'Import CSV')+'</button>'
+          +'<button class="btn btn-primary" onclick="libNewVendorGroupModal()">'
+          +libIcon('plus',14,2.4)+(t('lib_new_group'))+'</button>';
       }
     } else if(_libTab==='tasks'){
       if(_libOpenTaskGroupId){
         addEl.innerHTML =
-          '<button class="btn btn-ghost" style="gap:5px" onclick="libBackToTaskGroups()">'
-          +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>'
-          +(t('lib_back'))+'</button>'
-          +' <button class="btn btn-primary btn-create-gradient" onclick="libOpenTaskModalForGroup(\''+_libOpenTaskGroupId+'\')">'
-          +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
-          +(t('lib_add_task'))+'</button>';
+          '<button class="btn" onclick="libBackToTaskGroups()">'
+          +libIcon('back',13,2.2)+(t('lib_back'))+'</button>'
+          +'<button class="btn btn-primary" onclick="libOpenTaskModalForGroup(\''+_libOpenTaskGroupId+'\')">'
+          +libIcon('plus',14,2.4)+(t('lib_add_task'))+'</button>';
       } else {
         addEl.innerHTML =
-          '<button class="btn btn-primary btn-create-gradient" onclick="libNewTaskGroupModal()">'
-          +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
-          +(t('lib_new_group'))+'</button>';
+          '<button class="btn" onclick="libImportTasksCSV()">'+(isES?'Importar CSV':'Import CSV')+'</button>'
+          +'<button class="btn btn-primary" onclick="libNewTaskGroupModal()">'
+          +libIcon('plus',14,2.4)+(t('lib_new_group'))+'</button>';
       }
     } else if(_libTab==='layouts'){
       addEl.innerHTML = lib.layouts.length
-        ? '<button class="btn btn-primary btn-create-gradient" onclick="libOpenLayoutWizard()">'
-          +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
-          +(t('lib_new_layout'))+'</button>'
+        ? '<button class="btn btn-primary" onclick="libOpenLayoutWizard()">'
+          +libIcon('plus',14,2.4)+(t('lib_new_layout'))+'</button>'
         : '';
     } else if(_libTab==='moodboards') {
       if(_mbOpenFolderId){
-        addEl.innerHTML = '<button class="btn btn-primary" onclick="libMoodboardUploadImages(\''+_mbOpenFolderId+'\')">'
-          +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
-          +(t('lib_upload_images'))+'</button>';
+        addEl.innerHTML = '<button class="btn" onclick="libMbBackToFolders()">'
+          +libIcon('back',13,2.2)+(t('lib_moodboards'))+'</button>'
+          +'<button class="btn btn-primary" onclick="libMoodboardUploadImages(\''+_mbOpenFolderId+'\')">'
+          +libIcon('upload',14,2)+(t('lib_upload_images'))+'</button>';
       } else {
         addEl.innerHTML = lib.moodboards.length
-          ? '<button class="btn btn-primary btn-create-gradient" onclick="libCreateMoodboardFolder()">'
-            +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
-            +(t('lib_new_moodboard'))+'</button>'
+          ? '<button class="btn btn-primary" onclick="libCreateMoodboardFolder()">'
+            +libIcon('plus',14,2.4)+(t('lib_new_moodboard'))+'</button>'
           : '';
       }
     } else {
       addEl.innerHTML =
         '<button class="btn btn-primary" onclick="libSaveModal(\''+_libTab+'\')">'
-        +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
-        +t(addMap[_libTab]||'lib_save_to')+'</button>';
+        +libIcon('plus',14,2.4)+t(addMap[_libTab]||'lib_save_to')+'</button>';
     }
   }
 
   var el = document.getElementById('lib-content');
   if(!el) return;
 
+  var body='';
   switch(_libTab){
-    case 'vendors':     el.innerHTML = renderLibVendorSets(lib); break;
-    case 'tasks':       el.innerHTML = renderLibTaskGroups(lib); break;
-    case 'layouts':     el.innerHTML = renderLibLayouts(lib); break;
-    case 'tables':      el.innerHTML = renderLibTypes(lib,'tables'); break;
-    case 'elements':    el.innerHTML = renderLibTypes(lib,'elements'); break;
-    case 'chairs':      el.innerHTML = renderLibTypes(lib,'chairs'); break;
-    case 'centerpieces':el.innerHTML = renderLibTypes(lib,'centerpieces'); break;
-    case 'moodboards':  el.innerHTML = renderLibMoodboards(lib); break;
+    case 'index':       body = renderLibIndex(lib); break;
+    case 'vendors':     body = renderLibVendorSets(lib); break;
+    case 'tasks':       body = renderLibTaskGroups(lib); break;
+    case 'layouts':     body = renderLibLayouts(lib); break;
+    case 'tables':      body = renderLibTypes(lib,'tables'); break;
+    case 'elements':    body = renderLibTypes(lib,'elements'); break;
+    case 'chairs':      body = renderLibTypes(lib,'chairs'); break;
+    case 'centerpieces':body = renderLibTypes(lib,'centerpieces'); break;
+    case 'moodboards':  body = renderLibMoodboards(lib); break;
+    default:            body = renderLibVendorSets(lib); break;
   }
+  el.innerHTML = libTabsHTML(lib) + body;
 }
 
 function setLibTab(key){ _libTab=key; _mbOpenFolderId=null; _libOpenVendorGroupId=null; _libOpenTaskGroupId=null; renderLibrary(); }
 
+// ── Utilidades compartidas de la biblioteca ─────────────────────────────
+// Rejillas de columnas: el MISMO valor debe usarse en .rd-thead y en .rd-row.
+var LIB_GRID_VG   = '34px minmax(190px,1.7fr) 96px minmax(150px,1.3fr) 112px 158px';
+var LIB_GRID_V    = '34px minmax(200px,1.6fr) minmax(160px,1.2fr) minmax(170px,1.3fr) 118px 190px';
+var LIB_GRID_TG   = '34px minmax(190px,1.6fr) 84px minmax(180px,1.5fr) 112px 158px';
+var LIB_GRID_T    = '34px minmax(200px,1.7fr) minmax(180px,1.5fr) 104px minmax(140px,1fr) 190px';
+var LIB_GRID_GT   = '34px minmax(200px,1.7fr) minmax(180px,1.5fr) 104px minmax(140px,1fr) 190px';
+var LIB_GRID_MB   = '34px minmax(200px,1.9fr) 104px 104px 118px 190px';
+
+/** Color seguro para un atributo style: solo hex / rgb() / hsl(). */
+function libColor(c, fallback){
+  var s=String(c==null?'':c).trim();
+  return /^(#[0-9a-fA-F]{3,8}|rgba?\([\d\s.,%]+\)|hsla?\([\d\s.,%]+\))$/.test(s) ? s : (fallback||'var(--hairline)');
+}
+
+/** Boton de icono de fila (.rd-ibtn). `onclick` ya viene escapado por quien lo arma. */
+function libIbtn(icon, onclick, title, danger){
+  return '<button type="button" class="rd-ibtn'+(danger?' danger':'')+'" title="'+esc(title||'')+'" onclick="'+onclick+'">'
+    +libIcon(icon,13,2)+'</button>';
+}
+/** Contenedor de acciones alineado a la derecha dentro de una .rd-row. */
+function libActions(html){
+  return '<div class="lib-actions">'+html+'</div>';
+}
+/** Casilla de seleccion de fila. */
+function libCheck(cls, dataAttrs, onchange, id, title){
+  return '<input type="checkbox" class="lib-chk'+(cls?' '+cls:'')+'"'
+    +(id?' id="'+id+'"':'')+(dataAttrs||'')
+    +(title?' title="'+esc(title)+'"':'')
+    +' onchange="'+onchange+'">';
+}
+/** Buscador con lupa para la barra de herramientas de una .rd-table. */
+function libSearchBox(placeholder, oninput, id){
+  return '<div class="rd-search">'+libIcon('search',15,2)
+    +'<input type="text"'+(id?' id="'+id+'"':'')+' placeholder="'+esc(placeholder)+'" oninput="'+oninput+'">'
+    +'</div>';
+}
+/** Fila "sin resultados" con el ancho completo de la tabla. */
+function libNoResults(){
+  return '<div class="lib-noresults">'+(LANG==='es'?'Sin resultados':'No results')+'</div>';
+}
+/** Estado vacio grande y centrado. */
+function libEmptyState(iconKey, title, sub, ctaHtml){
+  return '<div class="rd-card pad-lg lib-empty">'
+    +'<div class="lib-empty-ico">'+libIcon(iconKey,28,1.5)+'</div>'
+    +'<h2 class="rd-h2 lib-empty-title">'+esc(title)+'</h2>'
+    +'<p class="lib-empty-sub">'+esc(sub)+'</p>'
+    +(ctaHtml?'<div class="lib-empty-actions">'+ctaHtml+'</div>':'')
+    +'</div>';
+}
+/** Etiqueta y tono del estado de un proveedor (compartidos con el modulo de presupuesto). */
+function libVendorStatus(v){
+  var st=(v&&v.vendorStatus)||(v&&v.hired?'hired':'pending');
+  var isES=LANG==='es';
+  var label=(typeof vendorStatusLabel==='function')
+    ? vendorStatusLabel(st)
+    : ({pending:isES?'Pendiente':'Pending', hired:isES?'Contratado':'Hired',
+        'in-progress':isES?'En Progreso':'In Progress', paid:isES?'Pagado':'Paid',
+        cancelled:isES?'Cancelado':'Cancelled'}[st]||(isES?'Pendiente':'Pending'));
+  var tone=(typeof vendorStatusTone==='function')
+    ? vendorStatusTone(st)
+    : ({pending:'neutral', hired:'success', 'in-progress':'warn', paid:'info', cancelled:'danger'}[st]||'neutral');
+  return {status:st, label:label, tone:tone};
+}
+/** "Editado hace 3 dias" a partir de updatedAt (ISO) o de la fecha civil guardada. */
+function libEditedLabel(entry){
+  var isES=LANG==='es';
+  var d=(entry&&entry.updatedAt)?startOfLocalDay(entry.updatedAt):null;
+  if(d){
+    var todayStart=new Date(); todayStart.setHours(0,0,0,0);
+    var n=Math.round((todayStart-d)/86400000);
+    if(n<=0)   return isES?'Editado hoy':'Edited today';
+    if(n===1)  return isES?'Editado ayer':'Edited yesterday';
+    if(n<7)    return isES?('Editado hace '+n+' días'):('Edited '+n+' days ago');
+    if(n<30){ var w=Math.round(n/7);  return isES?('Editado hace '+w+' semana'+(w>1?'s':'')):('Edited '+w+' week'+(w>1?'s':'')+' ago'); }
+    var m=Math.round(n/30);           return isES?('Editado hace '+m+' mes'+(m>1?'es':'')):('Edited '+m+' month'+(m>1?'s':'')+' ago');
+  }
+  if(entry&&entry.date) return (isES?'Editado ':'Edited ')+entry.date;
+  return isES?'Sin fecha':'No date';
+}
+
 function libEmpty(){
-  return '<div style="text-align:center;padding:60px 20px;color:var(--muted)">'
-    +'<div style="font-size:48px;margin-bottom:12px">📚</div>'
-    +'<div style="font-size:15px;font-weight:600;margin-bottom:6px">'+t('lib_empty')+'</div>'
-    +'<div style="font-size:13px">'+t('lib_empty_sub')+'</div></div>';
+  return libEmptyState('cube', t('lib_empty'), t('lib_empty_sub'), '');
 }
 
 function libCard(title, subtitle, badge, loadBtn, delKey, delType){
@@ -518,108 +686,96 @@ function renderLibVendorSets(lib){
     if(!entry){ _libOpenVendorGroupId=null; } else { return renderLibVendorGroupDetail(lib,entry,isES); }
   }
   if(!lib.vendors.length){
-    return '<div class="card" style="text-align:center;padding:52px 24px">'
-      +'<svg width="48" height="48" fill="none" stroke="var(--muted)" stroke-width="1.2" viewBox="0 0 24 24" style="margin:0 auto 14px;display:block"><path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Z"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>'
-      +'<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:8px">'+(t('lib_no_vendor_groups'))+'</div>'
-      +'<div style="font-size:13px;color:var(--muted);max-width:380px;margin:0 auto 20px">'+(t('lib_no_vendor_groups_sub'))+'</div>'
-      +'<button class="btn btn-primary btn-create-gradient" onclick="libNewVendorGroupModal()">'
-      +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
-      +(' '+t('lib_new_vendor_group'))+'</button></div>';
+    return libEmptyState('vendors', t('lib_no_vendor_groups'), t('lib_no_vendor_groups_sub'),
+      '<button class="btn btn-primary" onclick="libNewVendorGroupModal()">'
+      +libIcon('plus',14,2.4)+esc(t('lib_new_vendor_group'))+'</button>');
   }
   var rows=lib.vendors.map(function(e){ return libVendorGroupRow(e,isES); }).join('');
-  return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
-    +'<div style="position:relative;flex:1;display:flex;align-items:center">'
-    +'<svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>'
-    +'<input class="input" id="lib-vg-search" placeholder="'+(t('lib_search_groups'))+'" oninput="libSearchVendorGroups(this.value)" style="padding-left:36px;width:100%">'
+  return '<div class="rd-table" id="lib-vendor-group-table-wrap">'
+    +'<div class="rd-table-tools">'
+      +libSearchBox(t('lib_search_groups'),'libSearchVendorGroups(this.value)','lib-vg-search')
+      +'<button id="lib-vg-bulk-load-btn" class="btn btn-sm" style="display:none" onclick="libLoadSelectedVendorGroups()">'+esc(t('lib_load'))+'</button>'
+      +'<button id="lib-vg-bulk-del-btn" class="btn btn-danger btn-sm" style="display:none" onclick="libDeleteSelectedVendorGroups()">'+esc(t('lib_delete_sel'))+'</button>'
     +'</div>'
-    +'<button id="lib-vg-bulk-load-btn" class="btn btn-primary btn-sm" style="display:none;white-space:nowrap" onclick="libLoadSelectedVendorGroups()">'
-    +(t('lib_load'))+'</button>'
-    +'<button id="lib-vg-bulk-del-btn" class="btn btn-danger btn-sm" style="display:none;white-space:nowrap" onclick="libDeleteSelectedVendorGroups()">'
-    +(t('lib_delete_sel'))+'</button>'
-    +'</div>'
-    +'<div id="lib-vendor-group-table-wrap">'
-    +'<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm)">'
-    +'<table style="width:100%;border-collapse:collapse">'
-    +'<thead><tr style="background:var(--bg2);border-bottom:1px solid var(--border)">'
-    +'<th style="padding:9px 12px;width:36px"><input type="checkbox" id="lib-vg-chk-all" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libToggleAllVendorGroups(this.checked)"></th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(t('lib_name_col'))+'</th>'
-    +'<th style="padding:9px 14px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(t('lib_vendors_col'))+'</th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(t('lib_categories_col'))+'</th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(t('lib_date_col'))+'</th>'
-    +'<th style="padding:9px 14px"></th>'
-    +'</tr></thead>'
-    +'<tbody id="lib-vg-rows">'+rows+'</tbody>'
-    +'</table></div></div>';
+    +'<div class="rd-table-scroll"><div style="min-width:900px">'
+      +'<div class="rd-thead" style="grid-template-columns:'+LIB_GRID_VG+'">'
+        +'<span>'+libCheck('','','libToggleAllVendorGroups(this.checked)','lib-vg-chk-all',isES?'Seleccionar todos':'Select all')+'</span>'
+        +'<span>'+esc(t('lib_name_col'))+'</span>'
+        +'<span style="text-align:center">'+esc(t('lib_vendors_col'))+'</span>'
+        +'<span>'+esc(t('lib_categories_col'))+'</span>'
+        +'<span>'+esc(t('lib_date_col'))+'</span>'
+        +'<span></span>'
+      +'</div>'
+      +'<div id="lib-vg-rows">'+rows+'</div>'
+    +'</div></div></div>';
 }
 function libVendorGroupRow(entry,isES){
-  var vCount=(entry.vendors||[]).length;
+  var name=entry.name||t('lib_untitled');
+  var list=entry.vendors||[];
+  var vCount=list.length;
   var cats={};
-  (entry.vendors||[]).forEach(function(v){ if(v.category) cats[v.category]=true; });
+  list.forEach(function(v){ if(v.category) cats[v.category]=true; });
   var catNames=Object.keys(cats);
-  var catText=catNames.length?esc(catNames.slice(0,2).join(', '))+(catNames.length>2?' +'+(catNames.length-2):''):'—';
-  return '<tr onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
-    +'<td style="padding:11px 12px;width:36px" onclick="event.stopPropagation()">'
-    +'<input type="checkbox" class="lib-vg-sel" data-id="'+entry.id+'" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libUpdateVendorGroupBulkBtn()">'
-    +'</td>'
-    +'<td style="padding:11px 14px;font-weight:600;font-size:13px;vertical-align:middle"><a href="javascript:void(0)" onclick="event.stopPropagation();libOpenVendorGroup(\''+entry.id+'\')" style="color:inherit;text-decoration:none;cursor:pointer" onmouseover="this.style.color=\'var(--gold)\'" onmouseout="this.style.color=\'inherit\'">'+esc(entry.name)+'</a></td>'
-    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);text-align:center">'+vCount+'</td>'
-    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+catText+'</td>'
-    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted)">'+esc(entry.date||'—')+'</td>'
-    +'<td style="padding:11px 14px;text-align:right" onclick="event.stopPropagation()">'
-    +'<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">'
-    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadVendors(\''+entry.id+'\')">'+(t('lib_load'))+'</button>'
-    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar nombre':'Edit name')+'" onclick="libRenameVendorGroup(\''+entry.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
-    +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDelete(\'vendors\',\''+entry.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
-    +'</div></td>'
-    +'</tr>';
+  var catCell=catNames.length
+    ? '<div class="lib-pillcell">'+catNames.slice(0,2).map(function(c){ return rdPill(c,'neutral',{sm:true}); }).join('')
+      +(catNames.length>2?'<span class="rd-cell-sub">+'+(catNames.length-2)+'</span>':'')+'</div>'
+    : '<span class="rd-cell rd-light">—</span>';
+  return '<div class="rd-row" style="grid-template-columns:'+LIB_GRID_VG+'">'
+    +'<span>'+libCheck('lib-vg-sel',' data-id="'+esc(entry.id)+'"','libUpdateVendorGroupBulkBtn()')+'</span>'
+    +'<div class="lib-namecell">'
+      +'<span class="rd-avatar">'+esc(rdInitials(entry.name))+'</span>'
+      +'<button type="button" class="lib-namebtn" onclick="libOpenVendorGroup(\''+entry.id+'\')">'
+        +'<span class="rd-cell-main">'+esc(entry.name)+'</span>'
+        +'<span class="rd-cell-sub">'+vCount+' '+esc(isES?'proveedor(es)':'vendor(s)')+'</span>'
+      +'</button>'
+    +'</div>'
+    +'<span class="rd-cell rd-num" style="text-align:center">'+vCount+'</span>'
+    +catCell
+    +'<span class="rd-cell">'+esc(entry.date||'—')+'</span>'
+    +libActions(
+      '<button class="btn btn-sm" onclick="libLoadVendors(\''+entry.id+'\')">'+esc(t('lib_load'))+'</button>'
+      +libIbtn('edit','libRenameVendorGroup(\''+entry.id+'\')',isES?'Editar nombre':'Edit name')
+      +libIbtn('trash','libDelete(\'vendors\',\''+entry.id+'\')',isES?'Eliminar':'Delete',true)
+    )
+    +'</div>';
 }
 function renderLibVendorGroupDetail(lib,entry,isES){
   var vendors=entry.vendors||[];
-  var header='<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">'
-    +'<div style="font-size:15px;font-weight:700;color:var(--text)">'+esc(entry.name)+'</div>'
-    +'<button class="btn btn-ghost btn-sm btn-icon" onclick="libRenameVendorGroup(\''+entry.id+'\')" title="'+(t('lib_rename'))+'">'
-    +'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
-    +'<div style="font-size:12px;color:var(--muted);margin-left:auto">'+vendors.length+' '+(isES?'proveedor(es)':'vendor(s)')+'</div>'
+  var header='<div class="rd-tab-head lib-detail-head">'
+    +'<div class="lib-detail-title">'
+      +'<button type="button" class="rd-ibtn" title="'+esc(t('lib_back'))+'" onclick="libBackToVendorGroups()">'+libIcon('back',13,2.2)+'</button>'
+      +'<h2 class="rd-h3">'+esc(entry.name)+'</h2>'
+      +libIbtn('edit','libRenameVendorGroup(\''+entry.id+'\')',t('lib_rename'))
+    +'</div>'
+    +'<div class="rd-actions"><span class="rd-hint">'+vendors.length+' '+esc(isES?'proveedor(es)':'vendor(s)')+'</span></div>'
     +'</div>';
   if(!vendors.length){
-    return header
-      +'<section class="ev-empty fade-in">'
-      +'<div class="ev-empty-shell"><div class="ev-empty-aurora" aria-hidden="true"></div>'
-      +'<div class="ev-empty-grid"><div class="ev-empty-copy">'
-      +'<div class="ev-empty-badge">'+(isES?'Configuración de proveedores':'Vendor setup')+'</div>'
-      +'<h2 class="ev-empty-title">'+(isES?'Organiza todos tus proveedores en un solo lugar.':'Organize all your vendors in one place.')+'</h2>'
-      +'<p class="ev-empty-subtitle">'+(isES?'Crea un plan de proveedores para este grupo. El asistente sugiere los proveedores que necesitas según los servicios que requieras.':'Create a vendor plan for this group. The wizard suggests the vendors you need based on the services you require.')+'</p>'
-      +'<div class="ev-empty-actions">'
-      +'<button class="btn btn-primary btn-create-gradient ev-empty-cta" onclick="libOpenVendorSetupWizardForGroup(\''+entry.id+'\')">'
-      +'<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
-      +(isES?'Crear Plan de Proveedores':'Create Vendor Plan')+'</button>'
-      +'<button class="btn btn-ghost ev-empty-cta" onclick="libOpenVendorModalForGroup(\''+entry.id+'\')">'
-      +'<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
-      +(isES?'Agregar Proveedor':'Add Vendor')+'</button>'
-      +'</div></div></div></div></section>';
+    return header+libEmptyState('vendors',
+      isES?'Organiza todos tus proveedores en un solo lugar.':'Organize all your vendors in one place.',
+      isES?'Crea un plan de proveedores para este grupo. El asistente sugiere los proveedores que necesitas según los servicios que requieras.':'Create a vendor plan for this group. The wizard suggests the vendors you need based on the services you require.',
+      '<button class="btn btn-primary" onclick="libOpenVendorSetupWizardForGroup(\''+entry.id+'\')">'
+      +libIcon('plus',14,2.4)+esc(isES?'Crear plan de proveedores':'Create vendor plan')+'</button>'
+      +'<button class="btn" onclick="libOpenVendorModalForGroup(\''+entry.id+'\')">'
+      +libIcon('plus',14,2.2)+esc(t('lib_add_vendor'))+'</button>');
   }
   var rows=vendors.map(function(v){ return libVendorRow({entryId:entry.id,v:v},isES); }).join('');
   return header
-    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
-    +'<div style="position:relative;flex:1;display:flex;align-items:center">'
-    +'<svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>'
-    +'<input class="input" placeholder="'+(isES?'Buscar proveedores...':'Search vendors...')+'" oninput="libFilterVendors(this.value)" style="padding-left:36px;width:100%">'
+    +'<div class="rd-table" id="lib-vendor-table-wrap">'
+    +'<div class="rd-table-tools">'
+      +libSearchBox(isES?'Buscar proveedores...':'Search vendors...','libFilterVendors(this.value)')
+      +'<button id="lib-bulk-load-btn" class="btn btn-sm" style="display:none" onclick="libBulkLoadToEvent()">'+esc(t('lib_load'))+'</button>'
     +'</div>'
-    +'<button id="lib-bulk-load-btn" class="btn btn-primary btn-sm" style="display:none;white-space:nowrap" onclick="libBulkLoadToEvent()">'
-    +(t('lib_load'))+'</button>'
-    +'</div>'
-    +'<div id="lib-vendor-table-wrap">'
-    +'<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm)">'
-    +'<table style="width:100%;border-collapse:collapse">'
-    +'<thead><tr style="background:var(--bg2);border-bottom:1px solid var(--border)">'
-    +'<th style="padding:9px 12px;width:36px"><input type="checkbox" id="lib-chk-all" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libToggleAllVendors(this.checked)" title="'+(isES?'Seleccionar todos':'Select all')+'"></th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Proveedor':'Vendor')+'</th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Contacto':'Contact')+'</th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Servicios':'Services')+'</th>'
-    +'<th style="padding:9px 14px"></th>'
-    +'</tr></thead>'
-    +'<tbody id="lib-vendor-rows">'+rows+'</tbody>'
-    +'</table></div></div>';
+    +'<div class="rd-table-scroll"><div style="min-width:980px">'
+      +'<div class="rd-thead" style="grid-template-columns:'+LIB_GRID_V+'">'
+        +'<span>'+libCheck('','','libToggleAllVendors(this.checked)','lib-chk-all',isES?'Seleccionar todos':'Select all')+'</span>'
+        +'<span>'+esc(isES?'Proveedor':'Vendor')+'</span>'
+        +'<span>'+esc(isES?'Contacto':'Contact')+'</span>'
+        +'<span>'+esc(isES?'Servicios':'Services')+'</span>'
+        +'<span>'+esc(isES?'Estado':'Status')+'</span>'
+        +'<span></span>'
+      +'</div>'
+      +'<div id="lib-vendor-rows">'+rows+'</div>'
+    +'</div></div></div>';
 }
 function libOpenVendorGroup(id){ _libOpenVendorGroupId=id; renderLibrary(); }
 function libBackToVendorGroups(){ _libOpenVendorGroupId=null; renderLibrary(); }
@@ -671,8 +827,7 @@ function libSearchVendorGroups(q){
     return (entry.vendors||[]).some(function(v){ return [v.name,v.services,v.contact,v.category].some(function(f){return f&&f.toLowerCase().includes(s);}); });
   });
   var el=document.getElementById('lib-vg-rows');
-  if(el) el.innerHTML=filtered.length?filtered.map(function(e){ return libVendorGroupRow(e,isES); }).join('')
-    :'<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--muted);font-size:13px">'+(isES?'Sin resultados':'No results')+'</td></tr>';
+  if(el) el.innerHTML=filtered.length?filtered.map(function(e){ return libVendorGroupRow(e,isES); }).join(''):libNoResults();
   libUpdateVendorGroupBulkBtn();
 }
 function libNewVendorGroupModal(){
@@ -770,21 +925,27 @@ function libOpenVendorSetupWizardForGroup(entryId){
 
 function libVendorRow(item, isES){
   var v=item.v;
-  return '<tr onclick="libOpenVendorModalForGroup(\''+item.entryId+'\',\''+v.id+'\')" style="cursor:pointer" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
-    +'<td style="padding:11px 12px;width:36px" onclick="event.stopPropagation()">'
-    +'<input type="checkbox" class="lib-v-sel" data-entry="'+item.entryId+'" data-vid="'+v.id+'" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libUpdateBulkBtn()">'
-    +'</td>'
-    +'<td style="padding:11px 14px;font-weight:600;font-size:13px;min-width:180px">'+esc(v.name)+'</td>'
-    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);min-width:220px;white-space:nowrap">'+esc(v.contact||'—')+'</td>'
-    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);min-width:260px;white-space:nowrap">'+esc(v.services||'—')+'</td>'
-    +'<td style="padding:11px 14px;text-align:right" onclick="event.stopPropagation()">'
-    +'<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">'
-    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadVendorToEvent(\''+item.entryId+'\',\''+v.id+'\')">'+( t('lib_load'))+'</button>'
-    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar':'Edit')+'" onclick="libOpenVendorModalForGroup(\''+item.entryId+'\',\''+v.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
-    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Duplicar':'Duplicate')+'" onclick="libDuplicateSingleVendor(\''+item.entryId+'\',\''+v.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>'
-    +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDeleteSingleVendor(\''+item.entryId+'\',\''+v.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
-    +'</div></td>'
-    +'</tr>';
+  var st=libVendorStatus(v);
+  var open='libOpenVendorModalForGroup(\''+item.entryId+'\',\''+v.id+'\')';
+  return '<div class="rd-row click" style="grid-template-columns:'+LIB_GRID_V+'" onclick="'+open+'">'
+    +'<span onclick="event.stopPropagation()">'+libCheck('lib-v-sel',' data-entry="'+esc(item.entryId)+'" data-vid="'+esc(v.id)+'"','libUpdateBulkBtn()')+'</span>'
+    +'<div class="lib-namecell">'
+      +'<span class="rd-avatar">'+esc(rdInitials(v.name))+'</span>'
+      +'<div style="min-width:0">'
+        +'<div class="rd-cell-main">'+esc(v.name)+'</div>'
+        +(v.category?'<div class="rd-cell-sub">'+esc(v.category)+'</div>':'')
+      +'</div>'
+    +'</div>'
+    +'<span class="rd-cell">'+esc(v.contact||v.phone||'—')+'</span>'
+    +'<span class="rd-cell">'+esc(v.services||'—')+'</span>'
+    +'<span>'+rdPill(st.label,st.tone,{sm:true,dot:true})+'</span>'
+    +'<div onclick="event.stopPropagation()">'+libActions(
+      '<button class="btn btn-sm" onclick="libLoadVendorToEvent(\''+item.entryId+'\',\''+v.id+'\')">'+esc(t('lib_load'))+'</button>'
+      +libIbtn('edit',open,isES?'Editar':'Edit')
+      +libIbtn('copy','libDuplicateSingleVendor(\''+item.entryId+'\',\''+v.id+'\')',isES?'Duplicar':'Duplicate')
+      +libIbtn('trash','libDeleteSingleVendor(\''+item.entryId+'\',\''+v.id+'\')',isES?'Eliminar':'Delete',true)
+    )+'</div>'
+    +'</div>';
 }
 function renderLibVendors(lib){
   var isES=LANG==='es';
@@ -794,26 +955,22 @@ function renderLibVendors(lib){
   });
   if(!allV.length) return libEmpty();
   var rows=allV.map(function(item){ return libVendorRow(item,isES); }).join('');
-  return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
-    +'<div style="position:relative;flex:1;display:flex;align-items:center">'
-    +'<svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>'
-    +'<input class="input" placeholder="'+(isES?'Buscar proveedores...':'Search vendors...')+'" oninput="libFilterVendors(this.value)" style="padding-left:36px;width:100%">'
+  return '<div class="rd-table" id="lib-vendor-table-wrap">'
+    +'<div class="rd-table-tools">'
+      +libSearchBox(isES?'Buscar proveedores...':'Search vendors...','libFilterVendors(this.value)')
+      +'<button id="lib-bulk-load-btn" class="btn btn-sm" style="display:none" onclick="libBulkLoadToEvent()">'+esc(t('lib_load'))+'</button>'
     +'</div>'
-    +'<button id="lib-bulk-load-btn" class="btn btn-primary btn-sm" style="display:none;white-space:nowrap" onclick="libBulkLoadToEvent()">'
-    +(t('lib_load'))+'</button>'
-    +'</div>'
-    +'<div id="lib-vendor-table-wrap">'
-    +'<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm)">'
-    +'<table style="width:100%;border-collapse:collapse">'
-    +'<thead><tr style="background:var(--bg2);border-bottom:1px solid var(--border)">'
-    +'<th style="padding:9px 12px;width:36px"><input type="checkbox" id="lib-chk-all" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libToggleAllVendors(this.checked)" title="'+(isES?'Seleccionar todos':'Select all')+'"></th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Proveedor':'Vendor')+'</th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Contacto':'Contact')+'</th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Servicios':'Services')+'</th>'
-    +'<th style="padding:9px 14px"></th>'
-    +'</tr></thead>'
-    +'<tbody id="lib-vendor-rows">'+rows+'</tbody>'
-    +'</table></div></div>';
+    +'<div class="rd-table-scroll"><div style="min-width:980px">'
+      +'<div class="rd-thead" style="grid-template-columns:'+LIB_GRID_V+'">'
+        +'<span>'+libCheck('','','libToggleAllVendors(this.checked)','lib-chk-all',isES?'Seleccionar todos':'Select all')+'</span>'
+        +'<span>'+esc(isES?'Proveedor':'Vendor')+'</span>'
+        +'<span>'+esc(isES?'Contacto':'Contact')+'</span>'
+        +'<span>'+esc(isES?'Servicios':'Services')+'</span>'
+        +'<span>'+esc(isES?'Estado':'Status')+'</span>'
+        +'<span></span>'
+      +'</div>'
+      +'<div id="lib-vendor-rows">'+rows+'</div>'
+    +'</div></div></div>';
 }
 function libUpdateBulkBtn(){
   var checked=document.querySelectorAll('.lib-v-sel:checked').length;
@@ -840,7 +997,7 @@ function libFilterVendors(q){
     var v=item.v;
     return [v.name,v.category,v.subcategory,v.services,v.contact,v.notes].some(function(f){return f&&f.toLowerCase().includes(s);});
   });
-  var rows=filtered.map(function(item){ return libVendorRow(item,isES); }).join('');
+  var rows=filtered.length?filtered.map(function(item){ return libVendorRow(item,isES); }).join(''):libNoResults();
   var tb=document.getElementById('lib-vendor-rows'); if(tb) tb.innerHTML=rows;
   libUpdateBulkBtn();
 }
@@ -1151,24 +1308,30 @@ function parseCsvToVendors(csvText){
 }
 function showCsvPreview(vendors){
   var isES=LANG==='es';
+  var box=document.getElementById('csv-preview');
+  if(!box) return;
   if(!vendors.length){
-    document.getElementById('csv-preview').innerHTML='<p style="color:var(--danger);font-size:12px">'+(isES?'No se encontraron proveedores válidos':'No valid vendors found')+'</p>';
+    box.innerHTML='<p class="lib-csv-err">'+esc(isES?'No se encontraron proveedores válidos':'No valid vendors found')+'</p>';
     return;
   }
+  var grid='34px minmax(140px,1.4fr) minmax(140px,1.4fr)';
   var rows=vendors.slice(0,5).map(function(v){
-    return '<tr><td style="padding:6px 8px;font-size:12px;font-weight:600">'+esc(v.name)+'</td>'
-      +'<td style="padding:6px 8px;font-size:11px;color:var(--muted)">'+esc(v.services||'—')+'</td>'
-      +'<td style="padding:6px 8px;font-size:11px;color:var(--muted)">'+esc(v.contact||'—')+'</td></tr>';
+    return '<div class="rd-row lib-csv-row" style="grid-template-columns:'+grid+'">'
+      +'<span class="rd-avatar round">'+esc(rdInitials(v.name))+'</span>'
+      +'<span class="rd-cell-main">'+esc(v.name)+'</span>'
+      +'<span class="rd-cell">'+esc(v.services||v.contact||'—')+'</span>'
+      +'</div>';
   }).join('');
-  document.getElementById('csv-preview').innerHTML=
-    '<div style="font-size:12px;font-weight:600;margin-bottom:6px">'+(isES?'Vista previa':'Preview')+' ('+vendors.length+' '+(isES?'proveedores':'vendors')+'):</div>'
-    +'<div style="overflow-x:auto;max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:6px">'
-    +'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:var(--bg2)">'
-    +'<th style="padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted)">'+(t('lib_name_col'))+'</th>'
-    +'<th style="padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted)">'+(isES?'Servicios':'Services')+'</th>'
-    +'<th style="padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted)">'+(isES?'Contacto':'Contact')+'</th>'
-    +'</tr></thead><tbody>'+rows+'</tbody></table></div>';
-  document.getElementById('csv-import-btn').style.display='';
+  box.innerHTML=
+    '<div class="rd-label lib-csv-head">'+esc(isES?'Vista previa':'Preview')+' · '+vendors.length+' '+esc(isES?'proveedores':'vendors')+'</div>'
+    +'<div class="rd-table lib-csv-table">'
+      +'<div class="rd-thead" style="grid-template-columns:'+grid+'">'
+        +'<span></span><span>'+esc(t('lib_name_col'))+'</span><span>'+esc(isES?'Servicios':'Services')+'</span>'
+      +'</div>'
+      +'<div class="lib-csv-scroll">'+rows+'</div>'
+    +'</div>';
+  var btn=document.getElementById('csv-import-btn');
+  if(btn) btn.style.display='';
 }
 function libDoImportCSV(){
   if(!_csvParsed.length) return;
@@ -1197,23 +1360,22 @@ function renderLibTasks(lib){
 }
 function libTaskRow(tk, isES){
   var clr=tk.color||'#7c3aed';
-  return '<tr onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
-    +'<td style="padding:11px 12px;width:36px" onclick="event.stopPropagation()">'
-    +'<input type="checkbox" class="lib-gt-sel" data-tid="'+tk.id+'" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libUpdateTaskBulkBtn()">'
-    +'</td>'
-    +'<td style="padding:11px 14px;font-weight:600;font-size:13px;vertical-align:middle">'
-    +'<div style="display:flex;align-items:center;gap:8px"><div style="width:10px;height:10px;border-radius:50%;background:'+clr+';flex-shrink:0"></div>'+esc(tk.title)+'</div></td>'
-    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(tk.desc||'—')+'</td>'
-    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted)">'+(tk.durationDays?tk.durationDays+(isES?' días':' days'):'—')+'</td>'
-    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted)">'+esc(tk.assignee||'—')+'</td>'
-    +'<td style="padding:11px 14px;text-align:right" onclick="event.stopPropagation()">'
-    +'<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">'
-    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadTaskToEvent(\''+tk.id+'\')">'+( t('lib_load'))+'</button>'
-    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar':'Edit')+'" onclick="libEditGlobalTask(\''+tk.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
-    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Duplicar':'Duplicate')+'" onclick="libDuplicateGlobalTask(\''+tk.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>'
-    +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDeleteGlobalTask(\''+tk.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
-    +'</div></td>'
-    +'</tr>';
+  return '<div class="rd-row" style="grid-template-columns:'+LIB_GRID_T+'">'
+    +'<span>'+libCheck('lib-gt-sel',' data-tid="'+esc(tk.id)+'"','libUpdateTaskBulkBtn()')+'</span>'
+    +'<div class="lib-namecell">'
+      +'<span class="lib-dot" style="background:'+libColor(clr,'#7c3aed')+'"></span>'
+      +'<span class="rd-cell-main">'+esc(tk.title)+'</span>'
+    +'</div>'
+    +'<span class="rd-cell">'+esc(tk.desc||'—')+'</span>'
+    +'<span class="rd-cell rd-num">'+(tk.durationDays?tk.durationDays+(isES?' días':' days'):'—')+'</span>'
+    +'<span class="rd-cell">'+esc(tk.assignee||'—')+'</span>'
+    +libActions(
+      '<button class="btn btn-sm" onclick="libLoadTaskToEvent(\''+tk.id+'\')">'+esc(t('lib_load'))+'</button>'
+      +libIbtn('edit','libEditGlobalTask(\''+tk.id+'\')',isES?'Editar':'Edit')
+      +libIbtn('copy','libDuplicateGlobalTask(\''+tk.id+'\')',isES?'Duplicar':'Duplicate')
+      +libIbtn('trash','libDeleteGlobalTask(\''+tk.id+'\')',isES?'Eliminar':'Delete',true)
+    )
+    +'</div>';
 }
 function renderLibGlobalTasks(lib){
   if(!lib.globalTasks) lib.globalTasks=[];
@@ -1221,26 +1383,23 @@ function renderLibGlobalTasks(lib){
   var tasks=lib.globalTasks;
   if(!tasks.length) return libEmpty();
   var rows=tasks.map(function(tk){ return libTaskRow(tk,isES); }).join('');
-  return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
-    +'<div style="position:relative;flex:1;display:flex;align-items:center">'
-    +'<svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>'
-    +'<input class="input" placeholder="'+(isES?'Buscar tareas...':'Search tasks...')+'" oninput="libFilterTasks(this.value)" style="padding-left:36px;width:100%">'
+  return '<div class="rd-table">'
+    +'<div class="rd-table-tools">'
+      +libSearchBox(isES?'Buscar tareas...':'Search tasks...','libFilterTasks(this.value)')
+      +'<button id="lib-task-bulk-btn" class="btn btn-sm" style="display:none" onclick="libBulkLoadTasksToEvent()">'
+        +esc(isES?'Cargar seleccionadas a evento':'Load selected into event')+'</button>'
     +'</div>'
-    +'<button id="lib-task-bulk-btn" class="btn btn-primary btn-sm" style="display:none;white-space:nowrap" onclick="libBulkLoadTasksToEvent()">'
-    +(isES?'Cargar Seleccionadas a Evento':'Load Selected into Event')+'</button>'
-    +'</div>'
-    +'<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm)">'
-    +'<table style="width:100%;border-collapse:collapse">'
-    +'<thead><tr style="background:var(--bg2);border-bottom:1px solid var(--border)">'
-    +'<th style="padding:9px 12px;width:36px"><input type="checkbox" id="lib-task-chk-all" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libToggleAllTasks(this.checked)"></th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Tarea':'Task')+'</th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Descripción':'Description')+'</th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Duración':'Duration')+'</th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Asignado a':'Assignee')+'</th>'
-    +'<th style="padding:9px 14px"></th>'
-    +'</tr></thead>'
-    +'<tbody id="lib-task-rows">'+rows+'</tbody>'
-    +'</table></div>';
+    +'<div class="rd-table-scroll"><div style="min-width:980px">'
+      +'<div class="rd-thead" style="grid-template-columns:'+LIB_GRID_T+'">'
+        +'<span>'+libCheck('','','libToggleAllTasks(this.checked)','lib-task-chk-all',isES?'Seleccionar todos':'Select all')+'</span>'
+        +'<span>'+esc(isES?'Tarea':'Task')+'</span>'
+        +'<span>'+esc(isES?'Descripción':'Description')+'</span>'
+        +'<span>'+esc(isES?'Duración':'Duration')+'</span>'
+        +'<span>'+esc(isES?'Asignado a':'Assignee')+'</span>'
+        +'<span></span>'
+      +'</div>'
+      +'<div id="lib-task-rows">'+rows+'</div>'
+    +'</div></div></div>';
 }
 function renderLibTaskGroups(lib){
   if(!lib.tasks) lib.tasks=[];
@@ -1251,124 +1410,112 @@ function renderLibTaskGroups(lib){
   }
   var groups=lib.tasks;
   if(!groups.length){
-    return '<div class="card" style="text-align:center;padding:52px 24px">'
-      +'<svg width="48" height="48" fill="none" stroke="var(--muted)" stroke-width="1.2" viewBox="0 0 24 24" style="margin:0 auto 14px;display:block"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>'
-      +'<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:8px">'+(isES?'No hay grupos de tareas guardados':'No task groups saved yet')+'</div>'
-      +'<div style="font-size:13px;color:var(--muted);max-width:380px;margin:0 auto 20px">'+(isES?'Crea un nuevo grupo para organizar tus tareas reutilizables.':'Create a new group to organize your reusable tasks.')+'</div>'
-      +'<button class="btn btn-primary btn-create-gradient" onclick="libNewTaskGroupModal()">'
-      +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
-      +(isES?' Nuevo Grupo de Tareas':' New Task Group')+'</button></div>';
+    return libEmptyState('tasks',
+      isES?'No hay grupos de tareas guardados':'No task groups saved yet',
+      isES?'Crea un nuevo grupo para organizar tus tareas reutilizables.':'Create a new group to organize your reusable tasks.',
+      '<button class="btn btn-primary" onclick="libNewTaskGroupModal()">'
+      +libIcon('plus',14,2.4)+esc(isES?'Nuevo grupo de tareas':'New task group')+'</button>');
   }
   var rows=groups.map(function(e){ return libTaskGroupRow(e,isES); }).join('');
-  return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
-    +'<div style="position:relative;flex:1;display:flex;align-items:center">'
-    +'<svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>'
-    +'<input class="input" id="lib-tg-search" placeholder="'+(isES?'Buscar grupos o tareas...':'Search groups or tasks...')+'" oninput="libSearchTaskGroups(this.value)" style="padding-left:36px;width:100%">'
+  return '<div class="rd-table">'
+    +'<div class="rd-table-tools">'
+      +libSearchBox(isES?'Buscar grupos o tareas...':'Search groups or tasks...','libSearchTaskGroups(this.value)','lib-tg-search')
+      +'<button id="lib-tg-bulk-load-btn" class="btn btn-sm" style="display:none" onclick="libLoadSelectedTaskGroups()">'+esc(t('lib_load'))+'</button>'
+      +'<button id="lib-tg-bulk-del-btn" class="btn btn-danger btn-sm" style="display:none" onclick="libDeleteSelectedTaskGroups()">'+esc(t('lib_delete_sel'))+'</button>'
     +'</div>'
-    +'<button id="lib-tg-bulk-load-btn" class="btn btn-primary btn-sm" style="display:none;white-space:nowrap" onclick="libLoadSelectedTaskGroups()">'
-    +(t('lib_load'))+'</button>'
-    +'<button id="lib-tg-bulk-del-btn" class="btn btn-danger btn-sm" style="display:none;white-space:nowrap" onclick="libDeleteSelectedTaskGroups()">'
-    +(t('lib_delete_sel'))+'</button>'
-    +'</div>'
-    +'<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm)">'
-    +'<table style="width:100%;border-collapse:collapse">'
-    +'<thead><tr style="background:var(--bg2);border-bottom:1px solid var(--border)">'
-    +'<th style="padding:9px 12px;width:36px"><input type="checkbox" id="lib-tg-chk-all" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libToggleAllTaskGroups(this.checked)"></th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(t('lib_name_col'))+'</th>'
-    +'<th style="padding:9px 14px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Tareas':'Tasks')+'</th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Vista previa':'Preview')+'</th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(t('lib_date_col'))+'</th>'
-    +'<th style="padding:9px 14px"></th>'
-    +'</tr></thead>'
-    +'<tbody id="lib-tg-rows">'+rows+'</tbody>'
-    +'</table></div></div>';
+    +'<div class="rd-table-scroll"><div style="min-width:900px">'
+      +'<div class="rd-thead" style="grid-template-columns:'+LIB_GRID_TG+'">'
+        +'<span>'+libCheck('','','libToggleAllTaskGroups(this.checked)','lib-tg-chk-all',isES?'Seleccionar todos':'Select all')+'</span>'
+        +'<span>'+esc(t('lib_name_col'))+'</span>'
+        +'<span style="text-align:center">'+esc(isES?'Tareas':'Tasks')+'</span>'
+        +'<span>'+esc(isES?'Vista previa':'Preview')+'</span>'
+        +'<span>'+esc(t('lib_date_col'))+'</span>'
+        +'<span></span>'
+      +'</div>'
+      +'<div id="lib-tg-rows">'+rows+'</div>'
+    +'</div></div></div>';
 }
 function libTaskGroupRow(entry,isES){
-  var taskCount=(entry.tasks||[]).length;
-  var preview=(entry.tasks||[]).slice(0,3).map(function(tk){return esc(tk.title||'');}).join(', ')+(taskCount>3?' +'+(taskCount-3):'');
-  return '<tr onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
-    +'<td style="padding:11px 12px;width:36px" onclick="event.stopPropagation()">'
-    +'<input type="checkbox" class="lib-tg-sel" data-id="'+entry.id+'" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libUpdateTaskGroupBulkBtn()">'
-    +'</td>'
-    +'<td style="padding:11px 14px;font-weight:600;font-size:13px;vertical-align:middle"><a href="javascript:void(0)" onclick="event.stopPropagation();libOpenTaskGroup(\''+entry.id+'\')" style="color:inherit;text-decoration:none;cursor:pointer" onmouseover="this.style.color=\'var(--gold)\'" onmouseout="this.style.color=\'inherit\'">'+esc(entry.name)+'</a></td>'
-    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);text-align:center">'+taskCount+'</td>'
-    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(preview||'—')+'</td>'
-    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted)">'+esc(entry.date||'—')+'</td>'
-    +'<td style="padding:11px 14px;text-align:right" onclick="event.stopPropagation()">'
-    +'<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">'
-    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadTasks(\''+entry.id+'\')">'+(t('lib_load'))+'</button>'
-    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar nombre':'Edit name')+'" onclick="libRenameTaskGroup(\''+entry.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
-    +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDelete(\'tasks\',\''+entry.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
-    +'</div></td>'
-    +'</tr>';
+  var name=entry.name||t('lib_untitled');
+  var list=entry.tasks||[];
+  var taskCount=list.length;
+  var done=list.filter(function(tk){return tk.done;}).length;
+  var preview=list.slice(0,3).map(function(tk){return esc(tk.title||'');}).join(', ')+(taskCount>3?' +'+(taskCount-3):'');
+  return '<div class="rd-row" style="grid-template-columns:'+LIB_GRID_TG+'">'
+    +'<span>'+libCheck('lib-tg-sel',' data-id="'+esc(entry.id)+'"','libUpdateTaskGroupBulkBtn()')+'</span>'
+    +'<div class="lib-namecell">'
+      +'<span class="rd-avatar">'+esc(rdInitials(entry.name))+'</span>'
+      +'<button type="button" class="lib-namebtn" onclick="libOpenTaskGroup(\''+entry.id+'\')">'
+        +'<span class="rd-cell-main">'+esc(entry.name)+'</span>'
+        +'<span class="rd-cell-sub">'+done+'/'+taskCount+' '+esc(isES?'completadas':'done')+'</span>'
+      +'</button>'
+    +'</div>'
+    +'<span class="rd-cell rd-num" style="text-align:center">'+taskCount+'</span>'
+    +'<span class="rd-cell">'+(preview||'—')+'</span>'
+    +'<span class="rd-cell">'+esc(entry.date||'—')+'</span>'
+    +libActions(
+      '<button class="btn btn-sm" onclick="libLoadTasks(\''+entry.id+'\')">'+esc(t('lib_load'))+'</button>'
+      +libIbtn('edit','libRenameTaskGroup(\''+entry.id+'\')',isES?'Editar nombre':'Edit name')
+      +libIbtn('trash','libDelete(\'tasks\',\''+entry.id+'\')',isES?'Eliminar':'Delete',true)
+    )
+    +'</div>';
 }
 function renderLibTaskGroupDetail(lib,entry,isES){
   var tasks=entry.tasks||[];
-  var header='<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">'
-    +'<div style="font-size:15px;font-weight:700;color:var(--text)">'+esc(entry.name)+'</div>'
-    +'<button class="btn btn-ghost btn-sm btn-icon" onclick="libRenameTaskGroup(\''+entry.id+'\')" title="'+(t('lib_rename'))+'">'
-    +'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
-    +'<div style="font-size:12px;color:var(--muted);margin-left:auto">'+tasks.length+' '+(isES?'tarea(s)':'task(s)')+'</div>'
+  var header='<div class="rd-tab-head lib-detail-head">'
+    +'<div class="lib-detail-title">'
+      +'<button type="button" class="rd-ibtn" title="'+esc(t('lib_back'))+'" onclick="libBackToTaskGroups()">'+libIcon('back',13,2.2)+'</button>'
+      +'<h2 class="rd-h3">'+esc(entry.name)+'</h2>'
+      +libIbtn('edit','libRenameTaskGroup(\''+entry.id+'\')',t('lib_rename'))
+    +'</div>'
+    +'<div class="rd-actions"><span class="rd-hint">'+tasks.length+' '+esc(isES?'tarea(s)':'task(s)')+'</span></div>'
     +'</div>';
   if(!tasks.length){
-    return header
-      +'<section class="ev-empty fade-in">'
-      +'<div class="ev-empty-shell"><div class="ev-empty-aurora" aria-hidden="true"></div>'
-      +'<div class="ev-empty-grid"><div class="ev-empty-copy">'
-      +'<div class="ev-empty-badge">'+(isES?'Cronograma inicial':'Timeline starter')+'</div>'
-      +'<h2 class="ev-empty-title">'+(isES?'Comienza con un plan maestro listo para trabajar.':'Start with a master plan that is ready to work from.')+'</h2>'
-      +'<p class="ev-empty-subtitle">'+(isES?'Crea una plantilla completa de planificación para este grupo. Después podrás editar cada tarea, responsable y duración como quieras.':'Create a full planning template for this group. After that, you can edit every task, assignee, and duration however you like.')+'</p>'
-      +'<div class="ev-empty-actions">'
-      +'<button class="btn btn-primary btn-create-gradient ev-empty-cta" onclick="libOpenTemplatePlanWizardForGroup(\''+entry.id+'\')">'
-      +'<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
-      +(isES?'Crear Plan de Plantilla':'Create Template Plan')+'</button>'
-      +'<button class="btn btn-ghost ev-empty-cta" onclick="libOpenTaskModalForGroup(\''+entry.id+'\')">'
-      +'<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
-      +(isES?'Agregar Tarea':'Add Task')+'</button>'
-      +'</div></div></div></div></section>';
+    return header+libEmptyState('tasks',
+      isES?'Comienza con un plan maestro listo para trabajar.':'Start with a master plan that is ready to work from.',
+      isES?'Crea una plantilla completa de planificación para este grupo. Después podrás editar cada tarea, responsable y duración como quieras.':'Create a full planning template for this group. After that, you can edit every task, assignee and duration however you like.',
+      '<button class="btn btn-primary" onclick="libOpenTemplatePlanWizardForGroup(\''+entry.id+'\')">'
+      +libIcon('plus',14,2.4)+esc(isES?'Crear plan de plantilla':'Create template plan')+'</button>'
+      +'<button class="btn" onclick="libOpenTaskModalForGroup(\''+entry.id+'\')">'
+      +libIcon('plus',14,2.2)+esc(t('lib_add_task'))+'</button>');
   }
   var rows=tasks.map(function(tk){ return libGroupTaskRow(entry.id,tk,isES); }).join('');
   return header
-    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
-    +'<div style="position:relative;flex:1">'
-    +'<svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>'
-    +'<input class="input" placeholder="'+(isES?'Buscar tareas...':'Search tasks...')+'" oninput="libFilterGroupTasks(\''+entry.id+'\',this.value)" style="padding-left:36px;width:100%">'
+    +'<div class="rd-table" id="lib-task-table-wrap">'
+    +'<div class="rd-table-tools">'
+      +libSearchBox(isES?'Buscar tareas...':'Search tasks...','libFilterGroupTasks(\''+entry.id+'\',this.value)')
+      +'<button id="lib-gtg-bulk-load-btn" class="btn btn-sm" style="display:none" onclick="libBulkLoadGroupTasksToEvent(\''+entry.id+'\')">'+esc(t('lib_load'))+'</button>'
     +'</div>'
-    +'<button id="lib-gtg-bulk-load-btn" class="btn btn-primary btn-sm" style="display:none;white-space:nowrap" onclick="libBulkLoadGroupTasksToEvent(\''+entry.id+'\')">'
-    +(t('lib_load'))+'</button>'
-    +'</div>'
-    +'<div id="lib-task-table-wrap">'
-    +'<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm)">'
-    +'<table style="width:100%;border-collapse:collapse">'
-    +'<thead><tr style="background:var(--bg2);border-bottom:1px solid var(--border)">'
-    +'<th style="padding:9px 12px;width:36px"><input type="checkbox" id="lib-gtg-chk-all" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libToggleAllGroupTasks(this.checked)"></th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Tarea':'Task')+'</th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Descripción':'Description')+'</th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Duración':'Duration')+'</th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Asignado a':'Assignee')+'</th>'
-    +'<th style="padding:9px 14px"></th>'
-    +'</tr></thead>'
-    +'<tbody id="lib-gtg-task-rows">'+rows+'</tbody>'
-    +'</table></div></div>';
+    +'<div class="rd-table-scroll"><div style="min-width:980px">'
+      +'<div class="rd-thead" style="grid-template-columns:'+LIB_GRID_GT+'">'
+        +'<span>'+libCheck('','','libToggleAllGroupTasks(this.checked)','lib-gtg-chk-all',isES?'Seleccionar todos':'Select all')+'</span>'
+        +'<span>'+esc(isES?'Tarea':'Task')+'</span>'
+        +'<span>'+esc(isES?'Descripción':'Description')+'</span>'
+        +'<span>'+esc(isES?'Duración':'Duration')+'</span>'
+        +'<span>'+esc(isES?'Asignado a':'Assignee')+'</span>'
+        +'<span></span>'
+      +'</div>'
+      +'<div id="lib-gtg-task-rows">'+rows+'</div>'
+    +'</div></div></div>';
 }
 function libGroupTaskRow(entryId,tk,isES){
   var clr=tk.color||'#7c3aed';
-  return '<tr onclick="libOpenTaskModalForGroup(\''+entryId+'\',\''+tk.id+'\')" style="cursor:pointer" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
-    +'<td style="padding:11px 12px;width:36px" onclick="event.stopPropagation()">'
-    +'<input type="checkbox" class="lib-gtg-sel" data-entry="'+entryId+'" data-tid="'+tk.id+'" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libUpdateGroupTaskBulkBtn()">'
-    +'</td>'
-    +'<td style="padding:11px 14px;font-weight:600;font-size:13px;vertical-align:middle;min-width:180px">'
-    +'<div style="display:flex;align-items:center;gap:8px"><div style="width:10px;height:10px;border-radius:50%;background:'+clr+';flex-shrink:0"></div>'+esc(tk.title)+'</div></td>'
-    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);min-width:280px;white-space:nowrap">'+esc(tk.desc||'—')+'</td>'
-    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted)">'+(tk.durationDays?tk.durationDays+(isES?' días':' days'):'—')+'</td>'
-    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);min-width:180px;white-space:nowrap">'+esc(tk.assignee||'—')+'</td>'
-    +'<td style="padding:11px 14px;text-align:right" onclick="event.stopPropagation()">'
-    +'<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">'
-    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadGroupTaskToEvent(\''+entryId+'\',\''+tk.id+'\')">'+( t('lib_load'))+'</button>'
-    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar':'Edit')+'" onclick="libOpenTaskModalForGroup(\''+entryId+'\',\''+tk.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
-    +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDeleteGroupTask(\''+entryId+'\',\''+tk.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
-    +'</div></td>'
-    +'</tr>';
+  var open='libOpenTaskModalForGroup(\''+entryId+'\',\''+tk.id+'\')';
+  return '<div class="rd-row click" style="grid-template-columns:'+LIB_GRID_GT+'" onclick="'+open+'">'
+    +'<span onclick="event.stopPropagation()">'+libCheck('lib-gtg-sel',' data-entry="'+esc(entryId)+'" data-tid="'+esc(tk.id)+'"','libUpdateGroupTaskBulkBtn()')+'</span>'
+    +'<div class="lib-namecell">'
+      +'<span class="lib-dot" style="background:'+libColor(clr,'#7c3aed')+'"></span>'
+      +'<span class="rd-cell-main">'+esc(tk.title)+'</span>'
+    +'</div>'
+    +'<span class="rd-cell">'+esc(tk.desc||'—')+'</span>'
+    +'<span class="rd-cell rd-num">'+(tk.durationDays?tk.durationDays+(isES?' días':' days'):'—')+'</span>'
+    +'<span class="rd-cell">'+esc(tk.assignee||'—')+'</span>'
+    +'<div onclick="event.stopPropagation()">'+libActions(
+      '<button class="btn btn-sm" onclick="libLoadGroupTaskToEvent(\''+entryId+'\',\''+tk.id+'\')">'+esc(t('lib_load'))+'</button>'
+      +libIbtn('edit',open,isES?'Editar':'Edit')
+      +libIbtn('trash','libDeleteGroupTask(\''+entryId+'\',\''+tk.id+'\')',isES?'Eliminar':'Delete',true)
+    )+'</div>'
+    +'</div>';
 }
 function libOpenTaskGroup(id){ _libOpenTaskGroupId=id; renderLibrary(); }
 function libBackToTaskGroups(){ _libOpenTaskGroupId=null; renderLibrary(); }
@@ -1431,8 +1578,7 @@ function libSearchTaskGroups(q){
     return (entry.tasks||[]).some(function(tk){ return [tk.title,tk.desc,tk.assignee].some(function(f){return f&&f.toLowerCase().includes(s);}); });
   });
   var el=document.getElementById('lib-tg-rows');
-  if(el) el.innerHTML=filtered.length?filtered.map(function(e){ return libTaskGroupRow(e,isES); }).join('')
-    :'<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--muted);font-size:13px">'+(isES?'Sin resultados':'No results')+'</td></tr>';
+  if(el) el.innerHTML=filtered.length?filtered.map(function(e){ return libTaskGroupRow(e,isES); }).join(''):libNoResults();
   libUpdateTaskGroupBulkBtn();
 }
 function libNewTaskGroupModal(){
@@ -1479,11 +1625,11 @@ function libFilterGroupTasks(entryId,q){
   var lib=getLib(); var isES=LANG==='es';
   var entry=lib.tasks.find(function(e){return e.id===entryId;}); if(!entry) return;
   var s=q.trim().toLowerCase();
-  var filtered=s===''?entry.tasks:(entry.tasks||[]).filter(function(tk){
+  var filtered=s===''?(entry.tasks||[]):(entry.tasks||[]).filter(function(tk){
     return [tk.title,tk.desc,tk.assignee].some(function(f){return f&&f.toLowerCase().includes(s);});
   });
   var tb=document.getElementById('lib-gtg-task-rows');
-  if(tb) tb.innerHTML=filtered.map(function(tk){ return libGroupTaskRow(entryId,tk,isES); }).join('');
+  if(tb) tb.innerHTML=filtered.length?filtered.map(function(tk){ return libGroupTaskRow(entryId,tk,isES); }).join(''):libNoResults();
   libUpdateGroupTaskBulkBtn();
 }
 function libLoadGroupTaskToEvent(entryId,tid){
@@ -1615,7 +1761,7 @@ function libFilterTasks(q){
   var tasks=lib.globalTasks||[];
   var s=q.trim().toLowerCase();
   var filtered=s===''?tasks:tasks.filter(function(tk){return [tk.title,tk.desc,tk.assignee].some(function(f){return f&&f.toLowerCase().includes(s);});});
-  var rows=filtered.map(function(tk){ return libTaskRow(tk,isES); }).join('');
+  var rows=filtered.length?filtered.map(function(tk){ return libTaskRow(tk,isES); }).join(''):libNoResults();
   var tb=document.getElementById('lib-task-rows'); if(tb) tb.innerHTML=rows;
   libUpdateTaskBulkBtn();
 }
@@ -1891,26 +2037,91 @@ function libDoImportTasksCSV(){
   toast((LANG==='es'?added+' tareas importadas':added+' tasks imported'),'s');
 }
 
+// ── Planos: miniatura dibujada con los elementos reales del plano ────────
+/** Numeros del plano: mesas, sillas, elementos y superficie (si hay escala). */
+/** Etiqueta del modulo de planos: en ES la clave lib_layouts dice "Layouts". */
+function libLayoutsLabel(){ return LANG==='es' ? 'Planos' : t('lib_layouts'); }
+function libLayoutStats(entry){
+  var items=(entry&&entry.items)||[];
+  var tables=items.filter(function(i){ return i.shape&&String(i.shape).includes('table'); }).length;
+  var seats=items.reduce(function(s,i){ return s+(+i.chairs||0); },0);
+  var ppm=(entry&&entry.pxPerMeter)||(entry&&entry.floorplan&&entry.floorplan.pxPerMeter)||0;
+  var dims='0';
+  if(items.length){
+    var minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+    items.forEach(function(i){
+      var x=+i.x||0, y=+i.y||0, w=+i.w||0, h=+i.h||0;
+      if(x<minX)minX=x; if(y<minY)minY=y;
+      if(x+w>maxX)maxX=x+w; if(y+h>maxY)maxY=y+h;
+    });
+    if(ppm>0) dims=Math.round((maxX-minX)/ppm)+' × '+Math.round((maxY-minY)/ppm)+' m';
+    else dims=items.length+'';
+  }
+  return {tables:tables, seats:seats, items:items.length, dims:dims, scaled:ppm>0,
+    guests:(entry&&entry.guests)||seats||0};
+}
+
+/** Etiqueta de tipo del plano, deducida de sus elementos reales. */
+function libLayoutTypeLabel(entry){
+  var isES=LANG==='es';
+  if(entry&&entry.location) return String(entry.location);
+  var items=(entry&&entry.items)||[];
+  if(!items.length) return isES?'Vacío':'Empty';
+  var round=0, rect=0;
+  items.forEach(function(i){
+    var sh=String(i.shape||'');
+    if(sh.includes('table')){ if(sh.includes('round')||i.radius==='50%') round++; else rect++; }
+  });
+  if(round&&round>=rect) return isES?'Banquete':'Banquet';
+  if(rect) return isES?'Imperial':'Imperial';
+  return isES?'Espacio abierto':'Open space';
+}
+/** Tono estable a partir del texto de la etiqueta. */
+function libTypeTone(label){
+  var keys=['accent','info','success','warn','purple','champagne'];
+  var s=String(label||''), h=0;
+  for(var i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))>>>0;
+  return s?keys[h%keys.length]:'neutral';
+}
+
+/**
+ * Miniatura SVG del plano con sus elementos reales (posicion, forma y tamano
+ * escalados a la caja).  Si el plano esta vacio devuelve la caja sin contenido.
+ */
+function libLayoutThumb(entry){
+  var items=(entry&&entry.items)||[];
+  if(!items.length) return '';
+  var minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  items.forEach(function(i){
+    var x=+i.x||0, y=+i.y||0, w=+i.w||0, h=+i.h||0;
+    if(x<minX)minX=x; if(y<minY)minY=y;
+    if(x+w>maxX)maxX=x+w; if(y+h>maxY)maxY=y+h;
+  });
+  var bw=Math.max(1,maxX-minX), bh=Math.max(1,maxY-minY);
+  var pad=Math.max(bw,bh)*0.04;
+  var shapes=items.map(function(i){
+    var x=(+i.x||0), y=(+i.y||0), w=Math.max(1,+i.w||0), h=Math.max(1,+i.h||0);
+    var sh=String(i.shape||'');
+    var isRound=sh.includes('round')||i.radius==='50%';
+    var fill=libColor(i.bg,'#C4BBAD');
+    var stroke=libColor(i.bdClr,'rgba(22,19,15,.22)');
+    var rot=+i.rotation||0;
+    var tr=rot?' transform="rotate('+rot+' '+(x+w/2).toFixed(1)+' '+(y+h/2).toFixed(1)+')"':'';
+    if(isRound){
+      return '<ellipse cx="'+(x+w/2).toFixed(1)+'" cy="'+(y+h/2).toFixed(1)+'" rx="'+(w/2).toFixed(1)+'" ry="'+(h/2).toFixed(1)
+        +'" fill="'+fill+'" stroke="'+stroke+'" stroke-width="'+(Math.max(bw,bh)*0.004).toFixed(2)+'"'+tr+'/>';
+    }
+    return '<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+w.toFixed(1)+'" height="'+h.toFixed(1)
+      +'" rx="'+(Math.min(w,h)*0.08).toFixed(1)+'" fill="'+fill+'" stroke="'+stroke+'" stroke-width="'+(Math.max(bw,bh)*0.004).toFixed(2)+'"'+tr+'/>';
+  }).join('');
+  return '<svg class="lib-thumb-svg" viewBox="'+(minX-pad).toFixed(1)+' '+(minY-pad).toFixed(1)+' '
+    +(bw+pad*2).toFixed(1)+' '+(bh+pad*2).toFixed(1)+'" preserveAspectRatio="xMidYMid meet" aria-hidden="true">'
+    +shapes+'</svg>';
+}
+
+// Se conserva el nombre historico: ahora devuelve la misma tarjeta que la rejilla.
 function libLayoutRow(entry, isES){
-  var tables=(entry.items||[]).filter(function(i){return i.shape&&i.shape.includes('table');}).length;
-  var seats=(entry.items||[]).reduce(function(s,i){return s+(i.chairs||0);},0);
-  return '<tr onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
-    +'<td style="padding:11px 12px;width:36px" onclick="event.stopPropagation()">'
-    +'<input type="checkbox" class="lib-ly-sel" data-lid="'+entry.id+'" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libUpdateLayoutBulkBtn()">'
-    +'</td>'
-    +'<td style="padding:11px 14px;font-weight:600;font-size:13px;vertical-align:middle"><a href="javascript:void(0)" onclick="event.stopPropagation();libOpenLayoutEditor(\''+entry.id+'\')" style="color:inherit;text-decoration:none;cursor:pointer" onmouseover="this.style.color=\'var(--gold)\'" onmouseout="this.style.color=\'inherit\'">'+esc(entry.name)+'</a></td>'
-    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted)">'+esc(entry.location||'—')+'</td>'
-    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);text-align:center">'+(entry.guests||seats||'—')+'</td>'
-    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);text-align:center">'+tables+'</td>'
-    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(entry.notes||'—')+'</td>'
-    +'<td style="padding:11px 14px;text-align:right" onclick="event.stopPropagation()">'
-    +'<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">'
-    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadLayoutToEvent(\''+entry.id+'\')">'+( t('lib_load'))+'</button>'
-    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar':'Edit')+'" onclick="libOpenLayoutEditor(\''+entry.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
-    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Duplicar':'Duplicate')+'" onclick="libDuplicateLayout(\''+entry.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>'
-    +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDelete(\'layouts\',\''+entry.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
-    +'</div></td>'
-    +'</tr>';
+  return libLayoutCard(entry, isES);
 }
 var _expandedLibLayoutIds=[];
 function toggleLibLayoutExpand(lid){
@@ -1920,94 +2131,67 @@ function toggleLibLayoutExpand(lid){
   if(card) card.classList.toggle('emc-open',_expandedLibLayoutIds.indexOf(lid)>-1);
 }
 function libLayoutCard(entry, isES){
-  var tables=(entry.items||[]).filter(function(i){return i.shape&&i.shape.includes('table');}).length;
-  var seats=(entry.items||[]).reduce(function(s,i){return s+(i.chairs||0);},0);
-  var isOpen=_expandedLibLayoutIds.indexOf(entry.id)>-1;
-  return `<article class="emc llmc${isOpen?' emc-open':''}" data-lid="${entry.id}">
-    <div class="emc-summary" onclick="toggleLibLayoutExpand('${entry.id}')">
-      <label onclick="event.stopPropagation()" style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;flex-shrink:0">
-        <input type="checkbox" class="lib-ly-sel" data-lid="${entry.id}" style="width:16px;height:16px;accent-color:var(--gold-h);cursor:pointer" onchange="libUpdateLayoutBulkBtn()">
-      </label>
-      <div class="emc-info">
-        <div class="emc-name">${esc(entry.name)}</div>
-        <div class="emc-row">
-          <span class="emc-date">${tables} ${isES?'mesas':'tables'} · ${seats} ${isES?'sillas':'seats'}</span>
-          ${entry.location?'<span class="emc-days">'+esc(entry.location)+'</span>':''}
-        </div>
-      </div>
-      <svg class="emc-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-    </div>
-    <div class="emc-detail">
-      <div class="emc-meta">
-        <div class="emc-meta-item"><span class="emc-meta-lbl">${isES?'Invitados':'Guests'}</span><span class="emc-meta-val">${entry.guests||seats||'—'}</span></div>
-        <div class="emc-meta-item"><span class="emc-meta-lbl">${isES?'Mesas':'Tables'}</span><span class="emc-meta-val">${tables||'—'}</span></div>
-        ${entry.location?'<div class="emc-meta-item"><span class="emc-meta-lbl">'+(isES?'Ubicación':'Location')+'</span><span class="emc-meta-val">'+esc(entry.location)+'</span></div>':''}
-        ${entry.notes?'<div class="emc-meta-item emc-meta-full"><span class="emc-meta-lbl">'+(isES?'Notas':'Notes')+'</span><span class="emc-meta-val">'+esc(entry.notes)+'</span></div>':''}
-      </div>
-      <div class="emc-actions" onclick="event.stopPropagation()">
-        <button class="btn btn-primary btn-sm" onclick="libOpenLayoutEditor('${entry.id}')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg> ${isES?'Abrir':'Open'}</button>
-        <button class="btn btn-ghost btn-sm" onclick="libLoadLayoutToEvent('${entry.id}')">${isES?'Cargar':'Load'}</button>
-        <button class="btn btn-ghost btn-sm" onclick="libDuplicateLayout('${entry.id}')">${isES?'Duplicar':'Duplicate'}</button>
-        <button class="btn btn-danger btn-sm" onclick="libDelete('layouts','${entry.id}')">${isES?'Eliminar':'Delete'}</button>
-      </div>
-    </div>
-  </article>`;
-}
-function renderLibLayouts(lib){
-  if(!lib.layouts.length){
-    var isES=LANG==='es';
-    return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;text-align:center">'
-      +'<div style="width:80px;height:80px;border-radius:50%;background:var(--gold-l);display:flex;align-items:center;justify-content:center;margin-bottom:24px">'
-      +'<svg width="36" height="36" fill="none" stroke="var(--gold-h)" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div>'
-      +'<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:26px;font-weight:700;margin-bottom:10px">'+(isES?'Crea tu primer layout':'Create your first layout')+'</h2>'
-      +'<p style="color:var(--muted);font-size:14px;max-width:400px;margin-bottom:32px">'+(isES?'Diseña layouts reutilizables con mesas, pista de baile, escenario y más. Cárgalos en cualquier evento.':'Design reusable layouts with tables, dance floor, stage and more. Load them into any event.')+'</p>'
-      +'<button class="btn btn-primary btn-create-gradient" style="padding:14px 32px;font-size:15px" onclick="libOpenLayoutWizard()">'
-      +'<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="margin-right:8px"><path d="M12 5v14M5 12h14"/></svg>'
-      +(isES?'Crear primer layout':'Create First Layout')+'</button>'
-      
-      +'</div>';
-  }
-  var isES=LANG==='es';
-  if(isPhoneViewport()){
-    var cards=lib.layouts.map(function(entry){ return libLayoutCard(entry,isES); }).join('');
-    return '<div class="mobile-section-toolbar">'
-      +'<div style="display:grid;gap:10px">'
-      +'<input class="input" placeholder="'+(isES?'Buscar planos...':'Search layouts...')+'" oninput="libFilterLayouts(this.value)">'
-      +'<div class="mobile-inline-actions">'
-      +'<label class="btn btn-ghost btn-sm" style="display:inline-flex;align-items:center;gap:8px">'
-      +'<input type="checkbox" id="lib-layout-chk-all" style="width:16px;height:16px;accent-color:var(--gold-h);cursor:pointer" onchange="libToggleAllLayouts(this.checked)">'
-      +'<span>'+(isES?'Seleccionar visibles':'Select visible')+'</span></label>'
-      +'<button id="lib-layout-bulk-btn" class="btn btn-primary btn-sm" style="display:none" onclick="libBulkLoadLayoutsToEvent()">'+(isES?'Cargar':'Load')+'</button>'
-      +'<button id="lib-layout-bulk-del" class="btn btn-danger btn-sm" style="display:none" onclick="libBulkDeleteLayouts()">'+(isES?'Eliminar':'Delete')+'</button>'
-      +'</div></div>'
+  var st=libLayoutStats(entry);
+  var typeLbl=libLayoutTypeLabel(entry);
+  var thumb=libLayoutThumb(entry);
+  var spaceLbl=st.scaled?(isES?'Espacio':'Space'):(isES?'Elementos':'Elements');
+  return '<article class="rd-card clip hover lib-plan" data-lid="'+esc(entry.id)+'">'
+    +'<div class="lib-thumb rd-grid-bg">'
+      +(thumb||'<span class="lib-thumb-empty">'+esc(isES?'Plano vacío':'Empty plan')+'</span>')
+      +'<label class="lib-thumb-chk" onclick="event.stopPropagation()">'
+        +libCheck('lib-ly-sel',' data-lid="'+esc(entry.id)+'"','libUpdateLayoutBulkBtn()')
+      +'</label>'
+      +rdPill(typeLbl,libTypeTone(typeLbl),{up:true,cls:'lib-thumb-tag'})
+    +'</div>'
+    +'<div class="lib-plan-body">'
+      +'<h3 class="lib-plan-name">'+esc(entry.name)+'</h3>'
+      +'<div class="lib-plan-stats">'
+        +'<div><div class="lib-plan-num rd-num">'+st.tables+'</div><div class="rd-mini">'+esc(isES?'Mesas':'Tables')+'</div></div>'
+        +'<div><div class="lib-plan-num rd-num">'+st.seats+'</div><div class="rd-mini">'+esc(isES?'Sillas':'Chairs')+'</div></div>'
+        +'<div><div class="lib-plan-num rd-num">'+esc(st.dims)+'</div><div class="rd-mini">'+esc(spaceLbl)+'</div></div>'
       +'</div>'
-      +'<div id="lib-layout-rows" class="mobile-card-list">'+cards+'</div>'
-      +renderMobileStickyActionBar('<button class="btn btn-primary btn-create-gradient" onclick="libOpenLayoutWizard()">'+(isES?'Nuevo Layout':'New Layout')+'</button>');
+      +'<div class="lib-plan-foot">'
+        +'<span>'+esc(libEditedLabel(entry))+'</span>'
+        +'<span class="lib-dotsep"></span>'
+        +'<span class="rd-ellipsis">'+esc(entry.notes||entry.location||(isES?'Sin descripción':'No description'))+'</span>'
+      +'</div>'
+      +'<div class="lib-plan-actions">'
+        +'<button class="btn btn-primary btn-sm lib-plan-open" onclick="libOpenLayoutEditor(\''+entry.id+'\')">'+esc(isES?'Abrir':'Open')+'</button>'
+        +'<button class="btn btn-sm" onclick="libDuplicateLayout(\''+entry.id+'\')">'+esc(isES?'Duplicar':'Duplicate')+'</button>'
+        +libIbtn('send','libLoadLayoutToEvent(\''+entry.id+'\')',t('lib_load'))
+        +libIbtn('trash','libDelete(\'layouts\',\''+entry.id+'\')',isES?'Eliminar':'Delete',true)
+      +'</div>'
+    +'</div></article>';
+}
+/** Tile punteado "Nuevo plano" que abre el asistente. */
+function libNewPlanTile(){
+  var isES=LANG==='es';
+  return '<button type="button" class="rd-dash lib-plan-new" onclick="libOpenLayoutWizard()">'
+    +'<span class="rd-dash-ico">'+libIcon('plus',18,2.2)+'</span>'
+    +'<span class="lib-plan-new-t">'+esc(t('lib_new_layout'))+'</span>'
+    +'<span class="lib-plan-new-s">'+esc(isES?'Desde plantilla o en blanco':'From a template or blank')+'</span>'
+    +'</button>';
+}
+
+function renderLibLayouts(lib){
+  var isES=LANG==='es';
+  if(!lib.layouts.length){
+    return libEmptyState('layout',
+      isES?'Crea tu primer plano':'Create your first floor plan',
+      isES?'Diseña planos reutilizables con mesas, pista de baile, escenario y más. Cárgalos en cualquier evento.':'Design reusable plans with tables, dance floor, stage and more. Load them into any event.',
+      '<button class="btn btn-primary" onclick="libOpenLayoutWizard()">'
+      +libIcon('plus',14,2.4)+esc(isES?'Crear primer plano':'Create first plan')+'</button>');
   }
-  var rows=lib.layouts.map(function(entry){ return libLayoutRow(entry,isES); }).join('');
-  return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
-    +'<div style="position:relative;flex:1;display:flex;align-items:center">'
-    +'<svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>'
-    +'<input class="input" placeholder="'+(isES?'Buscar planos...':'Search layouts...')+'" oninput="libFilterLayouts(this.value)" style="padding-left:36px;width:100%">'
+  var cards=lib.layouts.map(function(entry){ return libLayoutCard(entry,isES); }).join('');
+  return '<div class="rd-toolrow lib-plan-tools">'
+      +libSearchBox(isES?'Buscar planos...':'Search plans...','libFilterLayouts(this.value)')
+      +'<label class="lib-selall">'+libCheck('','','libToggleAllLayouts(this.checked)','lib-layout-chk-all')
+        +'<span>'+esc(isES?'Seleccionar visibles':'Select visible')+'</span></label>'
+      +'<button id="lib-layout-bulk-btn" class="btn btn-sm" style="display:none" onclick="libBulkLoadLayoutsToEvent()">'+esc(t('lib_load'))+'</button>'
+      +'<button id="lib-layout-bulk-del" class="btn btn-danger btn-sm" style="display:none" onclick="libBulkDeleteLayouts()">'+esc(t('lib_delete_sel'))+'</button>'
     +'</div>'
-    +'<button id="lib-layout-bulk-btn" class="btn btn-primary btn-sm" style="display:none;white-space:nowrap" onclick="libBulkLoadLayoutsToEvent()">'
-    +(t('lib_load'))+'</button>'
-    +'<button id="lib-layout-bulk-del" class="btn btn-danger btn-sm" style="display:none;white-space:nowrap;margin-left:6px" onclick="libBulkDeleteLayouts()">'
-    +(isES?'Eliminar Seleccionados':'Delete Selected')+'</button>'
-    +'</div>'
-    +'<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm)">'
-    +'<table style="width:100%;border-collapse:collapse">'
-    +'<thead><tr style="background:var(--bg2);border-bottom:1px solid var(--border)">'
-    +'<th style="padding:9px 12px;width:36px"><input type="checkbox" id="lib-layout-chk-all" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libToggleAllLayouts(this.checked)"></th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(t('lib_name_col'))+'</th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Ubicación':'Location')+'</th>'
-    +'<th style="padding:9px 14px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Invitados':'Guests')+'</th>'
-    +'<th style="padding:9px 14px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Mesas':'Tables')+'</th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Descripción':'Description')+'</th>'
-    +'<th style="padding:9px 14px"></th>'
-    +'</tr></thead>'
-    +'<tbody id="lib-layout-rows">'+rows+'</tbody>'
-    +'</table></div>';
+    +'<div id="lib-layout-rows" class="lib-plan-grid">'+libNewPlanTile()+cards+'</div>'
+    +renderMobileStickyActionBar('<button class="btn btn-primary" onclick="libOpenLayoutWizard()">'+esc(t('lib_new_layout'))+'</button>');
 }
 function libFilterLayouts(q){
   var lib=getLib(); var isES=LANG==='es';
@@ -2016,10 +2200,9 @@ function libFilterLayouts(q){
     var tables=String(e.items?e.items.filter(function(i){return i.shape&&i.shape.includes('table');}).length:'');
     return [e.name,e.location,e.notes,e.guests,tables].some(function(f){return f&&String(f).toLowerCase().includes(s);});
   });
-  var rows=isPhoneViewport()
-    ? (filtered.length?filtered.map(function(e){ return libLayoutCard(e,isES); }).join(''):'<div class="mobile-record-card" style="text-align:center;color:var(--muted)">'+(isES?'Sin resultados':'No results')+'</div>')
-    : filtered.map(function(e){ return libLayoutRow(e,isES); }).join('');
-  var tb=document.getElementById('lib-layout-rows'); if(tb) tb.innerHTML=rows;
+  var body=filtered.length?filtered.map(function(e){ return libLayoutCard(e,isES); }).join(''):libNoResults();
+  var tb=document.getElementById('lib-layout-rows'); if(tb) tb.innerHTML=libNewPlanTile()+body;
+  libUpdateLayoutBulkBtn();
 }
 function libUpdateLayoutBulkBtn(){
   var checked=document.querySelectorAll('.lib-ly-sel:checked').length;
@@ -2160,32 +2343,38 @@ function libSaveEditLayout(entryId){
 }
 
 function renderLibTypes(lib, type){
+  var isES=LANG==='es';
   var data = lib[type]||{};
   var keys = Object.keys(data);
-  if(!keys.length) return libEmpty();
   var typeLabel = {tables:t('lib_tables'),elements:t('lib_elements'),chairs:t('lib_chairs'),centerpieces:t('lib_centerpieces')}[type]||type;
-  var loadBtn_all = proj()
-    ? '<button class="btn btn-primary btn-sm" onclick="libLoadTypes(\''+type+'\')">'+t('lib_load_btn')+'</button>'
-    : '';
-  return lib[type+'_packs'] && lib[type+'_packs'].length
-    ? lib[type+'_packs'].map(function(pack){
-        var sub = Object.keys(pack.data).length+' '+typeLabel+' · '+pack.date;
-        var loadBtn = proj()
-          ? '<button class="btn btn-primary btn-sm" onclick="libLoadTypesPack(\''+type+'\',\''+pack.id+'\')">'+t('lib_load_btn')+'</button>'
-          : '';
-        return libCard(pack.name, sub, '', loadBtn, pack.id, type+'_pack');
-      }).join('')
-    : '<div style="padding:16px 18px;background:#fff;border:1.5px solid var(--border);border-radius:var(--r-lg)">'
-      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
-      +'<div style="font-weight:700;font-size:14px">'+typeLabel+' <span style="font-weight:400;color:var(--muted);font-size:12px">('+keys.length+')</span></div>'
-      +loadBtn_all+'</div>'
-      +'<div style="display:flex;flex-wrap:wrap;gap:6px">'
-      +keys.map(function(k){
-        var item=data[k]; var lbl=item.label||k;
-        return '<span class="badge b-gray" style="display:inline-flex;align-items:center;gap:4px">'
-          +(item.color?'<span style="width:10px;height:10px;border-radius:2px;background:'+item.color+';display:inline-block"></span>':'')
-          +esc(lbl)+'</span>';
-      }).join('')+'</div></div>';
+  if(!keys.length && !(lib[type+'_packs'] && lib[type+'_packs'].length)){
+    return libEmptyState('cube', t('lib_empty'), t('lib_empty_sub'), '');
+  }
+  if(lib[type+'_packs'] && lib[type+'_packs'].length){
+    return '<div class="lib-pack-grid">'+lib[type+'_packs'].map(function(pack){
+      var cnt=Object.keys(pack.data||{}).length;
+      return '<section class="rd-card pad lib-pack">'
+        +'<div class="rd-card-title"><h2>'+esc(pack.name)+'</h2>'
+          +rdPill(cnt+' '+typeLabel,'neutral',{sm:true})+'</div>'
+        +'<div class="lib-pack-foot">'
+          +'<span class="rd-hint">'+esc(pack.date||'—')+'</span>'
+          +'<div class="rd-spacer"></div>'
+          +(proj()?'<button class="btn btn-sm" onclick="libLoadTypesPack(\''+type+'\',\''+pack.id+'\')">'+esc(t('lib_load_btn'))+'</button>':'')
+          +libIbtn('trash','libDelete(\''+type+'_pack\',\''+pack.id+'\')',isES?'Eliminar':'Delete',true)
+        +'</div></section>';
+    }).join('')+'</div>';
+  }
+  return '<section class="rd-card pad">'
+    +'<div class="rd-card-title"><h2>'+esc(typeLabel)+' <span class="rd-hint">('+keys.length+')</span></h2>'
+      +(proj()?'<button class="btn btn-sm" onclick="libLoadTypes(\''+type+'\')">'+esc(t('lib_load_btn'))+'</button>':'')+'</div>'
+    +'<div class="lib-chiprow">'
+    +keys.map(function(k){
+      var item=data[k]||{}; var lbl=item.label||k;
+      return '<span class="lib-chip">'
+        +(item.color?'<i style="background:'+libColor(item.color)+'"></i>':'')
+        +esc(lbl)+'</span>';
+    }).join('')
+    +'</div></section>';
 }
 
 function libFilterMoodboards(q){
@@ -2193,10 +2382,7 @@ function libFilterMoodboards(q){
   var s=q.trim().toLowerCase();
   var filtered=s===''?lib.moodboards:lib.moodboards.filter(function(e){return e.name.toLowerCase().includes(s);});
   var el=document.getElementById('lib-mb-rows'); if(!el) return;
-  el.innerHTML=isPhoneViewport()
-    ? (filtered.length?filtered.map(function(e){ return libMoodboardCard(e,isES); }).join(''):'<div class="mobile-record-card" style="text-align:center;color:var(--muted)">'+(isES?'Sin resultados':'No results')+'</div>')
-    : (filtered.length?filtered.map(function(e){ return _libMbRow(e,isES); }).join('')
-      :'<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--muted);font-size:13px">'+(isES?'Sin resultados':'No results')+'</td></tr>');
+  el.innerHTML=filtered.length?filtered.map(function(e){ return _libMbRow(e,isES); }).join(''):libNoResults();
   libUpdateMoodboardBulkBtn();
 }
 
@@ -2691,22 +2877,27 @@ function _libMbRow(entry, isES){
   var images = entry.images || [];
   var imgCnt = images.length;
   var folderCount = (entry.folders||[]).length + ((entry.uncategorized||[]).length ? 1 : 0) + (images.length ? 1 : 0);
-  return '<tr onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
-    +'<td style="padding:11px 12px;width:36px" onclick="event.stopPropagation()">'
-    +'<input type="checkbox" class="lib-mb-sel" data-id="'+entry.id+'" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libUpdateMoodboardBulkBtn()">'
-    +'</td>'
-    +'<td style="padding:11px 14px;font-weight:600;font-size:13px;vertical-align:middle"><a href="javascript:void(0)" onclick="event.stopPropagation();libOpenMoodboardFolder(\''+entry.id+'\')" style="color:inherit;text-decoration:none;cursor:pointer" onmouseover="this.style.color=\'var(--gold)\'" onmouseout="this.style.color=\'inherit\'">'+esc(entry.name)+'</a></td>'
-    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);text-align:center">'+imgCnt+'</td>'
-    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted);text-align:center">'+folderCount+'</td>'
-    +'<td style="padding:11px 14px;font-size:12px;color:var(--muted)">'+esc(entry.date||'—')+'</td>'
-    +'<td style="padding:11px 14px;text-align:right" onclick="event.stopPropagation()">'
-    +'<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">'
-    +'<button class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap" onclick="libLoadMoodboard(\''+entry.id+'\')">'+(t('lib_load'))+'</button>'
-    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Editar':'Edit')+'" onclick="libEditMoodboardFolder(\''+entry.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'
-    +'<button class="btn btn-ghost btn-sm btn-icon" title="'+(isES?'Duplicar':'Duplicate')+'" onclick="libDuplicateMoodboardFolder(\''+entry.id+'\')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>'
-    +'<button class="btn btn-danger btn-sm btn-icon" onclick="libDelete(\'moodboards\',\''+entry.id+'\')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>'
-    +'</div></td>'
-    +'</tr>';
+  var thumb = images.length
+    ? '<img class="lib-mb-thumb" src="'+esc(images[0])+'" alt="" loading="lazy">'
+    : '<span class="rd-avatar">'+esc(rdInitials(entry.name))+'</span>';
+  return '<div class="rd-row" style="grid-template-columns:'+LIB_GRID_MB+'">'
+    +'<span>'+libCheck('lib-mb-sel',' data-id="'+esc(entry.id)+'"','libUpdateMoodboardBulkBtn()')+'</span>'
+    +'<div class="lib-namecell">'+thumb
+      +'<button type="button" class="lib-namebtn" onclick="libOpenMoodboardFolder(\''+entry.id+'\')">'
+        +'<span class="rd-cell-main">'+esc(entry.name)+'</span>'
+        +'<span class="rd-cell-sub">'+(imgCnt?esc(isES?'Listo':'Ready'):esc(isES?'Vacío':'Empty'))+'</span>'
+      +'</button>'
+    +'</div>'
+    +'<span class="rd-cell rd-num" style="text-align:center">'+imgCnt+'</span>'
+    +'<span class="rd-cell rd-num" style="text-align:center">'+folderCount+'</span>'
+    +'<span class="rd-cell">'+esc(entry.date||'—')+'</span>'
+    +libActions(
+      '<button class="btn btn-sm" onclick="libLoadMoodboard(\''+entry.id+'\')">'+esc(t('lib_load'))+'</button>'
+      +libIbtn('edit','libEditMoodboardFolder(\''+entry.id+'\')',isES?'Editar':'Edit')
+      +libIbtn('copy','libDuplicateMoodboardFolder(\''+entry.id+'\')',isES?'Duplicar':'Duplicate')
+      +libIbtn('trash','libDelete(\'moodboards\',\''+entry.id+'\')',isES?'Eliminar':'Delete',true)
+    )
+    +'</div>';
 }
 var _expandedLibMbIds=[];
 function toggleLibMbExpand(mid){
@@ -2800,21 +2991,19 @@ function renderLibMoodboards(lib){
     var entry=lib.moodboards.find(function(e){return e.id===_mbOpenFolderId;});
     if(!entry){ _mbOpenFolderId=null; return renderLibMoodboards(lib); }
     var images=entry.images||[];
-    var breadcrumb='<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">'
-      +'<button class="btn btn-ghost btn-sm" style="display:flex;align-items:center;gap:5px;padding:5px 10px" onclick="libMbBackToFolders()">'
-      +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>'
-      +(isES?'Moodboards':'Moodboards')+'</button>'
-      +'<svg width="12" height="12" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>'
-      +'<span style="font-size:13px;font-weight:700">'+esc(entry.name)+'</span>'
-      +'<span style="font-size:11px;color:var(--muted);margin-left:4px">'+images.length+' '+(isES?'imagen(es)':'image(s)')+'</span>'
+    var breadcrumb='<div class="rd-tab-head lib-detail-head">'
+      +'<div class="lib-detail-title">'
+        +'<button type="button" class="rd-ibtn" title="'+esc(t('lib_back'))+'" onclick="libMbBackToFolders()">'+libIcon('back',13,2.2)+'</button>'
+        +'<h2 class="rd-h3">'+esc(entry.name)+'</h2>'
+      +'</div>'
+      +'<div class="rd-actions"><span class="rd-hint">'+images.length+' '+esc(isES?'imagen(es)':'image(s)')+'</span></div>'
       +'</div>';
     if(!images.length){
-      return breadcrumb
-        +'<div style="text-align:center;padding:60px 20px;color:var(--muted)">'
-        +'<svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24" style="margin-bottom:14px;display:block;margin-left:auto;margin-right:auto"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
-        +'<div style="font-size:15px;font-weight:600;margin-bottom:6px">'+(isES?'Sin imágenes aún':'No images yet')+'</div>'
-        +'<div style="font-size:13px;margin-bottom:24px">'+(isES?'Usa el botón "Subir Imágenes" para agregar fotos.':'Use the "Upload Images" button to add photos.')+'</div>'
-        +'</div>';
+      return breadcrumb+libEmptyState('upload',
+        isES?'Sin imágenes aún':'No images yet',
+        isES?'Usa el botón "Subir imágenes" para agregar fotos a este moodboard.':'Use the "Upload images" button to add photos to this moodboard.',
+        '<button class="btn btn-primary" onclick="libMoodboardUploadImages(\''+entry.id+'\')">'
+        +libIcon('upload',14,2)+esc(t('lib_upload_images'))+'</button>');
     }
     return breadcrumb
       +'<div class="mb-gallery">'
@@ -2822,69 +3011,45 @@ function renderLibMoodboards(lib){
         var spanClass = typeof mbSpanClass === 'function' ? mbSpanClass(i, images.length) : '';
         return '<div class="mb-card mb-bento-item '+spanClass+'" onclick="libMbLightbox(\''+_mbOpenFolderId+'\','+i+')">'
           +'<div class="media-zoom" style="position:relative;overflow:hidden;cursor:zoom-in;flex:1;min-height:0">'
-          +'<img src="'+src+'" class="media-zoom-img" alt="'+esc(LANG==='es'?'Imagen ampliada':'Zoomed image')+'" style="width:100%;height:100%;object-fit:cover;display:block" draggable="false">'
+          +'<img src="'+esc(src)+'" class="media-zoom-img" alt="'+esc(isES?'Imagen ampliada':'Zoomed image')+'" style="width:100%;height:100%;object-fit:cover;display:block" draggable="false">'
           +'<div class="media-zoom-overlay"></div>'
-          +'<div class="mb-meta"><div class="mb-meta-title">'+esc(entry.name)+'</div><div class="mb-meta-sub">'+(isES?'Moodboard':'Moodboard')+'</div></div>'
+          +'<div class="mb-meta"><div class="mb-meta-title">'+esc(entry.name)+'</div><div class="mb-meta-sub">Moodboard</div></div>'
           +'</div>'
           +'<div class="mb-card-actions" style="opacity:1">'
-          +'<button class="icon-btn icon-btn-danger" onclick="event.stopPropagation();libMoodboardDeleteImage(\''+_mbOpenFolderId+'\','+i+')" title="'+(isES?'Eliminar':'Delete')+'">'
+          +'<button class="icon-btn icon-btn-danger" onclick="event.stopPropagation();libMoodboardDeleteImage(\''+_mbOpenFolderId+'\','+i+')" title="'+esc(isES?'Eliminar':'Delete')+'">'
           +'<svg width="10" height="10" fill="none" stroke="#fff" stroke-width="2.5" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>'
           +'</div></div>';
       }).join('')
       +'</div>'
-      +renderMobileStickyActionBar('<button class="btn btn-primary" onclick="libMoodboardUploadImages(\''+_mbOpenFolderId+'\')">'+(isES?'Subir imágenes':'Upload images')+'</button>');
+      +renderMobileStickyActionBar('<button class="btn btn-primary" onclick="libMoodboardUploadImages(\''+_mbOpenFolderId+'\')">'+esc(t('lib_upload_images'))+'</button>');
   }
 
   if(!lib.moodboards.length){
-    return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;text-align:center">'
-      +'<div style="width:80px;height:80px;border-radius:50%;background:var(--gold-l);display:flex;align-items:center;justify-content:center;margin-bottom:24px">'
-      +'<svg width="36" height="36" fill="none" stroke="var(--gold-h)" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg></div>'
-      +'<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:26px;font-weight:700;margin-bottom:10px">'+(isES?'Crea tu primer moodboard':'Create your first moodboard')+'</h2>'
-      +'<p style="color:var(--muted);font-size:14px;max-width:400px;margin-bottom:32px">'+(isES?'Organiza imágenes de inspiración en moodboards reutilizables para tus eventos.':'Organize inspiration images in reusable moodboards for your events.')+'</p>'
-      +'<button class="btn btn-primary btn-create-gradient" style="padding:14px 32px;font-size:15px" onclick="libCreateMoodboardFolder()">'
-      +'<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="margin-right:8px"><path d="M12 5v14M5 12h14"/></svg>'
-      +(isES?'Crear primer moodboard':'Create First Moodboard')+'</button>'
-      +'</div>';
-  }
-  if(isPhoneViewport()){
-    var cards=lib.moodboards.map(function(e){ return libMoodboardCard(e,isES); }).join('');
-    return '<div class="mobile-section-toolbar">'
-      +'<div style="display:grid;gap:10px">'
-      +'<input class="input" placeholder="'+(t('lib_search_groups'))+'" oninput="libFilterMoodboards(this.value)">'
-      +'<div class="mobile-inline-actions">'
-      +'<label class="btn btn-ghost btn-sm" style="display:inline-flex;align-items:center;gap:8px">'
-      +'<input type="checkbox" id="lib-mb-chk-all" style="width:16px;height:16px;accent-color:var(--gold-h);cursor:pointer" onchange="libToggleAllMoodboards(this.checked)">'
-      +'<span>'+(isES?'Seleccionar visibles':'Select visible')+'</span></label>'
-      +'<button id="lib-mb-bulk-load-btn" class="btn btn-primary btn-sm" style="display:none" onclick="libLoadSelectedMoodboards()">'+(isES?'Cargar':'Load')+'</button>'
-      +'<button id="lib-mb-bulk-del-btn" class="btn btn-danger btn-sm" style="display:none" onclick="libDeleteSelectedMoodboards()">'+(isES?'Eliminar':'Delete')+'</button>'
-      +'</div></div>'
-      +'</div>'
-      +'<div id="lib-mb-rows" class="mobile-card-list">'+cards+'</div>'
-      +renderMobileStickyActionBar('<button class="btn btn-primary btn-create-gradient" onclick="libCreateMoodboardFolder()">'+(t('lib_new_moodboard'))+'</button>');
+    return libEmptyState('mood',
+      isES?'Crea tu primer moodboard':'Create your first moodboard',
+      isES?'Organiza imágenes de inspiración en moodboards reutilizables para tus eventos.':'Organize inspiration images in reusable moodboards for your events.',
+      '<button class="btn btn-primary" onclick="libCreateMoodboardFolder()">'
+      +libIcon('plus',14,2.4)+esc(isES?'Crear primer moodboard':'Create first moodboard')+'</button>');
   }
   var rows=lib.moodboards.map(function(e){ return _libMbRow(e,isES); }).join('');
-  return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
-    +'<div style="position:relative;flex:1;display:flex;align-items:center">'
-    +'<svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>'
-    +'<input class="input" placeholder="'+(t('lib_search_groups'))+'" oninput="libFilterMoodboards(this.value)" style="padding-left:36px;width:100%">'
+  return '<div class="rd-table">'
+    +'<div class="rd-table-tools">'
+      +libSearchBox(t('lib_search_groups'),'libFilterMoodboards(this.value)')
+      +'<button id="lib-mb-bulk-load-btn" class="btn btn-sm" style="display:none" onclick="libLoadSelectedMoodboards()">'+esc(t('lib_load'))+'</button>'
+      +'<button id="lib-mb-bulk-del-btn" class="btn btn-danger btn-sm" style="display:none" onclick="libDeleteSelectedMoodboards()">'+esc(t('lib_delete_sel'))+'</button>'
     +'</div>'
-    +'<button id="lib-mb-bulk-load-btn" class="btn btn-primary btn-sm" style="display:none;white-space:nowrap" onclick="libLoadSelectedMoodboards()">'
-    +(t('lib_load'))+'</button>'
-    +'<button id="lib-mb-bulk-del-btn" class="btn btn-danger btn-sm" style="display:none;white-space:nowrap" onclick="libDeleteSelectedMoodboards()">'
-    +(t('lib_delete_sel'))+'</button>'
-    +'</div>'
-    +'<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm)">'
-    +'<table style="width:100%;border-collapse:collapse">'
-    +'<thead><tr style="background:var(--bg2);border-bottom:1px solid var(--border)">'
-    +'<th style="padding:9px 12px;width:36px"><input type="checkbox" id="lib-mb-chk-all" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="libToggleAllMoodboards(this.checked)"></th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(t('lib_name_col'))+'</th>'
-    +'<th style="padding:9px 14px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Imágenes':'Images')+'</th>'
-    +'<th style="padding:9px 14px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(isES?'Carpetas':'Folders')+'</th>'
-    +'<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">'+(t('lib_date_col'))+'</th>'
-    +'<th style="padding:9px 14px"></th>'
-    +'</tr></thead>'
-    +'<tbody id="lib-mb-rows">'+rows+'</tbody>'
-    +'</table></div>';
+    +'<div class="rd-table-scroll"><div style="min-width:900px">'
+      +'<div class="rd-thead" style="grid-template-columns:'+LIB_GRID_MB+'">'
+        +'<span>'+libCheck('','','libToggleAllMoodboards(this.checked)','lib-mb-chk-all',isES?'Seleccionar todos':'Select all')+'</span>'
+        +'<span>'+esc(t('lib_name_col'))+'</span>'
+        +'<span style="text-align:center">'+esc(isES?'Imágenes':'Images')+'</span>'
+        +'<span style="text-align:center">'+esc(isES?'Carpetas':'Folders')+'</span>'
+        +'<span>'+esc(t('lib_date_col'))+'</span>'
+        +'<span></span>'
+      +'</div>'
+      +'<div id="lib-mb-rows">'+rows+'</div>'
+    +'</div></div></div>'
+    +renderMobileStickyActionBar('<button class="btn btn-primary" onclick="libCreateMoodboardFolder()">'+esc(t('lib_new_moodboard'))+'</button>');
 }
 
 var _mbLightboxId = null;
@@ -4197,16 +4362,7 @@ function libCloseLayoutEditor(entryId, prevCID){
   // Rebuild the library page HTML from scratch since we replaced pg-library's innerHTML
   var pgLib=document.getElementById('pg-library');
   if(pgLib){
-    pgLib.innerHTML=
-      '<div style="max-width:1200px;margin:0 auto;padding:32px 24px;width:100%">'
-      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px">'
-        +'<div><h1 class="editorial-title" id="lib-page-title" style="font-family:\'Cormorant Garamond\',serif;font-size:28px;font-weight:700">Layouts</h1>'
-      +'<p id="lib-page-sub" style="display:none"></p></div>'
-      +'<div style="display:flex;gap:8px;flex-wrap:wrap" id="lib-add-btns"></div>'
-      +'</div>'
-      +'<div style="display:none" id="lib-tabs"></div>'
-      +'<div id="lib-content"></div>'
-      +'</div>';
+    pgLib.innerHTML=_libPageShellHTML();
   }
   showPage('library');
   renderLibrary();
@@ -4239,16 +4395,7 @@ function libCancelLayoutEditor(){
   // Restore pg-library to its normal state so it looks correct if navigated back to
   var pgLib=document.getElementById('pg-library');
   if(pgLib){
-    pgLib.innerHTML=
-      '<div style="max-width:1200px;margin:0 auto;padding:32px 24px;width:100%">'
-      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px">'
-        +'<div><h1 class="editorial-title" id="lib-page-title" style="font-family:\'Cormorant Garamond\',serif;font-size:28px;font-weight:700">Layouts</h1>'
-      +'<p id="lib-page-sub" style="display:none"></p></div>'
-      +'<div style="display:flex;gap:8px;flex-wrap:wrap" id="lib-add-btns"></div>'
-      +'</div>'
-      +'<div style="display:none" id="lib-tabs"></div>'
-      +'<div id="lib-content"></div>'
-      +'</div>';
+    pgLib.innerHTML=_libPageShellHTML();
   }
 }
 window.libCancelLayoutEditor = libCancelLayoutEditor;
@@ -4378,9 +4525,4 @@ window.libCloseLayoutEditor = libCloseLayoutEditor;
 window.updateLibraryLabels = updateLibraryLabels;
 window.renderLibrary = renderLibrary;
 // placeholder to prevent old duplicate
-
-
-
-
-
 

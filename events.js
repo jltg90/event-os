@@ -358,13 +358,112 @@ function toggleEventExpand(eid){
   var card = document.querySelector('.emc[data-eid="'+eid+'"]');
   if(card) card.classList.toggle('emc-open', _expandedEventIds.indexOf(eid) > -1);
 }
+/* ─── Rediseño 2026-08 · iconos y utilidades compartidas del módulo ──────── */
+var EV_ICONS = {
+  calendar:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  money:'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+  tasks:'<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+  users:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/>',
+  vendors:'<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+  layout:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>',
+  chart:'<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
+  grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  doc:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
+  pdf:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/>',
+  edit:'<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/>',
+  copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  trash:'<polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/>',
+  arrow:'<path d="M5 12h14M12 5l7 7-7 7"/>',
+  alert:'<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
+  check:'<polyline points="20 6 9 17 4 12"/>',
+  clock:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  pin:'<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7Z"/><circle cx="12" cy="9" r="2.5"/>',
+  book:'<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>'
+};
+/** SVG en línea 24x24, stroke currentColor, como en el diseño. */
+function _evIcon(name, size, sw){
+  var paths = EV_ICONS[name] || '';
+  var s = size || 16;
+  return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' +
+    (sw || 1.9) + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths + '</svg>';
+}
+
+// Los proyectos viejos guardan 'planning'; los nuevos 'to-be-confirmed'.
+function _evNormStatus(s){ return s === 'planning' ? 'to-be-confirmed' : (s || 'to-be-confirmed'); }
+var _EV_STATUS_ORDER = ['confirmed','in-progress','to-be-confirmed','completed','cancelled'];
+var _EV_STATUS_DOT = {
+  'confirmed':'#17A398', 'in-progress':'#F2A93B', 'to-be-confirmed':'#8C8072',
+  'completed':'#3B7DD8', 'cancelled':'#C23C15'
+};
+/** Etiqueta de tipo, respetando los tipos libres guardados como 'other:…'. */
+function _evTypeText(ty){
+  if(ty && ty.indexOf('other:') === 0) return ty.slice(6);
+  return evTypeLabel(ty);
+}
+/** Nº de invitados de un proyecto (los stubs de metadatos solo traen guestCount). */
+function _evGuestCount(p){
+  var n = (p && p.guests && p.guests.length) || 0;
+  if(!n) n = Number(p && p.guestCount) || 0;
+  return n;
+}
+
+/* ─── Filtro por estado (en memoria, no se guarda) ───────────────────────── */
+var _evStatusFilter = 'all';
+function setEvStatusFilter(v){
+  _evStatusFilter = v || 'all';
+  renderEvents();
+}
+window.setEvStatusFilter = setEvStatusFilter;
+
+/** Host de la fila de píldoras: se inserta justo antes de #evgrid. */
+function _evStatusBarHost(){
+  var g = document.getElementById('evgrid');
+  if(!g || !g.parentElement) return null;
+  var bar = document.getElementById('ev-statusbar');
+  if(!bar){
+    bar = document.createElement('div');
+    bar.id = 'ev-statusbar';
+    bar.className = 'rd-filterbar ev-statusbar';
+    g.parentElement.insertBefore(bar, g);
+  }
+  return bar;
+}
+function _evStatusBarHTML(counts, total){
+  var isES = LANG === 'es';
+  var html = '<button type="button" class="rd-filter' + (_evStatusFilter === 'all' ? ' active' : '') +
+    '" onclick="setEvStatusFilter(\'all\')"><i class="dot" style="background:var(--hairline)"></i>' +
+    (isES ? 'Todos' : 'All') + '<span class="cnt">' + total + '</span></button>';
+  _EV_STATUS_ORDER.forEach(function(k){
+    if(!counts[k] && _evStatusFilter !== k) return;
+    html += '<button type="button" class="rd-filter' + (_evStatusFilter === k ? ' active' : '') +
+      '" onclick="setEvStatusFilter(\'' + k + '\')"><i class="dot" style="background:' + _EV_STATUS_DOT[k] + '"></i>' +
+      esc(statusLabel(k)) + '<span class="cnt">' + (counts[k] || 0) + '</span></button>';
+  });
+  return html;
+}
+
+/** Botonera por tarjeta/fila (PDF, duplicar, editar, borrar). */
+function _evRowActions(id){
+  var e = esc(id);
+  return '<button type="button" class="rd-ibtn" title="' + esc(t('export_pdf')) + '" aria-label="' + esc(t('export_pdf')) +
+      '" onclick="openExportPDFForEvent(\'' + e + '\')">' + _evIcon('pdf', 13, 2) + '</button>' +
+    '<button type="button" class="rd-ibtn" title="' + (LANG === 'es' ? 'Duplicar' : 'Duplicate') + '" aria-label="' +
+      (LANG === 'es' ? 'Duplicar' : 'Duplicate') + '" onclick="dupProj(\'' + e + '\')">' + _evIcon('copy', 13, 2) + '</button>' +
+    '<button type="button" class="rd-ibtn" title="' + esc(t('edit')) + '" aria-label="' + esc(t('edit')) +
+      '" onclick="openEventModal(\'' + e + '\')">' + _evIcon('edit', 13, 2) + '</button>' +
+    '<button type="button" class="rd-ibtn danger" title="' + esc(t('delete')) + '" aria-label="' + esc(t('delete')) +
+      '" onclick="confirmDelProj(\'' + e + '\')">' + _evIcon('trash', 13, 2) + '</button>';
+}
+
 function renderEvents(){
   var isMob = typeof isPhoneViewport === 'function' && isPhoneViewport();
   if(isMob) _evView='grid';
+  var isES = LANG === 'es';
   updateEvSortLabel();
   updateEvFilterLabels();
   const esEl=document.getElementById('event-search');
-  if(esEl) esEl.placeholder=LANG==='es'?'Buscar eventos...':'Search events...';
+  if(esEl) esEl.placeholder=isES?'Buscar eventos...':'Search events...';
   const efFrom=document.getElementById('ef-from'); const efTo=document.getElementById('ef-to');
   if(efFrom&&!efFrom.value&&_efFr){ efFrom.value=formatDMY(toLocalYMD(_efFr)); }
   if(efTo&&!efTo.value&&_efTo){ efTo.value=formatDMY(toLocalYMD(_efTo)); }
@@ -381,20 +480,51 @@ function renderEvents(){
   if(evToolbarEl) evToolbarEl.style.display = isMob ? 'none' : 'flex';
 
   const allEvents=Object.values(uproj()).filter(p=>p&&p.id&&p.id!=='__library__'&&p.id!=='__lib_layout__'&&p.status&&p.status!=='__internal__');
-  let list=allEvents.slice();
+
+  // Los stubs de metadatos no traen tareas: sin ellas el "avance del plan" saldria
+  // siempre en 0%.  Se completan en segundo plano y se vuelve a pintar una vez.
+  if(typeof _ensureAllProjectsComplete === 'function' &&
+     allEvents.some(function(p){ return p._metaOnly || (p._hasExtras && !p._extrasLoaded); })){
+    _ensureAllProjectsComplete().then(function(changed){
+      if(changed && (typeof _currentPage === 'undefined' || _currentPage === 'events')) renderEvents();
+    });
+  }
+
+  // Linea de portafolio: eventos vivos y presupuesto agregado.
+  var pfLine=document.getElementById('ev-portfolio-line');
+  if(pfLine){
+    var liveEvents=allEvents.filter(function(p){
+      var st=_evNormStatus(p.status);
+      return st!=='completed' && st!=='cancelled';
+    });
+    var liveBudget=liveEvents.reduce(function(s,p){ return s+(Number(p.budget)||0); },0);
+    pfLine.textContent = allEvents.length
+      ? (isES
+          ? (liveEvents.length+' '+(liveEvents.length===1?'evento activo':'eventos activos')+' · '+fmtMoney(liveBudget)+' bajo gestión')
+          : (liveEvents.length+' active '+(liveEvents.length===1?'event':'events')+' · '+fmtMoney(liveBudget)+' under management'))
+      : (isES?'Todavía no hay eventos en tu portafolio.':'No events in your portfolio yet.');
+  }
+
+  let base=allEvents.slice();
   if(_evSearch.trim()){
     const q=_evSearch.trim().toLowerCase();
-    list=list.filter(p=>[p.name,p.clientName,p.date,p.location].some(f=>f&&f.toLowerCase().includes(q)));
+    base=base.filter(p=>[p.name,p.clientName,p.date,p.location].some(f=>f&&f.toLowerCase().includes(q)));
   }
   if(!_efAt){
     const fp=new Date('1900-01-01'); const ff=new Date('2100-12-31');
     const fFrom=_efFr||fp; const fTo=_efTo||ff;
-    list=list.filter(p=>{
+    base=base.filter(p=>{
       if(!p.date)return false;
       const d=startOfLocalDay(p.date); if(!d) return _efAt;
       return d>=fFrom&&d<=fTo;
     });
   }
+  // Conteos por estado sobre lo que ya paso busqueda + fechas.
+  var stCounts={};
+  base.forEach(function(p){ var k=_evNormStatus(p.status); stCounts[k]=(stCounts[k]||0)+1; });
+  let list = _evStatusFilter==='all'
+    ? base.slice()
+    : base.filter(function(p){ return _evNormStatus(p.status)===_evStatusFilter; });
   list.sort((a,b)=>{
     let av,bv;
     if(_evSort==='name'){ av=(a.name||'').toLowerCase(); bv=(b.name||'').toLowerCase(); }
@@ -418,7 +548,18 @@ function renderEvents(){
     mobileActions.id='events-mobile-actions';
     g.parentElement.appendChild(mobileActions);
   }
-  g.className=_evView==='list'?'evgrid ev-list':'evgrid';
+
+  // Fila de filtros por estado (nueva).  Se oculta cuando aun no hay eventos.
+  var stBar=_evStatusBarHost();
+  if(stBar){
+    if(allEvents.length){
+      stBar.style.display='';
+      stBar.innerHTML=_evStatusBarHTML(stCounts, base.length);
+    } else {
+      stBar.style.display='none';
+      stBar.innerHTML='';
+    }
+  }
 
   const evHeader = document.getElementById('ev-header');
   const evHeaderCopy = document.getElementById('ev-header-copy');
@@ -440,8 +581,8 @@ function renderEvents(){
     }
     if (evHeaderCopy) evHeaderCopy.style.display = '';
     if (evCreateBtn) evCreateBtn.style.display = 'inline-flex';
-    if (evSearchbar) evSearchbar.style.display = 'flex';
-    if (evToolbar) evToolbar.style.display = 'flex';
+    if (evSearchbar) evSearchbar.style.display = '';
+    if (evToolbar) evToolbar.style.display = isMob ? 'none' : 'flex';
     if (evHeader) evHeader.style.marginBottom = '';
     g.className = 'ev-empty-host';
     g.innerHTML = renderEventsNoResultsState();
@@ -451,136 +592,135 @@ function renderEvents(){
   }
   if (evHeaderCopy) evHeaderCopy.style.display = '';
   if (evCreateBtn) evCreateBtn.style.display = 'inline-flex';
-  if (evSearchbar) evSearchbar.style.display = 'flex';
-  if (evToolbar) evToolbar.style.display = 'flex';
+  if (evSearchbar) evSearchbar.style.display = '';
+  if (evToolbar) evToolbar.style.display = isMob ? 'none' : 'flex';
   if (evHeader) evHeader.style.marginBottom = '';
-  const tc={social:'b-pink',corporate:'b-blue',community:'b-green',government:'b-orange',education:'b-purple'};
-  const tl={social:t('type_social'),corporate:t('type_corporate'),community:t('type_community'),government:t('type_government'),education:t('type_education')};
-  if(_evView==='list'){
-    const isES=LANG==='es';
-    const listHeader=`<div class="ev-list-header">
-      <div>${isES?'Evento':'Event'}</div>
-      <div>${isES?'Tipo':'Type'}</div>
-      <div>${isES?'Fecha':'Date'}</div>
-      <div>${isES?'Ubicación':'Location'}</div>
-      <div>${isES?'Estado':'Status'}</div>
-      <div>${isES?'Días':'Days'}</div>
-      <div></div>
-    </div>`;
-    g.innerHTML=listHeader+list.map(p=>{
-      const da=daysAway(p.date); const isPast=da<0;
-      const dLabel=da===0?t('today'):da>0?`${da} ${t('days_away')}`:`${Math.abs(da)} ${t('days_ago')}`;
-      const checked=_evSelected[p.id] ? ' checked' : '';
-      const selCls=_evSelected[p.id] ? ' evc-selected' : '';
-      return `<div class="evc evc-type-${p.type||'default'}${selCls} fade-in" onclick="openProject('${p.id}')">
-        <label class="ev-select" onclick="event.stopPropagation()">
-          <input type="checkbox" class="ev-select-input"${checked} onchange="toggleEvSelected('${p.id}',this.checked)">
-          <span class="ev-select-box">${checkIcon()}</span>
-        </label>
-        <div class="evc-body">
-          <div class="ev-list-main ev-list-cell">
-            <div style="font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.name)}</div>
-            <div class="s-sm ev-hover-detail ev-list-client">${esc(p.clientName)}</div>
-          </div>
-          <div class="ev-list-cell ev-list-type" style="white-space:nowrap">
-            <span class="badge ${tc[p.type]||'b-gray'}">${tl[p.type]||esc(p.type)}</span>
-          </div>
-          <div class="ev-list-cell ev-list-date" style="font-size:12px;white-space:nowrap">${fmtDate(p.date)}</div>
-          <div class="ev-list-cell ev-list-location" style="font-size:12px;white-space:nowrap">${esc(p.location||'—')}</div>
-          <div class="ev-list-cell ev-hover-detail ev-list-budget" style="font-size:12px;white-space:nowrap">${fmtMoney(p.budget)}</div>
-          <div class="ev-list-cell ev-list-status" style="font-size:12px;white-space:nowrap">${statusLabel(p.status)}</div>
-          <div class="ev-list-cell ev-list-days-cell" style="font-size:11px;font-weight:600;color:${isPast?'var(--light)':'var(--accent)'};white-space:nowrap;text-align:right">${dLabel}</div>
-          <div class="ev-list-actions" onclick="event.stopPropagation()">
-            <button class="btn btn-ghost btn-sm btn-icon" title="Export PDF" onclick="openExportPDFForEvent('${p.id}')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></button>
-            <button class="btn btn-ghost btn-sm btn-icon" title="Edit" onclick="openEventModal('${p.id}')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>
-            <button class="btn btn-danger btn-sm btn-icon" title="Delete" onclick="confirmDelProj('${p.id}')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>
-          </div>
-        </div>
-      </div>`;
+
+  if(_evView==='list' && !isMob){
+    // ── Escritorio: tabla ──
+    var cols='30px minmax(160px,2fr) 112px 96px minmax(110px,1fr) 110px 78px 96px 140px';
+    var head='<div class="rd-thead" style="grid-template-columns:'+cols+';gap:12px">'
+      +'<div></div>'
+      +'<div>'+(isES?'Evento':'Event')+'</div>'
+      +'<div>'+(isES?'Tipo':'Type')+'</div>'
+      +'<div>'+(isES?'Fecha':'Date')+'</div>'
+      +'<div>'+(isES?'Sede':'Venue')+'</div>'
+      +'<div>'+(isES?'Presupuesto':'Budget')+'</div>'
+      +'<div>'+(isES?'Avance':'Progress')+'</div>'
+      +'<div>'+(isES?'Estado':'Status')+'</div>'
+      +'<div style="text-align:right">'+(isES?'Acciones':'Actions')+'</div>'
+      +'</div>';
+    var rows=list.map(function(p){
+      var du=rdDaysUntil(p.date);
+      var pct=evProgress(p);
+      var sel=_evSelected[p.id]?' ev-row-sel':'';
+      return '<div class="rd-row click ev-row'+sel+'" style="grid-template-columns:'+cols+';gap:12px" onclick="openProject(\''+esc(p.id)+'\')">'
+        +'<label class="ev-rowcheck" onclick="event.stopPropagation()">'
+          +'<input type="checkbox" class="ev-select-input"'+(_evSelected[p.id]?' checked':'')+' onchange="toggleEvSelected(\''+esc(p.id)+'\',this.checked)" aria-label="'+esc(p.name)+'">'
+          +'<span class="ev-select-box">'+checkIcon()+'</span>'
+        +'</label>'
+        +'<div><div class="rd-cell-main">'+esc(p.name)+'</div><div class="rd-cell-sub">'+esc(p.clientName||'—')+'</div></div>'
+        +'<div class="ev-cell-clip">'+rdPill(_evTypeText(p.type)||'—', evTypeTone(p.type), {up:true})+'</div>'
+        +'<div class="rd-cell">'+esc(fmtDate(p.date))+'</div>'
+        +'<div class="rd-cell">'+esc(p.location||'—')+'</div>'
+        +'<div class="rd-cell-money">'+esc(fmtMoney(p.budget||0))+'</div>'
+        +'<div><div class="rd-bar thin flat"><i style="width:'+pct+'%"></i></div><div class="rd-hint rd-num" style="margin-top:4px">'+pct+'%</div></div>'
+        +'<div class="ev-cell-clip">'+rdPill(statusLabel(p.status)||'—', evStatusTone(p.status), {})+'</div>'
+        +'<div class="ev-row-actions" onclick="event.stopPropagation()">'+_evRowActions(p.id)+'</div>'
+        +'</div>';
     }).join('');
+    g.className='ev-tablehost';
+    g.innerHTML='<div class="rd-table"><div class="rd-table-scroll"><div style="min-width:1060px">'+head+rows+'</div></div></div>';
   } else if(isMob) {
     // ── Mobile: compact expandable event cards ──
     g.className='emc-list';
     g.innerHTML=list.map(p=>{
-      const da=daysAway(p.date); const isPast=da<0;
-      const dLabel=da===0?t('today'):da>0?`${da} ${t('days_away')}`:`${Math.abs(da)} ${t('days_ago')}`;
+      const du=rdDaysUntil(p.date);
       const isOpen=_expandedEventIds.indexOf(p.id)>-1;
-      const isES=LANG==='es';
-      return `<article class="emc${isOpen?' emc-open':''}" data-eid="${p.id}">
-        <div class="emc-summary" onclick="toggleEventExpand('${p.id}')">
+      return `<article class="emc${isOpen?' emc-open':''}" data-eid="${esc(p.id)}">
+        <div class="emc-summary" onclick="toggleEventExpand('${esc(p.id)}')">
           <div class="emc-info">
             <div class="emc-name">${esc(p.name)}</div>
             <div class="emc-row">
-              <span class="badge ${tc[p.type]||'b-gray'}" style="font-size:9px;padding:1px 7px">${tl[p.type]||esc(p.type)}</span>
-              <span class="emc-date">${fmtDate(p.date)}</span>
-              <span class="emc-days" style="color:${isPast?'var(--light)':'var(--success)'}">${dLabel}</span>
+              ${rdPill(_evTypeText(p.type)||'—', evTypeTone(p.type), {up:true, sm:true})}
+              <span class="emc-date">${esc(fmtDate(p.date))}</span>
+              <span class="emc-days${du.past?' is-past':''}">${esc(du.label)}</span>
             </div>
           </div>
           <svg class="emc-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
         <div class="emc-detail">
           <div class="emc-meta">
-            ${p.clientName?'<div class="emc-meta-item"><span class="emc-meta-lbl">'+(isES?'Cliente':'Client')+'</span><span class="emc-meta-val">'+esc(p.clientName)+'</span></div>':''}
-            <div class="emc-meta-item"><span class="emc-meta-lbl">${isES?'Ubicación':'Location'}</span><span class="emc-meta-val">${esc(p.location||'TBD')}</span></div>
-            <div class="emc-meta-item"><span class="emc-meta-lbl">${isES?'Presupuesto':'Budget'}</span><span class="emc-meta-val">${fmtMoney(p.budget)}</span></div>
-            <div class="emc-meta-item"><span class="emc-meta-lbl">${isES?'Estado':'Status'}</span><span class="emc-meta-val" style="text-transform:capitalize">${statusLabel(p.status)}</span></div>
+            ${p.clientName?'<div class="emc-meta-item"><span class="emc-meta-lbl">'+esc(t('client'))+'</span><span class="emc-meta-val">'+esc(p.clientName)+'</span></div>':''}
+            <div class="emc-meta-item"><span class="emc-meta-lbl">${isES?'Sede':'Venue'}</span><span class="emc-meta-val">${esc(p.location||'—')}</span></div>
+            <div class="emc-meta-item"><span class="emc-meta-lbl">${esc(t('total_budget'))}</span><span class="emc-meta-val rd-num">${esc(fmtMoney(p.budget||0))}</span></div>
+            <div class="emc-meta-item"><span class="emc-meta-lbl">${isES?'Estado':'Status'}</span><span class="emc-meta-val">${esc(statusLabel(p.status))}</span></div>
+            <div class="emc-meta-item"><span class="emc-meta-lbl">${isES?'Avance del plan':'Plan progress'}</span><span class="emc-meta-val rd-num">${evProgress(p)}%</span></div>
           </div>
           <div class="emc-actions" onclick="event.stopPropagation()">
-            <button class="btn btn-primary btn-sm" onclick="openProject('${p.id}')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg> ${isES?'Abrir':'Open'}</button>
-            <button class="btn btn-ghost btn-sm" onclick="openEventModal('${p.id}')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg> ${isES?'Editar':'Edit'}</button>
-            <button class="btn btn-ghost btn-sm" onclick="openExportPDFForEvent('${p.id}')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg> PDF</button>
-            <button class="btn btn-ghost btn-sm" onclick="dupProj('${p.id}')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> ${isES?'Duplicar':'Duplicate'}</button>
-            <button class="btn btn-danger btn-sm" onclick="confirmDelProj('${p.id}')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg> ${isES?'Eliminar':'Delete'}</button>
+            <button class="btn btn-primary btn-sm" onclick="openProject('${esc(p.id)}')">${_evIcon('arrow',14,2.2)} ${isES?'Abrir':'Open'}</button>
+            <button class="btn btn-sm" onclick="openEventModal('${esc(p.id)}')">${_evIcon('edit',14,2)} ${esc(t('edit'))}</button>
+            <button class="btn btn-sm" onclick="openExportPDFForEvent('${esc(p.id)}')">${_evIcon('pdf',14,2)} PDF</button>
+            <button class="btn btn-sm" onclick="dupProj('${esc(p.id)}')">${_evIcon('copy',14,2)} ${isES?'Duplicar':'Duplicate'}</button>
+            <button class="btn btn-danger btn-sm" onclick="confirmDelProj('${esc(p.id)}')">${_evIcon('trash',14,2)} ${esc(t('delete'))}</button>
           </div>
         </div>
       </article>`;
     }).join('');
   } else {
-    g.innerHTML=list.map(p=>{
-      const da=daysAway(p.date); const isPast=da<0;
-      const dLabel=da===0?t('today'):da>0?`${da} ${t('days_away')}`:`${Math.abs(da)} ${t('days_ago')}`;
-      const checked=_evSelected[p.id] ? ' checked' : '';
-      const selCls=_evSelected[p.id] ? ' evc-selected' : '';
-      return `<div class="evc evc-type-${p.type||'default'}${selCls} fade-in" onclick="openProject('${p.id}')">
-        <label class="ev-select" onclick="event.stopPropagation()">
-          <input type="checkbox" class="ev-select-input"${checked} onchange="toggleEvSelected('${p.id}',this.checked)">
-          <span class="ev-select-box">${checkIcon()}</span>
-        </label>
-        <div class="evc-top"></div>
-        <div class="evc-body">
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:14px">
-            <div style="min-width:0;flex:1">
-              <div style="font-size:17px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</div>
-              <div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(p.description||'')}</div>
-            </div>
-            <span class="badge ${tc[p.type]||'b-gray'}">${tl[p.type]||esc(p.type)}</span>
-          </div>
-          <div class="ev-hover-detail ev-grid-client" style="font-size:12px;color:var(--muted);margin-bottom:14px">${t('client')}: <span style="color:var(--text);font-weight:500">${esc(p.clientName)}</span></div>
-          ${evcRow('#f7f0de','#7a5c2a','<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',t('event_date'),fmtDate(p.date))}
-          ${evcRow('#f0fdf4','#10b981','<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7Z"/><circle cx="12" cy="9" r="2.5"/>',t('location'),esc(p.location||'TBD'))}
-          ${evcRow('#fdf4e0','#b8861a','<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',t('total_budget'),fmtMoney(p.budget),'ev-hover-detail ev-grid-budget')}
-        </div>
-        <div class="evc-foot">
-          <span style="font-size:12px;font-weight:600;text-transform:capitalize;color:var(--muted)">${statusLabel(p.status)}</span>
-          <div style="display:flex;align-items:center;gap:10px">
-            <span style="font-size:12px;font-weight:600;color:${isPast?'var(--light)':'var(--accent)'}">${dLabel}</span>
-            <div style="display:flex;gap:6px" onclick="event.stopPropagation()">
-              <button class="btn btn-ghost btn-sm btn-icon" title="Export PDF" onclick="openExportPDFForEvent('${p.id}')">
-                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
-              </button>
-              <button class="btn btn-ghost btn-sm btn-icon" title="Duplicate" onclick="dupProj('${p.id}')">
-                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              </button>
-              <button class="btn btn-ghost btn-sm btn-icon" title="Edit" onclick="openEventModal('${p.id}')">
-                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg>
-              </button>
-              <button class="btn btn-danger btn-sm btn-icon" title="Delete" onclick="confirmDelProj('${p.id}')">
-                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>`;
+    // ── Escritorio: tarjetas ──
+    g.className='ev-cards';
+    g.innerHTML=list.map(function(p){
+      var du=rdDaysUntil(p.date);
+      var pct=evProgress(p);
+      var guests=_evGuestCount(p);
+      var typeFg=rdTone(evTypeTone(p.type)).fg;
+      var daysBlock;
+      if(!du.valid){
+        daysBlock='<div class="rd-days is-past ev-days-sm">'+esc(t('no_date'))+'</div>';
+      } else if(du.past){
+        daysBlock='<div class="rd-days is-past ev-days-sm">'+esc(du.label)+'</div>';
+      } else if(du.n===0){
+        daysBlock='<div class="rd-days ev-days-sm">'+esc(t('today_label'))+'</div>';
+      } else {
+        daysBlock='<div class="rd-hint">'+(isES?'faltan':'in')+'</div>'
+          +'<div class="rd-days">'+du.n+' '+(isES?'días':'days')+'</div>';
+      }
+      return '<article class="ev-card fade-in'+(_evSelected[p.id]?' is-sel':'')+'" onclick="openProject(\''+esc(p.id)+'\')">'
+        +'<label class="ev-select" onclick="event.stopPropagation()">'
+          +'<input type="checkbox" class="ev-select-input"'+(_evSelected[p.id]?' checked':'')+' onchange="toggleEvSelected(\''+esc(p.id)+'\',this.checked)" aria-label="'+esc(p.name)+'">'
+          +'<span class="ev-select-box">'+checkIcon()+'</span>'
+        +'</label>'
+        +'<div class="rd-cover" style="background:'+evTypeCover(p.type)+'">'
+          +'<span class="ev-cover-type" style="color:'+typeFg+'">'+esc(_evTypeText(p.type)||(isES?'Evento':'Event'))+'</span>'
+          +'<div class="ev-cover-date">'+esc(fmtDate(p.date))+'</div>'
+        +'</div>'
+        +'<div class="ev-card-body">'
+          +'<div class="ev-card-top">'
+            +'<div style="min-width:0">'
+              +'<h3 class="rd-h3 ev-card-name">'+esc(p.name)+'</h3>'
+              +'<div class="ev-card-client">'+esc(p.clientName||'—')+'</div>'
+            +'</div>'
+            +'<div class="ev-card-days">'+daysBlock+'</div>'
+          +'</div>'
+          +'<div class="ev-card-meta">'
+            +'<div style="min-width:0;flex:1"><div class="rd-label">'+(isES?'Sede':'Venue')+'</div>'
+              +'<div class="ev-card-metaval rd-ellipsis" title="'+esc(p.location||'')+'">'+esc(p.location||'—')+'</div></div>'
+            +'<div style="text-align:right;flex-shrink:0"><div class="rd-label">'+esc(t('total_budget'))+'</div>'
+              +'<div class="ev-card-metaval rd-num">'+esc(fmtMoney(p.budget||0))+'</div></div>'
+          +'</div>'
+          +'<div class="ev-card-prog">'
+            +'<div class="ev-card-prog-top"><span>'+(isES?'Avance del plan':'Plan progress')+'</span><span class="rd-num">'+pct+'%</span></div>'
+            +'<div class="rd-bar"><i style="width:'+pct+'%"></i></div>'
+          +'</div>'
+          +'<div class="ev-card-foot">'
+            +rdPill(statusLabel(p.status)||'—', evStatusTone(p.status), {dot:true})
+            +'<span class="ev-card-guests rd-hint">'+guests+' '+esc(t('dash_guests_total')).toLowerCase()+'</span>'
+            +'<span class="ev-card-open">'+(isES?'Abrir':'Open')+_evIcon('arrow',13,2.2)+'</span>'
+            +'<div class="ev-card-actions" onclick="event.stopPropagation()">'+_evRowActions(p.id)+'</div>'
+          +'</div>'
+        +'</div>'
+      +'</article>';
     }).join('');
   }
   setupEventCardHoverEffects();
@@ -745,15 +885,18 @@ window.bulkDeleteEvents = bulkDeleteEvents;
 
 function renderEventsNoResultsState(){
   const isES = LANG === 'es';
-  const msg = isES
-    ? 'No hay eventos en este rango de fechas.'
-    : 'No events match this date range.';
+  const byStatus = _evStatusFilter !== 'all';
+  const msg = byStatus
+    ? (isES ? 'Ningún evento con este estado.' : 'No events with this status.')
+    : (isES ? 'Ningún evento coincide con los filtros.' : 'No events match these filters.');
   const hint = isES
-    ? 'Ajusta las fechas o vuelve a "Todas las fechas" para ver más resultados.'
-    : 'Adjust the dates or switch back to "All Dates" to see more results.';
-  return `<section class="card fade-in" style="text-align:center;padding:44px 28px;color:var(--muted);max-width:760px;margin:0 auto">
-    <div style="font-family:'Cormorant Garamond',serif;font-size:32px;font-weight:700;color:var(--text);margin-bottom:8px">${msg}</div>
-    <div style="font-size:14px;line-height:1.7">${hint}</div>
+    ? 'Ajusta la búsqueda, el estado o el rango de fechas para ver más resultados.'
+    : 'Adjust the search, the status or the date range to see more results.';
+  return `<section class="rd-card pad-lg fade-in ev-noresults">
+    <span class="ev-noresults-ico">${_evIcon('calendar', 20, 1.7)}</span>
+    <h2 class="rd-h2">${msg}</h2>
+    <p class="rd-sub">${hint}</p>
+    ${byStatus ? `<button type="button" class="btn" style="margin-top:18px" onclick="setEvStatusFilter('all')">${isES ? 'Ver todos los eventos' : 'Show all events'}</button>` : ''}
   </section>`;
 }
 
@@ -790,7 +933,7 @@ function renderEventsEmptyState(){
             <div class="ev-empty-bento-label">${isES ? 'Control total de tu evento' : 'Full control of your event'}</div>
           </div>
           <div class="ev-empty-bento-card --white --wide">
-            <div class="ev-empty-bento-label" style="margin-bottom:10px;font-weight:600;color:#DFD7C9">${isES ? 'Todo lo que necesitas' : 'Everything you need'}</div>
+            <div class="ev-empty-bento-label" style="margin-bottom:10px;font-weight:600;color:var(--sand-3)">${isES ? 'Todo lo que necesitas' : 'Everything you need'}</div>
             <div class="ev-empty-bento-features">
               <span class="ev-empty-bento-chip">${isES ? 'Presupuesto' : 'Budget'}</span>
               <span class="ev-empty-bento-chip">${isES ? 'Cronograma' : 'Timeline'}</span>
@@ -838,38 +981,19 @@ function confirmDelProj(id){
   });
 }
 
+// Los tres ayudantes de abajo conservan su firma historica pero delegan en los
+// helpers compartidos de core.js (rdDonut / rdRing / rdMetric) para que el panel
+// use exactamente la misma gramatica visual que el resto del rediseño.
 function _dashDonut(data, colorFn, size){
-  var total=data.reduce(function(s,d){return s+d[1];},0);
-  if(!total) return '<div style="width:'+size+'px;height:'+size+'px;border-radius:50%;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--muted)">—</div>';
-  var r=size*0.40, circ=2*Math.PI*r, cx=size/2, cy=size/2, sw=size*0.13;
-  // Small surface gap between segments (shows the light track) for a refined, premium ring
-  var gap = data.length>1 ? Math.min(circ*0.035, 5) : 0;
-  var rotation=-90;
-  var track='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="var(--bg2)" stroke-width="'+sw+'"/>';
-  var circles=data.map(function(d){
-    var pct=d[1]/total, arc=Math.max(0.5, pct*circ - gap);
-    var seg='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+colorFn(d[0])+'" stroke-width="'+sw+'" stroke-dasharray="'+arc.toFixed(2)+' '+(circ-arc).toFixed(2)+'" stroke-dashoffset="'+(circ*0.25).toFixed(2)+'" transform="rotate('+rotation.toFixed(2)+' '+cx+' '+cy+')" style="transition:stroke-dasharray .6s"/>';
-    rotation+=pct*360;
-    return seg;
-  }).join('');
-  return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'" style="flex-shrink:0">'+track+circles+'</svg>';
+  var pairs=(data||[]).map(function(d){ return [colorFn(d[0]), d[1]]; });
+  return rdDonut(pairs, { size:size||118, stroke:Math.max(8,Math.round((size||118)*0.13)), center:null });
 }
 function _dashRing(pct, color, size){
-  var r=size*0.4, circ=2*Math.PI*r, cx=size/2, cy=size/2, sw=size*0.12;
-  var dash=pct/100*circ;
-  return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'" style="flex-shrink:0">'
-    +'<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="var(--bg2)" stroke-width="'+sw+'"/>'
-    +'<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+color+'" stroke-width="'+sw+'" stroke-dasharray="'+dash.toFixed(2)+' '+(circ-dash).toFixed(2)+'" stroke-linecap="round" transform="rotate(-90 '+cx+' '+cy+')" style="transition:stroke-dasharray .6s"/>'
-    +'<text x="'+cx+'" y="'+cy+'" text-anchor="middle" dominant-baseline="central" fill="'+color+'" font-size="'+(size*0.22)+'" font-weight="700" font-family="Jost,sans-serif">'+pct+'%</text>'
-    +'</svg>';
+  return rdRing(pct, { size:size||76, stroke:Math.max(5,Math.round((size||76)*0.12)), color:color||'#E4572E', sub:null, labelSize:Math.round((size||76)*0.24) });
 }
 function _dashKPI(label, value, sub, color, tooltip){
-  var clr = color || '#242424';
-  return '<div class="card" style="padding:16px 12px;text-align:center'+(tooltip?';cursor:default':'')+'"'+(tooltip?' title="'+tooltip+'"':'')+'>'+
-    '<div style="font-family:\'DM Sans\',sans-serif;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#787470;font-weight:600;margin-bottom:8px">'+label+'</div>'+
-    '<div style="font-size:18px;font-weight:600;color:'+clr+';font-family:\'DM Sans\',sans-serif;line-height:1.2">'+value+'</div>'+
-    '<div style="font-family:\'DM Sans\',sans-serif;font-size:10px;color:#787470;margin-top:4px">'+sub+'</div>'+
-    '</div>';
+  return rdMetric({ label:label, value:value, sub:sub, color:color, center:true,
+    valClass:'sm', attrs: tooltip ? 'title="'+esc(tooltip)+'"' : '' });
 }
 function dismissOnboarding(pid){
   localStorage.setItem('eventos_onb_'+pid,'1');
@@ -879,7 +1003,7 @@ function _dashOnboarding(p,hired,done,litems){
   var pid=p.id;
   if(localStorage.getItem('eventos_onb_'+pid)) return '';
   var steps=[
-    {key:'onb_budget',   ok:(p.budget||0)>0,        action:"openEventModal('"+pid+"')", hint:''},
+    {key:'onb_budget',   ok:(p.budget||0)>0,          action:"openEventModal('"+esc(pid)+"')", hint:''},
     {key:'onb_vendors',  ok:hired.length>0,           action:"switchTab('budget')",       hint:t('tab_budget')},
     {key:'onb_timeline', ok:done>0,                   action:"switchTab('timeline')",     hint:t('tab_timeline')},
     {key:'onb_guests',   ok:(p.guests||[]).length>0,  action:"switchTab('guests')",       hint:t('tab_guests')},
@@ -890,198 +1014,208 @@ function _dashOnboarding(p,hired,done,litems){
   var pct=Math.round(complete/steps.length*100);
   var stepsHtml=steps.map(function(s){
     if(s.ok){
-      return '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;background:#F2EFE9;border:1px solid rgba(36,36,36,.06)">'
-        +'<div style="width:20px;height:20px;border-radius:50%;background:#242424;display:flex;align-items:center;justify-content:center;flex-shrink:0">'
-          +'<svg width="10" height="10" fill="none" stroke="#F2EFE9" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>'
-        +'</div>'
-        +'<span style="font-family:\'DM Sans\',sans-serif;font-size:12px;font-weight:500;color:#242424">'+t(s.key)+'</span>'
+      return '<div class="pd-onb-step is-done">'
+        +'<span class="rd-check done sm">'+_evIcon('check',11,3)+'</span>'
+        +'<span class="pd-onb-step-lbl">'+esc(t(s.key))+'</span>'
       +'</div>';
     }
-    return '<button onclick="'+s.action+'" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;background:#fff;border:1px solid rgba(36,36,36,.08);cursor:pointer;text-align:left;width:100%;transition:all .15s ease;font-family:\'DM Sans\',sans-serif" onmouseover="this.style.borderColor=\'#242424\'" onmouseout="this.style.borderColor=\'rgba(36,36,36,.08)\'">'
-      +'<div style="width:20px;height:20px;border-radius:50%;border:1.5px solid #DFD7C9;flex-shrink:0"></div>'
-      +'<div style="min-width:0">'
-        +'<div style="font-size:12px;font-weight:500;color:#242424">'+t(s.key)+'</div>'
-        +(s.hint?'<div style="font-size:10px;color:#787470;margin-top:1px">'+esc(s.hint)+' &rarr;</div>':'')
-      +'</div>'
+    return '<button type="button" class="pd-onb-step" onclick="'+esc(s.action)+'">'
+      +'<span class="rd-check sm"></span>'
+      +'<span style="min-width:0">'
+        +'<span class="pd-onb-step-lbl">'+esc(t(s.key))+'</span>'
+        +(s.hint?'<span class="pd-onb-step-hint">'+esc(s.hint)+' &rarr;</span>':'')
+      +'</span>'
     +'</button>';
   }).join('');
-  return '<div class="card" style="padding:20px 22px;margin-bottom:20px;background:#fff;border:1px solid rgba(36,36,36,.08)">'
-    +'<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">'
+  return '<div class="rd-card pad pd-onb">'
+    +'<div class="pd-onb-head">'
       +'<div>'
-        +'<div style="font-family:\'DM Sans\',sans-serif;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#787470">'+t('onb_title')+'</div>'
-        +'<div style="font-family:\'DM Sans\',sans-serif;font-size:11px;color:#787470;margin-top:3px">'+complete+' / '+steps.length+' '+t('onb_steps_done')+'</div>'
+        +'<div class="rd-label">'+esc(t('onb_title'))+'</div>'
+        +'<div class="rd-hint" style="margin-top:4px">'+complete+' / '+steps.length+' '+esc(t('onb_steps_done'))+'</div>'
       +'</div>'
-      +'<button class="btn btn-ghost" style="padding:2px 8px;font-size:12px;line-height:1.8;color:#787470" onclick="dismissOnboarding(\''+esc(pid)+'\')" title="'+t('onb_dismiss')+'">&#10005;</button>'
+      +'<button type="button" class="rd-ibtn" onclick="dismissOnboarding(\''+esc(pid)+'\')" title="'+esc(t('onb_dismiss'))+'" aria-label="'+esc(t('onb_dismiss'))+'">&#10005;</button>'
     +'</div>'
-    +'<div class="prog" style="margin-bottom:14px;background:#F2EFE9"><div class="prog-f" style="width:'+pct+'%;background:#242424;transition:width .4s"></div></div>'
-    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:8px">'
-      +stepsHtml
-    +'</div>'
+    +'<div class="rd-bar thin" style="margin:14px 0"><i style="width:'+pct+'%"></i></div>'
+    +'<div class="pd-onb-steps">'+stepsHtml+'</div>'
   +'</div>';
 }
+
+/** Alterna una tarea desde el panel del proyecto y repinta solo el panel. */
+function dashToggleTask(tid){
+  var p=proj(); if(!p) return;
+  var tk=(p.tasks||[]).find(function(x){ return x && x.id===tid; });
+  if(!tk) return;
+  var nd=!(typeof taskIsDone==='function' ? taskIsDone(tk) : !!tk.done);
+  tk.done=nd; tk.status=nd?'completed':'not-started';
+  saveProj(p);
+  renderDash();
+}
+window.dashToggleTask = dashToggleTask;
+
 function renderDash(){
   var p=proj();if(!p)return;
   var el=document.getElementById('tab-dashboard');
-  // Budget
-  var tb=p.budget||0;
-  var hired=p.vendors.filter(function(v){return v.hired;});
-  var paid=hired.reduce(function(s,v){return s+v.payments.reduce(function(a,pay){return a+Number(pay.amount);},0);},0);
-  var allocated=p.vendors.reduce(function(s,v){return s+(Number(v.budget)||0);},0);
+  if(!el) return;
+  var isES=LANG==='es';
+  var vendors=p.vendors||[], guests=p.guests||[], tasks=p.tasks||[];
+  // Presupuesto
+  var tb=Number(p.budget)||0;
+  var hired=vendors.filter(function(v){return v.hired;});
+  var paid=hired.reduce(function(s,v){return s+(v.payments||[]).reduce(function(a,pay){return a+(Number(pay.amount)||0);},0);},0);
+  var allocated=vendors.reduce(function(s,v){return s+(Number(v.budget)||0);},0);
   var remaining=tb-paid;
   var budgetPct=tb>0?Math.min(100,Math.round(paid/tb*100)):0;
   var allocPct=tb>0?Math.min(100,Math.round(allocated/tb*100)):0;
-  // Category breakdown
+  var paidOfAlloc=allocated>0?Math.min(100,Math.round(paid/allocated*100)):0;
+  var unallocPct=tb>0?Math.max(0,Math.round((tb-allocated)/tb*100)):0;
+  // Desglose por categoria (proveedor contratado)
   var catSpend={};
   hired.forEach(function(v){
-    var cat=v.name||'Other';
+    var cat=v.name||(isES?'Otro':'Other');
     if(!catSpend[cat]) catSpend[cat]={budget:0,paid:0};
     catSpend[cat].budget+=Number(v.budget)||0;
-    catSpend[cat].paid+=v.payments.reduce(function(a,pay){return a+Number(pay.amount);},0);
+    catSpend[cat].paid+=(v.payments||[]).reduce(function(a,pay){return a+(Number(pay.amount)||0);},0);
   });
   var catEntries=Object.entries(catSpend).sort(function(a,b){return b[1].budget-a[1].budget;}).slice(0,5);
   var catMax=catEntries.length?catEntries[0][1].budget:1;
-  // Sequential champagne ramp (rank 1 darkest → rank 5 lightest) — cohesive with the brand
-  var catColors=['#5E4720','#6C5328','#7A6030','#886D38','#967A40','#A48748'];
   var catBarsHtml=catEntries.map(function(e,i){
     var pct=catMax>0?Math.round(e[1].budget/catMax*100):0;
-    return '<div class="kpi-catbar" style="display:grid;grid-template-columns:100px 1fr 60px;align-items:center;gap:8px;margin-bottom:6px">'
-      +'<div style="font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+esc(e[0])+'">'+esc(e[0])+'</div>'
-      +'<div style="background:var(--bg2);border-radius:4px;height:8px;overflow:hidden"><div style="height:100%;border-radius:4px;background:'+catColors[i%catColors.length]+';width:'+pct+'%;transition:width .4s"></div></div>'
-      +'<div style="font-size:11px;font-weight:600;color:var(--text);text-align:right">'+formatCost(e[1].budget)+'</div>'
+    return '<div class="rd-cat-row">'
+      +'<span title="'+esc(e[0])+'">'+esc(e[0])+'</span>'
+      +'<span class="rd-bar thick"><i style="width:'+pct+'%;background:'+RD_SERIES[i%RD_SERIES.length]+'"></i></span>'
+      +'<span>'+esc(formatCost(e[1].budget))+'</span>'
       +'</div>';
   }).join('');
-  // Guests
-  var confirmed=p.guests.filter(function(g){return g.rsvp==='confirmed';}).length;
-  var pending=p.guests.filter(function(g){return g.rsvp==='pending';}).length;
-  var declined=p.guests.filter(function(g){return g.rsvp==='declined';}).length;
-  var plusOnes=p.guests.filter(function(g){return g.plusOne;}).length;
-  var guestTotal=p.guests.length;
-  // Tasks
-  var done=p.tasks.filter(function(tk){return tk.done;}).length;
-  var tpct=p.tasks.length?Math.round(done/p.tasks.length*100):0;
-  var today=toLocalYMD(new Date());
-  var overdue=p.tasks.filter(function(tk){return !tk.done&&tk.dueDate&&tk.dueDate<today;}).length;
-  // Layout
+  // Invitados
+  var confirmed=guests.filter(function(g){return g.rsvp==='confirmed'||g.rsvp==='yes';}).length;
+  var pending=guests.filter(function(g){return g.rsvp!=='confirmed'&&g.rsvp!=='yes'&&g.rsvp!=='declined'&&g.rsvp!=='no';}).length;
+  var declined=guests.filter(function(g){return g.rsvp==='declined'||g.rsvp==='no';}).length;
+  var plusOnes=guests.filter(function(g){return g.plusOne;}).length;
+  var guestTotal=guests.length;
+  var guestPct=guestTotal?Math.round(confirmed/guestTotal*100):0;
+  // Tareas
+  var done=tasks.filter(function(tk){return tk.done;}).length;
+  var tpct=tasks.length?Math.round(done/tasks.length*100):0;
+  var overdue=tasks.filter(function(tk){return isTaskOverdue(tk);}).length;
+  // Plano
   var litems=p.layoutItems||[];
   if(!litems.length&&p.layoutExport&&p.layoutExport.layoutId&&typeof getLib==='function'){
     var _dashLibE=getLib().layouts.find(function(e){return e.id===p.layoutExport.layoutId;});
     if(_dashLibE) litems=_dashLibE.items||[];
   }
   var chairs=litems.reduce(function(s,i){return s+(i.chairs||0);},0);
-  var assignedGuestTables=p.guests.filter(function(g){return g.table;});
+  var assignedGuestTables=guests.filter(function(g){return g.table;});
   var tables=[...new Set(assignedGuestTables.map(function(g){return g.table;}))].length;
   var guestsWithTable=assignedGuestTables.length;
   var guestsWithoutTable=guestTotal-guestsWithTable;
   var layoutName=(p.layoutExport&&p.layoutExport.layoutName)||'';
-  // Budget per guest
+  // Presupuesto por invitado
   var totalWithPlusOnes=guestTotal+plusOnes;
   var budgetPerGuest=totalWithPlusOnes>0&&tb>0?Math.ceil(tb/totalWithPlusOnes):0;
-  // Date
-  var dl=daysAway(p.date);
-  var dlBadge=dl===0?'b-gold':dl>0?(dl<=7?'b-orange':'b-green'):'b-pink';
-  var dlText=dl===0?t('dash_today'):dl>0?dl+' '+t('days_away'):Math.abs(dl)+' '+t('days_ago');
-  // Guest donut
-  var rsvpColorFn=function(k){return k==='confirmed'?'#3D7A5E':k==='pending'?'#A07818':'#A8403A';};
-  var rsvpData=[['confirmed',confirmed],['pending',pending],['declined',declined]].filter(function(d){return d[1]>0;});
-  var guestDonut=_dashDonut(rsvpData,rsvpColorFn,64);
-  // Render
+
+  // ── Métricas ───────────────────────────────────────────────────────────
+  var metrics=''
+    +rdMetric({label:t('dash_total_budget'), value:tb>0?formatCost(tb):'—',
+      sub:isES?'aprobado por el cliente':'approved by the client',
+      bar:{pct:100, color:'var(--ink)'}})
+    +rdMetric({label:t('dash_paid'), value:formatCost(paid), color:'var(--success)',
+      sub:tb>0?(budgetPct+'% '+t('dash_of_budget')):'—',
+      bar:{pct:budgetPct, color:'var(--success)'}})
+    +rdMetric({label:t('dash_remaining'), value:formatCost(remaining), color:remaining>=0?'var(--accent-deep)':'var(--danger)',
+      sub:isES?'por pagar':'left to pay',
+      bar:{pct:tb>0?Math.min(100,Math.round(Math.max(0,remaining)/tb*100)):0, color:'var(--accent)'}})
+    +rdMetric({label:t('dash_guests_total'), value:String(guestTotal),
+      sub:confirmed+' '+t('dash_confirmed')+(plusOnes?(' · '+plusOnes+' '+t('dash_plus_ones').toLowerCase()):''),
+      bar:{pct:guestPct, color:'var(--champagne-2)'}})
+    +rdMetric({label:t('dash_tasks_progress'), value:done+'/'+tasks.length,
+      sub:tpct+'% '+t('dash_complete')+(overdue?(' · '+overdue+' '+t('dash_overdue')):''),
+      bar:{pct:tpct, color:'var(--champagne)'}});
+
+  // ── Tarjeta de presupuesto ─────────────────────────────────────────────
+  var budgetCard='<section class="rd-card pad-lg">'
+    +'<div class="rd-card-title"><h2>'+esc(t('dash_budget_overview'))+'</h2>'
+      +'<button type="button" class="btn btn-sm" onclick="switchTab(\'budget\')">'+(isES?'Ver proveedores':'View vendors')+'</button></div>'
+    +'<div class="pd-bignums">'
+      +'<div><div class="rd-label">'+(isES?'Aprobado':'Approved')+'</div><div class="pd-bignum">'+esc(formatCost(tb))+'</div></div>'
+      +'<div><div class="rd-label">'+esc(t('dash_paid'))+'</div><div class="pd-smallnum" style="color:var(--success)">'+esc(formatCost(paid))+'</div></div>'
+      +'<div><div class="rd-label">'+(isES?'Saldo':'Balance')+'</div><div class="pd-smallnum">'+esc(formatCost(remaining))+'</div></div>'
+      +'<div><div class="rd-label">'+esc(t('dash_vendors_hired'))+'</div><div class="pd-smallnum">'+hired.length+'/'+vendors.length+'</div></div>'
+    +'</div>'
+    +'<div class="pd-barrow"><div class="pd-barrow-top"><span>'+esc(t('dash_allocated'))+'</span>'
+      +'<span class="rd-num">'+esc(formatCost(allocated))+(tb>0?' / '+esc(formatCost(tb)):'')+'</span></div>'
+      +'<div class="rd-bar thick"><i style="width:'+Math.min(100,allocPct)+'%;background:'+(allocPct>100?'var(--danger)':'var(--warn-2)')+'"></i></div></div>'
+    +'<div class="pd-barrow"><div class="pd-barrow-top"><span>'+esc(t('dash_paid'))+'</span>'
+      +'<span class="rd-num">'+esc(formatCost(paid))+(allocated>0?' / '+esc(formatCost(allocated)):'')+'</span></div>'
+      +'<div class="rd-bar thick"><i style="width:'+paidOfAlloc+'%;background:var(--success-2)"></i></div></div>'
+    +(tb>0?('<div class="pd-barrow"><div class="pd-barrow-top"><span>'+esc(t('dash_unallocated'))+'</span>'
+      +'<span class="rd-num" style="color:'+((tb-allocated)>=0?'var(--ink)':'var(--danger)')+'">'+esc(formatCost(tb-allocated))+'</span></div>'
+      +'<div class="rd-bar thick"><i style="width:'+unallocPct+'%;background:var(--hairline)"></i></div></div>'):'')
+    +(budgetPerGuest>0?('<div class="pd-perguest rd-hint">'+(isES?'Equivale a ':'That is ')+esc(formatCost(budgetPerGuest))+(isES?' por invitado (':' per guest (')+totalWithPlusOnes+(isES?' con acompañantes)':' incl. plus-ones)')+'</div>'):'')
+    +(catEntries.length?('<div class="pd-cats"><div class="rd-label" style="margin-bottom:14px">'+esc(t('dash_budget_by_category'))+'</div>'+catBarsHtml+'</div>'):'')
+  +'</section>';
+
+  // ── Invitados ──────────────────────────────────────────────────────────
+  var guestCard='<section class="rd-card pad">'
+    +'<div class="rd-card-title"><h2>'+esc(t('dash_guests_total'))+'</h2>'
+      +'<button type="button" class="btn btn-sm" onclick="switchTab(\'guests\')">'+(isES?'Abrir lista':'Open list')+'</button></div>'
+    +(guestTotal>0
+      ?('<div class="pd-donutrow">'
+        +rdDonut([['#17A398',confirmed],['#F2A93B',pending],['#E4572E',declined]],
+          {size:112, stroke:14, center:String(guestTotal), centerSub:isES?'invitados':'guests'})
+        +'<div style="flex:1;min-width:0">'
+          +'<div class="rd-legend-row"><i style="background:#17A398"></i><span>'+esc(t('dash_confirmed'))+'</span><b>'+confirmed+'</b></div>'
+          +'<div class="rd-legend-row"><i style="background:#F2A93B"></i><span>'+esc(t('dash_pending'))+'</span><b>'+pending+'</b></div>'
+          +'<div class="rd-legend-row"><i style="background:#E4572E"></i><span>'+esc(t('dash_declined'))+'</span><b>'+declined+'</b></div>'
+          +'<div class="pd-legend-foot rd-hint">'+plusOnes+' '+esc(t('dash_plus_ones')).toLowerCase()+' · '+tables+' '+esc(t('dash_tables')).toLowerCase()+'</div>'
+        +'</div>'
+      +'</div>')
+      :('<div class="pd-empty">'+(isES?'Todavía no hay invitados en la lista.':'No guests on the list yet.')+'</div>'))
+  +'</section>';
+
+  // ── Siguientes tareas ──────────────────────────────────────────────────
+  var pendingTasks=tasks.filter(function(tk){return !tk.done;}).sort(function(a,b){
+    var av=a.dueDate||'9999-12-31', bv=b.dueDate||'9999-12-31';
+    return av<bv?-1:av>bv?1:0;
+  }).slice(0,5);
+  var taskRows=pendingTasks.map(function(tk){
+    var od=isTaskOverdue(tk);
+    var du=tk.dueDate?rdDaysUntil(tk.dueDate):null;
+    var dueTxt=od?(isES?'Vencida':'Overdue'):(du&&du.valid?du.label:esc(t('no_date')));
+    return '<div class="pd-task">'
+      +'<button type="button" class="rd-check sm" onclick="dashToggleTask(\''+esc(tk.id)+'\')" aria-label="'+esc(tk.title||tk.name||'')+'"></button>'
+      +'<div style="min-width:0;flex:1">'
+        +'<div class="pd-task-title rd-ellipsis">'+esc(tk.title||tk.name||(isES?'Tarea':'Task'))+'</div>'
+        +'<div class="pd-task-sub">'+esc(tk.assignee||tk.who||tk.phase||'—')+'</div>'
+      +'</div>'
+      +'<span class="pd-task-due'+(od?' is-over':'')+'">'+esc(dueTxt)+'</span>'
+    +'</div>';
+  }).join('');
+  var taskCard='<section class="rd-card pad">'
+    +'<div class="rd-card-title"><h2>'+(isES?'Siguientes tareas':'Next tasks')+'</h2>'
+      +'<button type="button" class="btn btn-sm" onclick="switchTab(\'timeline\')">'+esc(t('tab_timeline'))+'</button></div>'
+    +(pendingTasks.length
+      ?taskRows
+      :('<div class="pd-empty">'+(tasks.length?(isES?'¡Todas las tareas están hechas!':'Every task is done!'):(isES?'Todavía no hay tareas en el plan.':'No tasks in the plan yet.'))+'</div>'))
+  +'</section>';
+
+  // ── Plano ──────────────────────────────────────────────────────────────
+  var layoutCard='<section class="rd-card pad">'
+    +'<div class="rd-card-title"><h2>'+esc(t('dash_layout_summary'))+'</h2></div>'
+    +'<div class="pd-layoutrow">'
+      +'<div><div class="pd-layout-num rd-num">'+tables+'</div><div class="rd-mini">'+esc(t('dash_tables'))+'</div></div>'
+      +'<div><div class="pd-layout-num rd-num">'+chairs+'</div><div class="rd-mini">'+esc(t('dash_chairs'))+'</div></div>'
+      +'<div style="flex:1"></div>'
+      +'<button type="button" class="btn btn-sm" onclick="switchTab(\'layout\')">'+(isES?'Abrir editor':'Open editor')+'</button>'
+    +'</div>'
+    +(layoutName
+      ?('<div class="pd-layout-name rd-hint rd-ellipsis" title="'+esc(layoutName)+'">'+esc(layoutName)+'</div>')
+      :(tables?'':('<div class="pd-empty" style="padding-top:12px">'+esc(t('dash_no_layout'))+'</div>')))
+    +(guestsWithoutTable>0?('<div class="pd-layout-name rd-hint">'+guestsWithoutTable+' '+(isES?'invitados sin mesa asignada':'guests without a table')+'</div>'):'')
+  +'</section>';
+
   el.innerHTML=_dashOnboarding(p,hired,done,litems)
-  // HEADER
-  +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">'
-    +'<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">'
-      +'<div style="font-family:\'DM Sans\',sans-serif;font-size:22px;font-weight:600;color:#242424">'+esc(p.name)+'</div>'
-      +(p.clientName?'<span style="font-family:\'DM Sans\',sans-serif;font-size:13px;color:#787470">· '+esc(p.clientName)+'</span>':'')
-      +'<span class="badge b-blue">'+fmtDateShort(p.date)+'</span>'
-      +'<span class="badge '+dlBadge+'">'+dlText+'</span>'
-    +'</div>'
-    +'<button class="btn btn-ghost" onclick="openEventModal(\''+p.id+'\')">'
-      +'<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg> '+t('edit_event')
-    +'</button>'
-  +'</div>'
-  // KPI ROW
-  +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:20px">'
-    +_dashKPI(t('dash_total_budget'), tb>0?formatCost(tb):'—', t('dash_event_budget'), '#242424')
-    +(totalWithPlusOnes>0&&tb>0?_dashKPI(LANG==='es'?'Presupuesto p/Inv.':'Budget / Guest', formatCost(budgetPerGuest), totalWithPlusOnes+' '+(LANG==='es'?'invitados':'guests'), '#242424', LANG==='es'?'Presupuesto ('+formatCost(tb)+') ÷ '+totalWithPlusOnes+' invitados (incl. acompañantes)':'Budget ('+formatCost(tb)+') ÷ '+totalWithPlusOnes+' guests (incl. plus-ones)'):'')
-    +_dashKPI(t('dash_paid'), formatCost(paid), tb>0?budgetPct+'% '+t('dash_of_budget'):'', '#A8403A')
-    +_dashKPI(t('dash_remaining'), formatCost(remaining), tb>0?t('dash_left'):'', remaining>=0?'#3D7A5E':'#A8403A')
-    +_dashKPI(t('dash_guests_total'), guestTotal+(plusOnes?'<span style="font-family:\'DM Sans\',sans-serif;font-size:14px;color:#787470;font-weight:400"> +'+plusOnes+'</span>':''), confirmed+' '+t('dash_confirmed'), '#3D7A5E')
-    +_dashKPI(t('dash_vendors_hired'), hired.length+'<span style="font-family:\'DM Sans\',sans-serif;font-size:14px;color:#787470;font-weight:400">/'+p.vendors.length+'</span>', t('dash_hired'), '#A07818')
-    +_dashKPI(t('dash_tasks_progress'), done+'<span style="font-family:\'DM Sans\',sans-serif;font-size:14px;color:#787470;font-weight:400">/'+p.tasks.length+'</span>', tpct+'% '+t('dash_complete'), '#A67C3D')
-    +_dashKPI(t('dash_tables'), tables||'0', chairs+' '+t('dash_chairs'), '#242424', LANG==='es'?'Total: '+guestTotal+' | Con mesa: '+guestsWithTable+' | Sin mesa: '+guestsWithoutTable:'Total: '+guestTotal+' | Assigned: '+guestsWithTable+' | Unassigned: '+guestsWithoutTable)
-  +'</div>'
-  // DETAIL GRID
-  +'<div class="dash-grid">'
-    // LEFT: Budget Card
-    +'<div class="card" style="padding:20px">'
-      +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--light);margin-bottom:16px">'+t('dash_budget_overview')+'</div>'
-      // Allocated bar
-      +'<div style="margin-bottom:12px">'
-        +'<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px">'
-          +'<span>'+t('dash_allocated')+'</span>'
-          +'<span style="font-weight:600;color:var(--text)">'+formatCost(allocated)+(tb>0?' / '+formatCost(tb):'')+'</span>'
-        +'</div>'
-        +'<div class="prog"><div class="prog-f" style="width:'+(allocPct>100?100:allocPct)+'%;background:'+(allocPct>100?'#A8403A':'#A07818')+'"></div></div>'
-      +'</div>'
-      // Paid bar
-      +'<div style="margin-bottom:12px">'
-        +'<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px">'
-          +'<span>'+t('dash_paid')+'</span>'
-          +'<span style="font-weight:600;color:var(--text)">'+formatCost(paid)+(allocated>0?' / '+formatCost(allocated):'')+'</span>'
-        +'</div>'
-        +'<div class="prog"><div class="prog-f" style="width:'+(allocated>0?Math.min(100,Math.round(paid/allocated*100)):0)+'%;background:'+(budgetPct>90?'#A8403A':budgetPct>70?'#A07818':'#3D7A5E')+'"></div></div>'
-      +'</div>'
-      // Unallocated
-      +(tb>0?'<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:16px"><span style="color:var(--muted)">'+t('dash_unallocated')+'</span><span style="font-weight:600;color:'+((tb-allocated)>=0?'#3D7A5E':'#A8403A')+'">'+formatCost(tb-allocated)+'</span></div>':'')
-      // Category breakdown
-      +(catEntries.length?'<div style="border-top:1px solid var(--border);padding-top:14px">'
-        +'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--light);margin-bottom:10px">'+t('dash_budget_by_category')+'</div>'
-        +catBarsHtml
-      +'</div>':'')
-    +'</div>'
-    // RIGHT: stacked cards
-    +'<div style="display:flex;flex-direction:column;gap:14px">'
-      // Guests card
-      +'<div class="card" style="padding:18px">'
-        +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--light);margin-bottom:12px">'+t('dash_guests_total')+'</div>'
-        +(guestTotal>0
-          ?'<div style="display:flex;align-items:center;gap:16px">'
-            +guestDonut
-            +'<div style="flex:1">'
-              +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><div style="width:8px;height:8px;border-radius:50%;background:#3D7A5E;flex-shrink:0"></div><span style="font-size:12px;flex:1">'+t('dash_confirmed')+'</span><span style="font-size:12px;font-weight:700">'+confirmed+'</span></div>'
-              +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><div style="width:8px;height:8px;border-radius:50%;background:#A07818;flex-shrink:0"></div><span style="font-size:12px;flex:1">'+t('dash_pending')+'</span><span style="font-size:12px;font-weight:700">'+pending+'</span></div>'
-              +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><div style="width:8px;height:8px;border-radius:50%;background:#A8403A;flex-shrink:0"></div><span style="font-size:12px;flex:1">'+t('dash_declined')+'</span><span style="font-size:12px;font-weight:700">'+declined+'</span></div>'
-              +(plusOnes?'<div style="font-size:11px;color:var(--muted);margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">'+t('dash_plus_ones')+': <strong>'+plusOnes+'</strong></div>':'')
-            +'</div>'
-          +'</div>'
-          :'<div style="font-size:12px;color:var(--muted)">—</div>')
-      +'</div>'
-      // Tasks card
-      +'<div class="card" style="padding:18px">'
-        +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--light);margin-bottom:12px">'+t('dash_tasks_progress')+'</div>'
-        +(p.tasks.length>0
-          ?'<div style="display:flex;align-items:center;gap:16px">'
-            +_dashRing(tpct,'#A67C3D',56)
-            +'<div style="flex:1">'
-              +'<div style="font-size:13px;font-weight:600;color:var(--text)">'+done+' / '+p.tasks.length+'</div>'
-              +'<div style="font-size:11px;color:var(--muted)">'+t('dash_complete')+'</div>'
-              +(overdue>0?'<div style="font-size:11px;font-weight:600;color:#A8403A;margin-top:6px">⚠ '+overdue+' '+t('dash_overdue')+'</div>':'')
-            +'</div>'
-          +'</div>'
-          :'<div style="font-size:12px;color:var(--muted)">—</div>')
-      +'</div>'
-      // Layout card
-      +'<div class="card" style="padding:18px">'
-        +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--light);margin-bottom:12px">'+t('dash_layout_summary')+'</div>'
-        +(tables>0||layoutName
-          ?'<div style="display:flex;gap:20px;align-items:center">'
-            +'<div style="text-align:center"><div style="font-size:22px;font-weight:700;color:var(--navy);font-family:\'Cormorant Garamond\',serif">'+tables+'</div><div style="font-size:10px;color:var(--muted)">'+t('dash_tables')+'</div></div>'
-            +'<div style="text-align:center"><div style="font-size:22px;font-weight:700;color:var(--navy);font-family:\'Cormorant Garamond\',serif">'+chairs+'</div><div style="font-size:10px;color:var(--muted)">'+t('dash_chairs')+'</div></div>'
-            +(layoutName?'<div style="flex:1;font-size:12px;color:var(--muted);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(layoutName)+'">'+esc(layoutName)+'</div>':'')
-          +'</div>'
-          :'<div style="font-size:12px;color:var(--muted)">'+t('dash_no_layout')+'</div>')
-      +'</div>'
-    +'</div>'
-  +'</div>';
+    +'<div class="rd-metrics">'+metrics+'</div>'
+    +'<div class="rd-grid-2">'+budgetCard+'<div class="rd-col">'+guestCard+taskCard+layoutCard+'</div></div>';
 }
 
 function statCard(lbl,ibg,iclr,icon,val,sub,pct,barClr){
@@ -1098,162 +1232,248 @@ function qaction(ibg,iclr,icon,lbl,onclick){
   </div>`;
 }
 var _dashTasksExpanded={};
+var _AD_MON_ES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+var _AD_MON_EN=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+
 function renderAppDash(){
   const el = document.getElementById('pg-dashboard-content');
   if (!el) return;
   const isES = LANG === 'es';
-  var isMob_ = typeof isPhoneViewport==='function' && isPhoneViewport();
-  const allProjects = Object.values(uproj()).filter(p => p && p.id && !p._metaOnly && p.id !== '__library__' && p.id !== '__lib_layout__' && p.status && p.status !== '__internal__');
-  const now = new Date(); now.setHours(0,0,0,0);
-  const todayTasks = [], expiredTasks = [], upcomingEvents = [];
-  allProjects.forEach(p => {
-    (p.tasks||[]).forEach(tk => {
-      if (tk.done) return;
-      if (!tk.dueDate) { todayTasks.push({tk,p}); return; }
-      const due = new Date(tk.dueDate+'T12:00:00'); due.setHours(0,0,0,0);
-      if (due < now) expiredTasks.push({tk,p});
-      else if (due.getTime() === now.getTime()) todayTasks.push({tk,p});
-    });
-    if (p.date) { const da = daysAway(p.date); if (da >= 0) upcomingEvents.push({p,da}); }
+  const all = Object.values(uproj()).filter(function(p){
+    return p && p.id && !p._metaOnly && p.id !== '__library__' && p.id !== '__lib_layout__' && p.status && p.status !== '__internal__';
   });
-  upcomingEvents.sort((a,b) => a.da - b.da);
-  const within30 = upcomingEvents.filter(e => e.da <= 30);
-  const displayEvents = within30.length >= 3 ? within30 : upcomingEvents.slice(0, Math.max(3, within30.length));
 
-  // -- Status donut data --
-  // Cohesive editorial categorical palette (CVD-validated ΔE 27) — muted, on-brand, not neon
-  const statusDef = [
-    { key:'to-be-confirmed', clr:'#7E6CA6', labelEN:'To be Confirmed', labelES:'Por Confirmar' },
-    { key:'confirmed',       clr:'#3D7A5E', labelEN:'Confirmed',        labelES:'Confirmado' },
-    { key:'in-progress',     clr:'#A67C3D', labelEN:'In Progress',      labelES:'En Progreso' },
-    { key:'completed',       clr:'#47618A', labelEN:'Completed',        labelES:'Completado' },
-    { key:'cancelled',       clr:'#A8403A', labelEN:'Cancelled',        labelES:'Cancelado' },
-  ];
-  const statusCounts = {};
-  statusDef.forEach(s => { statusCounts[s.key] = 0; });
-  allProjects.forEach(p => {
-    const st = p.status === 'planning' ? 'to-be-confirmed' : p.status;
-    if (statusCounts[st] !== undefined) statusCounts[st]++;
-  });
-  const grandTotal = allProjects.length;
-  const activeSlices = statusDef.filter(s => statusCounts[s.key] > 0);
-  const legendHTML = activeSlices.length === 0
-    ? `<span style="font-size:12px;color:var(--light)">${isES?'Sin proyectos aún':'No projects yet'}</span>`
-    : activeSlices.map(s => `
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <div style="width:10px;height:10px;border-radius:50%;background:${s.clr};flex-shrink:0"></div>
-          <span style="font-size:12px;color:var(--text);flex:1">${isES?s.labelES:s.labelEN}</span>
-          <span style="font-size:12px;font-weight:700;color:var(--text)">${statusCounts[s.key]}</span>
-        </div>`).join('');
+  var head='<div class="rd-page-head"><div>'
+    +'<div class="rd-eyebrow">'+esc(t('panel_eyebrow'))+'</div>'
+    +'<h1 class="rd-h1">'+(isES?'Panel general':'Dashboard')+'</h1>'
+    +'<p class="rd-sub">'+(isES?'Todo lo que necesita tu atención, en un solo lugar.':'Everything that needs your attention, in one place.')+'</p>'
+  +'</div></div>';
 
-  function buildSVGDonut() {
-    if (grandTotal === 0) return `<svg width="110" height="110" viewBox="0 0 110 110"><circle cx="55" cy="55" r="38" fill="none" stroke="var(--bg2)" stroke-width="15"/></svg>`;
-    const r = 38, circ = 2 * Math.PI * r, cx = 55, cy = 55, sw = 15;
-    const gap = activeSlices.length > 1 ? 5 : 0; // surface gap between segments
-    let rotation = -90;
-    const track = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--bg2)" stroke-width="${sw}"/>`;
-    const circles = activeSlices.map(s => {
-      const pct = statusCounts[s.key] / grandTotal;
-      const arc = Math.max(0.5, pct * circ - gap);
-      const seg = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${s.clr}" stroke-width="${sw}" stroke-dasharray="${arc.toFixed(2)} ${(circ - arc).toFixed(2)}" stroke-dashoffset="${(circ * 0.25).toFixed(2)}" transform="rotate(${rotation.toFixed(2)} ${cx} ${cy})"/>`;
-      rotation += pct * 360;
-      return seg;
-    }).join('');
-    return `<svg width="110" height="110" viewBox="0 0 110 110">${track}${circles}</svg>`;
+  if(!all.length){
+    el.innerHTML=head
+      +'<section class="rd-card pad-lg ad-blank">'
+        +'<span class="ad-blank-ico">'+_evIcon('calendar',22,1.7)+'</span>'
+        +'<h2 class="rd-h2">'+(isES?'Aún no hay nada que seguir':'Nothing to track yet')+'</h2>'
+        +'<p class="rd-sub">'+(isES?'Crea tu primer evento y este panel se llenará con lo que necesita tu atención.':'Create your first event and this panel will fill up with what needs your attention.')+'</p>'
+        +'<button type="button" class="btn btn-primary" style="margin-top:18px" onclick="openEventModal()">'+_evIcon('plus',15,2.4)+' '+esc(t('create_event'))+'</button>'
+      +'</section>';
+    return;
   }
-  const donutSVG = buildSVGDonut();
-  const donutCard = `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:18px 20px;box-shadow:var(--sh-sm);">
-    <div style="font-size:13px;font-weight:700;margin-bottom:14px">${isES?'Eventos por Estado':'Events by Status'}</div>
-    <div style="display:flex;align-items:center;gap:20px;">
-      <div style="position:relative;width:110px;height:110px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
-        ${donutSVG}
-        <div style="position:absolute;text-align:center;">
-          <div style="font-size:22px;font-weight:700;color:var(--text);line-height:1">${grandTotal}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">${isES?'eventos':'events'}</div>
-        </div>
-      </div>
-      <div style="flex:1">${legendHTML}</div>
-    </div>
-  </div>`;
 
-  function taskTable(title, items, emptyMsg, accentClr, sectionKey) {
-    var isMob_ = typeof isPhoneViewport==='function' && isPhoneViewport();
-    var isOpen = _dashTasksExpanded[sectionKey];
-    if(isMob_){
-      var mobileRows = items.slice(0,8).map(({tk,p}) =>
-        `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer" onclick="openProject('${p.id}');setTimeout(()=>switchTab('timeline'),120)">
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(tk.title||tk.name||'Task')}</div>
-            <div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(p.name)} · ${tk.dueDate?fmtDateShort(tk.dueDate):'—'}</div>
-          </div>
-          <svg width="14" height="14" fill="none" stroke="var(--light)" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
-        </div>`
-      ).join('');
-      return `<div style="background:var(--card);border-radius:16px;border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm);margin-bottom:12px">
-        <div style="padding:14px 14px;display:flex;align-items:center;gap:10px;cursor:pointer" onclick="_dashTasksExpanded['${sectionKey}']=!_dashTasksExpanded['${sectionKey}'];renderAppDash()">
-          <div style="width:8px;height:8px;border-radius:50%;background:${accentClr};flex-shrink:0"></div>
-          <span style="font-size:14px;font-weight:700;flex:1">${title}</span>
-          <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:2px 9px">${items.length}</span>
-          <svg width="16" height="16" fill="none" stroke="var(--light)" stroke-width="2.5" viewBox="0 0 24 24" style="transition:transform .25s;transform:rotate(${isOpen?'180':'0'}deg)"><polyline points="6 9 12 15 18 9"/></svg>
-        </div>
-        ${isOpen?(items.length===0
-          ?`<div style="padding:24px;text-align:center;font-size:13px;color:var(--light);border-top:1px solid var(--border)">${emptyMsg}</div>`
-          :mobileRows):''}
-      </div>`;
+  const todayY = toLocalYMD(new Date());
+  var totBudget=0, totGuests=0, totConfirmed=0, openTasks=0, overdueTasks=0, activeCount=0, soonCount=0;
+  var upcoming=[], attention=[], risk=null;
+  var statusCounts={};
+
+  all.forEach(function(p){
+    var s = rdEventSummary(p);
+    var st = _evNormStatus(p.status);
+    statusCounts[st]=(statusCounts[st]||0)+1;
+    var live = st!=='completed' && st!=='cancelled';
+    var du = rdDaysUntil(p.date);
+    if(live){ activeCount++; totBudget += s.budget; }
+    totGuests += s.guestsTotal;
+    totConfirmed += s.confirmed;
+    openTasks += Math.max(0, s.tasksTotal - s.tasksDone);
+    overdueTasks += s.overdue;
+    if(live && du.valid && du.n>=0){
+      upcoming.push({p:p, n:du.n, label:du.label, pct:evProgress(p)});
+      if(du.n<=120) soonCount++;
     }
-    const rows = items.slice(0,8).map(({tk,p}) =>
-      `<tr>
-        <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;cursor:pointer;color:var(--gold-h)" onclick="openProject('${p.id}');setTimeout(()=>switchTab('timeline'),120)">${esc(tk.title||tk.name||'Task')}</td>
-        <td><span style="font-size:11px;color:var(--gold-h);font-weight:600;cursor:pointer" onclick="openProject('${p.id}');setTimeout(()=>switchTab('timeline'),120)">${esc(p.name)}</span></td>
-        <td style="font-size:12px;color:var(--muted);white-space:nowrap">${tk.dueDate?fmtDateShort(tk.dueDate):'—'}</td>
-      </tr>`
-    ).join('');
-    return `<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm);margin-bottom:20px;">
-      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;">
-        <div style="width:8px;height:8px;border-radius:50%;background:${accentClr};flex-shrink:0"></div>
-        <span style="font-size:14px;font-weight:700">${title}</span>
-        <span style="margin-left:auto;font-size:11px;font-weight:600;color:var(--muted);background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:2px 9px">${items.length}</span>
-      </div>
-      ${items.length===0
-        ?`<div style="padding:28px;text-align:center;font-size:13px;color:var(--light)">${emptyMsg}</div>`
-        :`<div style="overflow-x:auto"><table><thead><tr><th>${isES?'Tarea':'Task'}</th><th>${isES?'Evento':'Event'}</th><th>${isES?'Fecha límite':'Due date'}</th></tr></thead><tbody>${rows}</tbody></table></div>`
+
+    // ── Requiere atención: tareas vencidas / de hoy ──
+    (p.tasks||[]).forEach(function(tk){
+      if(!tk || tk.done) return;
+      if(isTaskOverdue(tk)){
+        attention.push({sev:0, tone:'danger', icon:'alert',
+          title:(tk.title||tk.name||(isES?'Tarea':'Task')),
+          meta:p.name+(tk.assignee?(' · '+tk.assignee):''),
+          due:isES?'Vencida':'Overdue', dueTone:'danger',
+          act:"openProject('"+p.id+"');setTimeout(function(){switchTab('timeline')},140)"});
+      } else if(tk.dueDate===todayY){
+        attention.push({sev:1, tone:'warn', icon:'clock',
+          title:(tk.title||tk.name||(isES?'Tarea':'Task')),
+          meta:p.name+(tk.assignee?(' · '+tk.assignee):''),
+          due:t('today_label'), dueTone:'warn',
+          act:"openProject('"+p.id+"');setTimeout(function(){switchTab('timeline')},140)"});
       }
-    </div>`;
-  }
-  const tc={social:'b-pink',corporate:'b-blue',community:'b-green',government:'b-orange',education:'b-purple'};
-  const tl={social:t('type_social'),corporate:t('type_corporate'),community:t('type_community'),government:t('type_government'),education:t('type_education')};
-  const evCards = displayEvents.map(({p,da}) => {
-    const done=(p.tasks||[]).filter(tk=>tk.done).length;
-    const total=(p.tasks||[]).length;
-    const pct=total?Math.round(done/total*100):0;
-    const barClr='var(--success)';
-    const typeLbl=tl[p.type]||(p.type&&p.type.startsWith('other:')?p.type.slice(6):p.type)||'';
-    return `<div onclick="openProject('${p.id}')" style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);padding:18px;box-shadow:var(--sh-sm);cursor:pointer;transition:var(--tr);"
-      onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='var(--sh-lg)'"
-      onmouseout="this.style.transform='';this.style.boxShadow='var(--sh-sm)'">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <span style="font-size:11px;font-weight:600;color:var(--gold-h);background:var(--gold-l);padding:3px 10px;border-radius:20px">${da===0?t('today'):da+' '+(isES?'días':'days')}</span>
-        <span class="badge ${tc[p.type]||'b-gray'}">${typeLbl}</span>
-      </div>
-      <div style="font-size:15px;font-weight:700;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:14px">${esc(p.clientName)}</div>
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:5px">
-        <span>${isES?'Progreso':'Progress'}</span><span style="font-weight:600;color:var(--text)">${pct}%</span>
-      </div>
-      <div class="prog"><div class="prog-f" style="width:${pct}%;background:${barClr}"></div></div>
-    </div>`;
+    });
+
+    // ── Requiere atención: proveedores (agregados por evento) ──
+    if(live){
+      var toBudget="openProject('"+p.id+"');setTimeout(function(){switchTab('budget')},140)";
+      var unbooked=[], unbookedAmt=0, owing=[], owingAmt=0;
+      (p.vendors||[]).forEach(function(v){
+        if(!v) return;
+        var vb=Number(v.budget)||0;
+        var vp=(v.payments||[]).reduce(function(a,pay){return a+(Number(pay&&pay.amount)||0);},0);
+        if(!v.hired && vb>0){ unbooked.push(v); unbookedAmt+=vb; }
+        else if(v.hired && vb-vp>0){ owing.push(v); owingAmt+=(vb-vp); }
+      });
+      if(unbooked.length && du.valid && du.n>=0 && du.n<=90){
+        attention.push({sev:2, tone:'info', icon:'edit',
+          title: unbooked.length===1
+            ? ((isES?'Sin contratar — ':'Not booked — ')+(unbooked[0].name||(isES?'Proveedor':'Vendor')))
+            : (unbooked.length+(isES?' proveedores sin contratar':' vendors not booked')),
+          meta:p.name+' · '+fmtMoney(unbookedAmt),
+          due:du.label, dueTone:'muted', act:toBudget});
+      }
+      if(owing.length && du.valid && du.n>=0 && du.n<=30){
+        attention.push({sev:1, tone:'warn', icon:'money',
+          title: owing.length===1
+            ? ((isES?'Saldo pendiente — ':'Balance due — ')+(owing[0].name||(isES?'Proveedor':'Vendor')))
+            : (owing.length+(isES?' saldos pendientes':' balances due')),
+          meta:p.name+' · '+fmtMoney(owingAmt),
+          due:du.label, dueTone:'warn', act:toBudget});
+      }
+      if(unbooked.length && du.valid && du.n>=0 && (!risk || du.n<risk.n)){
+        risk={p:p, n:du.n, count:unbooked.length};
+      }
+    }
+
+    // ── Requiere atención: datos del evento ──
+    if(!p.date){
+      attention.push({sev:1, tone:'warn', icon:'calendar',
+        title:isES?'Evento sin fecha':'Event without a date',
+        meta:p.name, due:'', dueTone:'muted',
+        act:"openEventModal('"+p.id+"')"});
+    }
+    if(live && s.budget>0 && s.allocated>s.budget){
+      attention.push({sev:2, tone:'danger', icon:'money',
+        title:isES?'Presupuesto excedido':'Over budget',
+        meta:p.name+' · '+fmtMoney(s.allocated-s.budget)+(isES?' de más':' over'),
+        due:'', dueTone:'muted',
+        act:"openProject('"+p.id+"');setTimeout(function(){switchTab('budget')},140)"});
+    }
+  });
+
+  upcoming.sort(function(a,b){ return a.n-b.n; });
+  attention.sort(function(a,b){ return a.sev-b.sev; });
+  var attTop=attention.slice(0,6);
+
+  // ── Métricas ───────────────────────────────────────────────────────────
+  var moneyTxt=fmtMoney(totBudget);
+  var metrics='<div class="rd-metrics">'
+    +rdMetric({label:isES?'Eventos activos':'Active events', value:String(activeCount),
+      sub:isES?(soonCount+' en los próximos 120 días'):(soonCount+' in the next 120 days'),
+      icon:_evIcon('calendar',15), iconBg:'var(--accent-l)', iconFg:'var(--accent-deep)', valClass:'lg'})
+    +rdMetric({label:isES?'Bajo gestión':'Under management', value:moneyTxt,
+      sub:isES?'presupuesto agregado':'aggregate budget',
+      icon:_evIcon('money',15), iconBg:'var(--champagne-l)', iconFg:'var(--champagne-deep)',
+      valClass:moneyTxt.length>12?'sm':'lg'})
+    +rdMetric({label:isES?'Tareas por hacer':'Open tasks', value:String(openTasks),
+      sub:overdueTasks?(overdueTasks+' '+(isES?'vencidas':'overdue')):(isES?'ninguna vencida':'none overdue'),
+      icon:_evIcon('tasks',15),
+      iconBg:overdueTasks?'var(--accent-l)':'var(--success-l)', iconFg:overdueTasks?'var(--accent-deep)':'var(--success)',
+      valClass:'lg'})
+    +rdMetric({label:isES?'Invitados totales':'Total guests', value:String(totGuests),
+      sub:totConfirmed+' '+t('dash_confirmed').toLowerCase(),
+      icon:_evIcon('users',15), iconBg:'var(--success-l)', iconFg:'var(--success)', valClass:'lg'})
+  +'</div>';
+
+  // ── Próximos eventos ───────────────────────────────────────────────────
+  var MON=isES?_AD_MON_ES:_AD_MON_EN;
+  var upRows=upcoming.slice(0,5).map(function(u){
+    var d=startOfLocalDay(u.p.date);
+    var day=d?String(d.getDate()).padStart(2,'0'):'—';
+    var mon=d?MON[d.getMonth()]:'';
+    var meta=[u.p.clientName, u.p.location].filter(Boolean).join(' · ');
+    return '<div class="rd-card-row click ad-up" onclick="openProject(\''+esc(u.p.id)+'\')">'
+      +'<div class="ad-up-date"><div class="ad-up-day rd-num">'+day+'</div><div class="rd-mini" style="font-size:10px;margin-top:2px">'+esc(mon)+'</div></div>'
+      +'<span class="ad-up-sep"></span>'
+      +'<div style="min-width:0;flex:1"><div class="ad-up-name rd-ellipsis">'+esc(u.p.name)+'</div>'
+        +'<div class="ad-up-meta rd-ellipsis">'+esc(meta||'—')+'</div></div>'
+      +'<div class="ad-up-prog"><div class="rd-bar thin"><i style="width:'+u.pct+'%"></i></div>'
+        +'<div class="rd-hint rd-num" style="margin-top:5px;text-align:right">'+u.pct+'% '+(isES?'listo':'ready')+'</div></div>'
+      +rdPill(u.label, evStatusTone(u.p.status), {cls:'ad-up-tag'})
+    +'</div>';
   }).join('');
+  var upCard='<section class="rd-card clip">'
+    +'<div class="rd-card-head"><span class="rd-card-dot"></span><h2>'+(isES?'Próximos eventos':'Upcoming events')+'</h2>'
+      +'<span class="rd-spacer"></span>'
+      +'<button type="button" class="rd-link" onclick="showPage(\'events\')">'+(isES?'Ver todos':'View all')+'</button></div>'
+    +(upRows||('<div class="pd-empty" style="padding:26px 22px">'+(isES?'No hay eventos futuros programados.':'No upcoming events scheduled.')+'</div>'))
+  +'</section>';
 
-  el.innerHTML=`
-    <div style="margin-bottom:24px">
-      <h1 class="editorial-title" style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700">${isES?'Panel General':'Dashboard'}</h1>
-      <p style="color:var(--muted);font-size:14px;margin-top:2px">${isES?'Resumen de todos tus proyectos':'Overview across all your projects'}</p>
-    </div>
-    ${displayEvents.length>0?`<div style="margin-bottom:20px"><div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px;color:var(--text)">${within30.length>=3?(isES?'Próximos Eventos (30 días)':'Upcoming Events (30 days)'):(isES?'Próximos 3 Eventos':'Next 3 Events')}</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px">${evCards}</div></div>`:''}
-    <div style="display:grid;grid-template-columns:${isMob_?'1fr':'1fr 1fr'};gap:${isMob_?'0':'20'}px;align-items:start">
-      <div>${taskTable(isES?'Tareas de Hoy':"Today's Tasks",todayTasks,isES?'Sin tareas para hoy':'No tasks due today','var(--gold)','today')}</div>
-      <div>${taskTable(isES?'Tareas Vencidas':'Expired Tasks',expiredTasks,isES?'Sin tareas vencidas':'No overdue tasks','var(--danger)','expired')}</div>
-    </div>`;
+  // ── Requiere atención ──────────────────────────────────────────────────
+  var attRows=attTop.map(function(a){
+    var dueColor=a.dueTone==='danger'?'var(--danger)':a.dueTone==='warn'?'var(--warn)':'var(--muted)';
+    return '<div class="rd-card-row ad-att">'
+      +'<span class="ad-att-ico t-'+a.tone+'">'+_evIcon(a.icon,13,2)+'</span>'
+      +'<div style="min-width:0;flex:1"><div class="ad-att-title rd-ellipsis">'+esc(a.title)+'</div>'
+        +'<div class="ad-att-meta rd-ellipsis">'+esc(a.meta)+'</div></div>'
+      +(a.due?('<span class="ad-att-due" style="color:'+dueColor+'">'+esc(a.due)+'</span>'):'')
+      +'<button type="button" class="btn btn-sm ad-att-btn" onclick="'+esc(a.act)+'">'+(isES?'Resolver':'Resolve')+'</button>'
+    +'</div>';
+  }).join('');
+  var attCard='<section class="rd-card clip">'
+    +'<div class="rd-card-head"><span class="rd-card-dot deep"></span><h2>'+esc(t('needs_attention'))+'</h2>'
+      +(attention.length?('<span class="rd-pill sm t-danger ad-att-count">'+attention.length+'</span>'):'')+'</div>'
+    +(attTop.length
+      ?(attRows+(attention.length>attTop.length
+        ?('<div class="ad-att-more rd-hint">'+(isES?('y '+(attention.length-attTop.length)+' más…'):('and '+(attention.length-attTop.length)+' more…'))+'</div>')
+        :''))
+      :('<div class="ad-clear">'
+        +'<span class="ad-clear-ico">'+_evIcon('check',18,2.2)+'</span>'
+        +'<div><div class="ad-clear-title">'+(isES?'Todo en orden':'All clear')+'</div>'
+        +'<div class="rd-hint">'+(isES?'Sin tareas vencidas ni saldos urgentes.':'No overdue tasks and no urgent balances.')+'</div></div>'
+      +'</div>'))
+  +'</section>';
 
+  // ── Eventos por estado ─────────────────────────────────────────────────
+  var donutData=[], legendHTML='';
+  _EV_STATUS_ORDER.forEach(function(k){
+    var n=statusCounts[k]||0;
+    if(!n) return;
+    donutData.push([_EV_STATUS_DOT[k], n]);
+    legendHTML+='<div class="rd-legend-row"><i style="background:'+_EV_STATUS_DOT[k]+'"></i><span>'+esc(statusLabel(k))+'</span><b>'+n+'</b></div>';
+  });
+  var statusCard='<section class="rd-card pad">'
+    +'<div class="rd-card-title"><h2>'+(isES?'Eventos por estado':'Events by status')+'</h2></div>'
+    +'<div class="pd-donutrow">'
+      +rdDonut(donutData,{size:118,stroke:15,center:String(all.length),centerSub:isES?'eventos':'events'})
+      +'<div style="flex:1;min-width:0">'+(legendHTML||('<span class="rd-hint">'+(isES?'Sin eventos todavía':'No events yet')+'</span>'))+'</div>'
+    +'</div>'
+  +'</section>';
+
+  // ── Riesgo del portafolio (solo si hay algo real que contar) ───────────
+  var riskCard='';
+  if(risk){
+    var rn=risk.count;
+    var txt=isES
+      ? (rn===1
+          ? ('Un proveedor de «'+risk.p.name+'» sigue sin contratar a '+risk.n+' días del evento.')
+          : (rn+' proveedores de «'+risk.p.name+'» siguen sin contratar a '+risk.n+' días del evento.'))
+      : (rn===1
+          ? ('One vendor for “'+risk.p.name+'” is still unbooked, '+risk.n+' days before the event.')
+          : (rn+' vendors for “'+risk.p.name+'” are still unbooked, '+risk.n+' days before the event.'));
+    riskCard='<section class="rd-dark">'
+      +'<div class="rd-dark-eyebrow">'+_evIcon('alert',15,1.8)+'<span>'+(isES?'Riesgo del portafolio':'Portfolio risk')+'</span></div>'
+      +'<p>'+esc(txt)+'</p>'
+      +'<button type="button" class="btn" onclick="openProject(\''+esc(risk.p.id)+'\');setTimeout(function(){switchTab(\'budget\')},140)">'
+        +(isES?'Revisar proveedores':'Review vendors')+'</button>'
+    +'</section>';
   }
+
+  // ── Accesos rápidos ────────────────────────────────────────────────────
+  var quick=[
+    {icon:'plus',     label:t('create_event'),                       act:'openEventModal()'},
+    {icon:'vendors',  label:isES?'Biblioteca':'Library',             act:"showPage('library')"},
+    {icon:'chart',    label:t('nav_analytics'),                      act:"showPage('analytics')"},
+    {icon:'calendar', label:isES?'Ver eventos':'View events',        act:"showPage('events')"}
+  ].map(function(q){
+    return '<button type="button" class="rd-quick" onclick="'+esc(q.act)+'">'
+      +'<span>'+_evIcon(q.icon,17)+'</span><span>'+esc(q.label)+'</span></button>';
+  }).join('');
+  var quickCard='<section class="rd-card pad">'
+    +'<div class="rd-card-title"><h2>'+(isES?'Accesos rápidos':'Quick actions')+'</h2></div>'
+    +'<div class="ad-quickgrid">'+quick+'</div>'
+  +'</section>';
+
+  el.innerHTML=head+metrics
+    +'<div class="rd-grid-2 wide">'
+      +'<div class="rd-col">'+upCard+attCard+'</div>'
+      +'<div class="rd-col">'+statusCard+riskCard+quickCard+'</div>'
+    +'</div>';
+}
 

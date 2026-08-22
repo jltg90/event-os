@@ -25,7 +25,89 @@ function setAnalyticsDateRange(){
 }
 
 function updateAnalyticsLabels(){
-  const btn=document.getElementById('ap-alltime'); if(btn) btn.textContent=t('period_alltime');
+  // El botón "Todo" también refleja el estado: al restaurar un rango guardado
+  // (loadEvPrefs) nadie le quitaba la clase .active y quedaba mintiendo.
+  const btn=document.getElementById('ap-alltime');
+  if(btn){ btn.textContent=t('period_alltime'); btn.classList.toggle('active', !!_aAt); }
+  const title=document.getElementById('analytics-title'); if(title) title.textContent=t('analytics_title');
+  const sub=document.getElementById('analytics-sub'); if(sub) sub.textContent=t('analytics_sub');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REDISEÑO 2026-08 — vista de analíticas.
+// Un solo color por tipo de evento (tomado de la paleta de series del diseño)
+// para que la barra apilada, la dona y las leyendas coincidan en toda la página.
+// ═══════════════════════════════════════════════════════════════════════════
+var AN_TYPE_COLORS = {
+  social:    '#E4572E',
+  corporate: '#3B7DD8',
+  community: '#17A398',
+  government:'#F2A93B',
+  education: '#7C5CE0',
+  other:     '#C4BBAD'
+};
+var AN_TYPE_ORDER = ['social','corporate','community','government','education','other'];
+// Orden de color del ranking de proveedores (coral → naranja → ámbar → teal → azul).
+var AN_RANK_COLORS = ['#E4572E','#F2870F','#F2A93B','#17A398','#3B7DD8'];
+
+/** Normaliza p.type ('other:Aniversario' → 'other') a una llave de color. */
+function anTypeKey(ty){
+  var k = String(ty == null ? '' : ty).replace(/^other:.*$/, 'other');
+  return AN_TYPE_COLORS[k] ? k : 'other';
+}
+function anTypeName(ty){
+  var k = anTypeKey(ty);
+  if(k === 'other') return LANG === 'es' ? 'Otro' : 'Other';
+  return evTypeLabel(k) || k;
+}
+/** Enteros con separador de miles del idioma activo (no es dinero). */
+function anNum(n){
+  var v = Number(n);
+  if(!isFinite(v)) v = 0;
+  return v.toLocaleString(LANG === 'es' ? 'es-MX' : 'en-US');
+}
+function anIcon(paths, size){
+  var s = size || 20;
+  return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths + '</svg>';
+}
+/** Etiqueta corta de mes desde una llave 'YYYY-MM'.  Nunca new Date(cadena). */
+function anMonthLabel(key, withYear){
+  var parts = String(key).split('-');
+  var y = Number(parts[0]), m = Number(parts[1]);
+  if(!isFinite(y) || !isFinite(m)) return String(key);
+  var d = new Date(y, m - 1, 1); // constructor local con números: seguro
+  var name = d.toLocaleString(LANG === 'es' ? 'es-MX' : 'en-US', { month:'short' }).replace('.', '');
+  return withYear ? name + ' ' + String(y).slice(2) : name;
+}
+
+/** Estado vacío: sin eventos del todo, o sin eventos dentro del filtro. */
+function anEmptyState(hasAnyProject){
+  var chart = anIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>', 26);
+  var title, sub, action;
+  if(!hasAnyProject){
+    title = LANG === 'es' ? 'Aún no hay datos que analizar' : 'Nothing to analyze yet';
+    sub   = LANG === 'es'
+      ? 'Crea tu primer evento y aquí verás presupuestos, invitados y proveedores comparados entre todos tus proyectos.'
+      : 'Create your first event and this page will compare budgets, guests and vendors across all your projects.';
+    action = '<button class="btn btn-primary" onclick="showPage(\'events\')">' +
+      anIcon('<path d="M12 5v14M5 12h14"/>', 15) + ' ' +
+      esc(t('new_event') || (LANG === 'es' ? 'Nuevo evento' : 'New event')) + '</button>';
+  } else {
+    title = t('analytics_no_data');
+    sub   = LANG === 'es'
+      ? 'Ningún evento cae dentro del período seleccionado. Amplía el rango de fechas o vuelve a todo el historial.'
+      : 'No event falls inside the selected period. Widen the date range or go back to the full history.';
+    action = '<button class="btn" onclick="setAnalyticsAllTime()">' +
+      anIcon('<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>', 15) + ' ' +
+      esc(t('period_alltime')) + '</button>';
+  }
+  return '<div class="rd-card"><div class="an-empty">' +
+    '<span class="an-empty-ico">' + chart + '</span>' +
+    '<div class="an-empty-title">' + esc(title) + '</div>' +
+    '<div class="an-empty-sub">' + esc(sub) + '</div>' +
+    action +
+    '</div></div>';
 }
 
 function renderAnalytics(){
@@ -41,247 +123,212 @@ function renderAnalytics(){
   });
   updateAnalyticsLabels();
 
-  const title=document.getElementById('analytics-title');if(title)title.textContent=t('analytics_title');
-  const sub=document.getElementById('analytics-sub');if(sub)sub.textContent=t('analytics_sub');
   const fromEl=document.getElementById('ap-from'); const toEl=document.getElementById('ap-to');
-  if(fromEl&&!fromEl.value&&_aFr){
-    fromEl.value=formatDMY(toLocalYMD(_aFr));
-  }
-  if(toEl&&!toEl.value&&_aTo){
-    toEl.value=formatDMY(toLocalYMD(_aTo));
-  }
+  if(fromEl&&!fromEl.value&&_aFr) fromEl.value=formatDMY(toLocalYMD(_aFr));
+  if(toEl&&!toEl.value&&_aTo)     toEl.value=formatDMY(toLocalYMD(_aTo));
 
   const el = document.getElementById('analytics-content');
   if(!el) return;
 
   if(!inPeriod.length){
-    el.innerHTML = `<div style="text-align:center;padding:60px 20px;color:#787470">
-      <svg width="40" height="40" fill="none" stroke="#DFD7C9" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 14px;display:block"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
-      <div style="font-family:'DM Sans',sans-serif;font-size:16px;font-weight:600;color:#242424;margin-bottom:6px">${t('analytics_no_data')}</div>
-      <div style="font-family:'DM Sans',sans-serif;font-size:13px">${LANG==='es'?'Intenta con un período de tiempo más amplio.':'Try a different time period.'}</div>
-    </div>`;
+    el.innerHTML = anEmptyState(allProjects.length > 0);
     return;
   }
 
-  const totalBudget = inPeriod.reduce((s,p)=>s+Number(p.budget||0),0);
-  const avgBudget = totalBudget/inPeriod.length;
-  const totalGuests = inPeriod.reduce((s,p)=>s+(p.guests||[]).length,0);
-  const avgGuests = totalGuests/inPeriod.length;
-  const confirmedGuests = inPeriod.reduce((s,p)=>s+(p.guests||[]).filter(g=>g.rsvp==='confirmed').length,0);
+  // ── Agregados ────────────────────────────────────────────────────────────
+  // Ojo: un proyecto con _hasExtras sin cargar trae guests/vendors vacíos.
+  // core.js llama a _ensureAllProjectsComplete() y vuelve a renderizar.
+  const sums = inPeriod.map(rdEventSummary);
+  const totalBudget = sums.reduce((s,x)=>s+x.budget,0);
+  const avgBudget   = totalBudget/inPeriod.length;
+  const totalSeats  = sums.reduce((s,x)=>s+x.seats,0);
+  const avgSeats    = totalSeats/inPeriod.length;
+  const confirmed   = sums.reduce((s,x)=>s+x.confirmed,0);
+  const confirmPct  = totalSeats ? Math.round(confirmed/totalSeats*100) : 0;
 
   const byType = {};
-  inPeriod.forEach(p=>{ byType[p.type]=(byType[p.type]||0)+1; });
-  const byStatus = {};
-  inPeriod.forEach(p=>{ if(p.status) byStatus[p.status]=(byStatus[p.status]||0)+1; });
+  inPeriod.forEach(p=>{ const k=anTypeKey(p.type); byType[k]=(byType[k]||0)+1; });
+  const typeEntries = AN_TYPE_ORDER.filter(k=>byType[k]).map(k=>[k,byType[k]]);
+
   const vendorCats = {};
-  inPeriod.forEach(p=>{ (p.vendors||[]).filter(v=>v.hired).forEach(v=>{ vendorCats[v.category]=(vendorCats[v.category]||0)+1; }); });
-  const topVendors = Object.entries(vendorCats).sort((a,b)=>b[1]-a[1]).slice(0,5);
-
-  const typeClrs = {social:'#ec4899',corporate:'#3b82f6',community:'#10b981',government:'#f59e0b',education:'#8b5cf6'};
-  const statusClrs = {'to-be-confirmed':'#6b7280',confirmed:'#10b981','in-progress':'#f59e0b',completed:'#3b82f6',cancelled:'#ef4444'};
-  const tl={social:t('type_social'),corporate:t('type_corporate'),community:t('type_community'),government:t('type_government'),education:t('type_education')};
-  const sl={'to-be-confirmed':t('status_planning'),confirmed:t('status_confirmed'),'in-progress':t('status_in_progress'),completed:t('status_completed'),cancelled:t('status_cancelled')};
-
-  function barChart(data, colorFn, labelFn, max){
-    return data.map(([k,v])=>`
-      <div style="display:grid;grid-template-columns:110px 1fr 40px;align-items:center;gap:10px;margin-bottom:8px">
-        <div style="font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${labelFn(k)}</div>
-        <div style="background:var(--bg2);border-radius:4px;height:10px;overflow:hidden">
-          <div style="height:100%;border-radius:4px;background:${colorFn(k)};width:${Math.round(v/max*100)}%;transition:width .4s"></div>
-        </div>
-        <div style="font-size:12px;font-weight:700;color:var(--text);text-align:right">${v}</div>
-      </div>`).join('');
-  }
-
-  // Stacked bar chart: events per month broken down by type
-  var monthByType = {};
-  var monthTotals = {};
-  inPeriod.forEach(function(p){
-    if(!p.date) return;
-    var d = parseLocalDate(p.date);
-    if(!d) return;
-    var key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
-    if(!monthByType[key]) monthByType[key] = {};
-    var evType = (p.type||'other').replace(/^other:.*/,'other');
-    monthByType[key][evType] = (monthByType[key][evType]||0) + 1;
-    monthTotals[key] = (monthTotals[key]||0) + 1;
+  inPeriod.forEach(p=>{
+    (p.vendors||[]).filter(v=>v&&v.hired).forEach(v=>{
+      const cat = String(v.category||v.service||'').trim() || (LANG==='es'?'Sin categoría':'Uncategorized');
+      vendorCats[cat]=(vendorCats[cat]||0)+1;
+    });
   });
-  var sortedMonths = Object.keys(monthTotals).sort();
-  var maxMonthCount = Math.max.apply(null, Object.values(monthTotals).concat([1]));
-  var stackTypeOrder = ['social','corporate','community','government','education','other'];
-  var stackTypeClrs = Object.assign({}, typeClrs, {other:'#787470'});
-  var stackTypeLbls = Object.assign({}, tl, {other: LANG==='es'?'Otro':'Other'});
+  const topVendors = Object.entries(vendorCats)
+    .sort((a,b)=>b[1]-a[1]||String(a[0]).localeCompare(String(b[0])))
+    .slice(0,5);
 
-  // Build active types for legend (only types that appear)
-  var activeTypes = stackTypeOrder.filter(function(tp){ return inPeriod.some(function(p){ return (p.type||'other').replace(/^other:.*/,'other') === tp; }); });
+  // ── Fila de métricas ─────────────────────────────────────────────────────
+  const metrics =
+    rdMetric({
+      label: t('analytics_events'),
+      value: anNum(inPeriod.length),
+      sub: LANG==='es' ? 'de '+anNum(allProjects.length)+' en total' : 'of '+anNum(allProjects.length)+' in total',
+      valClass: 'lg'
+    }) +
+    rdMetric({
+      label: t('analytics_avg_budget'),
+      value: fmtMoney(Math.round(avgBudget)),
+      sub: (LANG==='es' ? 'total ' : 'total ') + fmtMoney(totalBudget),
+      valClass: 'lg'
+    }) +
+    rdMetric({
+      label: t('analytics_avg_guests'),
+      value: anNum(Math.round(avgSeats)),
+      sub: LANG==='es' ? anNum(totalSeats)+' en total' : anNum(totalSeats)+' in total',
+      valClass: 'lg'
+    }) +
+    rdMetric({
+      label: LANG==='es' ? 'Tasa de confirmación' : 'Confirmation rate',
+      value: totalSeats ? confirmPct+'%' : '—',
+      sub: LANG==='es' ? anNum(confirmed)+' confirmados' : anNum(confirmed)+' confirmed',
+      valClass: 'lg'
+    });
 
-  var timelineHtml = sortedMonths.length > 0 ? `
-    <div style="display:flex;align-items:flex-end;gap:8px;height:180px;padding:0 4px 0 30px;position:relative">
-      ${[0.25,0.5,0.75,1].map(function(frac){
-        var val = Math.round(maxMonthCount * frac);
-        return '<div style="position:absolute;left:0;bottom:'+Math.round(frac*100)+'%;font-family:\'DM Sans\',sans-serif;font-size:9px;color:#787470;transform:translateY(50%)">'+val+'</div>'
-          +'<div style="position:absolute;left:28px;right:0;bottom:'+Math.round(frac*100)+'%;height:1px;background:rgba(36,36,36,.06)"></div>';
-      }).join('')}
-      ${sortedMonths.map(function(m){
-        var total = monthTotals[m];
-        var types = monthByType[m];
-        var barPct = Math.round(total / maxMonthCount * 100);
-        var segments = stackTypeOrder.filter(function(tp){ return types[tp]; }).map(function(tp){
-          var segPct = types[tp] / total * 100;
-          var showLabel = segPct > 18 && types[tp] > 0;
-          return '<div style="width:100%;height:'+segPct.toFixed(1)+'%;background:'+stackTypeClrs[tp]+';display:flex;align-items:center;justify-content:center;min-height:2px">'
-            +(showLabel ? '<span style="font-family:\'DM Sans\',sans-serif;font-size:9px;font-weight:600;color:#fff;line-height:1">'+types[tp]+'</span>' : '')
-            +'</div>';
-        }).join('');
-        return '<div style="flex:1;min-width:28px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%">'
-          +'<div style="font-family:\'DM Sans\',sans-serif;font-size:10px;font-weight:600;color:#242424;margin-bottom:4px">'+total+'</div>'
-          +'<div style="width:80%;height:'+Math.max(barPct,3)+'%;border-radius:4px 4px 0 0;overflow:hidden;display:flex;flex-direction:column-reverse;transition:height .4s">'+segments+'</div>'
-          +'</div>';
-      }).join('')}
-    </div>
-    <div style="display:flex;gap:8px;padding:4px 4px 0 30px;border-top:1px solid rgba(36,36,36,.08)">
-      ${sortedMonths.map(function(m){
-        var parts = m.split('-');
-        var moName = new Date(+parts[0],+parts[1]-1,1).toLocaleString(LANG==='es'?'es-MX':'en-US',{month:'short'});
-        return '<div style="flex:1;min-width:28px;text-align:center;font-family:\'DM Sans\',sans-serif;font-size:9px;color:#787470;padding-top:6px;white-space:nowrap">'+moName+' '+parts[0].slice(2)+'</div>';
-      }).join('')}
-    </div>
-    <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:14px;padding-left:30px">
-      ${activeTypes.map(function(tp){
-        return '<div style="display:flex;align-items:center;gap:5px">'
-          +'<div style="width:10px;height:10px;border-radius:3px;background:'+stackTypeClrs[tp]+';flex-shrink:0"></div>'
-          +'<span style="font-family:\'DM Sans\',sans-serif;font-size:11px;color:#464646">'+(stackTypeLbls[tp]||tp)+'</span>'
-          +'</div>';
-      }).join('')}
-    </div>` : '';
-
-  function donutSegments(data, colorFn){
-    const total = data.reduce((s,[,v])=>s+v,0);
-    if(!total) return '';
-    let offset=25;
-    const r=15.9155, circ=2*Math.PI*r;
-    return data.map(([k,v])=>{
-      const pct=v/total*100;
-      const dash=pct/100*circ;
-      const gap=circ-dash;
-      const seg=`<circle cx="21" cy="21" r="${r}" fill="none" stroke="${colorFn(k)}" stroke-width="5"
-        stroke-dasharray="${dash.toFixed(2)} ${gap.toFixed(2)}"
-        stroke-dashoffset="${(100-offset)*circ/100}"
-        transform="rotate(-90 21 21)"/>`;
-      offset+=pct;
-      return seg;
-    }).join('');
+  // ── Eventos por mes (barras apiladas por tipo) ───────────────────────────
+  const monthTypes = {}, monthTotals = {};
+  let undated = 0;
+  inPeriod.forEach(p=>{
+    const d = parseLocalDate(p.date);
+    if(!d){ undated++; return; }
+    const key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    if(!monthTypes[key]) monthTypes[key] = {};
+    const k = anTypeKey(p.type);
+    monthTypes[key][k] = (monthTypes[key][k]||0)+1;
+    monthTotals[key]   = (monthTotals[key]||0)+1;
+  });
+  // Meses con datos, rellenando los huecos para que el eje sea continuo.
+  // Si el rango es enorme (>24 meses) se muestran solo los meses con eventos.
+  let months = Object.keys(monthTotals).sort();
+  if(months.length > 1){
+    const a = months[0].split('-'), b = months[months.length-1].split('-');
+    const span = (Number(b[0])-Number(a[0]))*12 + (Number(b[1])-Number(a[1])) + 1;
+    if(span <= 24){
+      const filled = [];
+      for(let i=0;i<span;i++){
+        const y = Number(a[0]) + Math.floor((Number(a[1])-1+i)/12);
+        const m = ((Number(a[1])-1+i) % 12) + 1;
+        filled.push(y+'-'+String(m).padStart(2,'0'));
+      }
+      months = filled;
+    }
   }
+  const maxMonth  = months.reduce((m,k)=>Math.max(m,monthTotals[k]||0),1);
+  const multiYear = months.length ? months[0].slice(0,4)!==months[months.length-1].slice(0,4) : false;
+  const AN_BAR_MAX = 150; // px: alto de .an-bars (196) menos cifra, etiqueta y gaps
 
-  function buildLargeDonut(data, colorFn, labelFn) {
-    const total = data.reduce((s,[,v])=>s+v,0);
-    if (!total) return '<div style="color:var(--muted);font-size:12px">—</div>';
-    const r = 38, circ = 2 * Math.PI * r, cx = 55, cy = 55;
-    let rotation = -90;
-    const circles = data.map(([k,v]) => {
-      const pct = v / total;
-      const dash = pct * circ;
-      const seg = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${colorFn(k)}" stroke-width="16" stroke-dasharray="${dash.toFixed(2)} ${(circ-dash).toFixed(2)}" stroke-dashoffset="${(circ*0.25).toFixed(2)}" transform="rotate(${rotation.toFixed(2)} ${cx} ${cy})"/>`;
-      rotation += pct * 360;
-      return seg;
+  const legend = AN_TYPE_ORDER.filter(k=>byType[k]).map(k=>
+    '<span class="an-legend-item"><i style="background:'+AN_TYPE_COLORS[k]+'"></i>'+esc(anTypeName(k))+'</span>'
+  ).join('');
+
+  const bars = months.map(key=>{
+    const total = monthTotals[key]||0;
+    const types = monthTypes[key]||{};
+    if(!total){
+      return '<div class="an-bar-col">'+
+        '<span class="an-bar-total zero">0</span>'+
+        '<span class="an-bar-stack zero" style="height:4px"></span>'+
+        '<span class="an-bar-lbl">'+esc(anMonthLabel(key, multiYear))+'</span>'+
+      '</div>';
+    }
+    const h = Math.max(6, Math.round(total/maxMonth*AN_BAR_MAX));
+    const segs = AN_TYPE_ORDER.filter(k=>types[k]).map(k=>
+      '<span class="an-bar-seg" style="height:'+(types[k]/total*100).toFixed(2)+'%;background:'+AN_TYPE_COLORS[k]+'"'+
+      ' title="'+esc(anTypeName(k)+': '+anNum(types[k]))+'"></span>'
+    ).join('');
+    return '<div class="an-bar-col">'+
+      '<span class="an-bar-total">'+esc(anNum(total))+'</span>'+
+      '<span class="an-bar-stack" style="height:'+h+'px">'+segs+'</span>'+
+      '<span class="an-bar-lbl">'+esc(anMonthLabel(key, multiYear))+'</span>'+
+    '</div>';
+  }).join('');
+
+  const monthCard =
+    '<section class="rd-card pad-lg an-sec">'+
+      '<div class="rd-card-title an-head">'+
+        '<h2>'+esc(LANG==='es'?'Eventos por mes':'Events per month')+'</h2>'+
+        '<div class="an-legend">'+legend+'</div>'+
+      '</div>'+
+      (months.length
+        ? '<div class="an-chart"><div class="an-bars">'+bars+'</div></div>'
+        : '<div class="an-note">'+esc(LANG==='es'?'Ninguno de estos eventos tiene fecha asignada.':'None of these events has a date yet.')+'</div>')+
+      (undated
+        ? '<div class="an-note">'+esc(LANG==='es'
+            ? anNum(undated)+' evento(s) sin fecha no aparecen en la gráfica.'
+            : anNum(undated)+' event(s) without a date are not shown in the chart.')+'</div>'
+        : '')+
+    '</section>';
+
+  // ── Dona por tipo de evento ──────────────────────────────────────────────
+  const donutData = typeEntries.map(([k,v])=>[AN_TYPE_COLORS[k], v, anTypeName(k)]);
+  const donutLegend = typeEntries.map(([k,v])=>
+    '<div class="rd-legend-row"><i style="background:'+AN_TYPE_COLORS[k]+'"></i>'+
+    '<span>'+esc(anTypeName(k))+'</span><b>'+esc(anNum(v))+'</b></div>'
+  ).join('');
+  const typeCard =
+    '<section class="rd-card pad-lg">'+
+      '<div class="rd-card-title"><h2>'+esc(LANG==='es'?'Por tipo de evento':'By event type')+'</h2></div>'+
+      '<div class="an-donut-wrap">'+
+        rdDonut(donutData, { size:128, stroke:16, centerSub: LANG==='es'?'eventos':'events' })+
+        '<div class="an-donut-legend">'+donutLegend+'</div>'+
+      '</div>'+
+    '</section>';
+
+  // ── Ranking de categorías de proveedor ───────────────────────────────────
+  const maxCat = topVendors.length ? topVendors[0][1] : 1;
+  const rankCard =
+    '<section class="rd-card pad-lg">'+
+      '<div class="rd-card-title"><h2>'+
+        esc(LANG==='es'?'Categorías de proveedor más contratadas':'Most hired vendor categories')+'</h2></div>'+
+      (topVendors.length
+        ? topVendors.map(([cat,n],i)=>
+            '<div class="an-rank-row">'+
+              '<span class="an-rank-name" title="'+esc(cat)+'">'+esc(cat)+'</span>'+
+              '<span class="rd-bar thick"><i style="width:'+Math.max(4,Math.round(n/maxCat*100))+'%;background:'+
+                AN_RANK_COLORS[i % AN_RANK_COLORS.length]+'"></i></span>'+
+              '<span class="an-rank-cnt">'+esc(anNum(n))+'</span>'+
+            '</div>'
+          ).join('')
+        : '<div class="an-note">'+esc(LANG==='es'?'Todavía no hay proveedores contratados en este período.':'No hired vendors in this period yet.')+'</div>')+
+    '</section>';
+
+  // ── Eventos del período (conserva la navegación a cada proyecto) ─────────
+  const rows = inPeriod.slice()
+    .sort((a,b)=>String(a.date||'9999-99-99').localeCompare(String(b.date||'9999-99-99')))
+    .map(p=>{
+      const s = rdEventSummary(p);
+      // El id va dentro de una cadena JS dentro de un atributo: esc() no basta
+      // (decodifica a comilla), así que también se quitan comillas y barras.
+      const pid = esc(String(p.id).replace(/['"\\]/g, ''));
+      return '<div class="rd-card-row click" onclick="openProject(\''+pid+'\')">'+
+        '<span class="rd-avatar an-row-avatar" style="background:'+evTypeCover(anTypeKey(p.type))+'">'+esc(rdInitials(p.name))+'</span>'+
+        '<div style="flex:1;min-width:0">'+
+          '<div class="rd-cell-main">'+esc(p.name)+'</div>'+
+          '<div class="rd-cell-sub">'+esc(fmtDate(p.date))+' · '+esc(anTypeName(p.type))+' · '+
+            esc(anNum(s.seats)+' '+(LANG==='es'?'inv.':'guests'))+'</div>'+
+        '</div>'+
+        '<span class="rd-cell-money an-row-money">'+esc(fmtMoney(s.budget))+'</span>'+
+        rdPill(statusLabel(p.status), evStatusTone(p.status), { sm:true, dot:true })+
+      '</div>';
     }).join('');
-    const svg = `<svg width="110" height="110" viewBox="0 0 110 110" style="flex-shrink:0">${circles}</svg>`;
-    const legend = data.map(([k,v]) => `
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-        <div style="width:10px;height:10px;border-radius:50%;background:${colorFn(k)};flex-shrink:0"></div>
-        <span style="font-family:'DM Sans',sans-serif;font-size:12px;color:#242424;flex:1">${labelFn(k)}</span>
-        <span style="font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;color:#242424">${v}</span>
-      </div>`).join('');
-    return `<div style="display:flex;align-items:center;gap:20px;">
-      <div style="position:relative;width:110px;height:110px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
-        ${svg}
-        <div style="position:absolute;text-align:center;">
-          <div style="font-size:20px;font-weight:600;color:#242424;line-height:1;font-family:'DM Sans',sans-serif">${total}</div>
-          <div style="font-family:'DM Sans',sans-serif;font-size:10px;color:#787470;margin-top:2px">${LANG==='es'?'eventos':'events'}</div>
-        </div>
-      </div>
-      <div style="flex:1">${legend}</div>
-    </div>`;
-  }
+  const listCard =
+    '<section class="rd-card clip an-sec">'+
+      '<div class="rd-card-head">'+
+        '<span class="rd-card-dot"></span>'+
+        '<h2>'+esc(LANG==='es'?'Eventos del período':'Events in period')+'</h2>'+
+        '<span class="rd-hint" style="margin-left:auto">'+esc(anNum(inPeriod.length))+'</span>'+
+      '</div>'+
+      rows+
+    '</section>';
 
-  el.innerHTML = `
-  <!-- KPI CARDS -->
-  <div class="an-kpi" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px">
-    <div class="card" style="padding:18px;text-align:center">
-      <div style="font-family:'DM Sans',sans-serif;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#787470;margin-bottom:8px">${t('analytics_events')}</div>
-      <div style="font-size:22px;font-weight:600;color:#242424;font-family:'DM Sans',sans-serif">${inPeriod.length}</div>
-      <div style="font-family:'DM Sans',sans-serif;font-size:11px;color:#787470;margin-top:4px">${LANG==='es'?'de '+allProjects.length+' total':'of '+allProjects.length+' total'}</div>
-    </div>
-    <div class="card" style="padding:18px;text-align:center">
-      <div style="font-family:'DM Sans',sans-serif;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#787470;margin-bottom:8px">${t('analytics_avg_budget')}</div>
-      <div style="font-size:20px;font-weight:600;color:#242424;font-family:'DM Sans',sans-serif">${fmtMoney(avgBudget)}</div>
-      <div style="font-family:'DM Sans',sans-serif;font-size:11px;color:#787470;margin-top:4px">${t('total_budget')}: ${fmtMoney(totalBudget)}</div>
-    </div>
-    <div class="card" style="padding:18px;text-align:center">
-      <div style="font-family:'DM Sans',sans-serif;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#787470;margin-bottom:8px">${t('analytics_avg_guests')}</div>
-      <div style="font-size:22px;font-weight:600;color:#242424;font-family:'DM Sans',sans-serif">${Math.round(avgGuests)}</div>
-      <div style="font-family:'DM Sans',sans-serif;font-size:11px;color:#787470;margin-top:4px">${totalGuests} ${LANG==='es'?'confirmados '+confirmedGuests:'total, '+confirmedGuests+' confirmed'}</div>
-    </div>
-    <div class="card" style="padding:18px;text-align:center">
-      <div style="font-family:'DM Sans',sans-serif;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#787470;margin-bottom:8px">${LANG==='es'?'Completados':'Completed'}</div>
-      <div style="font-size:22px;font-weight:600;color:#242424;font-family:'DM Sans',sans-serif">${byStatus['completed']||0}</div>
-      <div style="font-family:'DM Sans',sans-serif;font-size:11px;color:#787470;margin-top:4px">${LANG==='es'?'eventos completados':'events completed'}</div>
-    </div>
-  </div>
-
-  <!-- CHARTS ROW -->
-  <div class="an-2col" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
-
-    <!-- Event Timeline -->
-    <div class="card" style="padding:20px;grid-column:1/-1">
-      <div style="font-family:'DM Sans',sans-serif;font-weight:600;font-size:14px;color:#242424;margin-bottom:16px">${t('analytics_timeline')}</div>
-      ${timelineHtml||'<div style="color:var(--muted);font-size:12px;text-align:center;padding:20px">—</div>'}
-    </div>
-
-    <!-- By Type -->
-    <div class="card" style="padding:20px">
-      <div style="font-family:'DM Sans',sans-serif;font-weight:600;font-size:14px;color:#242424;margin-bottom:14px">${t('analytics_by_type')}</div>
-      ${Object.keys(byType).length?buildLargeDonut(Object.entries(byType).sort((a,b)=>b[1]-a[1]),k=>typeClrs[k]||'#9e9e9e',k=>tl[k]||k):'<div style="color:var(--muted);font-size:12px">—</div>'}
-    </div>
-
-    <!-- By Status -->
-    <div class="card" style="padding:20px">
-      <div style="font-family:'DM Sans',sans-serif;font-weight:600;font-size:14px;color:#242424;margin-bottom:14px">${LANG==='es'?'Eventos por Estado':'Events by Status'}</div>
-      ${Object.keys(byStatus).length?buildLargeDonut(Object.entries(byStatus).sort((a,b)=>b[1]-a[1]),k=>statusClrs[k]||'#9e9e9e',k=>sl[k]||k):'<div style="color:var(--muted);font-size:12px">—</div>'}
-    </div>
-
-  </div>
-
-  <!-- TOP VENDORS + EVENT LIST -->
-  <div class="an-2col" style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
-
-    <!-- Top vendor categories -->
-    <div class="card" style="padding:20px">
-      <div style="font-family:'DM Sans',sans-serif;font-weight:600;font-size:14px;color:#242424;margin-bottom:14px">${t('analytics_top_vendors')}</div>
-      ${topVendors.length?topVendors.map(([cat,cnt])=>`
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bg)">
-          <div style="font-size:12px;font-weight:600">${cat}</div>
-          <span style="font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;color:#242424;min-width:28px;text-align:center">${cnt}</span>
-        </div>`).join(''):`<div style="color:var(--muted);font-size:12px">${LANG==='es'?'Sin proveedores contratados':'No hired vendors'}</div>`}
-    </div>
-
-    <!-- Events in period list -->
-    <div class="card" style="padding:20px">
-      <div style="font-family:'DM Sans',sans-serif;font-weight:600;font-size:14px;color:#242424;margin-bottom:14px">${LANG==='es'?'Eventos del Período':'Events in Period'}</div>
-      ${inPeriod.sort((a,b)=>a.date<b.date?-1:1).map(p=>`
-        <div onclick="openProject('${p.id}')" class="analytics-project-row">
-          <div>
-            <div style="font-size:13px;font-weight:600">${esc(p.name)}</div>
-            <div class="s-sm">${fmtDate(p.date)} · ${(p.guests||[]).length} ${LANG==='es'?'inv.':'guests'}</div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;color:#242424">${fmtMoney(p.budget)}</div>
-            <div style="font-size:10px;color:var(--muted);margin-top:2px">${p.status?esc(t('status_'+p.status.replace('-','_'))||p.status):''}</div>
-          </div>
-        </div>`).join('')}
-    </div>
-
-  </div>`;
+  el.innerHTML =
+    '<div class="rd-metrics an-metrics">'+metrics+'</div>'+
+    monthCard+
+    '<div class="rd-grid-2 eq an-sec an-cards-2">'+typeCard+rankCard+'</div>'+
+    listCard;
 }
 
 var _exportPDFTarget = null; // when set, generateExportPDF uses this project instead of proj()

@@ -1,7 +1,7 @@
 window.EVENTOS_CONFIG = window.EVENTOS_CONFIG || {
   aiProxyUrl: 'https://nameless-breeze-1837.jltg90.workers.dev',
   convexUrl: 'https://descriptive-ibis-559.convex.cloud',
-  buildVersion: '20260820-3',
+  buildVersion: '20260821-1',
 
   // ─── Clerk ────────────────────────────────────────────────────────────────
   // Pega aqui tu Publishable Key del dashboard de Clerk (API Keys).

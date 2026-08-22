@@ -133,6 +133,62 @@ See [convex/schema.ts](convex/schema.ts) for indexes.
   desde el JWT verificado. Añadir una función nueva a Convex significa envolverla en
   `authedQuery`/`authedMutation`, nunca leer un id que venga en los argumentos.
 
+## Sistema de diseño (rediseño 2026-08, paleta "Arcilla")
+
+Origen: proyecto de Claude Design `EventOS Rediseño.dc.html`. Antes de tocar UI,
+lee esta sección: casi todo lo que necesitas ya existe como token o como clase.
+
+- **Tokens** en `:root` de `styles.css`, con su equivalente en `html.dark`.
+  Fondos `--paper` / `--paper-2` / `--paper-3` / `--sand`; texto `--ink` / `--ink-2` /
+  `--ink-3` / `--muted` / `--light`; líneas `--line` / `--border` / `--border-2`;
+  acento coral `--accent` / `--accent-deep` / `--accent-l`; `--champagne`;
+  sidebar `--espresso` / `--cream`; estados `--success` / `--warn` / `--danger` /
+  `--info` / `--purple`. Los nombres viejos (`--bg`, `--text`, `--gold*`, `--navy*`)
+  siguen existiendo como **alias** para no romper los módulos: no los borres, pero en
+  código nuevo usa los nombres nuevos.
+- **Nunca escribas un color a pelo** (`#242424`, `#787470`, `#F2EFE9`…): rompe el tema
+  oscuro. La única excepción son los degradados de portada y los pares tonales de
+  `RD_TONES`, que son de marca y son iguales en ambos temas.
+- **Tipografía**: DM Sans para todo. Cormorant Garamond **solo** en títulos de página
+  (`.rd-h1`), de pestaña (`.rd-h2`), nombres de evento (`.rd-h3`) y avatares-inicial.
+  Los títulos de tarjeta van en DM Sans 600 a 14.5px. Cifras siempre con
+  `font-variant-numeric: tabular-nums` (clase `.rd-num`).
+- **Clases compartidas `.rd-*`** (en `styles.css`, al final): `.rd-card`, `.rd-metric(s)`,
+  `.rd-table` + `.rd-thead`/`.rd-row`/`.rd-tfoot`, `.rd-pill` + tonos `.t-success`
+  `.t-warn` `.t-danger` `.t-info` `.t-purple` `.t-neutral` `.t-champagne` `.t-ink`,
+  `.rd-filter`, `.rd-seg`, `.rd-search`, `.rd-ibtn`, `.rd-bar`, `.rd-check`,
+  `.rd-legend-row`, `.rd-dark`, `.rd-dash`, `.rd-grid-2`, `.rd-field` + `.rd-input`.
+  Úsalas antes de inventar CSS nuevo.
+- **Helpers JS compartidos** (final de `core.js`): `rdTone`, `rdPill`, `rdMetric`,
+  `rdDonut`, `rdRing`, `rdInitials`, `rdDaysUntil`, `rdEventSummary`, `evProgress`,
+  `evStatusTone`, `evTypeTone`, `evTypeCover`, `evTypeLabel`, `rdUpdateShell`.
+  `rdEventSummary(p)` es la fuente única de los números de un proyecto (presupuesto,
+  pagado, invitados por RSVP, tareas, vencidas): si necesitas una cifra, sácala de ahí
+  en vez de recontar, para que todas las vistas digan lo mismo.
+- **Shell**: el sidebar oscuro fijo (`.app-sidebar`, 248px, se colapsa a 72px con
+  `toggleSidebar()`), la barra superior (`.topbar` con migas, buscador global y CTA)
+  y la cabecera de proyecto (`.pnav` con píldoras de tipo/estado, cuenta regresiva y
+  anillo de avance) viven en `index.html` + `core.js`. `rdUpdateShell()` sincroniza
+  migas, contador de eventos y "evento activo"; llámala si cambias de vista por tu
+  cuenta. Ya NO existe la barra `.tnav`.
+- **Modelo de datos que se malinterpreta**: `guest.rsvp` es `'confirmed'`/`'pending'`/
+  `'declined'` y `guest.plusOne` es **booleano** (un acompañante como mucho); el total
+  de asistentes es invitados + los que tienen `plusOne`. `project.status` es
+  `'to-be-confirmed'` (los proyectos viejos traen `'planning'`), `'confirmed'`,
+  `'in-progress'`, `'completed'` o `'cancelled'`.
+
+### Verificación visual (banco de pruebas headless)
+
+No hay tests. Para comprobar de verdad un cambio de UI hay un banco de pruebas que
+sirve la app real con Clerk y Convex sustituidos por dobles con datos semilla, la
+abre en Chrome headless, navega a la vista que pidas, captura un PNG y lista los
+errores de consola. Está en el scratchpad de la sesión (`scratchpad/harness/`:
+`server.mjs`, `stub.js`, `shot.mjs`, `README.md`) — **si vas a hacer trabajo de UI,
+recréalo o pide que te lo pasen**: encontró tres errores de sintaxis y un fallo de
+arranque que `node --check` no veía. Lo que hay que mirar en cada captura: `ERRORS`
+en 0, `scrollW` no mayor que `clientW` (si no, hay desbordamiento horizontal), y el
+PNG abierto de verdad, en español, inglés, tema oscuro y a 390px de ancho.
+
 ## Deployment & Data Safety Rules
 
 - **Cache-busting**: When deploying, bump the `?v=` query string on all `<script>`/`<link>` tags in `index.html` AND update `buildVersion` in `app-config.js`. This forces browsers to fetch fresh files. `chair-images.js` se versiona solo: usa `buildVersion` desde `ensureChairImages()`.

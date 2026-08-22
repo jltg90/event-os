@@ -29,7 +29,14 @@ function calcBudgetStats(p){
   // _num() en todas las sumas: un importe vacio o corrupto ya no propaga NaN a la UI.
   var estimatedTotal = allVendors.reduce(function(s,v){ return s+_num(v.budget); },0);
   var tb = hired.reduce(function(s,v){ return s+_num(v.budget); },0);
-  var paid = hired.reduce(function(s,v){ return s+(v.payments||[]).reduce(function(a,pay){ return a+_num(pay.amount); },0); },0);
+  // `paid` suma los pagos de TODOS los proveedores, no solo los contratados.
+  // Antes filtraba por `hired` y eso hacia que un anticipo registrado a un
+  // proveedor todavia marcado como "pendiente" (savePay no toca v.hired)
+  // desapareciera del total: la tarjeta "Pagado real" y la fila TOTAL de la
+  // tabla mostraban cifras distintas en la misma pantalla, y ademas no cuadraba
+  // con rdEventSummary() de core.js, que es lo que usan el panel y las
+  // analiticas.  Un pago registrado es dinero pagado, con contrato o sin el.
+  var paid = allVendors.reduce(function(s,v){ return s+(v.payments||[]).reduce(function(a,pay){ return a+_num(pay.amount); },0); },0);
   var projBudget = _num(p.budget);
   var diff = projBudget - estimatedTotal;
   var guestTotal = (p.guests||[]).length;
@@ -42,134 +49,202 @@ function calcBudgetStats(p){
   return _budgetCache.result;
 }
 
+// ── Iconos y utilidades compartidas del rediseño (presupuesto/cronograma/invitados) ──
+var BG_IC = {
+  plus:   '<path d="M12 5v14M5 12h14"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/>',
+  edit:   '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/>',
+  trash:  '<polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>',
+  copy:   '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  down:   '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+  up:     '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
+  book:   '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
+  cash:   '<path d="M12 2v20"/><path d="M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+  cal:    '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  user:   '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  clock:  '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>',
+  check:  '<polyline points="20,6 9,17 4,12"/>',
+  chev:   '<path d="m6 9 6 6 6-6"/>',
+  eye:    '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+  sparks: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><path d="M7.5 7.5 5 5M19 19l-2.5-2.5M16.5 7.5 19 5M5 19l2.5-2.5"/>',
+  users:  '<path d="M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/>',
+  table:  '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/>',
+  grid:   '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  list:   '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  gantt:  '<rect x="3" y="4" width="14" height="4" rx="1.5"/><rect x="6" y="10" width="12" height="4" rx="1.5"/><rect x="9" y="16" width="11" height="4" rx="1.5"/>'
+};
+function _bgSvg(paths, size, sw){
+  var s = size || 14;
+  return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' +
+    (sw || 1.9) + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths + '</svg>';
+}
+/** Estado vacío común a presupuesto / cronograma / invitados. `actions` ya es HTML. */
+function _bgEmptyState(eyebrow, title, body, actions, icon){
+  return '<section class="bg-empty rd-card fade-in">' +
+    '<span class="bg-empty-ico">' + _bgSvg(icon || BG_IC.sparks, 22, 1.7) + '</span>' +
+    '<div class="rd-eyebrow">' + esc(eyebrow) + '</div>' +
+    '<h2 class="rd-h3 bg-empty-title">' + esc(title) + '</h2>' +
+    '<p class="bg-empty-sub">' + esc(body) + '</p>' +
+    '<div class="bg-empty-actions">' + actions + '</div>' +
+    '</section>';
+}
+/** Buscador con lupa. `oninput` ya es una llamada JS. */
+function _bgSearch(id, placeholder, value, oninput, extraCls){
+  return '<div class="rd-search' + (extraCls ? ' ' + extraCls : '') + '">' +
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">' + BG_IC.search + '</svg>' +
+    '<input id="' + id + '" type="search" placeholder="' + esc(placeholder) + '" aria-label="' + esc(placeholder) + '" value="' + esc(value || '') + '" oninput="' + oninput + '">' +
+    '</div>';
+}
+
 function _budgetToolbarHtml(isES){
-  return `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <button class="btn btn-ghost" onclick="libDownloadVendorTemplate()">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>${isES?'Descargar Plantilla':'Download Template'}</span>
-      </button>
-      <button class="btn btn-ghost" onclick="libQuickLoadVendors()">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>${isES?'Importar Proveedores':'Import Vendors'}</span>
-      </button>
-      <button class="btn btn-ghost" onclick="libQuickSaveVendors()">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span>${isES?'Guardar en Biblioteca':'Save to Library'}</span>
-      </button>
-      <button class="btn btn-primary btn-create-gradient" onclick="openVendorModal()">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>${t('add_vendor')}
-      </button>
+  return `<div class="rd-actions">
+      <button class="btn" onclick="libDownloadVendorTemplate()">${_bgSvg(BG_IC.down,13,2)}<span>${isES?'Plantilla':'Template'}</span></button>
+      <button class="btn" onclick="libQuickLoadVendors()">${_bgSvg(BG_IC.up,13,2)}<span>${isES?'Importar de biblioteca':'Import from library'}</span></button>
+      <button class="btn" onclick="libQuickSaveVendors()">${_bgSvg(BG_IC.book,13,2)}<span>${isES?'Guardar en biblioteca':'Save to library'}</span></button>
+      <button class="btn btn-primary" onclick="openVendorModal()">${_bgSvg(BG_IC.plus,14,2.4)}${t('add_vendor')}</button>
     </div>`;
 }
 function _budgetStatCard(label, value, valueColor, sub){
-  return `<div class="bstat-card"><div class="bstat-label">${label}</div><div class="bstat-value" style="color:${valueColor}">${value}</div>${sub?'<div class="bstat-sub">'+sub+'</div>':''}</div>`;
+  return `<div class="rd-metric"><div class="rd-label" style="margin-bottom:11px">${label}</div><div class="rd-metric-val" style="color:${valueColor}">${value}</div>${sub?'<div class="rd-metric-sub">'+sub+'</div>':''}</div>`;
 }
+// Filtro de estado de la tabla de proveedores (se conserva entre repintados).
+var vendorStatusFilter = 'all';
+var vendorSearchQuery = '';
+var VENDOR_STATUSES = ['pending','hired','in-progress','paid','cancelled'];
+function vendorStatusValue(v){ return (v && v.vendorStatus) || (v && v.hired ? 'hired' : 'pending'); }
+function vendorStatusLabel(st){
+  var isES = LANG==='es';
+  return { pending:isES?'Pendiente':'Pending', hired:isES?'Contratado':'Hired',
+           'in-progress':isES?'En Progreso':'In Progress', paid:isES?'Pagado':'Paid',
+           cancelled:isES?'Cancelado':'Cancelled' }[st] || (isES?'Pendiente':'Pending');
+}
+function vendorStatusTone(st){
+  return { pending:'neutral', hired:'success', 'in-progress':'warn', paid:'info', cancelled:'danger' }[st] || 'neutral';
+}
+/** Tono estable por categoría, para el avatar de la fila. */
+function _bgCatTone(cat){
+  var keys = ['accent','info','success','warn','purple','champagne'];
+  var s = String(cat||''), h = 0;
+  for(var i=0;i<s.length;i++) h = (h*31 + s.charCodeAt(i)) >>> 0;
+  return rdTone(s ? keys[h % keys.length] : 'neutral');
+}
+function _bgMatchesVendor(v, q){
+  return [v.name,v.category,v.subcategory,v.services,v.contact,v.phone,v.notes]
+    .some(function(f){ return f && String(f).toLowerCase().indexOf(q) !== -1; });
+}
+/** Proveedores que pasan el buscador (sin aplicar el filtro de estado). */
+function _bgSearchedVendors(p){
+  var list = (p && p.vendors) || [];
+  var q = String(vendorSearchQuery||'').trim().toLowerCase();
+  return q ? list.filter(function(v){ return _bgMatchesVendor(v, q); }) : list.slice();
+}
+/** Proveedores visibles = buscador + filtro de estado. */
+function _bgVisibleVendors(p){
+  var list = _bgSearchedVendors(p);
+  if(vendorStatusFilter !== 'all') list = list.filter(function(v){ return vendorStatusValue(v) === vendorStatusFilter; });
+  return list;
+}
+function _bgVendorFiltersHtml(p){
+  var searched = _bgSearchedVendors(p);
+  var isES = LANG==='es';
+  var counts = {}; VENDOR_STATUSES.forEach(function(s){ counts[s] = 0; });
+  searched.forEach(function(v){ var s = vendorStatusValue(v); if(counts[s] !== undefined) counts[s]++; });
+  var items = [['all', isES?'Todos':'All', searched.length, '']];
+  VENDOR_STATUSES.forEach(function(s){
+    if(counts[s] > 0 || vendorStatusFilter === s) items.push([s, vendorStatusLabel(s), counts[s], rdTone(vendorStatusTone(s)).fg]);
+  });
+  return items.map(function(it){
+    return '<button class="rd-filter sm' + (vendorStatusFilter===it[0]?' active':'') + '" onclick="setVendorStatusFilter(\'' + it[0] + '\')">' +
+      (it[3] ? '<i class="dot" style="background:' + it[3] + '"></i>' : '') +
+      esc(it[1]) + ' <span class="cnt">' + it[2] + '</span></button>';
+  }).join('');
+}
+function setVendorStatusFilter(k){
+  vendorStatusFilter = k;
+  _bgRefreshVendorList();
+}
+/** Repinta solo las filas (y las píldoras) para no perder el foco del buscador. */
+function _bgRefreshVendorList(){
+  var p = proj(); if(!p) return;
+  var list = _bgVisibleVendors(p);
+  var rows = document.getElementById('vendor-rows');
+  if(rows){
+    rows.innerHTML = _bgVendorRowsHtml(p, list);
+    var f = document.getElementById('vendor-filters');
+    if(f) f.innerHTML = _bgVendorFiltersHtml(p);
+  } else {
+    var vl = document.getElementById('vlist');
+    if(vl) vl.innerHTML = renderVendorTable(list, '');
+  }
+  syncVendorSelectionToVisible();
+}
+
 function renderBudget(){
   const p=proj();const el=document.getElementById('tab-budget');
   if(ensureDefaultVendors(p)) saveProj(p);
   const allVendors = p.vendors;
   const isES = LANG==='es';
   const isMob = isPhoneViewport();
+  const mobBar = renderMobileStickyActionBar(`
+    <button class="btn" onclick="libQuickLoadVendors()">${isES?'Importar':'Import'}</button>
+    <button class="btn btn-primary" onclick="openVendorModal()">${t('add_vendor')}</button>
+  `);
   if(!allVendors.length){
     el.innerHTML=`
-  <div class="sh">
-    <div><div class="sh-title editorial-title" style="color:var(--text)">${t('budget_management_title')}</div>
-    <div class="sh-sub">${isES?'Gestiona tus proveedores y presupuesto del evento':'Manage your event vendors and budget'}</div></div>
+  <div class="rd-tab-head">
+    <div>
+      <h2 class="rd-h2">${isES?'Presupuesto y proveedores':'Budget & vendors'}</h2>
+      <p class="rd-sub">${isES?'Gestiona tus proveedores y el presupuesto del evento':'Manage your event vendors and budget'}</p>
+    </div>
     ${isMob?'':_budgetToolbarHtml(isES)}
   </div>
   ${renderVendorEmptyState()}
-  ${renderMobileStickyActionBar(`
-    <button class="btn btn-ghost" onclick="libQuickLoadVendors()">${isES?'Importar':'Import'}</button>
-    <button class="btn btn-primary btn-create-gradient" onclick="openVendorModal()">${t('add_vendor')}</button>
-  `)}`;
+  ${mobBar}`;
     return;
   }
   const bs=calcBudgetStats(p);
   const hired=bs.hired, estimatedTotal=bs.estimatedTotal, tb=bs.tb, paid=bs.paid;
   const projBudget=bs.projBudget, diff=bs.diff;
-  const guestTotalB=bs.guestTotal, plusOnesB=bs.plusOnes, totalWithPlusOnesB=bs.totalWithPlusOnes;
+  const totalWithPlusOnesB=bs.totalWithPlusOnes;
   const budgetPerGuestB=bs.budgetPerGuest, budgetPct=bs.budgetPct;
-  const diffClr = diff>=0?'var(--success)':'var(--danger)';
+  const diffClr = diff>=0?'var(--success)':'var(--accent-deep)';
   const paidPct = tb>0 ? Math.min(100, Math.round(paid/tb*100)) : 0;
+  const perGuestSub = (totalWithPlusOnesB>0&&projBudget>0)
+    ? fmtMoney(budgetPerGuestB)+' '+(isES?'por invitado':'per guest')
+    : t('approved_budget');
+  const metrics = `<div class="rd-metrics">
+    ${rdMetric({label:isES?'Aprobado':'Approved', value:fmtMoney(projBudget), sub:perGuestSub, color:'var(--ink)'})}
+    ${rdMetric({label:isES?'Asignado':'Allocated', value:fmtMoney(estimatedTotal), color:'var(--warn)',
+      sub:budgetPct+'% '+t('of_approved'), bar:{pct:budgetPct, color:budgetPct>100?'var(--accent)':'var(--warn-2)'}})}
+    ${rdMetric({label:t('actual_paid'), value:fmtMoney(paid), color:'var(--success)',
+      sub:t('balance_label')+': '+fmtMoney(tb-paid), bar:{pct:paidPct, color:'var(--success)'}})}
+    ${rdMetric({label:t('budget_variance'), value:(diff>=0?'+':'')+fmtMoney(diff), color:diffClr,
+      sub:diff>=0?t('under_budget'):t('over_budget')})}
+  </div>`;
   el.innerHTML=`
-  <div class="sh">
-    <div><div class="sh-title editorial-title" style="color:var(--text)">${t('budget_management_title')}</div>
-    <div class="sh-sub">${t('budget_label')}: ${fmtMoney(tb)} &middot; ${t('paid_label')}: ${fmtMoney(paid)} &middot; ${t('balance_label')}: ${fmtMoney(tb-paid)}</div></div>
+  <div class="rd-tab-head">
+    <div>
+      <h2 class="rd-h2">${isES?'Presupuesto y proveedores':'Budget & vendors'}</h2>
+      <p class="rd-sub">${allVendors.length} ${isES?'proveedores':'vendors'} &middot; ${hired.length} ${isES?'contratados':'hired'} &middot; ${t('paid_label')}: ${fmtMoney(paid)} &middot; ${t('balance_label')}: ${fmtMoney(tb-paid)}</p>
+    </div>
     ${isMob?'':_budgetToolbarHtml(isES)}
   </div>
-  ${isMob?`
-  <div class="bstat-scroll">
-    ${_budgetStatCard(t('event_total_budget'), fmtMoney(projBudget), 'var(--gold-h)', t('approved_budget'))}
-    ${_budgetStatCard(t('estimated_cost'), fmtMoney(estimatedTotal), '#f59e0b',
-      '<div class="prog" style="margin-bottom:2px"><div class="prog-f" style="width:'+budgetPct+'%;background:'+(budgetPct>100?'var(--danger)':'#f59e0b')+'"></div></div>'+budgetPct+'% '+t('of_approved'))}
-    ${_budgetStatCard(t('actual_paid'), fmtMoney(paid), 'var(--success)',
-      '<div class="prog" style="margin-bottom:2px"><div class="prog-f" style="width:'+paidPct+'%;background:var(--success)"></div></div>'+t('balance_label')+': '+fmtMoney(tb-paid))}
-    ${_budgetStatCard(t('budget_variance'), (diff>=0?'+':'')+fmtMoney(diff), diffClr,
-      '<span style="font-weight:600;color:'+diffClr+'">'+(diff>=0?t('under_budget'):t('over_budget'))+'</span>')}
-    ${totalWithPlusOnesB>0&&projBudget>0?_budgetStatCard(isES?'Presupuesto p/Inv.':'Budget / Guest', fmtMoney(budgetPerGuestB), 'var(--gold-h)', totalWithPlusOnesB+' '+(isES?'invitados':'guests')):''}
-  </div>`:`
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:20px">
-    <div class="card" style="padding:18px">
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--light);font-weight:600;margin-bottom:6px">${t('event_total_budget')}</div>
-      <div style="font-size:22px;font-weight:700;color:var(--gold-h)">${fmtMoney(projBudget)}</div>
-      <div style="font-size:11px;color:var(--muted);margin-top:2px">${t('approved_budget')}</div>
-    </div>
-    ${totalWithPlusOnesB>0&&projBudget>0?`<div class="card" style="padding:18px;cursor:default" title="${isES?'Presupuesto ('+fmtMoney(projBudget)+') ÷ '+totalWithPlusOnesB+' invitados (incl. acompañantes)':'Budget ('+fmtMoney(projBudget)+') ÷ '+totalWithPlusOnesB+' guests (incl. plus-ones)'}">
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--light);font-weight:600;margin-bottom:6px">${isES?'Presupuesto p/Inv.':'Budget / Guest'}</div>
-      <div style="font-size:22px;font-weight:700;color:var(--gold-h)">${fmtMoney(budgetPerGuestB)}</div>
-      <div style="font-size:11px;color:var(--muted);margin-top:2px">${totalWithPlusOnesB} ${isES?'invitados':'guests'}</div>
-    </div>`:''}
-    <div class="card" style="padding:18px">
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--light);font-weight:600;margin-bottom:6px">${t('estimated_cost')}</div>
-      <div style="font-size:22px;font-weight:700;color:#f59e0b">${fmtMoney(estimatedTotal)}</div>
-      <div style="font-size:11px;color:var(--muted);margin-top:4px">
-        <div class="prog" style="margin-bottom:2px"><div class="prog-f" style="width:${budgetPct}%;background:${budgetPct>100?'var(--danger)':'#f59e0b'}"></div></div>
-        ${budgetPct}% ${t('of_approved')}
-      </div>
-    </div>
-    <div class="card" style="padding:18px">
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--light);font-weight:600;margin-bottom:6px">${t('actual_paid')}</div>
-      <div style="font-size:22px;font-weight:700;color:var(--success)">${fmtMoney(paid)}</div>
-      <div style="font-size:11px;color:var(--muted);margin-top:2px">${t('balance_label')}: ${fmtMoney(tb-paid)}</div>
-    </div>
-    <div class="card" style="padding:18px">
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--light);font-weight:600;margin-bottom:6px">${t('budget_variance')}</div>
-      <div style="font-size:22px;font-weight:700;color:${diffClr}">${diff>=0?'+':''}${fmtMoney(diff)}</div>
-      <div style="font-size:11px;color:${diffClr};margin-top:2px;font-weight:600">${diff>=0?t('under_budget'):t('over_budget')}</div>
-    </div>
-  </div>`}
-  <div style="margin-bottom:14px;position:relative;display:flex;align-items:center">
-    <svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-    <input id="vendor-search" class="input" placeholder="${LANG==='es'?'Buscar proveedores...':'Search vendors...'}" oninput="filterVendors(this.value)" style="padding-left:36px;width:100%" aria-label="${LANG==='es'?'Buscar proveedores':'Search vendors'}">
-  </div>
-  <div id="vlist">${renderVendorTable(allVendors, '')}</div>
-  ${renderMobileStickyActionBar(`
-    <button class="btn btn-ghost" onclick="libQuickLoadVendors()">${isES?'Importar':'Import'}</button>
-    <button class="btn btn-primary btn-create-gradient" onclick="openVendorModal()">${t('add_vendor')}</button>
-  `)}`;
+  ${metrics}
+  ${isMob?`<div class="bg-mobsearch">${_bgSearch('vendor-search', isES?'Buscar proveedor, categoría o contacto…':'Search vendor, category or contact…', vendorSearchQuery, 'filterVendors(this.value)')}</div>`:''}
+  <div id="vlist">${renderVendorTable(_bgVisibleVendors(p), '')}</div>
+  ${mobBar}`;
 }
 
 function renderVendorEmptyState(){
   const isES = LANG==='es';
-  return `<section class="ev-empty fade-in">
-    <div class="ev-empty-shell">
-      <div class="ev-empty-aurora" aria-hidden="true"></div>
-      <div class="ev-empty-grid">
-        <div class="ev-empty-copy">
-          <div class="ev-empty-badge">${isES?'Configuracion de proveedores':'Vendor setup'}</div>
-          <h2 class="ev-empty-title">${isES?'Organiza todos tus proveedores en un solo lugar.':'Organize all your vendors in one place.'}</h2>
-          <p class="ev-empty-subtitle">${isES?'Crea un plan de proveedores personalizado para tu evento. El asistente sugiere los proveedores que necesitas segun los servicios que requieras, y te permite marcar los que ya tienes confirmados.':'Create a tailored vendor plan for your event. The wizard suggests the vendors you need based on your services, and lets you mark which ones are already confirmed.'}</p>
-          <div class="ev-empty-actions">
-            <button class="btn btn-primary btn-create-gradient ev-empty-cta" onclick="openVendorSetupWizard()">
-              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-              ${isES?'Crear Plan de Proveedores':'Create Vendor Plan'}
-            </button>
-            <button class="btn btn-ghost ev-empty-cta" onclick="openVendorModal()">
-              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-              ${t('add_vendor')}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>`;
+  return _bgEmptyState(
+    isES?'Configuración de proveedores':'Vendor setup',
+    isES?'Organiza todos tus proveedores en un solo lugar.':'Organize all your vendors in one place.',
+    isES?'Crea un plan de proveedores a la medida de tu evento. El asistente sugiere los proveedores que necesitas según los servicios que requieras y te deja marcar los que ya tienes confirmados.':'Create a tailored vendor plan for your event. The wizard suggests the vendors you need based on your services, and lets you mark which ones are already confirmed.',
+    `<button class="btn btn-primary" onclick="openVendorSetupWizard()">${_bgSvg(BG_IC.plus,14,2.4)}${isES?'Crear plan de proveedores':'Create vendor plan'}</button>
+     <button class="btn" onclick="openVendorModal()">${_bgSvg(BG_IC.plus,14,2.2)}${t('add_vendor')}</button>
+     <button class="btn" onclick="libQuickLoadVendors()">${_bgSvg(BG_IC.up,13,2)}${isES?'Importar de biblioteca':'Import from library'}</button>`,
+    BG_IC.cash);
 }
 
 // ── Vendor Setup Wizard ────────────────────────────────────────────────────────
@@ -465,77 +540,103 @@ function toggleAllVisibleVendors(checked){
   updateVendorBulkBar();
 }
 function vendorStatusInfo(v){
-  const st = v.vendorStatus || (v.hired ? 'hired' : 'pending');
-  const map = {
-    pending:      { label: LANG==='es'?'Pendiente':'Pending',       bg:'#f3f4f6', clr:'#374151' },
-    hired:        { label: LANG==='es'?'Contratado':'Hired',         bg:'#d1fae5', clr:'#065f46' },
-    'in-progress':{ label: LANG==='es'?'En Progreso':'In Progress',  bg:'#fef3c7', clr:'#92400e' },
-    paid:         { label: LANG==='es'?'Pagado':'Paid',              bg:'#dbeafe', clr:'#1e40af' },
-    cancelled:    { label: LANG==='es'?'Cancelado':'Cancelled',      bg:'#fee2e2', clr:'#991b1b' },
-  };
-  return map[st] || map.pending;
+  const st = vendorStatusValue(v);
+  const tone = rdTone(vendorStatusTone(st));
+  return { label: vendorStatusLabel(st), bg: tone.bg, clr: tone.fg, tone: vendorStatusTone(st), status: st };
 }
 function filterVendors(query){
-  const p=proj(); if(!p) return;
-  const q=query.trim().toLowerCase();
-  const vendors = q==='' ? p.vendors : p.vendors.filter(v=>{
-    return [v.name,v.category,v.subcategory,v.services,v.contact,v.notes].some(f=>f&&f.toLowerCase().includes(q));
-  });
-  document.getElementById('vlist').innerHTML = renderVendorTable(vendors, '');
-  syncVendorSelectionToVisible();
+  vendorSearchQuery = typeof query==='string' ? (query.length>200?query.substring(0,200):query) : '';
+  _bgRefreshVendorList();
+}
+var BG_VCOLS = 'style="grid-template-columns:34px minmax(180px,2fr) minmax(130px,1.1fr) 122px 146px 132px 138px"';
+/** Filas + pie de la tabla de proveedores (sin la cabecera ni las herramientas). */
+function _bgVendorRowsHtml(p, vendors){
+  const isES = LANG==='es';
+  if(!vendors.length){
+    const filtered = (p.vendors||[]).length > 0;
+    return `<div class="bg-norows">${filtered ? (isES?'Ningún proveedor coincide con la búsqueda.':'No vendors match your search.') : t('no_comparison_vendors')}
+      <button class="btn btn-sm" onclick="filterVendors('');setVendorStatusFilter('all')">${isES?'Limpiar filtros':'Clear filters'}</button></div>`;
+  }
+  let totBudget = 0, totPaid = 0;
+  const rows = vendors.map(function(v){
+    const paid = (v.payments||[]).reduce(function(a,py){ return a+_num(py.amount); }, 0);
+    const budget = _num(v.budget);
+    totBudget += budget; totPaid += paid;
+    const pct = budget>0 ? Math.min(100, Math.round(paid/budget*100)) : 0;
+    const st = vendorStatusValue(v);
+    const tone = rdTone(vendorStatusTone(st));
+    const cat = _bgCatTone(v.category);
+    const nPays = (v.payments||[]).length;
+    return `<div class="rd-row click" ${BG_VCOLS} onclick="showVendorDetail('${v.id}')">
+      <div onclick="event.stopPropagation()"><input class="vendor-sel bg-chk" type="checkbox" data-vid="${v.id}" ${isVendorSelected(v.id)?'checked':''} onchange="toggleVendorSelection('${v.id}', this.checked)" aria-label="${isES?'Seleccionar':'Select'} ${esc(v.name)}"></div>
+      <div class="bg-vname">
+        <span class="rd-avatar" style="background:${cat.bg};color:${cat.fg}">${esc(rdInitials(v.name))}</span>
+        <div style="min-width:0">
+          <div class="rd-cell-main">${esc(v.name)}</div>
+          <div class="rd-cell-sub">${esc(v.category||(isES?'Sin categoría':'Uncategorized'))}${v.subcategory?' · '+esc(v.subcategory):''}</div>
+        </div>
+      </div>
+      <div class="rd-cell">${v.contact?esc(v.contact):(v.phone?esc(v.phone):'&mdash;')}</div>
+      <div class="rd-cell-money">${fmtMoney(budget)}</div>
+      <div>
+        <div class="bg-paidval">${fmtMoney(paid)}${nPays?`<span class="bg-paidn">${nPays} ${isES?(nPays===1?'pago':'pagos'):(nPays===1?'payment':'payments')}</span>`:''}</div>
+        <div class="rd-bar thin" style="margin-top:5px"><i style="width:${pct}%;background:var(--success)"></i></div>
+      </div>
+      <div onclick="event.stopPropagation()">
+        <span class="bg-stsel t-${vendorStatusTone(st)}">
+          <i></i><span>${esc(vendorStatusLabel(st))}</span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">${BG_IC.chev}</svg>
+          <select aria-label="${isES?'Estado del proveedor':'Vendor status'}" onchange="setVendorStatus('${v.id}',this.value)">
+            ${VENDOR_STATUSES.map(function(s){ return `<option value="${s}"${st===s?' selected':''}>${esc(vendorStatusLabel(s))}</option>`; }).join('')}
+          </select>
+        </span>
+      </div>
+      <div class="bg-rowacts" onclick="event.stopPropagation()">
+        <button class="rd-ibtn" title="${isES?'Registrar pago':'Add payment'}" aria-label="${isES?'Registrar pago':'Add payment'}" onclick="openPayModal('${v.id}')">${_bgSvg(BG_IC.cash,13,2)}</button>
+        <button class="rd-ibtn" title="${isES?'Duplicar':'Duplicate'}" aria-label="${isES?'Duplicar':'Duplicate'}" onclick="dupVendor('${v.id}')">${_bgSvg(BG_IC.copy,13,2)}</button>
+        <button class="rd-ibtn" title="${isES?'Editar':'Edit'}" aria-label="${isES?'Editar':'Edit'}" onclick="openVendorModal('${v.id}')">${_bgSvg(BG_IC.edit,13,2)}</button>
+        <button class="rd-ibtn danger" title="${isES?'Eliminar':'Delete'}" aria-label="${isES?'Eliminar':'Delete'}" onclick="delV('${v.id}')">${_bgSvg(BG_IC.trash,13,2)}</button>
+      </div>
+    </div>`;
+  }).join('');
+  const foot = `<div class="rd-tfoot" ${BG_VCOLS}>
+    <div></div>
+    <div class="rd-label">${isES?'Total':'Total'}</div>
+    <div></div>
+    <div class="rd-cell-money" style="font-weight:600">${fmtMoney(totBudget)}</div>
+    <div class="rd-cell-money" style="font-weight:600;color:var(--success)">${fmtMoney(totPaid)}</div>
+    <div class="rd-cell">${totBudget>0?Math.min(100,Math.round(totPaid/totBudget*100)):0}% ${isES?'pagado':'paid'}</div>
+    <div></div>
+  </div>`;
+  return rows + foot;
 }
 function renderVendorTable(vendors, tab){
-  if(!vendors.length) return `<div class="card" style="text-align:center;padding:40px;color:var(--muted)">${t(tab==='hired'?'no_hired_vendors':'no_comparison_vendors')}<br><br><button class="btn btn-primary btn-create-gradient btn-sm" onclick="openVendorModal()">Add Vendor</button></div>`;
   if(isPhoneViewport()) return renderVendorMobileCards(vendors, tab);
+  const p = proj() || { vendors: [] };
   const isES = LANG==='es';
-  const rows = vendors.map(v=>{
-    const paid = v.payments.reduce((a,p)=>a+Number(p.amount),0);
-    const si = vendorStatusInfo(v);
-    return `<tr style="cursor:pointer;transition:.15s" onclick="showVendorDetail('${v.id}')" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
-      <td style="padding:12px 10px" onclick="event.stopPropagation()"><input class="vendor-sel" type="checkbox" data-vid="${v.id}" ${isVendorSelected(v.id)?'checked':''} onchange="toggleVendorSelection('${v.id}', this.checked)" style="width:14px;height:14px;accent-color:var(--gold-h);cursor:pointer"></td>
-      <td style="padding:12px 16px;font-weight:600;font-size:13px">${esc(v.name)}<div style="font-size:11px;font-weight:400;color:var(--muted);margin-top:2px">${esc(v.category||'')}${v.subcategory?' · '+esc(v.subcategory):''}</div></td>
-      <td style="padding:12px 16px;font-size:12px;color:var(--muted)">${esc(v.contact||'—')}</td>
-      <td style="padding:12px 16px;font-size:13px;font-weight:600">${fmtMoney(v.budget)}</td>
-      <td style="padding:12px 16px">
-        <select class="select" style="font-size:11px;padding:3px 8px;height:28px;background:${si.bg};color:${si.clr};border:none;font-weight:600;border-radius:20px;cursor:pointer" onclick="event.stopPropagation()" onchange="setVendorStatus('${v.id}',this.value)">
-          ${['pending','hired','in-progress','paid','cancelled'].map(s=>`<option value="${s}"${(v.vendorStatus||(v.hired?'hired':'pending'))===s?' selected':''}>${{pending:isES?'Pendiente':'Pending',hired:isES?'Contratado':'Hired','in-progress':isES?'En Progreso':'In Progress',paid:isES?'Pagado':'Paid',cancelled:isES?'Cancelado':'Cancelled'}[s]}</option>`).join('')}
-        </select>
-      </td>
-      <td style="padding:12px 16px;font-size:13px;font-weight:600;color:var(--success)">${fmtMoney(paid)}</td>
-      <td style="padding:12px 16px">
-        ${v.payments.length?`<span style="font-size:11px;background:#eff6ff;color:#1e40af;padding:2px 8px;border-radius:10px;font-weight:600">${v.payments.length} ${isES?'pago(s)':'payment(s)'}</span>`:`<span style="font-size:11px;color:var(--light)">—</span>`}
-      </td>
-      <td style="padding:12px 16px" onclick="event.stopPropagation()">
-        <div style="display:flex;gap:6px">
-          <button class="btn btn-ghost btn-sm btn-icon" title="${isES?'Duplicar':'Duplicate'}" onclick="dupVendor('${v.id}')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
-          <button class="btn btn-ghost btn-sm btn-icon" title="${isES?'Editar':'Edit'}" onclick="openVendorModal('${v.id}')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>
-          <button class="btn btn-danger btn-sm btn-icon" title="${isES?'Eliminar':'Delete'}" onclick="delV('${v.id}')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>
-        </div>
-      </td>
-    </tr>`;
-  }).join('');
-  return `<div style="background:var(--card);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;box-shadow:var(--sh-sm)">
-    <div id="vendor-bulk-bar" style="display:${vendorSelectionCount()?'flex':'none'};padding:10px 16px;border-bottom:1px solid var(--border);gap:8px;align-items:center;flex-wrap:wrap;background:var(--gold-l)">
-      <span id="vendor-bulk-count" style="font-size:12px;font-weight:600;color:var(--gold-h)">${vendorSelectionCount()} ${isES?'seleccionado(s)':'selected'}</span>
-      <button class="btn btn-ghost btn-sm" onclick="openBulkVendorEditModal()">${isES?'Editar seleccionados':'Edit selected'}</button>
-      <button class="btn btn-danger btn-sm" onclick="bulkDeleteVendors()">${isES?'Eliminar seleccionados':'Delete selected'}</button>
-      <button class="btn btn-ghost btn-sm" onclick="clearVendorSelection()">${isES?'Limpiar selección':'Clear selection'}</button>
+  return `<div class="rd-table">
+    <div class="rd-table-tools">
+      ${_bgSearch('vendor-search', isES?'Buscar proveedor, categoría o contacto…':'Search vendor, category or contact…', vendorSearchQuery, 'filterVendors(this.value)')}
+      <div class="rd-pillrow" id="vendor-filters">${_bgVendorFiltersHtml(p)}</div>
     </div>
-    <table style="width:100%;border-collapse:collapse">
-      <thead>
-        <tr style="background:var(--bg2);border-bottom:1px solid var(--border)">
-          <th style="padding:10px 10px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)"><input type="checkbox" id="vendor-chk-all" onchange="toggleAllVisibleVendors(this.checked)" style="width:14px;height:14px;accent-color:var(--gold-h);cursor:pointer"></th>
-          <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">${isES?'Proveedor':'Vendor'}</th>
-          <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">${isES?'Contacto':'Contact'}</th>
-          <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">${isES?'Presupuesto':'Budget'}</th>
-          <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">${isES?'Estado':'Status'}</th>
-          <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">${isES?'Pagado':'Paid'}</th>
-          <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">${isES?'Pagos':'Payments'}</th>
-          <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)"></th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
+    <div id="vendor-bulk-bar" class="bg-bulk" style="display:${vendorSelectionCount()?'flex':'none'}">
+      <span id="vendor-bulk-count" class="bg-bulk-count">${vendorSelectionCount()} ${isES?'seleccionado(s)':'selected'}</span>
+      <button class="btn btn-sm" onclick="openBulkVendorEditModal()">${isES?'Editar seleccionados':'Edit selected'}</button>
+      <button class="btn btn-sm btn-danger" onclick="bulkDeleteVendors()">${isES?'Eliminar seleccionados':'Delete selected'}</button>
+      <button class="btn btn-sm" onclick="clearVendorSelection()">${isES?'Limpiar selección':'Clear selection'}</button>
+    </div>
+    <div class="rd-table-scroll"><div style="min-width:960px">
+      <div class="rd-thead" ${BG_VCOLS}>
+        <div><input type="checkbox" id="vendor-chk-all" class="bg-chk" onchange="toggleAllVisibleVendors(this.checked)" aria-label="${isES?'Seleccionar todos':'Select all'}"></div>
+        <div>${isES?'Proveedor':'Vendor'}</div>
+        <div>${isES?'Contacto':'Contact'}</div>
+        <div>${isES?'Presupuesto':'Budget'}</div>
+        <div>${isES?'Pagado':'Paid'}</div>
+        <div>${isES?'Estado':'Status'}</div>
+        <div></div>
+      </div>
+      <div id="vendor-rows">${_bgVendorRowsHtml(p, vendors)}</div>
+    </div></div>
   </div>`;
 }
 var _expandedVendorIds = [];
@@ -549,74 +650,77 @@ function toggleVendorExpand(vid){
 }
 function renderVendorMobileCards(vendors, tab){
   const isES = LANG==='es';
-  if(!vendors.length) return `<div class="card" style="text-align:center;padding:40px;color:var(--muted)">${t(tab==='hired'?'no_hired_vendors':'no_comparison_vendors')}</div>`;
-  return `<div class="mobile-section-toolbar">
-      <div id="vendor-bulk-bar" class="mobile-inline-actions" style="display:${vendorSelectionCount()?'flex':'none'};padding:12px 14px;border:1px solid rgba(166,124,61,.28);border-radius:16px;background:var(--gold-l)">
-        <span id="vendor-bulk-count" style="font-size:12px;font-weight:700;color:var(--gold-h)">${vendorSelectionCount()} ${isES?'seleccionado(s)':'selected'}</span>
-        <button class="btn btn-ghost btn-sm" onclick="openBulkVendorEditModal()">${isES?'Editar':'Edit'}</button>
-        <button class="btn btn-danger btn-sm" onclick="bulkDeleteVendors()">${isES?'Eliminar':'Delete'}</button>
-        <button class="btn btn-ghost btn-sm" onclick="clearVendorSelection()">${isES?'Limpiar':'Clear'}</button>
+  const p = proj() || { vendors: [] };
+  const empty = `<div class="bg-norows">${(p.vendors||[]).length?(isES?'Ningún proveedor coincide con la búsqueda.':'No vendors match your search.'):t('no_comparison_vendors')}</div>`;
+  return `<div class="bg-mobtools">
+      <div class="rd-pillrow">${_bgVendorFiltersHtml(p)}</div>
+      <div id="vendor-bulk-bar" class="bg-bulk" style="display:${vendorSelectionCount()?'flex':'none'}">
+        <span id="vendor-bulk-count" class="bg-bulk-count">${vendorSelectionCount()} ${isES?'seleccionado(s)':'selected'}</span>
+        <button class="btn btn-sm" onclick="openBulkVendorEditModal()">${isES?'Editar':'Edit'}</button>
+        <button class="btn btn-sm btn-danger" onclick="bulkDeleteVendors()">${isES?'Eliminar':'Delete'}</button>
+        <button class="btn btn-sm" onclick="clearVendorSelection()">${isES?'Limpiar':'Clear'}</button>
       </div>
-      <div class="mobile-inline-actions">
-        <label class="btn btn-ghost btn-sm" style="display:inline-flex;align-items:center;gap:8px">
-          <input type="checkbox" id="vendor-chk-all" onchange="toggleAllVisibleVendors(this.checked)" style="width:16px;height:16px;accent-color:var(--gold-h);cursor:pointer">
-          <span>${isES?'Seleccionar visibles':'Select visible'}</span>
-        </label>
-      </div>
+      <label class="bg-selall">
+        <input type="checkbox" id="vendor-chk-all" class="bg-chk" onchange="toggleAllVisibleVendors(this.checked)">
+        <span>${isES?'Seleccionar visibles':'Select visible'}</span>
+      </label>
     </div>
-    <div class="mobile-card-list">
-      ${vendors.map(function(v){
-        var paid = (v.payments||[]).reduce(function(a,p){ return a+Number(p.amount); },0);
-        var si = vendorStatusInfo(v);
+    <div class="bg-cards">
+      ${vendors.length ? vendors.map(function(v){
+        var paid = (v.payments||[]).reduce(function(a,py){ return a+_num(py.amount); },0);
+        var budget = _num(v.budget);
         var isOpen = _expandedVendorIds.indexOf(v.id) > -1;
-        var remaining = Math.max(0, Number(v.budget||0) - paid);
-        var pct = v.budget > 0 ? Math.min(100, Math.round(paid / v.budget * 100)) : 0;
-        return `<article class="vmc${isOpen?' vmc-open':''}" data-vid="${v.id}">
-          <div class="vmc-summary" onclick="toggleVendorExpand('${v.id}')">
+        var remaining = Math.max(0, budget - paid);
+        var pct = budget > 0 ? Math.min(100, Math.round(paid / budget * 100)) : 0;
+        var st = vendorStatusValue(v);
+        var cat = _bgCatTone(v.category);
+        return `<article class="vmc bg-card${isOpen?' vmc-open':''}" data-vid="${v.id}">
+          <div class="vmc-summary bg-card-top" onclick="toggleVendorExpand('${v.id}')">
             <label class="vmc-chk" onclick="event.stopPropagation()">
-              <input class="vendor-sel" type="checkbox" data-vid="${v.id}" ${isVendorSelected(v.id)?'checked':''} onchange="toggleVendorSelection('${v.id}', this.checked)">
+              <input class="vendor-sel bg-chk" type="checkbox" data-vid="${v.id}" ${isVendorSelected(v.id)?'checked':''} onchange="toggleVendorSelection('${v.id}', this.checked)" aria-label="${isES?'Seleccionar':'Select'} ${esc(v.name)}">
             </label>
-            <div class="vmc-info">
-              <div class="vmc-name">${esc(v.name)}</div>
-              <div class="vmc-row">
-                <span class="vmc-badge" style="background:${si.bg};color:${si.clr}">${si.label}</span>
-                <span class="vmc-money">${fmtMoney(v.budget)}</span>
-                ${paid > 0 ? `<span class="vmc-paid">${fmtMoney(paid)} ${isES?'pagado':'paid'}</span>` : ''}
+            <span class="rd-avatar" style="background:${cat.bg};color:${cat.fg}">${esc(rdInitials(v.name))}</span>
+            <div class="bg-card-info">
+              <div class="rd-cell-main">${esc(v.name)}</div>
+              <div class="bg-card-row">
+                <span class="rd-pill sm t-${vendorStatusTone(st)}"><i></i>${esc(vendorStatusLabel(st))}</span>
+                <span class="rd-cell-money">${fmtMoney(budget)}</span>
               </div>
             </div>
-            <svg class="vmc-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            <svg class="vmc-chevron bg-card-chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${BG_IC.chev}</svg>
           </div>
-          <div class="vmc-detail">
-            <div class="vmc-progress-wrap">
-              <div class="vmc-progress-bar"><div class="vmc-progress-fill" style="width:${pct}%"></div></div>
-              <div class="vmc-progress-labels">
-                <span>${isES?'Pagado':'Paid'}: ${fmtMoney(paid)}</span>
-                <span>${isES?'Restante':'Remaining'}: ${fmtMoney(remaining)}</span>
-              </div>
+          <div class="vmc-detail bg-card-detail">
+            <div class="rd-bar thin"><i style="width:${pct}%;background:var(--success)"></i></div>
+            <div class="bg-card-barlbl">
+              <span>${isES?'Pagado':'Paid'}: ${fmtMoney(paid)}</span>
+              <span>${isES?'Restante':'Remaining'}: ${fmtMoney(remaining)}</span>
             </div>
-            <div class="vmc-meta">
-              ${v.category ? `<div class="vmc-meta-item"><span class="vmc-meta-label">${isES?'Categoría':'Category'}</span><span class="vmc-meta-value">${esc(v.category)}${v.subcategory?' · '+esc(v.subcategory):''}</span></div>` : ''}
-              ${v.contact ? `<div class="vmc-meta-item"><span class="vmc-meta-label">${isES?'Contacto':'Contact'}</span><span class="vmc-meta-value">${esc(v.contact)}</span></div>` : ''}
-              ${v.phone ? `<div class="vmc-meta-item"><span class="vmc-meta-label">${isES?'Teléfono':'Phone'}</span><span class="vmc-meta-value">${esc(v.phone)}</span></div>` : ''}
-              ${(v.payments||[]).length ? `<div class="vmc-meta-item"><span class="vmc-meta-label">${isES?'Pagos':'Payments'}</span><span class="vmc-meta-value">${v.payments.length}</span></div>` : ''}
-              ${v.notes ? `<div class="vmc-meta-item vmc-meta-full"><span class="vmc-meta-label">${isES?'Notas':'Notes'}</span><span class="vmc-meta-value">${esc(v.notes)}</span></div>` : ''}
+            <div class="bg-card-meta">
+              ${v.category ? `<div><span class="rd-label">${isES?'Categoría':'Category'}</span><span>${esc(v.category)}${v.subcategory?' · '+esc(v.subcategory):''}</span></div>` : ''}
+              ${v.contact ? `<div><span class="rd-label">${isES?'Contacto':'Contact'}</span><span>${esc(v.contact)}</span></div>` : ''}
+              ${v.phone ? `<div><span class="rd-label">${isES?'Teléfono':'Phone'}</span><span>${esc(v.phone)}</span></div>` : ''}
+              ${(v.payments||[]).length ? `<div><span class="rd-label">${isES?'Pagos':'Payments'}</span><span>${v.payments.length}</span></div>` : ''}
+              ${v.notes ? `<div class="bg-card-meta-full"><span class="rd-label">${isES?'Notas':'Notes'}</span><span>${esc(v.notes)}</span></div>` : ''}
             </div>
-            <div class="vmc-status-row" onclick="event.stopPropagation()">
-              <select class="select vmc-status-select" style="background:${si.bg};color:${si.clr}" onchange="setVendorStatus('${v.id}',this.value)">
-                ${['pending','hired','in-progress','paid','cancelled'].map(function(s){
-                  return `<option value="${s}"${(v.vendorStatus||(v.hired?'hired':'pending'))===s?' selected':''}>${{pending:isES?'Pendiente':'Pending',hired:isES?'Contratado':'Hired','in-progress':isES?'En Progreso':'In Progress',paid:isES?'Pagado':'Paid',cancelled:isES?'Cancelado':'Cancelled'}[s]}</option>`;
-                }).join('')}
-              </select>
+            <div onclick="event.stopPropagation()" style="margin-top:12px">
+              <span class="bg-stsel t-${vendorStatusTone(st)}">
+                <i></i><span>${esc(vendorStatusLabel(st))}</span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">${BG_IC.chev}</svg>
+                <select aria-label="${isES?'Estado del proveedor':'Vendor status'}" onchange="setVendorStatus('${v.id}',this.value)">
+                  ${VENDOR_STATUSES.map(function(s){ return `<option value="${s}"${st===s?' selected':''}>${esc(vendorStatusLabel(s))}</option>`; }).join('')}
+                </select>
+              </span>
             </div>
-            <div class="vmc-actions" onclick="event.stopPropagation()">
-              <button class="btn btn-ghost btn-sm" onclick="showVendorDetail('${v.id}')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> ${isES?'Ver':'View'}</button>
-              <button class="btn btn-ghost btn-sm" onclick="openVendorModal('${v.id}')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg> ${isES?'Editar':'Edit'}</button>
-              <button class="btn btn-ghost btn-sm" onclick="dupVendor('${v.id}')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> ${isES?'Duplicar':'Duplicate'}</button>
-              <button class="btn btn-danger btn-sm" onclick="delV('${v.id}')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg> ${isES?'Eliminar':'Delete'}</button>
+            <div class="bg-card-acts" onclick="event.stopPropagation()">
+              <button class="btn btn-sm" onclick="showVendorDetail('${v.id}')">${_bgSvg(BG_IC.eye,13,2)} ${isES?'Ver':'View'}</button>
+              <button class="btn btn-sm" onclick="openPayModal('${v.id}')">${_bgSvg(BG_IC.cash,13,2)} ${isES?'Pago':'Payment'}</button>
+              <button class="btn btn-sm" onclick="openVendorModal('${v.id}')">${_bgSvg(BG_IC.edit,13,2)} ${isES?'Editar':'Edit'}</button>
+              <button class="btn btn-sm" onclick="dupVendor('${v.id}')">${_bgSvg(BG_IC.copy,13,2)} ${isES?'Duplicar':'Duplicate'}</button>
+              <button class="btn btn-sm btn-danger" onclick="delV('${v.id}')">${_bgSvg(BG_IC.trash,13,2)} ${isES?'Eliminar':'Delete'}</button>
             </div>
           </div>
         </article>`;
-      }).join('')}
+      }).join('') : empty}
     </div>`;
 }
 function setVendorStatus(id, status){
@@ -1422,30 +1526,65 @@ function openTemplatePlanWizardForLib(){
   };
   _renderPlanWiz();
 }
+/** Vencida: usa las fechas civiles locales (startOfLocalDay), nunca new Date(fecha). */
+function _tlOverdue(tk){
+  if(!tk || taskIsDone(tk) || !tk.dueDate) return false;
+  var due = startOfLocalDay(tk.dueDate);
+  if(!due) return false;
+  var t0 = new Date(); t0.setHours(0,0,0,0);
+  return due < t0;
+}
+/** Las fases se guardan en inglés en los datos; aquí se traducen para la UI. */
+function _tlPhaseLabel(phase){
+  var isES = LANG==='es';
+  var map = {
+    'Strategy & Budget':          isES?'Estrategia y presupuesto':'Strategy & Budget',
+    'Venue & Core Vendors':       isES?'Sede y proveedores clave':'Venue & Core Vendors',
+    'Design & Guest Experience':  isES?'Diseño y experiencia':'Design & Guest Experience',
+    'Logistics & Operations':     isES?'Logística y operación':'Logistics & Operations',
+    'Guest Management':           isES?'Gestión de invitados':'Guest Management',
+    'Final Confirmation':         isES?'Confirmación final':'Final Confirmation',
+    'Event Week':                 isES?'Semana del evento':'Event Week',
+    'Post-Event':                 isES?'Post-evento':'Post-Event'
+  };
+  return map[phase] || phase || '';
+}
+function _tlPhaseTone(phase){
+  var map = {
+    'Strategy & Budget':'champagne', 'Venue & Core Vendors':'info',
+    'Design & Guest Experience':'purple', 'Logistics & Operations':'neutral',
+    'Guest Management':'accent', 'Final Confirmation':'warn',
+    'Event Week':'danger', 'Post-Event':'success'
+  };
+  if(map[phase]) return map[phase];
+  var keys=['info','purple','champagne','warn','accent','success'];
+  var str=String(phase||''), h=0;
+  for(var i=0;i<str.length;i++) h=(h*31+str.charCodeAt(i))>>>0;
+  return str ? keys[h%keys.length] : 'neutral';
+}
+function _tlTaskPhase(tk){ return tk.phase || taskPhaseValue(tk); }
+/** Tono de la barra/píldora de una tarea: hecha, vencida o por fase. */
+function _tlTaskTone(tk){
+  if(taskIsDone(tk)) return 'success';
+  if(_tlOverdue(tk)) return 'danger';
+  return _tlPhaseTone(_tlTaskPhase(tk));
+}
+function _tlBarColor(tk){
+  if(taskIsDone(tk)) return 'var(--success)';
+  if(_tlOverdue(tk)) return 'var(--accent)';
+  return tk.color || rdTone(_tlPhaseTone(_tlTaskPhase(tk))).fg;
+}
+
 function renderTimelineEmptyState(){
   const isES = LANG==='es';
-  return `<section class="ev-empty fade-in">
-    <div class="ev-empty-shell">
-      <div class="ev-empty-aurora" aria-hidden="true"></div>
-      <div class="ev-empty-grid">
-        <div class="ev-empty-copy">
-          <div class="ev-empty-badge">${isES ? 'Cronograma inicial' : 'Timeline starter'}</div>
-          <h2 class="ev-empty-title">${isES ? 'Comienza este evento con un plan maestro listo para trabajar.' : 'Start this event with a master plan that is ready to work from.'}</h2>
-          <p class="ev-empty-subtitle">${isES ? 'Crea una plantilla completa de planificación para eventos sociales, corporativos, galas, celebraciones privadas y recaudaciones. Después podrás editar cada tarea, responsable y fecha como quieras.' : 'Create a full planning template for social events, corporate events, galas, private celebrations, and fundraisers. After that, you can edit every task, assignee, and date however you like.'}</p>
-          <div class="ev-empty-actions">
-            <button class="btn btn-primary btn-create-gradient ev-empty-cta" onclick="openTemplatePlanWizard()">
-              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-              ${isES ? 'Crear Plan de Plantilla' : 'Create Template Plan'}
-            </button>
-            <button class="btn btn-ghost ev-empty-cta" onclick="openTaskModal()">
-              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-              ${t('add_task')}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>`;
+  return _bgEmptyState(
+    isES ? 'Cronograma inicial' : 'Timeline starter',
+    isES ? 'Comienza este evento con un plan maestro listo para trabajar.' : 'Start this event with a master plan that is ready to work from.',
+    isES ? 'Crea una plantilla completa de planificación para eventos sociales, corporativos, galas, celebraciones privadas y recaudaciones. Después podrás editar cada tarea, responsable y fecha como quieras.' : 'Create a full planning template for social events, corporate events, galas, private celebrations, and fundraisers. After that, you can edit every task, assignee, and date however you like.',
+    `<button class="btn btn-primary" onclick="openTemplatePlanWizard()">${_bgSvg(BG_IC.plus,14,2.4)}${isES?'Crear plan de plantilla':'Create template plan'}</button>
+     <button class="btn" onclick="openTaskModal()">${_bgSvg(BG_IC.plus,14,2.2)}${t('add_task')}</button>
+     <button class="btn" onclick="libQuickLoadTasks()">${_bgSvg(BG_IC.up,13,2)}${isES?'Importar tareas':'Import tasks'}</button>`,
+    BG_IC.cal);
 }
 function _libUpdateSectionLabels(){
   // 'lib-save-vendor-lbl' no existe en ningun render: el boton de guardar proveedores
@@ -1454,64 +1593,88 @@ function _libUpdateSectionLabels(){
   var lvl=document.getElementById('lib-load-vendor-lbl'); if(lvl) lvl.textContent=LANG==='es'?'CARGAR':'LOAD';
   var ltl=document.getElementById('lib-load-task-lbl');   if(ltl) ltl.textContent=LANG==='es'?'Importar Tareas':'Import Tasks';
 }
+/** Tareas que pasan el buscador (sin aplicar el filtro de estado). */
+function _tlSearchedTasks(p){
+  var tasks = (p && p.tasks) || [];
+  var q = String(taskSearchQuery||'').trim().toLowerCase();
+  if(!q) return tasks.slice();
+  return tasks.filter(function(tk){
+    return [tk.title,tk.desc,tk.assignee,tk.startDate,tk.dueDate,tk.endDate,tk.planningWindow,tk.durationDays,tk.status,_tlTaskPhase(tk),_tlPhaseLabel(_tlTaskPhase(tk))]
+      .some(function(v){ return String(v||'').toLowerCase().indexOf(q) !== -1; });
+  });
+}
+function _tlFiltersHtml(p){
+  const isES = LANG==='es';
+  const tod = today();
+  const list = _tlSearchedTasks(p);
+  const c = {
+    all: list.length,
+    overdue: list.filter(function(tk){ return _tlOverdue(tk); }).length,
+    pending: list.filter(function(tk){ return !taskIsDone(tk); }).length,
+    done:    list.filter(function(tk){ return taskIsDone(tk); }).length,
+    today:   list.filter(function(tk){ return tk.dueDate===tod; }).length,
+    upcoming:list.filter(function(tk){ return tk.dueDate && tk.dueDate>tod && !taskIsDone(tk); }).length
+  };
+  const defs = [
+    ['all',      isES?'Todas':'All',        ''],
+    ['overdue',  isES?'Vencidas':'Overdue',  rdTone('danger').fg],
+    ['pending',  isES?'Pendientes':'Pending', rdTone('warn').fg],
+    ['today',    isES?'Hoy':'Today',        rdTone('info').fg],
+    ['upcoming', isES?'Próximas':'Upcoming', rdTone('champagne').fg],
+    ['done',     isES?'Listas':'Done',      rdTone('success').fg]
+  ];
+  return defs.filter(function(d){
+    return d[0]==='all' || c[d[0]]>0 || taskListFilter===d[0];
+  }).map(function(d){
+    return '<button class="rd-filter sm' + (taskListFilter===d[0]?' active':'') + '" data-task-filter="' + d[0] + '" onclick="setTaskListFilter(\'' + d[0] + '\')">' +
+      (d[2] ? '<i class="dot" style="background:' + d[2] + '"></i>' : '') +
+      esc(d[1]) + ' <span class="cnt">' + c[d[0]] + '</span></button>';
+  }).join('');
+}
+function _tlRefreshFilters(p){
+  var box = document.getElementById('timeline-filters');
+  if(box) box.innerHTML = _tlFiltersHtml(p || proj());
+}
+
 function renderTimeline(){
   const p=proj();const el=document.getElementById('tab-timeline');
   if(!Array.isArray(p.tasks)) p.tasks=[];
+  const isES=LANG==='es';
+  const isMob=isPhoneViewport();
+  const total=p.tasks.length;
   const done=p.tasks.filter(taskIsDone).length;
-  const ov=p.tasks.filter(tk=>!taskIsDone(tk)&&tk.dueDate<today()).length;
-  const pct=p.tasks.length?Math.round(done/p.tasks.length*100):0;
+  const ov=p.tasks.filter(_tlOverdue).length;
+  const pct=total?Math.round(done/total*100):0;
+  const sub = total
+    ? `${total} ${isES?'tareas':'tasks'} &middot; ${done} ${isES?'completadas':'done'} &middot; ${ov} ${isES?'vencidas':'overdue'} &middot; ${pct}% ${isES?'de avance':'complete'}`
+    : t('timeline_sub');
   el.innerHTML=`
-  <div class="sh">
-    <div><div class="sh-title editorial-title" style="color:var(--text)">${t('timeline')}</div>
-    <div class="sh-sub">${t('timeline_sub')}</div></div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-ghost btn-sm" onclick="openTemplatePlanWizard()" style="display:flex;align-items:center;gap:5px;font-size:11px">
-        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/><path d="M19 3v4M17 5h4"/></svg>
-        <span>${LANG==='es'?'Crear Plan de Plantilla':'Create Template Plan'}</span>
-      </button>
-      <button class="btn btn-ghost btn-sm" onclick="libQuickSaveTasks()" style="display:flex;align-items:center;gap:5px;font-size:11px">
-        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-        <span id="lib-save-task-lbl">${t('lib_save_to')}</span>
-      </button>
-      <button class="btn btn-ghost btn-sm" onclick="libQuickLoadTasks()" style="display:flex;align-items:center;gap:5px;font-size:11px">
-        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><polyline points="8,10 12,14 16,10"/></svg>
-        <span id="lib-load-task-lbl">${LANG==='es'?'Importar Tareas':'Import Tasks'}</span>
-      </button>
-      <button class="btn btn-primary btn-create-gradient" onclick="openTaskModal()">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>${t('add_task')}
-      </button>
+  <div class="rd-tab-head">
+    <div>
+      <h2 class="rd-h2">${t('timeline')}</h2>
+      <p class="rd-sub">${sub}</p>
     </div>
+    ${isMob?'':`<div class="rd-actions">
+      <button class="btn" onclick="openTemplatePlanWizard()">${_bgSvg(BG_IC.sparks,13,2)}<span>${isES?'Plan de plantilla':'Template plan'}</span></button>
+      <button class="btn" onclick="libQuickSaveTasks()">${_bgSvg(BG_IC.book,13,2)}<span id="lib-save-task-lbl">${t('lib_save_to')}</span></button>
+      <button class="btn" onclick="libQuickLoadTasks()">${_bgSvg(BG_IC.up,13,2)}<span id="lib-load-task-lbl">${isES?'Importar tareas':'Import tasks'}</span></button>
+      <button class="btn btn-primary" onclick="openTaskModal()">${_bgSvg(BG_IC.plus,14,2.4)}${t('add_task')}</button>
+    </div>`}
   </div>
-  <div class="sg" style="margin-bottom:20px">
-    ${statCard(t('total_tasks'),'#f5f3ff','#7c3aed','<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',p.tasks.length,t('tasks_sub'),'0','#7c3aed')}
-    ${statCard(t('completed_tasks'),'#ecfdf5','#10b981','<polyline points="20,6 9,17 4,12"/>',done,t('done'),pct,'#10b981')}
-    ${statCard(t('overdue_tasks'),'#fff0f0','#ef4444','<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/>',ov,t('tasks_overdue_sub'),'0','#ef4444')}
-    ${statCard(t('progress'),'#f7f0de','#7a5c2a','<circle cx="12" cy="12" r="10"/>',pct+'%',t('completed_tasks'),pct,'#a67c3d')}
-  </div>
-  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px">
-    <div class="vtabs" style="margin-bottom:0">
-      <div class="vtab ${tView==='list'?'active':''}" onclick="tView='list';renderTimeline()">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>${t('list_view')}
-      </div>
-      <div class="vtab ${tView==='gantt'?'active':''}" onclick="tView='gantt';renderTimeline()">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="10" width="12" height="4" rx="1"/><rect x="7" y="16" width="14" height="4" rx="1"/></svg>${t('gantt_view')}
-      </div>
-      <div class="vtab ${tView==='calendar'?'active':''}" onclick="tView='calendar';renderTimeline()">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>${t('calendar_view')}
-      </div>
+  <div class="tl-toolrow">
+    <div class="rd-seg">
+      <button class="${tView==='list'?'active':''}" onclick="tView='list';renderTimeline()">${t('list_view')}</button>
+      <button class="${tView==='gantt'?'active':''}" onclick="tView='gantt';renderTimeline()">${t('gantt_view')}</button>
+      <button class="${tView==='calendar'?'active':''}" onclick="tView='calendar';renderTimeline()">${t('calendar_view')}</button>
     </div>
-    <div class="vtabs" style="margin-bottom:0">
-      ${[['all',LANG==='es'?'Todas':'All'],['overdue',LANG==='es'?'Vencidas':'Overdue'],['today',LANG==='es'?'Hoy':'Today'],['upcoming',LANG==='es'?'Próximas':'Upcoming']].map(([k,l])=>`<div class="vtab ${taskListFilter===k?'active':''}" data-task-filter="${k}" onclick="setTaskListFilter('${k}',this)">${l}</div>`).join('')}
-    </div>
+    <div class="tl-spacer"></div>
+    <div class="rd-pillrow" id="timeline-filters">${_tlFiltersHtml(p)}</div>
   </div>
-  <div class="timeline-search-wrap" style="position:relative;display:flex;align-items:center;margin-bottom:4px">
-    <svg width="15" height="15" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:12px;pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-    <input id="timeline-task-search" class="input" placeholder="${t('search_tasks')}" value="${esc(taskSearchQuery)}" oninput="debouncedTaskSearch(this.value)" style="padding-left:36px;width:100%">
-  </div>
-  <div id="tview-content" style="margin-top:12px"></div>
+  <div class="tl-search">${_bgSearch('timeline-task-search', t('search_tasks'), taskSearchQuery, 'debouncedTaskSearch(this.value)')}</div>
+  <div id="tview-content"></div>
   ${renderMobileStickyActionBar(`
-    <button class="btn btn-ghost" onclick="libQuickLoadTasks()">${LANG==='es'?'Importar':'Import'}</button>
-    <button class="btn btn-primary btn-create-gradient" onclick="openTaskModal()">${t('add_task')}</button>
+    <button class="btn" onclick="libQuickLoadTasks()">${isES?'Importar':'Import'}</button>
+    <button class="btn btn-primary" onclick="openTaskModal()">${t('add_task')}</button>
   `)}`;
   renderTimelineView(p);
 }
@@ -1519,23 +1682,23 @@ var taskListFilter='all';
 var taskSearchQuery='';
 function setTaskListFilter(filter,el){
   taskListFilter=filter;
-  const scope=el&&el.parentElement?el.parentElement:document;
-  scope.querySelectorAll('[data-task-filter]').forEach(btn=>{
-    btn.classList.toggle('active', btn.dataset.taskFilter===filter);
-  });
-  setTimeout(()=>renderTimelineView(proj()),0);
+  _tlRefreshFilters(proj());
+  setTimeout(function(){ renderTimelineView(proj()); },0);
 }
 function filterTasks(tasks){
   const tod=today();
   let filtered=[...tasks];
-  if(taskListFilter==='overdue') filtered=filtered.filter(tk=>!taskIsDone(tk)&&tk.dueDate&&tk.dueDate<tod);
+  if(taskListFilter==='overdue') filtered=filtered.filter(function(tk){ return _tlOverdue(tk); });
   else if(taskListFilter==='today') filtered=filtered.filter(tk=>tk.dueDate===tod);
   else if(taskListFilter==='upcoming') filtered=filtered.filter(tk=>tk.dueDate&&tk.dueDate>tod&&!taskIsDone(tk));
+  else if(taskListFilter==='pending') filtered=filtered.filter(tk=>!taskIsDone(tk));
+  else if(taskListFilter==='done') filtered=filtered.filter(taskIsDone);
   const q=taskSearchQuery.trim().toLowerCase();
-  if(q) filtered=filtered.filter(tk=>[tk.title,tk.desc,tk.assignee,tk.startDate,tk.dueDate,tk.endDate,tk.planningWindow,tk.durationDays,tk.status,tk.phase].some(v=>String(v||'').toLowerCase().includes(q)));
+  if(q) filtered=filtered.filter(tk=>[tk.title,tk.desc,tk.assignee,tk.startDate,tk.dueDate,tk.endDate,tk.planningWindow,tk.durationDays,tk.status,_tlTaskPhase(tk),_tlPhaseLabel(_tlTaskPhase(tk))].some(v=>String(v||'').toLowerCase().includes(q)));
   return filtered;
 }
 function renderTimelineView(p){
+  _tlRefreshFilters(p);
   if(!(p.tasks||[]).length && !taskSearchQuery.trim()){
     document.getElementById('tview-content').innerHTML=renderTimelineEmptyState();
     return;
@@ -1552,167 +1715,126 @@ function toggleTaskExpand(tid){
   var card = document.querySelector('.tmc[data-tid="'+tid+'"]');
   if(card) card.classList.toggle('tmc-open', _expandedTaskIds.indexOf(tid) > -1);
 }
+/** Aviso de "no hay resultados" común a las tres vistas del cronograma. */
+function _tlNoTasks(){
+  const isES = LANG==='es';
+  return `<div class="bg-norows">${taskSearchQuery.trim()?t('no_tasks_found'):t('no_tasks_yet')}
+    ${taskSearchQuery.trim()||taskListFilter!=='all'?`<button class="btn btn-sm" onclick="taskSearchQuery='';setTaskListFilter('all');renderTimeline()">${isES?'Limpiar filtros':'Clear filters'}</button>`:''}</div>`;
+}
 function renderTaskList(p){
   const el=document.getElementById('tview-content');
-  const tod=today();
-  const isMob=isPhoneViewport();
+  const isES=LANG==='es';
   let sorted=filterTasks([...p.tasks]).sort((a,b)=>(a.dueDate||'').localeCompare(b.dueDate||''));
-  if(!sorted.length){ el.innerHTML=`<div class="card" style="text-align:center;padding:40px;color:var(--muted)">${taskSearchQuery.trim()?t('no_tasks_found'):t('no_tasks_yet')}</div>`; return; }
-  if(isMob){
-    el.innerHTML=sorted.map(function(tk){
-      var status=taskStatusValue(tk);
-      var isDone=taskIsDone(tk);
-      var ov=!isDone&&tk.dueDate&&tk.dueDate<tod;
-      var isOpen=_expandedTaskIds.indexOf(tk.id)>-1;
-      var dateStr=fmtDate(tk.dueDate||tk.startDate);
-      var statusLbl=taskStatusLabel(status);
-      return `<article class="tmc${isOpen?' tmc-open':''}" data-tid="${tk.id}">
-        <div class="tmc-summary" onclick="toggleTaskExpand('${tk.id}')">
-          <div class="tchk ${isDone?'done':''}" onclick="event.stopPropagation();toggleTask('${tk.id}')">
-            ${isDone?'<svg width="12" height="12" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24"><polyline points="20,6 9,17 4,12"/></svg>':''}
-          </div>
-          <div class="tmc-info">
-            <div class="tmc-name ${isDone?'tmc-done':''}">${esc(tk.title)}</div>
-            <div class="tmc-row">
-              <span class="tmc-date${ov?' tmc-overdue':''}">${dateStr}${ov?' · '+t('overdue'):''}</span>
-              <span class="tmc-status">${esc(statusLbl)}</span>
-            </div>
-          </div>
-          <div class="tmc-color" style="background:${tk.color||'#7c3aed'}"></div>
-          <svg class="tmc-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </div>
-        <div class="tmc-detail">
-          ${tk.desc?'<div class="tmc-desc">'+esc(tk.desc)+'</div>':''}
-          <div class="tmc-meta">
-            <div class="tmc-meta-item"><span class="tmc-meta-lbl">${LANG==='es'?'Fechas':'Dates'}</span><span class="tmc-meta-val" style="color:${ov?'var(--danger)':'var(--text)'}">${fmtDate(tk.startDate||tk.dueDate)}${tk.startDate&&tk.dueDate?' → '+fmtDate(tk.dueDate):''}</span></div>
-            <div class="tmc-meta-item"><span class="tmc-meta-lbl">${LANG==='es'?'Asignado':'Assignee'}</span><span class="tmc-meta-val">${esc(tk.assignee||t('unassigned'))}</span></div>
-            <div class="tmc-meta-item"><span class="tmc-meta-lbl">${LANG==='es'?'Duración':'Duration'}</span><span class="tmc-meta-val">${tk.durationDays||1} ${LANG==='es'?'días':'days'}</span></div>
-            <div class="tmc-meta-item"><span class="tmc-meta-lbl">${LANG==='es'?'Fase':'Phase'}</span><span class="tmc-meta-val">${esc(tk.phase||taskPhaseValue(tk))}</span></div>
-            ${tk.planningWindow?'<div class="tmc-meta-item"><span class="tmc-meta-lbl">'+(LANG==='es'?'Ventana':'Window')+'</span><span class="tmc-meta-val">'+esc(tk.planningWindow)+'</span></div>':''}
-          </div>
-          <div class="tmc-actions" onclick="event.stopPropagation()">
-            <button class="btn btn-ghost btn-sm" onclick="openTaskModal('${tk.id}')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg> ${LANG==='es'?'Editar':'Edit'}</button>
-            <button class="btn btn-ghost btn-sm" onclick="dupTask('${tk.id}')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> ${LANG==='es'?'Duplicar':'Duplicate'}</button>
-            <button class="btn btn-danger btn-sm" onclick="delTask('${tk.id}')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg> ${LANG==='es'?'Eliminar':'Delete'}</button>
-          </div>
-        </div>
-      </article>`;
-    }).join('');
-    return;
-  }
-  el.innerHTML=sorted.map(tk=>{
-    const status=taskStatusValue(tk);
+  if(!sorted.length){ el.innerHTML=_tlNoTasks(); return; }
+  el.innerHTML='<div class="tl-list">'+sorted.map(function(tk){
     const isDone=taskIsDone(tk);
-    const ov=!isDone&&tk.dueDate&&tk.dueDate<tod;
-    return `<div class="task-row">
-      <div class="tchk ${isDone?'done':''}" onclick="toggleTask('${tk.id}')">
-        ${isDone?`<svg width="12" height="12" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24"><polyline points="20,6 9,17 4,12"/></svg>`:''}
-      </div>
-      <div style="flex:1">
-        <div class="task-title ${isDone?'done':''}">${esc(tk.title)}</div>
-        ${tk.desc?`<div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(tk.desc)}</div>`:''}
-        <div class="task-meta">
-          <span style="color:${ov?'var(--danger)':'var(--muted)'};display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>${fmtDate(tk.startDate||tk.dueDate)}${tk.startDate&&tk.dueDate?' - '+fmtDate(tk.dueDate):''}${ov?' ('+t('overdue')+')':''}</span>
-          <span style="display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>${esc(tk.assignee||t('unassigned'))}</span>
-          <span style="display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>${esc(String(tk.durationDays||1))} ${LANG==='es'?'días':'days'}</span>
-          <span style="display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7h8M8 12h8M8 17h5"/></svg>${esc(tk.phase||taskPhaseValue(tk))}</span>
-          <span style="display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>${esc(taskStatusLabel(status))}</span>
-          ${tk.planningWindow?`<span style="display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18"/><path d="M12 3v18"/></svg>${esc(tk.planningWindow)}</span>`:''}
+    const ov=_tlOverdue(tk);
+    const phase=_tlTaskPhase(tk);
+    const dates=fmtDate(tk.startDate||tk.dueDate)+(tk.startDate&&tk.dueDate?' → '+fmtDate(tk.dueDate):'');
+    return `<div class="tl-task${isDone?' is-done':''}">
+      <button class="rd-check tl-check${isDone?' done':''}" onclick="toggleTask('${tk.id}')" aria-label="${isDone?(isES?'Marcar como pendiente':'Mark as pending'):(isES?'Marcar como hecha':'Mark as done')}" title="${isDone?(isES?'Marcar como pendiente':'Mark as pending'):(isES?'Marcar como hecha':'Mark as done')}">${isDone?_bgSvg(BG_IC.check,12,3):''}</button>
+      <div class="tl-task-body">
+        <div class="tl-task-head">
+          <span class="tl-task-title">${esc(tk.title)}</span>
+          ${rdPill(_tlPhaseLabel(phase), _tlPhaseTone(phase), {up:true})}
+          ${!isDone&&taskStatusValue(tk)==='in-progress'?rdPill(taskStatusLabel(tk),'info',{sm:true}):''}
+          ${ov?rdPill(t('overdue'),'danger',{sm:true,dot:true}):''}
+        </div>
+        ${tk.desc?`<div class="tl-task-desc">${esc(tk.desc)}</div>`:''}
+        <div class="tl-task-meta">
+          <span class="${ov?'is-over':''}">${_bgSvg(BG_IC.cal,13,1.9)}${esc(dates)}</span>
+          <span>${_bgSvg(BG_IC.user,13,1.9)}${esc(tk.assignee||t('unassigned'))}</span>
+          <span>${_bgSvg(BG_IC.clock,13,1.9)}${esc(String(tk.durationDays||1))} ${(Number(tk.durationDays)||1)===1?(isES?'día':'day'):(isES?'días':'days')}</span>
+          ${tk.planningWindow?`<span>${_bgSvg(BG_IC.list,13,1.9)}${esc(tk.planningWindow)}</span>`:''}
         </div>
       </div>
-      <div style="display:flex;gap:6px">
-        <div style="width:12px;height:12px;border-radius:50%;background:${tk.color||'#7c3aed'};flex-shrink:0;margin-top:4px"></div>
-        <button class="btn btn-ghost btn-sm btn-icon" onclick="dupTask('${tk.id}')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
-        <button class="btn btn-ghost btn-sm btn-icon" onclick="openTaskModal('${tk.id}')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>
-        <button class="btn btn-danger btn-sm btn-icon" onclick="delTask('${tk.id}')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+      <div class="tl-task-acts">
+        <span class="tl-task-color" style="background:${_tlBarColor(tk)}" aria-hidden="true"></span>
+        <button class="rd-ibtn" title="${isES?'Duplicar':'Duplicate'}" aria-label="${isES?'Duplicar':'Duplicate'}" onclick="dupTask('${tk.id}')">${_bgSvg(BG_IC.copy,13,2)}</button>
+        <button class="rd-ibtn" title="${isES?'Editar':'Edit'}" aria-label="${isES?'Editar':'Edit'}" onclick="openTaskModal('${tk.id}')">${_bgSvg(BG_IC.edit,13,2)}</button>
+        <button class="rd-ibtn danger" title="${isES?'Eliminar':'Delete'}" aria-label="${isES?'Eliminar':'Delete'}" onclick="delTask('${tk.id}')">${_bgSvg(BG_IC.trash,13,2)}</button>
       </div>
     </div>`;
-  }).join('');
+  }).join('')+'</div>';
 }
-var _ganttZoom=14; var _ganttOffset=0; // px per day
+var _ganttZoom=14; var _ganttOffset=0; // px por dia
+// Con zoom automatico el rango completo entra en el ancho disponible; los botones
+// +/- lo desactivan para respetar la eleccion del usuario.
+var _ganttZoomAuto=true;
+function _tlSetGanttZoom(px){ _ganttZoomAuto=false; _ganttZoom=Math.max(2,Math.min(60,px)); renderGantt(proj()); }
 function renderGantt(p){
   const el=document.getElementById('tview-content');
   const tasks=filterTasks([...p.tasks]).filter(tk=>tk.startDate||tk.dueDate).sort((a,b)=>(a.startDate||a.dueDate).localeCompare(b.startDate||b.dueDate));
-  if(!tasks.length){el.innerHTML=`<div class="card" style="text-align:center;padding:40px;color:var(--muted)">${taskSearchQuery.trim()?t('no_tasks_found'):t('no_tasks_yet')}</div>`;return;}
+  if(!tasks.length){ el.innerHTML=_tlNoTasks(); return; }
   const isES=LANG==='es';
-  const allDates=tasks.flatMap(tk=>[tk.startDate||tk.dueDate,tk.dueDate||tk.startDate].filter(Boolean).map(d=>new Date(d+'T12:00:00')));
+  const allDates=tasks.flatMap(tk=>[tk.startDate||tk.dueDate,tk.dueDate||tk.startDate].filter(Boolean).map(d=>parseLocalDate(d))).filter(Boolean);
   let minD=new Date(Math.min(...allDates)); let maxD=new Date(Math.max(...allDates));
-  // Apply offset (months navigation)
   minD.setMonth(minD.getMonth()+_ganttOffset); maxD.setMonth(maxD.getMonth()+_ganttOffset);
   minD.setDate(1); minD.setHours(0,0,0,0);
   maxD.setDate(new Date(maxD.getFullYear(),maxD.getMonth()+1,0).getDate()); maxD.setHours(23,59,59,999);
   const totalDays=Math.max(1,(maxD-minD)/86400000);
-  const pxPerDay=_ganttZoom; // px per day
+  if(_ganttZoomAuto){
+    var avail=(el&&el.clientWidth?el.clientWidth:1000)-260-2;
+    _ganttZoom=Math.max(3,Math.min(24,Math.floor(avail/Math.max(1,totalDays))));
+  }
+  const pxPerDay=_ganttZoom;
   const totalW=Math.round(totalDays*pxPerDay);
   const months=[]; const cur=new Date(minD);
-  while(cur<=maxD){months.push({y:cur.getFullYear(),m:cur.getMonth(),lbl:cur.toLocaleString(isES?'es-MX':'en-US',{month:'short'})+' '+cur.getFullYear(),days:new Date(cur.getFullYear(),cur.getMonth()+1,0).getDate()});cur.setMonth(cur.getMonth()+1);}
-  // Build week sub-header
+  while(cur<=maxD){months.push({lbl:cur.toLocaleString(isES?'es-MX':'en-US',{month:'short'})+' '+cur.getFullYear(),days:new Date(cur.getFullYear(),cur.getMonth()+1,0).getDate()});cur.setMonth(cur.getMonth()+1);}
   const weekCells=[];
   const wCur=new Date(minD);
   while(wCur<=maxD){
     const wEnd=new Date(wCur); wEnd.setDate(wEnd.getDate()+6);
-    const pct=Math.min(wEnd,maxD)-wCur;
-    const wDays=Math.round(pct/86400000)+1;
-    const wW=wDays*pxPerDay;
-    weekCells.push(`<div style="width:${wW}px;flex-shrink:0;border-right:1px solid var(--border);padding:0 4px;font-size:9px;color:var(--muted);white-space:nowrap;overflow:hidden;box-sizing:border-box;text-align:center">${isES?'S':'W'} ${Math.ceil(wCur.getDate()/7)}</div>`);
+    const wDays=Math.round((Math.min(wEnd,maxD)-wCur)/86400000)+1;
+    weekCells.push(`<div class="tl-gantt-week" style="width:${wDays*pxPerDay}px">${isES?'S':'W'} ${Math.ceil(wCur.getDate()/7)}</div>`);
     wCur.setDate(wCur.getDate()+7);
   }
   const rows=tasks.map(tk=>{
-    const tks=new Date((tk.startDate||tk.dueDate)+'T12:00:00');
-    const tke=new Date((tk.dueDate||tk.startDate)+'T12:00:00');
-    // Hide task entirely if it ends before the visible range starts
-    if(tke<minD) return '';
-    // Hide task entirely if it starts after the visible range ends
-    if(tks>maxD) return '';
-    // Clip start to visible range
+    const tks=parseLocalDate(tk.startDate||tk.dueDate);
+    const tke=parseLocalDate(tk.dueDate||tk.startDate);
+    if(!tks||!tke||tke<minD||tks>maxD) return '';
     const clippedStart=tks<minD?minD:tks;
-    const l=Math.max(0,Math.round((clippedStart-minD)/86400000)*pxPerDay);
-    const fullW=Math.max(4,Math.round((tke-tks)/86400000+1)*pxPerDay);
-    // Reduce width by how much was clipped on the left
+    const fullW=Math.round((tke-tks)/86400000+1)*pxPerDay;
     const clippedDays=tks<minD?Math.round((minD-tks)/86400000):0;
-    const w=Math.max(4,fullW-clippedDays*pxPerDay);
+    // Ancho minimo para que una tarea de 1-2 dias siga leyendose como barra y no como punto.
+    const w=Math.min(totalW,Math.max(38,fullW-clippedDays*pxPerDay));
+    const l=Math.min(Math.max(0,totalW-w),Math.max(0,Math.round((clippedStart-minD)/86400000)*pxPerDay));
     const isDone=taskIsDone(tk);
-    const clr=isDone?'#10b981':(tk.dueDate&&tk.dueDate<today())?'#ef4444':(tk.color||'#7c3aed');
-    return `<div class="g-row">
-      <div class="g-tl">
-        <div class="tchk ${isDone?'done':''}" style="width:16px;height:16px;flex-shrink:0" onclick="toggleTask('${tk.id}')">
-          ${isDone?`<svg width="10" height="10" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24"><polyline points="20,6 9,17 4,12"/></svg>`:''}
-        </div>
-        <div style="display:flex;flex-direction:column;min-width:0">
-          <div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(tk.title)}">${esc(tk.title)}</div>
-          <div style="font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(tk.phase||taskPhaseValue(tk))}</div>
+    const phase=_tlTaskPhase(tk);
+    return `<div class="tl-gantt-row">
+      <div class="tl-gantt-lbl">
+        <button class="rd-check sm${isDone?' done':''}" onclick="toggleTask('${tk.id}')" aria-label="${isDone?(isES?'Marcar como pendiente':'Mark as pending'):(isES?'Marcar como hecha':'Mark as done')}">${isDone?_bgSvg(BG_IC.check,10,3):''}</button>
+        <div>
+          <div class="rd-cell-main" title="${esc(tk.title)}">${esc(tk.title)}</div>
+          <div class="rd-cell-sub">${esc(_tlPhaseLabel(phase))}</div>
         </div>
       </div>
-      <div class="g-bars" style="position:relative">
-        <div class="g-bar" style="left:${l}px;width:${w}px;background:${clr};overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px;color:#fff;font-weight:600;padding:0 8px;box-sizing:border-box;display:flex;align-items:center;min-width:4px;position:absolute" title="${esc(tk.title)} - ${tk.startDate||''} to ${tk.dueDate||''} - ${esc(tk.phase||taskPhaseValue(tk))} - ${esc(taskStatusLabel(tk))}" onclick="openTaskModal('${tk.id}')">${esc(tk.title)}</div>
+      <div class="tl-gantt-track">
+        <div class="tl-gantt-bar" style="left:${l}px;width:${w}px;background:${_tlBarColor(tk)}" title="${esc(tk.title)} · ${fmtDate(tk.startDate||tk.dueDate)} → ${fmtDate(tk.dueDate||tk.startDate)} · ${esc(taskStatusLabel(tk))}" onclick="openTaskModal('${tk.id}')">${w>=54?esc(tk.title):''}</div>
       </div>
     </div>`;
   }).join('');
   el.innerHTML=`
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-      <button class="btn btn-ghost btn-sm" onclick="_ganttOffset--;renderGantt(proj())" title="${isES?'Anterior':'Previous'}">&#8592;</button>
-      <button class="btn btn-ghost btn-sm" onclick="_ganttOffset=0;renderGantt(proj())">${isES?'Hoy':'Reset'}</button>
-      <button class="btn btn-ghost btn-sm" onclick="_ganttOffset++;renderGantt(proj())" title="${isES?'Siguiente':'Next'}">&#8594;</button>
-      <div style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">
-        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6M8 11h6"/></svg>
-        <button class="btn btn-ghost btn-sm" onclick="_ganttZoom=Math.max(2,_ganttZoom-4);renderGantt(proj())" title="${isES?'Alejar':'Zoom out'}">-</button>
-        <span style="font-size:11px;color:var(--muted);min-width:40px;text-align:center">${isES?'Zoom':'Zoom'}</span>
-        <button class="btn btn-ghost btn-sm" onclick="_ganttZoom=Math.min(60,_ganttZoom+4);renderGantt(proj())" title="${isES?'Acercar':'Zoom in'}">+</button>
+    <div class="tl-gantt-nav">
+      <button class="rd-ibtn" onclick="_ganttOffset--;renderGantt(proj())" title="${isES?'Mes anterior':'Previous month'}" aria-label="${isES?'Mes anterior':'Previous month'}">&#8249;</button>
+      <button class="btn btn-sm" onclick="_ganttOffset=0;_ganttZoomAuto=true;renderGantt(proj())">${isES?'Hoy':'Today'}</button>
+      <button class="rd-ibtn" onclick="_ganttOffset++;renderGantt(proj())" title="${isES?'Mes siguiente':'Next month'}" aria-label="${isES?'Mes siguiente':'Next month'}">&#8250;</button>
+      <div class="tl-zoom">
+        <span class="rd-label">${isES?'Zoom':'Zoom'}</span>
+        <button class="rd-ibtn" onclick="_tlSetGanttZoom(_ganttZoom-4)" title="${isES?'Alejar':'Zoom out'}" aria-label="${isES?'Alejar':'Zoom out'}">&minus;</button>
+        <button class="rd-ibtn" onclick="_tlSetGanttZoom(_ganttZoom+4)" title="${isES?'Acercar':'Zoom in'}" aria-label="${isES?'Acercar':'Zoom in'}">+</button>
       </div>
     </div>
-    <div class="gantt-wrap"><div class="gantt-scroll"><div class="gantt-inner" style="min-width:${220+totalW}px">
-      <div class="g-hdr">
-        <div class="g-lbl-col">${t('task')}</div>
-        <div class="g-months">${months.map(m=>`<div class="g-month" style="width:${m.days*pxPerDay}px;flex-shrink:0">${m.lbl}</div>`).join('')}</div>
+    <div class="tl-gantt"><div class="tl-gantt-scroll"><div style="min-width:${260+totalW}px">
+      <div class="tl-gantt-head">
+        <div class="tl-gantt-headlbl">${t('task')}</div>
+        <div class="tl-gantt-months">${months.map(m=>`<div class="tl-gantt-month" style="width:${m.days*pxPerDay}px;flex-shrink:0">${esc(m.lbl)}</div>`).join('')}</div>
       </div>
-      <div style="display:flex;margin-left:220px;border-bottom:1px solid var(--border);background:var(--bg2)">
-        ${weekCells.join('')}
-      </div>
+      <div class="tl-gantt-weeks" style="padding-left:260px">${weekCells.join('')}</div>
       ${rows}
     </div></div></div>`;
-  // Allow simultaneous horizontal (gantt) and vertical (page) scrolling.
-  // Without this the browser locks to one axis for the entire wheel gesture.
-  var gs = el.querySelector('.gantt-scroll');
+  // Permite desplazar el gantt en horizontal y la página en vertical a la vez.
+  var gs = el.querySelector('.tl-gantt-scroll');
   if(gs){
     gs.addEventListener('wheel', function(e){
       if(e.deltaX !== 0){
@@ -1734,31 +1856,40 @@ function dupTask(id){
 var calD=new Date();
 function renderCal(p){
   const el=document.getElementById('tview-content');
+  const isES=LANG==='es';
   const tasks=filterTasks(p.tasks);
-  if(!tasks.length){el.innerHTML=`<div class="card" style="text-align:center;padding:40px;color:var(--muted)">${taskSearchQuery.trim()?t('no_tasks_found'):t('no_tasks_yet')}</div>`;return;}
+  if(!tasks.length){ el.innerHTML=_tlNoTasks(); return; }
   const yr=calD.getFullYear();const mo=calD.getMonth();
   const fd=new Date(yr,mo,1).getDay();const dim=new Date(yr,mo+1,0).getDate();
-  const mn=calD.toLocaleString('default',{month:'long',year:'numeric'});
+  let mn=calD.toLocaleString(isES?'es-MX':'en-US',{month:'long',year:'numeric'});
+  mn=mn.charAt(0).toUpperCase()+mn.slice(1);
   const tod=today();const tbd={};
-  tasks.forEach(tk=>{if(!tbd[tk.dueDate])tbd[tk.dueDate]=[];tbd[tk.dueDate].push(tk);});
+  tasks.forEach(tk=>{if(!tk.dueDate)return;if(!tbd[tk.dueDate])tbd[tk.dueDate]=[];tbd[tk.dueDate].push(tk);});
+  const dow=isES?['Dom','Lun','Mar','Mié','Jue','Vie','Sáb']:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   let cells='';
-  for(let i=0;i<fd;i++)cells+=`<div class="cal-cell"><div class="cal-date om"></div></div>`;
+  for(let i=0;i<fd;i++)cells+='<div class="tl-cal-cell is-out"></div>';
   for(let i=1;i<=dim;i++){
-    const ds=`${yr}-${String(mo+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+    const ds=yr+'-'+String(mo+1).padStart(2,'0')+'-'+String(i).padStart(2,'0');
     const tks=tbd[ds]||[];
-    cells+=`<div class="cal-cell"><div class="cal-date ${ds===tod?'today':''}">${i}</div>${tks.map(tk=>`<div class="cal-ev" style="background:${taskIsDone(tk)?'#10b981':tk.color||'#a67c3d'};cursor:pointer" title="${esc(tk.title)}" onclick="openTaskModal('${tk.id}')">${esc(tk.title)}</div>`).join('')}</div>`;
+    cells+=`<div class="tl-cal-cell${ds===tod?' is-today':''}">
+      <div class="tl-cal-day">${i}</div>
+      ${tks.map(function(tk){
+        var tone=rdTone(_tlTaskTone(tk));
+        return `<div class="tl-cal-ev" style="background:${tone.bg};color:${tone.fg}" title="${esc(tk.title)}" onclick="openTaskModal('${tk.id}')">${esc(tk.title)}</div>`;
+      }).join('')}
+    </div>`;
   }
-  const rem=42-fd-dim;for(let i=0;i<rem;i++)cells+=`<div class="cal-cell"><div class="cal-date om"></div></div>`;
-  el.innerHTML=`<div class="cal-wrap">
-    <div class="cal-hdr">
-      <div class="cal-mn">${mn}</div>
-      <div style="display:flex;gap:8px">
-        <button class="cal-nav-btn" onclick="calD.setMonth(calD.getMonth()-1);renderCal(proj())">&#8592;</button>
-        <button class="cal-nav-btn" onclick="calD.setMonth(calD.getMonth()+1);renderCal(proj())">&#8594;</button>
+  const rem=42-fd-dim;for(let i=0;i<rem;i++)cells+='<div class="tl-cal-cell is-out"></div>';
+  el.innerHTML=`<div class="tl-cal">
+    <div class="tl-cal-head">
+      <h3 class="tl-cal-title">${esc(mn)}</h3>
+      <div style="display:flex;gap:6px">
+        <button class="rd-ibtn lg" onclick="calD.setMonth(calD.getMonth()-1);renderCal(proj())" title="${isES?'Mes anterior':'Previous month'}" aria-label="${isES?'Mes anterior':'Previous month'}">&#8249;</button>
+        <button class="rd-ibtn lg" onclick="calD.setMonth(calD.getMonth()+1);renderCal(proj())" title="${isES?'Mes siguiente':'Next month'}" aria-label="${isES?'Mes siguiente':'Next month'}">&#8250;</button>
       </div>
     </div>
-    <div class="cal-dh">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>`<div class="cal-dh-cell">${d}</div>`).join('')}</div>
-    <div class="cal-cells">${cells}</div>
+    <div class="tl-cal-dow">${dow.map(d=>'<div>'+d+'</div>').join('')}</div>
+    <div class="tl-cal-grid">${cells}</div>
   </div>`;
 }
 function toggleTask(tid){const p=proj();const tk=p.tasks.find(tk=>tk.id===tid);if(tk){const nextDone=!taskIsDone(tk);tk.done=nextDone;tk.status=nextDone?'completed':'not-started';saveProj(p);renderTimeline();}}
@@ -1840,92 +1971,125 @@ function debouncedTaskSearch(val){ taskSearchQuery=_truncSearch(val); clearTimeo
 function clearSearchTimers(){ clearTimeout(_gFilterTimer); clearTimeout(_seatingFilterTimer); clearTimeout(_tSearchTimer); _gFilterTimer=null; _seatingFilterTimer=null; _tSearchTimer=null; }
 function renderGuestEmptyState(){
   const isES=LANG==='es';
-  return `<section class="ev-empty fade-in">
-    <div class="ev-empty-shell">
-      <div class="ev-empty-aurora" aria-hidden="true"></div>
-      <div class="ev-empty-grid">
-        <div class="ev-empty-copy">
-          <div class="ev-empty-badge">${isES?'Lista de invitados':'Guest list'}</div>
-          <h2 class="ev-empty-title">${isES?'Construye tu lista de invitados en minutos.':'Build your guest list in minutes.'}</h2>
-          <p class="ev-empty-subtitle">${isES?'Descarga la plantilla de Excel, llénala con tus invitados e impórtala de vuelta. También puedes agregar invitados manualmente uno a uno.':'Download the Excel template, fill it in with your guests, and import it back. You can also add guests one by one manually.'}</p>
-          <div class="ev-empty-actions">
-            <button class="btn btn-primary btn-create-gradient ev-empty-cta" onclick="downloadGuestTemplate()">
-              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              ${isES?'Descargar Plantilla':'Download Template'}
-            </button>
-            <label class="btn btn-ghost ev-empty-cta" style="cursor:pointer">
-              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              ${isES?'Importar Invitados':'Import Guests'}
-              <input type="file" accept=".csv,.xlsx" multiple class="hidden" onchange="importCSV(this)">
-            </label>
-            <button class="btn btn-ghost ev-empty-cta" onclick="openGuestModal()">
-              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-              ${isES?'Agregar Manualmente':'Add Manually'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>`;
+  return _bgEmptyState(
+    isES?'Lista de invitados':'Guest list',
+    isES?'Construye tu lista de invitados en minutos.':'Build your guest list in minutes.',
+    isES?'Descarga la plantilla, llénala con tus invitados e impórtala de vuelta. También puedes agregarlos manualmente uno a uno.':'Download the template, fill it in with your guests, and import it back. You can also add guests one by one manually.',
+    `<button class="btn btn-primary" onclick="downloadGuestTemplate()">${_bgSvg(BG_IC.down,13,2)}${isES?'Descargar plantilla':'Download template'}</button>
+     <label class="btn" style="cursor:pointer">${_bgSvg(BG_IC.up,13,2)}${isES?'Importar invitados':'Import guests'}<input type="file" accept=".csv,.xlsx" multiple class="hidden" onchange="importCSV(this)"></label>
+     <button class="btn" onclick="openGuestModal()">${_bgSvg(BG_IC.plus,14,2.2)}${isES?'Agregar manualmente':'Add manually'}</button>`,
+    BG_IC.users);
 }
+/** Color del punto de menú en la vista por mesas. */
+var GS_MEAL_COLORS = {
+  'chicken':'#F2A93B', 'pollo':'#F2A93B',
+  'fish':'#3B7DD8',    'pescado':'#3B7DD8',
+  'beef':'#C23C15',    'res':'#C23C15',
+  'vegetarian':'#17A398', 'vegetariano':'#17A398',
+  'vegan':'#0E7F76',   'vegano':'#0E7F76',
+  'kids menu':'#7C5CE0', 'menú niños':'#7C5CE0', 'menu ninos':'#7C5CE0'
+};
+function _gsMealColor(meal){
+  var key = String(meal==null?'':meal).trim().toLowerCase();
+  if(!key) return 'var(--hairline)';
+  if(GS_MEAL_COLORS[key]) return GS_MEAL_COLORS[key];
+  var pal = ['#E4572E','#F2870F','#F2A93B','#17A398','#3B7DD8','#7C5CE0','#C89B6A'];
+  var h = 0;
+  for(var i=0;i<key.length;i++) h = (h*31 + key.charCodeAt(i)) >>> 0;
+  return pal[h % pal.length];
+}
+/** 'Mesa 3' si el dato es solo un numero/letra; el valor tal cual si ya trae texto. */
+function _gsTableLabel(tb){
+  var v = fixMojibake(String(tb==null?'':tb)).trim();
+  if(!v) return '';
+  return (/^[0-9]+$/.test(v) || v.length <= 2) ? (t('table_header') + ' ' + v) : v;
+}
+function _gsRsvpTone(v){
+  var value = guestRsvpValue(v);
+  return value==='confirmed' ? 'success' : value==='declined' ? 'danger' : 'warn';
+}
+function _gsRsvpLabel(v){
+  var value = guestRsvpValue(v), isES = LANG==='es';
+  if(value==='confirmed') return isES?'Confirmado':'Confirmed';
+  if(value==='declined')  return isES?'Rechazado':'Declined';
+  return isES?'Pendiente':'Pending';
+}
+/** Píldora de RSVP que cicla pendiente → confirmado → rechazado al hacer clic. */
+function _gsRsvpPill(g){
+  var isES = LANG==='es';
+  var hint = isES?'Clic para cambiar el RSVP':'Click to change RSVP';
+  return rdPill(_gsRsvpLabel(g.rsvp), _gsRsvpTone(g.rsvp), { dot:true, click:true,
+    attrs:'role="button" tabindex="0" title="'+esc(hint)+'" onclick="event.stopPropagation();cycleGuestRsvp(\''+g.id+'\')"' +
+          ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();event.stopPropagation();cycleGuestRsvp(\''+g.id+'\');}"' });
+}
+
 function renderGuests(){
   const p=proj();const el=document.getElementById('tab-guests');
   if(!p||!el) return;
-  if(!p.guests||!p.guests.length){el.innerHTML=renderGuestEmptyState();return;}
+  const isES=LANG==='es';
+  if(!p.guests||!p.guests.length){
+    el.innerHTML=`
+    <div class="rd-tab-head">
+      <div>
+        <h2 class="rd-h2">${t('guest_management')}</h2>
+        <p class="rd-sub">${isES?'Importa, organiza y confirma a tus invitados':'Import, organize and confirm your guests'}</p>
+      </div>
+    </div>
+    ${renderGuestEmptyState()}`;
+    return;
+  }
   const guestCount=p.guests.length;
   const plusOnes=p.guests.filter(g=>g.plusOne).length;
   const totalGuests=guestCount+plusOnes;
-  const confirmedGuests=p.guests.filter(g=>g.rsvp==='confirmed').length;
-  const confirmedPlusOnes=p.guests.filter(g=>g.rsvp==='confirmed'&&g.plusOne).length;
+  const confirmedGuests=p.guests.filter(g=>guestRsvpValue(g.rsvp)==='confirmed').length;
+  const confirmedPlusOnes=p.guests.filter(g=>guestRsvpValue(g.rsvp)==='confirmed'&&g.plusOne).length;
   const confirmed=confirmedGuests+confirmedPlusOnes;
-  const declinedGuests=p.guests.filter(g=>g.rsvp==='declined').length;
-  const declinedPlusOnes=p.guests.filter(g=>g.rsvp==='declined'&&g.plusOne).length;
+  const declinedGuests=p.guests.filter(g=>guestRsvpValue(g.rsvp)==='declined').length;
+  const declinedPlusOnes=p.guests.filter(g=>guestRsvpValue(g.rsvp)==='declined'&&g.plusOne).length;
   const declined=declinedGuests+declinedPlusOnes;
-  const pendingGuests=p.guests.filter(g=>!g.rsvp||g.rsvp==='pending').length;
-  const pendingPlusOnes=p.guests.filter(g=>(!g.rsvp||g.rsvp==='pending')&&g.plusOne).length;
+  const pendingGuests=p.guests.filter(g=>guestRsvpValue(g.rsvp)==='pending').length;
+  const pendingPlusOnes=p.guests.filter(g=>guestRsvpValue(g.rsvp)==='pending'&&g.plusOne).length;
   const pending=pendingGuests+pendingPlusOnes;
   const tables=[...new Set(p.guests.filter(g=>g.table).map(g=>g.table))].length;
+  const mt=function(label,value,color,title){
+    return rdMetric({center:true, label:label, value:String(value), color:color, attrs:'title="'+esc(title)+'"'});
+  };
   el.innerHTML=`
-  <div class="sh">
-    <div><div class="sh-title" style="color:var(--text)">${t('guest_management')}</div>
-    <div class="sh-sub">${totalGuests} ${t('total')} &middot; ${confirmed} ${t('confirmed_guests')} &middot; ${pending} ${t('pending_guests')}</div></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-ghost btn-sm" onclick="downloadGuestTemplate()">
-        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        ${t('download_template')}
-      </button>
-      <label class="btn btn-ghost btn-sm" style="cursor:pointer">
-        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-        ${LANG==='es'?'Importar Invitados':'Import Guests'}<input type="file" accept=".csv,.xlsx" multiple class="hidden" onchange="importCSV(this)">
-      </label>
-      <button class="btn btn-ghost btn-sm" onclick="exportGuestsExcel()">
-        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        ${LANG==='es'?'Exportar Invitados':'Export Guests'}
-      </button>
-      <button class="btn btn-primary btn-create-gradient btn-sm" onclick="openGuestModal()">
-        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>${t('add_guest')}
-      </button>
+  <div class="rd-tab-head">
+    <div>
+      <h2 class="rd-h2">${t('guest_management')}</h2>
+      <p class="rd-sub">${totalGuests} ${isES?'personas esperadas':'people expected'} &middot; ${confirmed} ${isES?'confirmadas':'confirmed'} &middot; ${pending} ${isES?'sin responder':'awaiting reply'}</p>
+    </div>
+    <div class="rd-actions">
+      <button class="btn" onclick="downloadGuestTemplate()">${_bgSvg(BG_IC.down,13,2)}<span>${isES?'Plantilla CSV':'CSV template'}</span></button>
+      <label class="btn" style="cursor:pointer">${_bgSvg(BG_IC.up,13,2)}<span>${isES?'Importar':'Import'}</span><input type="file" accept=".csv,.xlsx" multiple class="hidden" onchange="importCSV(this)"></label>
+      <button class="btn" onclick="exportGuestsExcel()">${_bgSvg(BG_IC.down,13,2)}<span>${isES?'Exportar Excel':'Export Excel'}</span></button>
+      <button class="btn" onclick="exportGuestsCSV()">${_bgSvg(BG_IC.down,13,2)}<span>${isES?'Exportar CSV':'Export CSV'}</span></button>
+      <button class="btn btn-primary" onclick="openGuestModal()">${_bgSvg(BG_IC.plus,14,2.4)}${t('add_guest')}</button>
     </div>
   </div>
-  <div class="gs-stats">
-    <div class="gs-stat" title="${LANG==='es'?'Invitados principales en la lista, sin acompañantes.':'Primary guests on the list, excluding plus ones.'}"><div class="gs-val">${guestCount}</div><div class="gs-lbl">${LANG==='es'?'Invitados':'Guests'}</div></div>
-    <div class="gs-stat" title="${LANG==='es'?'Acompañantes marcados como +1 en la lista.':'Guests marked as plus ones on the list.'}"><div class="gs-val">${plusOnes}</div><div class="gs-lbl">${LANG==='es'?'Plus Ones':'Plus Ones'}</div></div>
-    <div class="gs-stat" title="${LANG==='es'?'Total de asistentes previstos: invitados ('+guestCount+') + plus ones ('+plusOnes+').':'Total expected attendees: guests ('+guestCount+') + plus ones ('+plusOnes+').'}"><div class="gs-val">${totalGuests}</div><div class="gs-lbl">${t('total_guests')}</div></div>
-    <div class="gs-stat" title="${LANG==='es'?'Confirmados: invitados ('+confirmedGuests+') + plus ones ('+confirmedPlusOnes+').':'Confirmed: guests ('+confirmedGuests+') + plus ones ('+confirmedPlusOnes+').'}"><div class="gs-val" style="color:var(--success)">${confirmed}</div><div class="gs-lbl">${t('confirmed_guests')}</div></div>
-    <div class="gs-stat" title="${LANG==='es'?'Pendientes: invitados ('+pendingGuests+') + plus ones ('+pendingPlusOnes+').':'Pending: guests ('+pendingGuests+') + plus ones ('+pendingPlusOnes+').'}"><div class="gs-val" style="color:var(--warn)">${pending}</div><div class="gs-lbl">${t('pending')}</div></div>
-    <div class="gs-stat" title="${LANG==='es'?'Rechazados: invitados ('+declinedGuests+') + plus ones ('+declinedPlusOnes+').':'Declined: guests ('+declinedGuests+') + plus ones ('+declinedPlusOnes+').'}"><div class="gs-val" style="color:var(--danger)">${declined}</div><div class="gs-lbl">${t('declined')}</div></div>
-    <div class="gs-stat" title="${LANG==='es'?'Número de mesas asignadas actualmente en la lista de invitados.':'Number of tables currently assigned in the guest list.'}"><div class="gs-val" style="color:var(--gold-h)">${tables}</div><div class="gs-lbl">${t('tables')}</div></div>
+  <div class="rd-metrics tight">
+    ${mt(isES?'Invitados':'Guests', guestCount, 'var(--ink)', isES?'Invitados principales en la lista, sin acompañantes.':'Primary guests on the list, excluding plus ones.')}
+    ${mt(isES?'Plus ones':'Plus ones', plusOnes, 'var(--champagne-deep)', isES?'Acompañantes marcados como +1 en la lista.':'Guests marked as plus ones on the list.')}
+    ${mt(t('total_guests'), totalGuests, 'var(--accent-deep)', isES?('Total de asistentes previstos: invitados ('+guestCount+') + plus ones ('+plusOnes+').'):('Total expected attendees: guests ('+guestCount+') + plus ones ('+plusOnes+').'))}
+    ${mt(t('confirmed_guests'), confirmed, 'var(--success)', isES?('Confirmados: invitados ('+confirmedGuests+') + plus ones ('+confirmedPlusOnes+').'):('Confirmed: guests ('+confirmedGuests+') + plus ones ('+confirmedPlusOnes+').'))}
+    ${mt(t('pending'), pending, 'var(--warn)', isES?('Pendientes: invitados ('+pendingGuests+') + plus ones ('+pendingPlusOnes+').'):('Pending: guests ('+pendingGuests+') + plus ones ('+pendingPlusOnes+').'))}
+    ${mt(t('declined'), declined, 'var(--accent-deep)', isES?('Rechazados: invitados ('+declinedGuests+') + plus ones ('+declinedPlusOnes+').'):('Declined: guests ('+declinedGuests+') + plus ones ('+declinedPlusOnes+').'))}
+    ${mt(t('tables'), tables, 'var(--info)', isES?'Número de mesas asignadas actualmente en la lista de invitados.':'Number of tables currently assigned in the guest list.')}
   </div>
-  <div class="tbar">
-    <button class="tb ${gView==='list'?'active':''}" onclick="gView='list';renderGuests()">${LANG==='es'?'Todos los Invitados':'All Guests'}</button>
-    <button class="tb ${gView==='seating'?'active':''}" onclick="gView='seating';renderGuests()">${LANG==='es'?'Asignación por Mesas':'Table Assignments'}</button>
+  <div class="gs-toolrow">
+    <div class="rd-seg">
+      <button class="${gView==='list'?'active':''}" onclick="gView='list';renderGuests()">${isES?'Lista completa':'Full list'}</button>
+      <button class="${gView==='seating'?'active':''}" onclick="gView='seating';renderGuests()">${isES?'Por mesas':'By table'}</button>
+    </div>
+    ${_bgSearch('guest-search-input', isES?'Buscar invitado, mesa o categoría…':'Search guest, table or category…', gFilter, gView==='seating'?'debouncedSeatingFilter(this.value)':'debouncedGuestFilter(this.value)')}
   </div>
   <div id="gview"></div>
   ${renderMobileStickyActionBar(`
-    <label class="btn btn-ghost" style="cursor:pointer">
-      ${LANG==='es'?'Importar':'Import'}<input type="file" accept=".csv,.xlsx" multiple class="hidden" onchange="importCSV(this)">
+    <label class="btn" style="cursor:pointer">
+      ${isES?'Importar':'Import'}<input type="file" accept=".csv,.xlsx" multiple class="hidden" onchange="importCSV(this)">
     </label>
-    <button class="btn btn-primary btn-create-gradient" onclick="openGuestModal()">${t('add_guest')}</button>
+    <button class="btn btn-primary" onclick="openGuestModal()">${t('add_guest')}</button>
   `)}`;
   gView==='list'?renderGuestList(p):renderSeating(p);
 }
@@ -1967,30 +2131,36 @@ function openGuestModal(gid){
 }
 
 function renderSeating(p){
+  const isES=LANG==='es';
   let seated = p.guests.filter(g => g.table);
   if(gFilter){var _sfq=gFilter.toLowerCase();seated=seated.filter(function(g){return _guestMatchesFilter(g,_sfq);});}
-  seated = seated.sort((a,b) => a.table.localeCompare(b.table, undefined, { numeric:true }));
+  seated = seated.sort((a,b) => String(a.table).localeCompare(String(b.table), undefined, { numeric:true }));
   const tables = [...new Set(seated.map(g => g.table))];
-  document.getElementById('gview').innerHTML = `<div style="background:var(--card-solid);border-radius:var(--r);border:1px solid var(--border);overflow:hidden">
-    <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--bg2)">
-      <input class="input" id="seating-search-input" style="flex:1;min-width:200px" placeholder="${t('search_guests')}" aria-label="${t('search_guests')}" value="${esc(gFilter)}" oninput="debouncedSeatingFilter(this.value)">
-    </div>
-    <div style="padding:16px">
-      ${tables.length ? tables.map(tb => {
-        const gs = seated.filter(g => g.table === tb);
-        return `<div style="margin-bottom:20px">
-          <div class="seating-th">${t('table_header')} ${tb} &middot; ${gs.length} ${t('guests_lbl')}</div>
-          ${gs.map(g => `<div class="seating-row">
-            <div><strong>${guestText(g.name)}</strong>${g.plusOne ? ' <span class="s-sm">+1</span>' : ''}</div>
-            <div style="display:flex;gap:12px;font-size:12px;color:var(--muted)">
-              <span>${guestValueOrDash(g.meal)}</span>
-              <span class="rb ${guestRsvpClass(g.rsvp)}">${guestText(guestRsvpValue(g.rsvp))}</span>
-            </div>
-          </div>`).join('')}
-        </div>`;
-      }).join('') : `<div class="card" style="text-align:center;padding:40px;color:var(--muted)">${t('no_guests_found')}</div>`}
-    </div>
-  </div>`;
+  const unseated = p.guests.filter(function(g){ return !g.table; }).length;
+  const meals = [...new Set(p.guests.map(function(g){ return String(g.meal||'').trim(); }).filter(Boolean))];
+  const legend = meals.length ? `<div class="gs-legend">${meals.map(function(m){
+      return '<span><i class="gs-dot" style="background:'+_gsMealColor(m)+'"></i>'+esc(fixMojibake(m))+'</span>';
+    }).join('')}${unseated?'<span><i class="gs-dot" style="background:var(--hairline)"></i>'+esc(unseated+' '+(isES?'sin mesa':'unseated'))+'</span>':''}</div>` : '';
+  document.getElementById('gview').innerHTML = tables.length
+    ? legend + '<div class="gs-tables">' + tables.map(function(tb){
+        var gs = seated.filter(function(g){ return g.table === tb; });
+        var seats = gs.reduce(function(a,g){ return a + 1 + (g.plusOne?1:0); }, 0);
+        return `<section class="gs-table-card">
+          <div class="gs-table-head">
+            <h3 class="gs-table-name">${esc(_gsTableLabel(tb))}</h3>
+            ${rdPill(seats+' '+(seats===1?(isES?'lugar':'seat'):(isES?'lugares':'seats')), seats>0?'champagne':'neutral', {sm:true})}
+          </div>
+          ${gs.map(function(g){
+            return `<div class="gs-guest" onclick="openGuestModal('${g.id}')" title="${esc(isES?'Editar invitado':'Edit guest')}">
+              <span class="gs-dot" style="background:${_gsMealColor(g.meal)}"></span>
+              <span class="gs-guest-name">${guestText(g.name)}${g.plusOne?' +1':''}</span>
+              <span class="gs-guest-meal">${g.meal?guestText(g.meal):_gsRsvpLabel(g.rsvp)}</span>
+            </div>`;
+          }).join('')}
+        </section>`;
+      }).join('') + '</div>'
+    : `<div class="bg-norows">${t('no_guests_found')}
+        <button class="btn btn-sm" onclick="gView='list';renderGuests()">${isES?'Ver lista completa':'See full list'}</button></div>`;
 }
 function saveGuest(gid){
   const name=gv('gf-name');if(!name)return toast(LANG==='es'?'El nombre es requerido':'Name required','e');
@@ -2191,7 +2361,15 @@ function delGuest(gid){
     }
   });
 }
+var GS_COLS = 'style="grid-template-columns:34px minmax(170px,1.5fr) minmax(140px,1.1fr) 118px 130px 84px 56px 110px 74px"';
+function _gsSortHead(key, label){
+  var isActive = gSort===key;
+  var arrow = isActive ? (gAsc?'&#9650;':'&#9660;') : '&#8597;';
+  return '<button class="gs-sortbtn' + (isActive?' is-active':'') + '" onclick="gSort=\'' + key + '\';gAsc=' + (isActive?'!gAsc':'true') + ';renderGuestList(proj())">' +
+    esc(label) + '<span class="gs-arrow">' + arrow + '</span></button>';
+}
 function renderGuestList(p){
+  const isES=LANG==='es';
   let guests=[...p.guests];
   if(gFilter){var _gfq=gFilter.toLowerCase();guests=guests.filter(function(g){return _guestMatchesFilter(g,_gfq);});}
   guests.sort((a,b)=>{const va=String(a[gSort]||''),vb=String(b[gSort]||'');return gAsc?va.localeCompare(vb,undefined,{numeric:true}):vb.localeCompare(va,undefined,{numeric:true});});
@@ -2200,87 +2378,79 @@ function renderGuestList(p){
     updateGuestBulkBar();
     return;
   }
-  const si=k=>gSort===k?(gAsc?'&uarr;':'&darr;'):'&harr;';
   document.getElementById('gview').innerHTML=`
-  <div style="background:var(--card-solid);border-radius:var(--r);border:1px solid var(--border);overflow:hidden">
-    <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--bg2)">
-      <input class="input" style="flex:1;min-width:200px" placeholder="${t('search_guests')}" aria-label="${t('search_guests')}" value="${esc(gFilter)}" oninput="debouncedGuestFilter(this.value)">
-      <select class="select" style="width:auto" onchange="gSort=this.value;renderGuestList(proj())">
-        <option value="name" ${gSort==='name'?'selected':''}>${t('sort_name')}</option>
-        <option value="rsvp" ${gSort==='rsvp'?'selected':''}>${t('sort_rsvp')}</option>
-        <option value="table" ${gSort==='table'?'selected':''}>${t('sort_table')}</option>
-        <option value="category" ${gSort==='category'?'selected':''}>${t('sort_category')}</option>
+  <div class="rd-table">
+    <div class="rd-table-tools">
+      <span class="rd-hint">${guests.length} ${guests.length===1?(isES?'invitado':'guest'):(isES?'invitados':'guests')}</span>
+      <div class="rd-spacer"></div>
+      <select class="rd-input" style="width:auto" aria-label="${t('sort_name')}" onchange="gSort=this.value;renderGuestList(proj())">
+        <option value="name" ${gSort==='name'?'selected':''}>${esc(t('sort_name'))}</option>
+        <option value="rsvp" ${gSort==='rsvp'?'selected':''}>${esc(t('sort_rsvp'))}</option>
+        <option value="table" ${gSort==='table'?'selected':''}>${esc(t('sort_table'))}</option>
+        <option value="category" ${gSort==='category'?'selected':''}>${esc(t('sort_category'))}</option>
       </select>
-      <button class="btn btn-ghost btn-sm" onclick="gAsc=!gAsc;renderGuestList(proj())">${gAsc?t('asc'):t('desc')}</button>
+      <button class="btn btn-sm" onclick="gAsc=!gAsc;renderGuestList(proj())">${gAsc?t('asc'):t('desc')}</button>
     </div>
-    <div id="guest-bulk-bar" style="display:${guestSelectionCount()?'flex':'none'};padding:10px 16px;border-bottom:1px solid var(--border);gap:8px;align-items:center;flex-wrap:wrap;background:var(--gold-l)">
-      <span id="guest-bulk-count" style="font-size:12px;font-weight:600;color:var(--gold-h)">${guestSelectionCount()} ${LANG==='es'?'seleccionado(s)':'selected'}</span>
-      <button class="btn btn-ghost btn-sm" onclick="openBulkGuestEditModal()">${LANG==='es'?'Editar seleccionados':'Edit selected'}</button>
-      <button class="btn btn-danger btn-sm" onclick="bulkDeleteGuests()">${LANG==='es'?'Eliminar seleccionados':'Delete selected'}</button>
-      <button class="btn btn-ghost btn-sm" onclick="clearGuestSelection()">${LANG==='es'?'Limpiar selección':'Clear selection'}</button>
+    <div id="guest-bulk-bar" class="bg-bulk" style="display:${guestSelectionCount()?'flex':'none'}">
+      <span id="guest-bulk-count" class="bg-bulk-count">${guestSelectionCount()} ${isES?'seleccionado(s)':'selected'}</span>
+      <button class="btn btn-sm" onclick="openBulkGuestEditModal()">${isES?'Editar seleccionados':'Edit selected'}</button>
+      <button class="btn btn-sm btn-danger" onclick="bulkDeleteGuests()">${isES?'Eliminar seleccionados':'Delete selected'}</button>
+      <button class="btn btn-sm" onclick="clearGuestSelection()">${isES?'Limpiar selección':'Clear selection'}</button>
     </div>
-    <div style="overflow-x:auto">
-    <table>
-      <thead><tr>
-        <th style="width:36px"><input type="checkbox" id="guest-chk-all" style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="toggleAllVisibleGuests(this.checked)"></th>
-        <th onclick="gSort='name';gAsc=gSort==='name'?!gAsc:true;renderGuestList(proj())">${t('col_name')} ${si('name')}</th>
-        <th>${t('col_contact')}</th>
-        <th onclick="gSort='category';gAsc=gSort==='category'?!gAsc:true;renderGuestList(proj())">${t('col_category')} ${si('category')}</th>
-        <th onclick="gSort='rsvp';gAsc=gSort==='rsvp'?!gAsc:true;renderGuestList(proj())">${t('col_rsvp')} ${si('rsvp')}</th>
-        <th onclick="gSort='table';gAsc=gSort==='table'?!gAsc:true;renderGuestList(proj())">${t('col_table')} ${si('table')}</th>
-        <th>${t('col_plus_one')}</th><th>${t('col_meal')}</th><th>${t('col_notes')}</th><th>${t('col_actions')}</th>
-      </tr></thead>
-      <tbody id="guest-rows-body">
-        ${buildGuestRows(guests)}
-      </tbody>
-    </table>
-    </div>
+    <div class="rd-table-scroll"><div style="min-width:1040px">
+      <div class="rd-thead" ${GS_COLS}>
+        <div><input type="checkbox" id="guest-chk-all" class="bg-chk" onchange="toggleAllVisibleGuests(this.checked)" aria-label="${isES?'Seleccionar todos':'Select all'}"></div>
+        <div>${_gsSortHead('name', t('col_name'))}</div>
+        <div>${t('col_contact')}</div>
+        <div>${_gsSortHead('category', t('col_category'))}</div>
+        <div>${_gsSortHead('rsvp', t('col_rsvp'))}</div>
+        <div>${_gsSortHead('table', t('col_table'))}</div>
+        <div>${t('col_plus_one')}</div>
+        <div>${t('col_meal')}</div>
+        <div></div>
+      </div>
+      <div id="guest-rows-body">${buildGuestRows(guests)}</div>
+    </div></div>
   </div>`;
   updateGuestBulkBar();
 }
 function renderGuestMobileCards(guests){
   const isES = LANG==='es';
-  const empty = `<div class="mobile-record-card" style="text-align:center;color:var(--muted)">${t('no_guests_found')}</div>`;
-  return `<div class="mobile-section-toolbar">
-      <div style="display:grid;gap:10px">
-        <input class="input" placeholder="${t('search_guests')}" aria-label="${t('search_guests')}" value="${esc(gFilter)}" oninput="debouncedGuestFilter(this.value)">
-        <div class="mobile-inline-actions">
-          <select class="select" style="flex:1;min-width:0" onchange="gSort=this.value;renderGuestList(proj())">
-            <option value="name" ${gSort==='name'?'selected':''}>${t('sort_name')}</option>
-            <option value="rsvp" ${gSort==='rsvp'?'selected':''}>${t('sort_rsvp')}</option>
-            <option value="table" ${gSort==='table'?'selected':''}>${t('sort_table')}</option>
-            <option value="category" ${gSort==='category'?'selected':''}>${t('sort_category')}</option>
-          </select>
-          <button class="btn btn-ghost btn-sm" onclick="gAsc=!gAsc;renderGuestList(proj())">${gAsc?t('asc'):t('desc')}</button>
-          <label class="btn btn-ghost btn-sm" style="display:inline-flex;align-items:center;gap:8px">
-            <input type="checkbox" id="guest-chk-all" style="width:16px;height:16px;accent-color:var(--gold-h);cursor:pointer" onchange="toggleAllVisibleGuests(this.checked)">
-            <span>${isES?'Todos':'All'}</span>
-          </label>
-        </div>
+  const empty = `<div class="bg-norows">${t('no_guests_found')}</div>`;
+  return `<div class="gs-mobtools">
+      <div class="gs-mobrow">
+        <select class="rd-input" style="flex:1;min-width:0" aria-label="${t('sort_name')}" onchange="gSort=this.value;renderGuestList(proj())">
+          <option value="name" ${gSort==='name'?'selected':''}>${esc(t('sort_name'))}</option>
+          <option value="rsvp" ${gSort==='rsvp'?'selected':''}>${esc(t('sort_rsvp'))}</option>
+          <option value="table" ${gSort==='table'?'selected':''}>${esc(t('sort_table'))}</option>
+          <option value="category" ${gSort==='category'?'selected':''}>${esc(t('sort_category'))}</option>
+        </select>
+        <button class="btn btn-sm" onclick="gAsc=!gAsc;renderGuestList(proj())">${gAsc?t('asc'):t('desc')}</button>
+        <label class="bg-selall">
+          <input type="checkbox" id="guest-chk-all" class="bg-chk" onchange="toggleAllVisibleGuests(this.checked)">
+          <span>${isES?'Todos':'All'}</span>
+        </label>
       </div>
-      <div id="guest-bulk-bar" class="mobile-inline-actions" style="display:${guestSelectionCount()?'flex':'none'};padding:12px 14px;border:1px solid rgba(166,124,61,.28);border-radius:16px;background:var(--gold-l)">
-        <span id="guest-bulk-count" style="font-size:12px;font-weight:700;color:var(--gold-h)">${guestSelectionCount()} ${isES?'seleccionado(s)':'selected'}</span>
-        <button class="btn btn-ghost btn-sm" onclick="openBulkGuestEditModal()">${isES?'Editar':'Edit'}</button>
-        <button class="btn btn-danger btn-sm" onclick="bulkDeleteGuests()">${isES?'Eliminar':'Delete'}</button>
-        <button class="btn btn-ghost btn-sm" onclick="clearGuestSelection()">${isES?'Limpiar':'Clear'}</button>
+      <div id="guest-bulk-bar" class="bg-bulk" style="display:${guestSelectionCount()?'flex':'none'};border-radius:14px;border-bottom:none">
+        <span id="guest-bulk-count" class="bg-bulk-count">${guestSelectionCount()} ${isES?'seleccionado(s)':'selected'}</span>
+        <button class="btn btn-sm" onclick="openBulkGuestEditModal()">${isES?'Editar':'Edit'}</button>
+        <button class="btn btn-sm btn-danger" onclick="bulkDeleteGuests()">${isES?'Eliminar':'Delete'}</button>
+        <button class="btn btn-sm" onclick="clearGuestSelection()">${isES?'Limpiar':'Clear'}</button>
       </div>
     </div>
-    <div id="guest-mobile-list" class="mobile-card-list">
+    <div id="guest-mobile-list" class="gs-cards">
       ${guests.length ? guests.map(function(g){
-        var contact = guestText(g.email);
-        if(g.phone) contact += '<br>'+guestText(g.phone);
-        return `<article class="mobile-record-card" onclick="openGuestModal('${g.id}')" style="padding:14px 16px">
-          <div style="display:flex;align-items:center;gap:10px">
-            <label onclick="event.stopPropagation()" style="display:flex;align-items:center;justify-content:center;flex-shrink:0">
-              <input type="checkbox" class="guest-sel" data-gid="${g.id}" ${isGuestSelected(g.id)?'checked':''} style="width:18px;height:18px;accent-color:var(--gold-h);cursor:pointer" onchange="toggleGuestSelection('${g.id}',this.checked)">
-            </label>
-            <div style="flex:1;min-width:0">
-              <div style="font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;color:#242424;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${guestText(g.name)}</div>
-              <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;font-family:'DM Sans',sans-serif;font-size:12px;color:#787470;margin-top:3px">
-                <span>${guestValueOrDash(g.category)}</span>
-                ${g.table?'<span>· '+t('table_header')+' '+guestText(g.table)+'</span>':''}
-                <span class="rb rb-tap ${guestRsvpClass(g.rsvp)}" onclick="event.stopPropagation();cycleGuestRsvp('${g.id}')" style="margin-left:auto" title="${isES?'Toca para cambiar el RSVP':'Tap to change RSVP'}">${guestText(guestRsvpValue(g.rsvp))}</span>
-              </div>
+        return `<article class="gs-card" onclick="openGuestModal('${g.id}')">
+          <label onclick="event.stopPropagation()" style="display:flex;align-items:center">
+            <input type="checkbox" class="guest-sel bg-chk" data-gid="${g.id}" ${isGuestSelected(g.id)?'checked':''} onchange="toggleGuestSelection('${g.id}',this.checked)" aria-label="${isES?'Seleccionar':'Select'} ${guestText(g.name)}">
+          </label>
+          <span class="rd-avatar round">${esc(rdInitials(fixMojibake(String(g.name||''))))}</span>
+          <div class="gs-card-info">
+            <div class="rd-cell-main">${guestText(g.name)}${g.plusOne?' +1':''}</div>
+            <div class="gs-card-row">
+              <span>${guestValueOrDash(g.category)}</span>
+              ${g.table?'<span>· '+esc(_gsTableLabel(g.table))+'</span>':''}
+              <span class="gs-push">${_gsRsvpPill(g)}</span>
             </div>
           </div>
         </article>`;
@@ -2307,22 +2477,33 @@ function gEditSpan(gid, field, displayVal){
   return '<span class="gedit" data-gid="'+gid+'" data-field="'+field+'" onclick="gInlineEdit(this)" title="'+(LANG==='es'?'Clic para editar':'Click to edit')+'">'+v+'</span>';
 }
 function buildGuestRows(guests){
-  if(!guests.length) return `<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--muted)">${t('no_guests_found')}</td></tr>`;
-  return guests.map(g=>`<tr data-gid="${g.id}">
-    <td><input type="checkbox" class="guest-sel" data-gid="${g.id}" ${isGuestSelected(g.id)?'checked':''} style="width:15px;height:15px;accent-color:var(--gold-h);cursor:pointer" onchange="toggleGuestSelection('${g.id}',this.checked)"></td>
-    <td style="font-weight:600">${gEditSpan(g.id,'name',guestText(g.name))}</td>
-    <td style="font-size:12px;color:var(--muted)">${gEditSpan(g.id,'email',guestText(g.email))}<br>${gEditSpan(g.id,'phone',guestText(g.phone))}</td>
-    <td>${gEditSpan(g.id,'category','<span class="badge b-gray">'+guestValueOrDash(g.category)+'</span>')}</td>
-    <td>${gEditSpan(g.id,'rsvp','<span class="rb '+guestRsvpClass(g.rsvp)+'">'+guestText(guestRsvpValue(g.rsvp))+'</span>')}</td>
-    <td>${gEditSpan(g.id,'table',guestText(g.table))}</td>
-    <td>${gEditSpan(g.id,'plusOne',g.plusOne?'&#10003;':'')}</td>
-    <td style="font-size:12px">${gEditSpan(g.id,'meal',guestText(g.meal))}</td>
-    <td style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${gEditSpan(g.id,'notes',guestText(g.notes))}</td>
-    <td><div style="display:flex;gap:4px">
-      <button class="btn btn-ghost btn-sm btn-icon" onclick="openGuestModal('${g.id}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>
-      <button class="btn btn-danger btn-sm btn-icon" onclick="delGuest('${g.id}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
-    </div></td>
-  </tr>`).join('');
+  const isES=LANG==='es';
+  if(!guests.length) return `<div class="bg-norows">${t('no_guests_found')}</div>`;
+  return guests.map(function(g){
+    return `<div class="rd-row" ${GS_COLS} data-gid="${g.id}">
+    <div><input type="checkbox" class="guest-sel bg-chk" data-gid="${g.id}" ${isGuestSelected(g.id)?'checked':''} onchange="toggleGuestSelection('${g.id}',this.checked)" aria-label="${isES?'Seleccionar':'Select'} ${guestText(g.name)}"></div>
+    <div class="gs-name">
+      <span class="rd-avatar round">${esc(rdInitials(fixMojibake(String(g.name||''))))}</span>
+      <div class="gs-name-txt">
+        <div class="rd-cell-main">${gEditSpan(g.id,'name',guestText(g.name))}</div>
+        <div class="rd-cell-sub">${gEditSpan(g.id,'notes',guestText(g.notes))}</div>
+      </div>
+    </div>
+    <div class="rd-cell">
+      <div>${gEditSpan(g.id,'email',guestText(g.email))}</div>
+      <div class="rd-cell-sub">${gEditSpan(g.id,'phone',guestText(g.phone))}</div>
+    </div>
+    <div class="rd-cell">${gEditSpan(g.id,'category',guestValueOrDash(g.category))}</div>
+    <div>${_gsRsvpPill(g)}</div>
+    <div class="rd-cell">${gEditSpan(g.id,'table',guestText(g.table))}</div>
+    <div class="rd-cell">${gEditSpan(g.id,'plusOne',g.plusOne?'&#10003;':'')}</div>
+    <div class="rd-cell">${gEditSpan(g.id,'meal',guestText(g.meal))}</div>
+    <div class="gs-rowacts">
+      <button class="rd-ibtn" title="${isES?'Editar':'Edit'}" aria-label="${isES?'Editar':'Edit'}" onclick="openGuestModal('${g.id}')">${_bgSvg(BG_IC.edit,13,2)}</button>
+      <button class="rd-ibtn danger" title="${isES?'Eliminar':'Delete'}" aria-label="${isES?'Eliminar':'Delete'}" onclick="delGuest('${g.id}')">${_bgSvg(BG_IC.trash,13,2)}</button>
+    </div>
+  </div>`;
+  }).join('');
 }
 
 // Inline-edit a single guest field in place. Click a .gedit cell -> swap to an input/select;
@@ -2354,7 +2535,7 @@ function gInlineEdit(span){
   }
   editor.style.cssText='width:100%;min-width:70px;font-size:12px;padding:3px 6px';
   var done=false;
-  function rebuildRow(){ var tr=editor.closest('tr'); if(tr) tr.outerHTML=buildGuestRows([g]); }
+  function rebuildRow(){ var tr=editor.closest('.rd-row'); if(tr) tr.outerHTML=buildGuestRows([g]); }
   function commit(){
     if(done) return; done=true;
     var nv = (field==='plusOne') ? (editor.value==='1') : editor.value;
@@ -2654,7 +2835,7 @@ function showImportPreview(newGuests){
     ${newGuests.slice(0,8).map(g=>`<div style="display:flex;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)">
       <span style="font-weight:600;flex:1;font-size:12px">${esc(g.name)}</span>
       <span style="color:var(--muted);font-size:12px">${esc(g.email||'—')}</span>
-      <span class="rb ${g.rsvp==='confirmed'?'rb-c':g.rsvp==='declined'?'rb-d':'rb-p'}">${esc(g.rsvp)}</span>
+      ${rdPill(_gsRsvpLabel(g.rsvp), _gsRsvpTone(g.rsvp), {sm:true, dot:true})}
     </div>`).join('')}
     ${newGuests.length>8?`<div style="padding:6px 0;color:var(--light);font-size:11px">+ ${newGuests.length-8} ${es?'más...':'more...'}</div>`:''}
   </div>

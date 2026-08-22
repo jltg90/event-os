@@ -230,6 +230,9 @@ function applyTranslations(){
   if(ll) ll.textContent = LANG==='es' ? 'EN' : 'ES';
   var tl_ = document.getElementById('tour-label');
   if(tl_) tl_.textContent = LANG==='es' ? 'Guía' : 'Highlights';
+  // Shell del rediseno: migas, contador de eventos, evento activo, buscador.
+  if(typeof rdUpdateShell === "function") rdUpdateShell();
+  if(typeof setSyncStatus === "function" && _lastSyncAt) setSyncStatus("ok");
   repairMojibakeInDOM(document.body);
 }
 
@@ -1565,6 +1568,11 @@ function enterApp(){
   if(uav) uav.textContent = initial;
   if(uname) uname.textContent = name;
   if(uemail) uemail.textContent = email;
+  // Bloque de cuenta del sidebar (rediseno 2026-08)
+  var sbName = document.getElementById('sb-user-name');
+  var sbMeta = document.getElementById('sb-user-meta');
+  if(sbName) sbName.textContent = name;
+  if(sbMeta) sbMeta.textContent = email;
   if(mobUav) mobUav.textContent = initial;
   if(mobUname) mobUname.textContent = name;
   if(mobUemail) mobUemail.textContent = email;
@@ -1608,25 +1616,48 @@ function setSyncStatus(state){
   var btn      = document.getElementById('sync-btn');
   var dotMenu  = document.getElementById('sync-dot-menu');
   var labelMenu= document.getElementById('sync-label-menu');
+  var meta     = document.getElementById('sync-meta');
+  // El color y el fondo los pone el CSS via las clases is-busy / is-bad, para que
+  // la pildora del sidebar siga la paleta del rediseno tambien en tema oscuro.
   var cfg = {
-    ok:      { color:'#4caf50', text:'Saved',      title:'All changes saved to cloud.' },
-    syncing: { color:'#f59e0b', text:'Syncing…',   title:'Syncing with cloud…' },
-    saving:  { color:'#3b82f6', text:'Saving…',    title:'Saving to cloud…' },
-    offline: { color:'#ef4444', text:'Offline',    title:'Saved locally — will sync when reconnected.' },
-    error:   { color:'#ef4444', text:'Save error', title:'Could not save — check connection.' },
+    ok:      { color:'#5FBF95', text:t('sync_ok'),      title:t('sync_hint_ok'),      cls:'' },
+    syncing: { color:'#F2A93B', text:t('sync_syncing'), title:t('sync_hint_busy'),    cls:'is-busy' },
+    saving:  { color:'#F2A93B', text:t('sync_saving'),  title:t('sync_hint_busy'),    cls:'is-busy' },
+    offline: { color:'#F2703C', text:t('sync_offline'), title:t('sync_hint_offline'), cls:'is-bad' },
+    error:   { color:'#F2703C', text:t('sync_error'),   title:t('sync_hint_error'),   cls:'is-bad' },
   };
   var c = cfg[state] || cfg.ok;
   if(dot)      dot.style.background  = c.color;
   if(dotMenu)  dotMenu.style.background = c.color;
   if(label)    label.textContent     = c.text;
   if(labelMenu)labelMenu.textContent = c.text;
+  if(state==='ok') _lastSyncAt = Date.now();
+  if(meta)     meta.textContent      = (state==='ok') ? _syncAgoLabel() : '';
   if(btn){
     btn.title = c.title;
-    btn.style.borderColor = (state==='offline'||state==='error') ? 'rgba(239,68,68,.4)' : 'var(--border)';
-    btn.style.color       = (state==='offline'||state==='error') ? '#ef4444' : '';
+    btn.classList.remove('is-busy','is-bad');
+    if(c.cls) btn.classList.add(c.cls);
+    btn.style.borderColor = '';
+    btn.style.color = '';
   }
 }
+// Marca de tiempo de la ultima sincronizacion correcta, para el "hace N min"
+// del sidebar (el diseno lo muestra bajo el estado).
+var _lastSyncAt = null;
+function _syncAgoLabel(){
+  if(!_lastSyncAt) return '';
+  var mins = Math.floor((Date.now() - _lastSyncAt) / 60000);
+  return mins < 1 ? t('just_now') : t('min_ago').replace('{n}', mins);
+}
 function setSyncDot(state){ setSyncStatus(state); }
+// Refresca el "hace N min" sin cambiar de estado.
+setInterval(function(){
+  var meta = document.getElementById('sync-meta');
+  var btn  = document.getElementById('sync-btn');
+  if(meta && btn && !btn.classList.contains('is-busy') && !btn.classList.contains('is-bad')){
+    meta.textContent = _syncAgoLabel();
+  }
+}, 60000);
 
 window.addEventListener('online',  function(){ if(DB.cur) manualSync(); });
 window.addEventListener('offline', function(){ setSyncStatus('offline'); });
@@ -1689,6 +1720,7 @@ function showPage(p){
     ? (libNav[typeof _libTab!=='undefined' ? _libTab : 'vendors'] || 'snav-vendors')
     : (smap[p]||null);
   if(sid){const se=document.getElementById(sid);if(se)se.classList.add('active');}
+  rdUpdateShell();
   if(p==='dashboard'){
     renderAppDash();
     // Las vistas agregadas necesitan los proyectos completos, no los stubs.
@@ -1782,10 +1814,41 @@ function toggleProjectTabMenu(event){
 
 function renderPNav(){
   const p=proj();if(!p)return;
-  document.getElementById('pnav-name').textContent=p.name;
-  const tl={social:t('social_private')||'Social / Private',corporate:t('corporate')||'Corporate',community:t('community')||'Community',government:t('government')||'Government',education:t('education')||'Education'};
-  document.getElementById('pnav-type').textContent=tl[p.type]||p.type;
+  const set=(id,val)=>{ const el=document.getElementById(id); if(el) el.textContent=val||''; };
+  set('pnav-name', p.name);
+
+  // Tipo y estado como pildoras tonales (rediseno 2026-08)
+  const typeEl=document.getElementById('pnav-type');
+  if(typeEl){
+    typeEl.className='rd-pill up t-'+evTypeTone(p.type);
+    typeEl.textContent=evTypeLabel(p.type);
+    typeEl.style.display=p.type?'':'none';
+  }
+  const stEl=document.getElementById('pnav-status');
+  if(stEl){
+    stEl.className='rd-pill t-'+evStatusTone(p.status);
+    stEl.style.display=p.status?'':'none';
+    set('pnav-status-label', statusLabel(p.status));
+  }
+
+  set('pnav-client', p.clientName);
+  set('pnav-date', p.date?fmtDate(p.date):t('no_date'));
+  set('pnav-location', p.location);
+  // Los separadores solo aparecen entre dos datos que existan.
+  const d1=document.getElementById('pnav-dot-1'), d2=document.getElementById('pnav-dot-2');
+  if(d1) d1.style.display=(p.clientName&&(p.date||p.location))?'':'none';
+  if(d2) d2.style.display=(p.date&&p.location)?'':'none';
+
+  // Cuenta regresiva: fecha civil, con parseLocalDate detras (nunca new Date(fecha)).
+  const days=rdDaysUntil(p.date);
+  const dEl=document.getElementById('pnav-days');
+  if(dEl){ dEl.textContent=days.label; dEl.classList.toggle('is-past', !!days.past); }
+
+  const ring=document.getElementById('pnav-ring');
+  if(ring) ring.innerHTML=rdRing(evProgress(p));
+
   syncProjectTabMenu();
+  rdUpdateShell();
 }
 function switchTab(tab){
   // Flush any pending debounced save before switching sections
@@ -2517,4 +2580,297 @@ function _maybeShowWelcomeTour(){
     if(localStorage.getItem(key)==='done') return;
   }catch(e){ return; }
   setTimeout(_showOnboardingWizard, 800);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REDISEÑO 2026-08 — helpers compartidos (paleta "Arcilla").
+// Los usan events.js, analytics.js, library.js, budget-timeline-guests.js,
+// layout.js y misc.js.  Fuente: Claude Design "EventOS Rediseño.dc.html".
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Tonos: fondo + texto.  Son los mismos pares que usa el diseño y coinciden con
+// las clases .t-* de styles.css (usa las clases cuando puedas; estos valores son
+// para SVG y estilos inline donde no llega una clase).
+var RD_TONES = {
+  success:   { bg:'#DFF5F1', fg:'#0E7F76' },
+  warn:      { bg:'#FDF0D8', fg:'#A2700B' },
+  danger:    { bg:'#FDE7E0', fg:'#C23C15' },
+  accent:    { bg:'#FDE7E0', fg:'#C23C15' },
+  info:      { bg:'#E4EDFC', fg:'#2A63C4' },
+  purple:    { bg:'#EEE8FD', fg:'#6341C9' },
+  champagne: { bg:'#F7EFDF', fg:'#7A5C2A' },
+  neutral:   { bg:'#F1EBE1', fg:'#6E655B' }
+};
+// Paleta de series para gráficas (viva, en el orden del diseño).
+var RD_SERIES = ['#E4572E','#3B7DD8','#17A398','#7C5CE0','#F2A93B','#F2870F','#C89B6A','#C4BBAD'];
+
+function rdTone(key){ return RD_TONES[key] || RD_TONES.neutral; }
+
+/** Píldora de estado. `label` ya debe venir traducido; se escapa aquí. */
+function rdPill(label, tone, opts){
+  opts = opts || {};
+  var cls = 'rd-pill t-' + (RD_TONES[tone] ? tone : 'neutral');
+  if(opts.up) cls += ' up';
+  if(opts.sm) cls += ' sm';
+  if(opts.click) cls += ' click';
+  if(opts.cls) cls += ' ' + opts.cls;
+  return '<span class="' + cls + '"' + (opts.attrs ? ' ' + opts.attrs : '') + '>' +
+    (opts.dot ? '<i></i>' : '') + esc(label) + '</span>';
+}
+
+// El estado guardado usa 'planning' en proyectos viejos y 'to-be-confirmed' en los nuevos.
+function evStatusTone(s){
+  switch(s){
+    case 'confirmed':   return 'success';
+    case 'in-progress': return 'warn';
+    case 'completed':   return 'info';
+    case 'cancelled':   return 'danger';
+    default:            return 'neutral';   // to-be-confirmed / planning / vacío
+  }
+}
+function evTypeTone(ty){
+  switch(ty){
+    case 'social':     return 'accent';
+    case 'corporate':  return 'info';
+    case 'community':  return 'success';
+    case 'government': return 'warn';
+    case 'education':  return 'purple';
+    default:           return 'neutral';
+  }
+}
+function evTypeCover(ty){
+  switch(ty){
+    case 'social':     return 'linear-gradient(135deg,#F2703C,#C23C15)';
+    case 'corporate':  return 'linear-gradient(135deg,#4C8DEB,#2A63C4)';
+    case 'community':  return 'linear-gradient(135deg,#1FB8AA,#0E7F76)';
+    case 'government': return 'linear-gradient(135deg,#F2C05A,#A2700B)';
+    case 'education':  return 'linear-gradient(135deg,#8B6CF0,#6341C9)';
+    default:           return 'linear-gradient(135deg,#C4BBAD,#8C8072)';
+  }
+}
+function evTypeLabel(ty){
+  var k = { social:'type_social', corporate:'type_corporate', community:'type_community',
+            government:'type_government', education:'type_education' }[ty];
+  return k ? t(k) : (ty || '');
+}
+
+/** Iniciales para avatares: "Boda Ramírez & Ortiz" -> "BR". */
+function rdInitials(name){
+  var parts = String(name || '').trim().split(/\s+/).filter(function(w){ return /[\p{L}\p{N}]/u.test(w); });
+  if(!parts.length) return '?';
+  return (parts[0][0] + (parts.length > 1 ? parts[1][0] : '')).toUpperCase();
+}
+
+/**
+ * Días hasta una fecha civil 'YYYY-MM-DD'.  Usa startOfLocalDay (lang.js): con
+ * new Date(fecha) la medianoche UTC cae en el día anterior en México.
+ * Devuelve { n, label, past, valid }.
+ */
+function rdDaysUntil(ymd){
+  var d = startOfLocalDay(ymd);
+  if(!d) return { n:null, label:t('no_date'), past:false, valid:false };
+  var today = new Date(); today.setHours(0,0,0,0);
+  var n = Math.round((d - today) / 86400000);
+  var label;
+  if(n === 0)      label = t('today_label');
+  else if(n === 1) label = t('tomorrow_label');
+  else if(n > 0)   label = t('days_left').replace('{n}', n);
+  else             label = t('days_ago').replace('{n}', Math.abs(n));
+  return { n:n, label:label, past:n < 0, valid:true };
+}
+
+/** Anillo de progreso SVG con el porcentaje al centro. */
+function rdRing(pct, o){
+  o = o || {};
+  var size = o.size || 76, sw = o.stroke || 7, color = o.color || '#E4572E';
+  var r = size * 0.42, c = size / 2, circ = 2 * Math.PI * r;
+  pct = Math.max(0, Math.min(100, Math.round(pct || 0)));
+  var dash = pct / 100 * circ;
+  return '<div style="position:relative;width:' + size + 'px;height:' + size + 'px;flex-shrink:0">' +
+    '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" aria-hidden="true">' +
+      '<circle cx="' + c + '" cy="' + c + '" r="' + r + '" fill="none" stroke="var(--sand)" stroke-width="' + sw + '"/>' +
+      '<circle cx="' + c + '" cy="' + c + '" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="' + sw + '" stroke-linecap="round"' +
+        ' stroke-dasharray="' + dash.toFixed(2) + ' ' + (circ - dash).toFixed(2) + '"' +
+        ' transform="rotate(-90 ' + c + ' ' + c + ')" style="transition:stroke-dasharray .9s cubic-bezier(.2,.8,.2,1)"/>' +
+    '</svg>' +
+    '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">' +
+      '<div style="font-size:' + (o.labelSize || 15) + 'px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1">' + pct + '%</div>' +
+      (o.sub === null ? '' : '<div class="rd-mini" style="font-size:9px;margin-top:2px">' + esc(o.sub || t('tasks_plan')) + '</div>') +
+    '</div></div>';
+}
+
+/**
+ * Dona SVG con total al centro.  `data` = [[color, valor, etiqueta], …].
+ * Con total 0 dibuja solo la pista (sin dividir entre cero).
+ */
+function rdDonut(data, o){
+  o = o || {};
+  var size = o.size || 118, sw = o.stroke || 15;
+  var r = size * 0.38, c = size / 2, circ = 2 * Math.PI * r;
+  var total = (data || []).reduce(function(s, d){ return s + (Number(d[1]) || 0); }, 0);
+  var segs = '', rot = -90;
+  if(total > 0){
+    var gap = data.filter(function(d){ return Number(d[1]) > 0; }).length > 1 ? Math.min(circ * 0.035, 5) : 0;
+    data.forEach(function(d){
+      var v = Number(d[1]) || 0;
+      if(v <= 0) return;
+      var pct = v / total, arc = Math.max(0.6, pct * circ - gap);
+      segs += '<circle cx="' + c + '" cy="' + c + '" r="' + r + '" fill="none" stroke="' + d[0] + '" stroke-width="' + sw + '" stroke-linecap="round"' +
+        ' stroke-dasharray="' + arc.toFixed(2) + ' ' + (circ - arc).toFixed(2) + '" stroke-dashoffset="' + (circ * 0.25).toFixed(2) + '"' +
+        ' transform="rotate(' + rot.toFixed(2) + ' ' + c + ' ' + c + ')" style="transition:stroke-dasharray .6s"/>';
+      rot += pct * 360;
+    });
+  }
+  var center = (o.center === undefined) ? String(total) : o.center;
+  return '<div style="position:relative;width:' + size + 'px;height:' + size + 'px;flex-shrink:0">' +
+    '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" aria-hidden="true">' +
+      '<circle cx="' + c + '" cy="' + c + '" r="' + r + '" fill="none" stroke="var(--sand)" stroke-width="' + sw + '"/>' + segs +
+    '</svg>' +
+    (center === null ? '' :
+      '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">' +
+        '<div style="font-size:' + Math.round(size * 0.23) + 'px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1;color:var(--ink)">' + esc(center) + '</div>' +
+        '<div class="rd-mini" style="font-size:10px;margin-top:3px">' + esc(o.centerSub === undefined ? 'total' : o.centerSub) + '</div>' +
+      '</div>') +
+    '</div>';
+}
+
+/** Tarjeta de métrica. `value`/`sub`/`label` ya traducidos; se escapan aquí. */
+function rdMetric(o){
+  o = o || {};
+  var html = '<div class="rd-metric' + (o.center ? ' center' : '') + (o.cls ? ' ' + o.cls : '') + '"' + (o.attrs ? ' ' + o.attrs : '') + '>';
+  if(o.icon){
+    html += '<div class="rd-metric-top"><span class="rd-label">' + esc(o.label || '') + '</span>' +
+      '<span class="rd-metric-ico" style="background:' + (o.iconBg || 'var(--accent-l)') + ';color:' + (o.iconFg || 'var(--accent-deep)') + '">' + o.icon + '</span></div>';
+  } else if(!o.center){
+    html += '<div class="rd-label" style="margin-bottom:12px">' + esc(o.label || '') + '</div>';
+  }
+  html += '<div class="rd-metric-val' + (o.valClass ? ' ' + o.valClass : '') + '"' + (o.color ? ' style="color:' + o.color + '"' : '') + '>' + esc(o.value == null ? '' : o.value) + '</div>';
+  if(o.center) html += '<div class="rd-label">' + esc(o.label || '') + '</div>';
+  if(o.sub) html += '<div class="rd-metric-sub">' + esc(o.sub) + '</div>';
+  if(o.bar){
+    html += '<div class="rd-bar thin" style="margin-top:13px"><i style="width:' + Math.max(0, Math.min(100, o.bar.pct || 0)) + '%' +
+      (o.bar.color ? ';background:' + o.bar.color : '') + '"></i></div>';
+  }
+  return html + '</div>';
+}
+
+/** % del plan completado (tareas hechas / tareas totales). */
+function evProgress(p){
+  var tasks = (p && p.tasks) || [];
+  if(!tasks.length) return 0;
+  return Math.round(tasks.filter(function(tk){ return tk && tk.done; }).length / tasks.length * 100);
+}
+
+/**
+ * Resumen numérico de un proyecto, en un solo sitio para que todas las vistas
+ * cuenten lo mismo.  OJO: si el proyecto tiene `_hasExtras` sin `_extrasLoaded`,
+ * guests/vendors están vacíos en memoria (ver CLAUDE.md) — quien agregue varios
+ * proyectos debe llamar antes a _ensureAllProjectsComplete().
+ */
+function rdEventSummary(p){
+  p = p || {};
+  var vendors = p.vendors || [], guests = p.guests || [], tasks = p.tasks || [];
+  var budget = Number(p.budget) || 0;
+  var allocated = vendors.reduce(function(s, v){ return s + (Number(v && v.budget) || 0); }, 0);
+  var paid = vendors.reduce(function(s, v){
+    return s + ((v && v.payments) || []).reduce(function(a, pay){ return a + (Number(pay && pay.amount) || 0); }, 0);
+  }, 0);
+  var hired = vendors.filter(function(v){ return v && v.hired; }).length;
+  // El modelo real usa rsvp 'confirmed' | 'pending' | 'declined' y plusOne booleano
+  // (un acompañante como mucho).  Los conteos incluyen al acompañante, igual que
+  // renderGuests() en budget-timeline-guests.js.
+  var confirmed = 0, pending = 0, declined = 0, seats = 0, plusOnes = 0;
+  guests.forEach(function(g){
+    if(!g) return;
+    var n = 1 + (g.plusOne ? 1 : 0);
+    if(g.plusOne) plusOnes++;
+    seats += n;
+    if(g.rsvp === 'confirmed') confirmed += n;
+    else if(g.rsvp === 'declined') declined += n;
+    else pending += n;
+  });
+  var tasksDone = tasks.filter(function(tk){ return tk && tk.done; }).length;
+  var overdue = tasks.filter(function(tk){ return isTaskOverdue(tk); }).length;
+  return {
+    budget: budget, allocated: allocated, paid: paid,
+    balance: budget - paid, unallocated: budget - allocated,
+    vendorsTotal: vendors.length, hired: hired,
+    guestsTotal: guests.length, seats: seats, plusOnes: plusOnes,
+    confirmed: confirmed, pending: pending, declined: declined,
+    tasksTotal: tasks.length, tasksDone: tasksDone,
+    tasksPct: tasks.length ? Math.round(tasksDone / tasks.length * 100) : 0,
+    overdue: overdue
+  };
+}
+
+// ─── Buscador de la barra superior ────────────────────────────────────────
+// Escribir en él lleva a la lista de eventos y reutiliza el filtro que ya existe
+// (filterEvents en events.js), en vez de inventar un segundo motor de búsqueda.
+function topbarSearch(q){
+  if(_currentPage !== 'events') showPage('events');
+  var box = document.getElementById('event-search');
+  if(box) box.value = q;
+  if(typeof filterEvents === 'function') filterEvents(q);
+}
+function focusGlobalSearch(){
+  var el = document.getElementById('topbar-search-input');
+  if(el){ el.focus(); el.select(); }
+}
+function reopenActiveProject(){
+  var id = _recentProjectIds && _recentProjectIds[0];
+  if(id && uproj()[id]) openProject(id);
+  else showPage('events');
+}
+document.addEventListener('keydown', function(e){
+  if((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')){
+    e.preventDefault();
+    focusGlobalSearch();
+  }
+});
+
+// ─── Estado del shell (migas, contadores, evento activo) ──────────────────
+function rdUpdateShell(){
+  var page = _currentPage || 'events';
+  var rootKey = { dashboard:'overview', analytics:'nav_analytics', library:'lib_root', project:'nav_events', events:'nav_events' }[page] || 'nav_events';
+  var rootEl = document.getElementById('crumb-root');
+  if(rootEl) rootEl.textContent = t(rootKey === 'overview' ? 'overview' : rootKey);
+  var wrap = document.getElementById('crumb-project');
+  var cur = document.getElementById('crumb-cur');
+  var p = (page === 'project') ? proj() : null;
+  if(wrap) wrap.style.display = p ? 'flex' : 'none';
+  if(cur && p) cur.textContent = p.name || '';
+
+  // Contador de eventos del sidebar
+  var cnt = document.getElementById('snav-events-count');
+  if(cnt){
+    var n = Object.values(uproj()).filter(function(x){
+      return x && x.id && x.id !== '__library__' && x.id !== '__lib_layout__' && x.status && x.status !== '__internal__';
+    }).length;
+    cnt.textContent = n ? String(n) : '';
+  }
+
+  // Evento activo (el último abierto), como en el diseño
+  var aw = document.getElementById('sb-active-wrap');
+  if(aw){
+    var aid = (_recentProjectIds && _recentProjectIds[0]) || null;
+    var ap = aid ? uproj()[aid] : null;
+    if(ap){
+      aw.style.display = '';
+      var ini = document.getElementById('sb-active-ini');
+      var nm  = document.getElementById('sb-active-name');
+      var dt  = document.getElementById('sb-active-date');
+      if(ini) ini.textContent = rdInitials(ap.name);
+      if(nm)  nm.textContent = ap.name || '';
+      if(dt)  dt.textContent = ap.date ? fmtDate(ap.date) : t('no_date');
+    } else {
+      aw.style.display = 'none';
+    }
+  }
+
+  var sl = document.getElementById('sb-search-label');
+  if(sl) sl.textContent = LANG === 'es' ? 'Buscar' : 'Search';
+  var ti = document.getElementById('topbar-search-input');
+  if(ti) ti.placeholder = t('topbar_search_ph');
+  var fm = document.getElementById('feedback-menu-label');
+  if(fm) fm.textContent = LANG === 'es' ? 'Enviar comentarios' : 'Send feedback';
 }

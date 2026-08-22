@@ -44,6 +44,13 @@ function totalMBImages(p){
   return mb.uncategorized.length + mb.folders.reduce((s,f)=>s+f.images.length,0);
 }
 
+// ── MOODBOARD (rediseño 2026-08: rejilla bento de 12 columnas) ─────────────
+// El patrón de 7 mosaicos suma 12 columnas en cada fila (5+4+3 y 3+3+3+3),
+// igual que el diseño, así que las filas siempre cierran alineadas.
+var MB_TILES = 7;
+
+// OJO: library.js llama a mbSpanClass para SU galería (.mb-gallery), que no es
+// la rejilla bento de esta pestaña.  Se deja intacta y el bento usa mbTileClass.
 function mbSpanClass(index, total){
   var pattern = total <= 2
     ? ['mb-span-feature','mb-span-wide']
@@ -51,9 +58,57 @@ function mbSpanClass(index, total){
   return pattern[index % pattern.length] || '';
 }
 
+/** Clase de tamaño del mosaico según su posición en la rejilla bento. */
+function mbTileClass(index){
+  return 'mb-t' + mbTileSlot(index) + ' mb-k' + mbTileSlot(index);
+}
+function mbTileSlot(index){
+  return ((index % MB_TILES) + MB_TILES) % MB_TILES;
+}
+// Anchos que cierran la fila en 12 columnas desde cada posición del patrón.
+var MB_FILL = ['mb-fill-12','mb-fill-7','mb-fill-3a','mb-fill-12','mb-fill-9','mb-fill-6','mb-fill-3b'];
+function mbFillClass(index){
+  var i = mbTileSlot(index);
+  return MB_FILL[i] + ' mb-k' + i;
+}
+
+/** Iconos del rediseño: SVG en línea, 24x24, trazo currentColor. */
+function mbIco(paths, size, sw){
+  return '<svg width="' + (size||18) + '" height="' + (size||18) + '" viewBox="0 0 24 24" fill="none" '
+    + 'stroke="currentColor" stroke-width="' + (sw||1.9) + '" stroke-linecap="round" stroke-linejoin="round" '
+    + 'aria-hidden="true">' + paths + '</svg>';
+}
+var MB_ICONS = {
+  image:  '<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>',
+  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/>',
+  folder: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+  pencil: '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/>',
+  trash:  '<path d="M3 6h18"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>',
+  move:   '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  chev:   '<path d="m9 18 6-6-6-6"/>',
+  zoom:   '<circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 3.5 3.5M11 8v6M8 11h6"/>',
+  drop:   '<path d="M12 2.7 6.6 8.1a7.6 7.6 0 1 0 10.8 0z"/>',
+  spark:  '<path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>',
+  plus:   '<path d="M12 5v14M5 12h14"/>'
+};
+
+/** Cadena segura para incrustar dentro de un onclick="foo('…')". */
+function mbAttrStr(s){
+  var str = String(s === null || s === undefined ? '' : s);
+  return esc(str.replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+}
+/** Solo se pintan colores con forma de hex: evita inyectar CSS por el color guardado. */
+function mbIsHex(c){
+  return typeof c === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(c.trim());
+}
+function mbSafeColor(c, fallback){
+  return mbIsHex(c) ? c.trim() : (fallback || 'var(--champagne)');
+}
+
 function mbFolderLabel(folderId){
   if(!folderId) return t('uncategorized');
   var p = proj();
+  if(!p) return t('uncategorized');
   var mb = getMB(p);
   var folder = mb.folders.find(function(f){ return f.id===folderId; });
   return folder ? folder.name : t('uncategorized');
@@ -75,116 +130,213 @@ function mbCollectImages(folderId){
   });
 }
 
+/** Carpetas sugeridas del diseño para el estado vacío. */
+function mbSuggestions(){
+  return LANG==='es'
+    ? ['Referencia principal','Paleta floral','Textiles','Vajilla','Iluminación','Papelería','Montaje']
+    : ['Main reference','Floral palette','Textiles','Tableware','Lighting','Stationery','Setup'];
+}
+
+/** Mosaico punteado que abre el selector de archivos de una carpeta. */
+function mbAddTile(folderId, index){
+  var isES = LANG==='es';
+  return '<button type="button" class="rd-dash mb-tile ' + mbFillClass(index) + '"'
+    + ' onclick="mbTriggerUpload(\'' + mbAttrStr(folderId) + '\')">'
+    + '<span class="mb-dash-ico">' + mbIco(MB_ICONS.image, 20) + '</span>'
+    + '<span class="mb-dash-label">' + esc(t('upload_images_btn')) + '</span>'
+    + '<span class="mb-dash-sub">' + (isES ? 'JPG o PNG · máx. 5 MB' : 'JPG or PNG · max 5 MB') + '</span>'
+    + '</button>';
+}
+
 function renderMoodboard(){
   const p=proj(); const el=document.getElementById('tab-moodboard');
+  if(!p || !el) return;
   const mb=getMB(p);
   const total=totalMBImages(p);
+  const isES = LANG==='es';
+  const nF = mb.folders.length;
 
-  el.innerHTML=`
-  <div class="sh">
+  const head = `
+  <div class="rd-tab-head">
     <div>
-      <div class="sh-title editorial-title" style="color:var(--text)">${t('moodboard_library_title')}</div>
-      <div class="sh-sub">${total} ${t('images')} · ${mb.folders.length} folders</div>
+      <h2 class="rd-h2">${esc(t('moodboard_library_title'))}</h2>
+      <p class="rd-sub">${isES?'Dirección visual, paleta y referencias del evento':'Visual direction, palette and references for the event'}
+        · <span class="rd-num">${total}</span> ${isES?(total===1?'imagen':'imágenes'):(total===1?'image':'images')}
+        · <span class="rd-num">${nF}</span> ${isES?(nF===1?'carpeta':'carpetas'):(nF===1?'folder':'folders')}</p>
     </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-ghost" onclick="libQuickLoadMoodboards()">${LANG==='es'?'Importar Moodboard':'Import Moodboard'}</button>
-      <button class="btn btn-primary" onclick="openNewFolderModal()">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-        ${t('new_folder_btn')}
-      </button>
+    <div class="rd-actions">
+      <button class="btn" onclick="libQuickLoadMoodboards()">${isES?'Importar Moodboard':'Import Moodboard'}</button>
+      <button class="btn" onclick="openNewFolderModal()">${esc(t('new_folder_btn'))}</button>
+      <button class="btn btn-primary" onclick="mbUploadFromHeader()">${mbIco(MB_ICONS.upload,15)}${esc(t('upload_images_btn'))}</button>
     </div>
+  </div>`;
+
+  const emptyBoard = `
+  <div class="mb-bento">
+    ${mbSuggestions().map(function(name,i){
+      return '<button type="button" class="rd-dash mb-tile ' + mbTileClass(i) + '"'
+        + ' onclick="openNewFolderModal(\'' + mbAttrStr(name) + '\')">'
+        + '<span class="mb-dash-ico">' + mbIco(MB_ICONS.image, 20) + '</span>'
+        + '<span class="mb-dash-label">' + esc(name) + '</span>'
+        + '</button>';
+    }).join('')}
   </div>
+  <p class="mb-empty-note">${esc(t('start_moodboard'))} — ${esc(t('start_moodboard_sub'))}</p>`;
 
-  ${total===0 && mb.folders.length===0 ? `
-  <div class="card" style="text-align:center;padding:60px">
-    <svg width="48" height="48" fill="none" stroke="var(--light)" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 14px;display:block"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21,15 16,10 5,21"/></svg>
-    <p style="font-size:16px;font-weight:600;margin-bottom:8px">${t('start_moodboard')}</p>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:20px">${t('start_moodboard_sub')}</p>
-    <div style="display:flex;gap:10px;justify-content:center">
-      <button class="btn btn-ghost" onclick="openNewFolderModal()">${t('create_folder_btn')}</button>
-    </div>
-  </div>` : ''}
-
-  <!-- Folders -->
-  ${mb.folders.map((folder,fi)=>`
-  <div class="mb-folder">
-    <div class="mb-folder-header" onclick="toggleMBFolder('${folder.id}')">
-      <svg width="18" height="18" fill="${folder.color||'#f59e0b'}" stroke="none" viewBox="0 0 24 24" style="flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-      <div class="mb-folder-title">${esc(folder.name)}</div>
-      <span class="mb-folder-count">${folder.images.length} images</span>
-      <div style="display:flex;gap:6px;align-items:center" onclick="event.stopPropagation()">
-        <label class="btn btn-ghost btn-sm" style="cursor:pointer;padding:5px 10px">
-          + Add<input type="file" accept="image/*" multiple class="hidden" onchange="addMBImages(this,'${folder.id}')">
-        </label>
-        <button class="btn btn-ghost btn-sm btn-icon" onclick="renameFolderModal('${folder.id}')">
-          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg>
+  const folders = mb.folders.map(function(folder){
+    const fid = folder.id;
+    const fidA = mbAttrStr(fid);
+    const imgs = folder.images || [];
+    const open = mbOpenFolders[fid] !== false;
+    const dot = mbSafeColor(folder.color, 'var(--champagne)');
+    const renameLbl = isES?'Renombrar carpeta':'Rename folder';
+    return `
+    <section class="mb-folder-sec">
+      <div class="mb-folder-head">
+        <button type="button" class="mb-folder-toggle" aria-expanded="${open?'true':'false'}" onclick="toggleMBFolder('${fidA}')">
+          <span class="mb-chev${open?' open':''}">${mbIco(MB_ICONS.chev,14,2.2)}</span>
+          <span class="mb-fdot" style="background:${dot}"></span>
+          <span class="mb-fname">${esc(folder.name)}</span>
+          <span class="mb-fcount rd-num">${imgs.length}</span>
         </button>
-        <button class="btn btn-danger btn-sm btn-icon" onclick="deleteMBFolder('${folder.id}')">
-          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg>
-        </button>
+        <div class="rd-actions">
+          <button class="rd-ibtn" title="${esc(t('upload_images_btn'))}" aria-label="${esc(t('upload_images_btn'))}" onclick="mbTriggerUpload('${fidA}')">${mbIco(MB_ICONS.upload,15)}</button>
+          <button class="rd-ibtn" title="${esc(renameLbl)}" aria-label="${esc(renameLbl)}" onclick="renameFolderModal('${fidA}')">${mbIco(MB_ICONS.pencil,15)}</button>
+          <button class="rd-ibtn danger" title="${esc(t('delete'))}" aria-label="${esc(t('delete'))}" onclick="deleteMBFolder('${fidA}')">${mbIco(MB_ICONS.trash,15)}</button>
+          <input type="file" id="mb-file-${esc(fid)}" class="hidden" accept="image/*" multiple onchange="addMBImages(this,'${fidA}')">
+        </div>
       </div>
-      <svg class="mb-folder-chevron ${mbOpenFolders[folder.id]!==false?'open':''}" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
-    </div>
-    <div class="mb-folder-body" style="display:${mbOpenFolders[folder.id]===false?'none':'block'}">
-      ${folder.images.length===0 ? `
-      <div style="text-align:center;padding:24px;color:var(--muted)">
-        <p style="font-size:13px;margin-bottom:10px">${t('no_images_yet')}</p>
-        <label class="btn btn-ghost btn-sm" style="cursor:pointer;display:inline-flex">
-          ${t('upload_images_btn')}<input type="file" accept="image/*" multiple class="hidden" onchange="addMBImages(this,'${folder.id}')">
-        </label>
-      </div>` : `
-      <div class="mb-gallery">
-        ${folder.images.map((img,ii)=>mbImageCard(img,ii,folder.id,folder.images.length)).join('')}
-      </div>`}
-    </div>
-  </div>`).join('')}
+      ${open ? `<div class="mb-bento">
+        ${imgs.map(function(img,ii){ return mbImageCard(img,ii,fid,imgs.length); }).join('')}
+        ${mbAddTile(fid, imgs.length)}
+      </div>` : ''}
+    </section>`;
+  }).join('');
 
-  ${renderMobileStickyActionBar(`
-    <button class="btn btn-ghost" onclick="libQuickLoadMoodboards()">${LANG==='es'?'Importar':'Import'}</button>
-    <button class="btn btn-primary" onclick="openNewFolderModal()">${t('new_folder_btn')}</button>
-  `)}
+  el.innerHTML = head
+    + (nF === 0 ? emptyBoard : folders)
+    + mbPaletteCard(p)
+    + renderMobileStickyActionBar(
+        '<button class="btn" onclick="openNewFolderModal()">' + esc(t('new_folder_btn')) + '</button>'
+      + '<button class="btn btn-primary" onclick="mbUploadFromHeader()">' + esc(t('upload_images_btn')) + '</button>');
 
-  `;
+}
+
+/** Tarjeta "Paleta del evento": lee p.aiPalette, el campo que ya guarda el asistente. */
+function mbPaletteCard(p){
+  const isES = LANG==='es';
+  const title = isES ? 'Paleta del evento' : 'Event palette';
+  const pal = (Array.isArray(p.aiPalette) ? p.aiPalette : []).filter(function(c){ return c && mbIsHex(c.hex); });
+  const theme = p.aiTheme || '';
+
+  if(!pal.length){
+    const ghosts = ['var(--accent-l)','var(--champagne-l)','var(--sand-2)','var(--paper-2)']
+      .map(function(bg){ return '<span class="mb-ghost-chip" style="background:'+bg+'"></span>'; }).join('');
+    return `<section class="rd-card pad-lg mb-palette">
+      <div class="rd-card-title"><h2>${title}</h2></div>
+      <div class="mb-palette-empty">
+        <div class="mb-ghost-row">${ghosts}</div>
+        <div class="mb-palette-copy">
+          <p class="mb-palette-msg">${isES?'Todavía no hay una paleta guardada para este evento.':'No palette saved for this event yet.'}</p>
+          <p class="rd-hint">${isES?'Define el tema y los colores para que todo el equipo trabaje con la misma dirección visual.':'Set the theme and colours so the whole team works from the same visual direction.'}</p>
+        </div>
+        <button class="btn btn-sm mb-palette-cta" onclick="mbSuggestPalette()">${mbIco(MB_ICONS.spark,14)}${isES?'Sugerir tema y paleta':'Suggest theme & palette'}</button>
+      </div>
+    </section>`;
+  }
+
+  return `<section class="rd-card pad-lg mb-palette">
+    <div class="rd-card-title">
+      <h2>${title}</h2>
+      ${theme ? rdPill(theme, 'champagne', {sm:true}) : ''}
+    </div>
+    <div class="mb-swatches">
+      ${pal.map(function(c){
+        const hex = c.hex.trim();
+        return '<div class="mb-swatch">'
+          + '<div class="mb-swatch-chip" style="background:' + hex + '"></div>'
+          + '<div class="mb-swatch-name">' + esc(c.name || hex) + '</div>'
+          + '<div class="mb-swatch-hex rd-num">' + esc(hex.toUpperCase()) + '</div>'
+          + '</div>';
+      }).join('')}
+    </div>
+    <div class="mb-palette-foot">
+      <span class="rd-hint">${isES?'Guardada desde el asistente de IA':'Saved from the AI assistant'}</span>
+      <button class="btn btn-sm" onclick="mbSuggestPalette()">${mbIco(MB_ICONS.spark,14)}${isES?'Actualizar paleta':'Update palette'}</button>
+    </div>
+  </section>`;
+}
+
+/** Abre el asistente en la acción de tema y paleta (no duplica la lógica de IA). */
+function mbSuggestPalette(){
+  if(typeof openAIPanel !== 'function' || typeof startAIAction !== 'function'){
+    return toast(LANG==='es'?'El asistente no está disponible':'The assistant is not available','e');
+  }
+  openAIPanel();
+  setTimeout(function(){ startAIAction('moodboard'); }, 60);
+}
+
+/** Dispara el selector de archivos de una carpeta concreta. */
+function mbTriggerUpload(folderId){
+  var input = document.getElementById('mb-file-' + folderId);
+  if(input) input.click();
+  else toast(LANG==='es'?'Abre la carpeta para subir imágenes':'Open the folder to upload images','e');
+}
+
+/** Botón "Subir imágenes" de la cabecera: elige carpeta destino si hay varias. */
+function mbUploadFromHeader(){
+  var p = proj(); if(!p) return;
+  var mb = getMB(p);
+  var isES = LANG==='es';
+  if(!mb.folders.length) return openNewFolderModal();
+  if(mb.folders.length === 1) return mbPickUploadFolder(mb.folders[0].id, true);
+  openMo('<div class="mo-title">' + (isES?'¿A qué carpeta?':'Which folder?') + '</div>'
+    + '<div class="mb-pick-list">'
+    + mb.folders.map(function(f){
+        return '<button type="button" class="mb-pick" onclick="mbPickUploadFolder(\'' + mbAttrStr(f.id) + '\')">'
+          + '<span class="mb-fdot" style="background:' + mbSafeColor(f.color) + '"></span>'
+          + '<span class="mb-pick-name">' + esc(f.name) + '</span>'
+          + '<span class="mb-fcount rd-num">' + (f.images||[]).length + '</span>'
+          + '</button>';
+      }).join('')
+    + '</div>'
+    + '<div class="mo-foot"><button class="btn" onclick="closeMo()">' + esc(t('cancel')) + '</button></div>');
+}
+function mbPickUploadFolder(fid, skipClose){
+  if(!skipClose) closeMo();
+  if(mbOpenFolders[fid] === false){ mbOpenFolders[fid] = true; renderMoodboard(); }
+  setTimeout(function(){ mbTriggerUpload(fid); }, 40);
 }
 
 function mbImageCard(img, ii, folderId, total){
   const fKey = folderId || '__root__';
-  const fidJs = folderId ? `'${folderId}'` : 'null';
-  const spanClass = mbSpanClass(ii, total || 0);
-  const folderLabel = mbFolderLabel(folderId);
-  return `<div class="mb-card mb-bento-item ${spanClass}" draggable="true"
-      data-mbidx="${ii}" data-mbfolder="${fKey}"
-      ondragstart="mbDragStart(event,'${fKey}',${ii})"
+  const fidJs = folderId ? `'${mbAttrStr(folderId)}'` : 'null';
+  const isES = LANG==='es';
+  const alt = img.name || (isES?'Imagen del moodboard':'Moodboard image');
+  const moveLbl = isES?'Mover a otra carpeta':'Move to folder';
+  const openLb = `mbOpenLightboxIdx(${ii},${fidJs})`;
+  return `<figure class="mb-tile mb-shot ${mbTileClass(ii)}" draggable="true"
+      data-mbidx="${ii}" data-mbfolder="${esc(fKey)}"
+      ondragstart="mbDragStart(event,'${esc(fKey)}',${ii})"
       ondragover="event.preventDefault()"
-      ondrop="mbDrop(event,'${fKey}',${ii})">
-    <div class="media-zoom" style="position:relative;overflow:hidden;cursor:zoom-in;flex:1;min-height:0"
-         onclick="mbOpenLightboxIdx(${ii},${fidJs})">
-      <img src="${img.src}" class="media-zoom-img" alt="${esc(img.name||(LANG==='es'?'Imagen del moodboard':'Moodboard image'))}" style="width:100%;height:100%;object-fit:cover;display:block" loading="lazy">
-      <div class="media-zoom-overlay">
-        <svg width="28" height="28" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 3.5 3.5"/><path d="M11 8v6M8 11h6"/></svg>
-      </div>
-      <div class="mb-meta">
-        <div class="mb-meta-title">${esc(img.name||'Untitled image')}</div>
-        <div class="mb-meta-sub">${esc(folderLabel)}</div>
-      </div>
+      ondrop="mbDrop(event,'${esc(fKey)}',${ii})">
+    <img class="mb-shot-img" src="${esc(img.src)}" alt="${esc(alt)}" loading="lazy" onclick="${openLb}">
+    <button type="button" class="mb-shot-zoom" aria-label="${isES?'Ampliar imagen':'Zoom image'}" onclick="${openLb}">${mbIco(MB_ICONS.zoom,26,1.5)}</button>
+    <div class="mb-shot-actions">
+      <button type="button" class="mb-ibtn" title="${esc(moveLbl)}" aria-label="${esc(moveLbl)}"
+        onclick="event.stopPropagation();moveMBImageModal(${ii},${fidJs})">${mbIco(MB_ICONS.move,14)}</button>
+      <button type="button" class="mb-ibtn danger" title="${esc(t('delete'))}" aria-label="${esc(t('delete'))}"
+        onclick="event.stopPropagation();delMBImg(${ii},${fidJs})">${mbIco(MB_ICONS.trash,14)}</button>
     </div>
-    <div class="mb-card-actions">
-      <button class="icon-btn" onclick="event.stopPropagation();moveMBImageModal(${ii},${fidJs})" title="Move to folder">
-        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-      </button>
-      <button class="icon-btn icon-btn-danger"
-              onclick="event.stopPropagation();delMBImg(${ii},${fidJs})" title="Delete">
-        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg>
-      </button>
-    </div>
-    <div style="padding:8px 12px">
-      <input style="width:100%;border:none;border-bottom:1.5px solid var(--border);background:transparent;font-size:12px;font-family:inherit;padding:4px 0;outline:none;color:var(--text)"
-        value="${esc(img.name||'')}" placeholder="${t('add_label')}"
+    <figcaption class="mb-shot-cap">
+      <input class="mb-shot-name" value="${esc(img.name||'')}" placeholder="${esc(t('add_label'))}"
+        aria-label="${isES?'Nombre de la imagen':'Image name'}"
         onclick="event.stopPropagation()"
-        onfocus="this.style.borderColor='var(--gold)'"
-        onblur="this.style.borderColor='var(--border)';renameMBImg(${ii},${fidJs},this.value)">
-    </div>
-  </div>`;
+        onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"
+        onblur="mbRenameByCard(this.closest('[data-mbidx]'),this.value)">
+      <span class="mb-shot-sub">${esc(mbFolderLabel(folderId))}</span>
+    </figcaption>
+  </figure>`;
 }
 
 function mbOpenLightboxIdx(idx, folderId){
@@ -234,24 +386,30 @@ function toggleMBFolder(id){
   renderMoodboard();
 }
 
-function openNewFolderModal(){
-  const colors=['#f59e0b','#10b981','#a67c3d','#7c3aed','#ec4899','#ef4444','#06b6d4','#6b7280'];
-  openMo(`<div class="mo-title">${t('new_folder')}</div>
-  <div class="ig" style="margin-bottom:16px"><label>Folder Name *</label><input class="input" id="mf-name" placeholder="e.g. Floral Inspiration, Venue Ideas..."></div>
-  <div class="ig" style="margin-bottom:4px"><label>Folder Color</label></div>
-  <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">
-    ${colors.map((c,i)=>`<div onclick="selectMBFolderColor(this,'${c}')" data-color="${c}" style="width:30px;height:30px;border-radius:50%;background:${c};cursor:pointer;border:3px solid ${i===0?'#000':'transparent'};transition:all .15s"></div>`).join('')}
+// Paleta del rediseno; `preset` llega desde los mosaicos sugeridos del tablero vacio.
+var MB_FOLDER_COLORS = ['#E4572E','#F2870F','#F2A93B','#17A398','#3B7DD8','#7C5CE0','#C89B6A','#C4BBAD'];
+function openNewFolderModal(preset){
+  const isES = LANG==='es';
+  const name = (typeof preset === 'string') ? preset : '';
+  openMo(`<div class="mo-title">${esc(t('new_folder'))}</div>
+  <div class="ig" style="margin-bottom:16px">
+    <label>${isES?'Nombre de la carpeta':'Folder name'} *</label>
+    <input class="input" id="mf-name" value="${esc(name)}" placeholder="${isES?'Ej. Inspiración floral, Ideas de sede…':'e.g. Floral inspiration, Venue ideas…'}">
   </div>
-  <input type="hidden" id="mf-color" value="${colors[0]}">
+  <div class="ig" style="margin-bottom:8px"><label>${isES?'Color':'Colour'}</label></div>
+  <div class="mb-color-row">
+    ${MB_FOLDER_COLORS.map((c,i)=>`<button type="button" class="mb-color${i===0?' sel':''}" onclick="selectMBFolderColor(this,'${c}')" data-color="${c}" style="background:${c}" aria-label="${esc(c)}"></button>`).join('')}
+  </div>
+  <input type="hidden" id="mf-color" value="${MB_FOLDER_COLORS[0]}">
   <div class="mo-foot">
-    <button class="btn btn-ghost" onclick="closeMo()">Cancel</button>
-    <button class="btn btn-primary" onclick="createMBFolder()">Create Folder</button>
+    <button class="btn" onclick="closeMo()">${esc(t('cancel'))}</button>
+    <button class="btn btn-primary" onclick="createMBFolder()">${esc(t('create_folder_btn'))}</button>
   </div>`);
 }
 
 function selectMBFolderColor(el,c){
-  document.querySelectorAll('#mo-body [data-color]').forEach(d=>d.style.borderColor='transparent');
-  el.style.borderColor='#000';
+  document.querySelectorAll('#mo-body [data-color]').forEach(function(d){ d.classList.remove('sel'); });
+  el.classList.add('sel');
   document.getElementById('mf-color').value=c;
 }
 
@@ -267,11 +425,15 @@ function renameFolderModal(fid){
   const p=proj(); const mb=getMB(p);
   const folder=mb.folders.find(f=>f.id===fid);
   if(!folder)return;
-  openMo(`<div class="mo-title">Rename Folder</div>
-  <div class="ig" style="margin-bottom:16px"><label>Folder Name</label><input class="input" id="mfr-name" value="${esc(folder.name)}"></div>
+  const isES = LANG==='es';
+  openMo(`<div class="mo-title">${isES?'Renombrar carpeta':'Rename folder'}</div>
+  <div class="ig" style="margin-bottom:16px">
+    <label>${isES?'Nombre de la carpeta':'Folder name'}</label>
+    <input class="input" id="mfr-name" value="${esc(folder.name)}">
+  </div>
   <div class="mo-foot">
-    <button class="btn btn-ghost" onclick="closeMo()">Cancel</button>
-    <button class="btn btn-primary" onclick="saveFolderRename('${fid}')">Save</button>
+    <button class="btn" onclick="closeMo()">${esc(t('cancel'))}</button>
+    <button class="btn btn-primary" onclick="saveFolderRename('${mbAttrStr(fid)}')">${esc(t('save'))}</button>
   </div>`);
 }
 function saveFolderRename(fid){
@@ -326,11 +488,11 @@ async function addMBImages(input, folderId){
   }
   var MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per image
   const p=proj();const mb=getMB(p);
-  toast('Uploading images…');
+  toast(LANG==='es' ? 'Subiendo imágenes…' : 'Uploading images…');
   let uploaded=0;
   for(const f of files){
     if(f.size > MAX_FILE_SIZE){
-      toast(f.name + ' is too large (max 5MB)','e');
+      toast(f.name + (LANG==='es' ? ' pesa demasiado (máx. 5 MB)' : ' is too large (max 5MB)'),'e');
       continue;
     }
     try{
@@ -344,17 +506,22 @@ async function addMBImages(input, folderId){
   if(uploaded>0){
     if(folderId&&!mbOpenFolders[folderId])mbOpenFolders[folderId]=true;
     saveProj(p);renderMoodboard();
-    toast(uploaded+' image'+(uploaded>1?'s':'')+' added','s');
+    toast(LANG==='es' ? (uploaded+' imagen'+(uploaded>1?'es':'')+' añadida'+(uploaded>1?'s':''))
+                          : (uploaded+' image'+(uploaded>1?'s':'')+' added'),'s');
   }
 }
 
 function delMBImg(idx, folderId){
-  openMo(`<div class="mo-title" style="color:#ef4444">Delete Image</div>
-  <p style="font-size:14px;color:var(--muted);margin-bottom:24px">Are you sure you want to delete this image? This cannot be undone.</p>
-  <div class="mo-foot">
-    <button class="btn btn-ghost" onclick="closeMo()">Cancel</button>
-    <button class="btn btn-danger" onclick="closeMo();_doDelMBImg(${idx},${folderId===null||folderId===undefined?'null':`'${folderId}'`})">Delete</button>
-  </div>`);
+  var isES = LANG==='es';
+  var fid = (folderId === null || folderId === undefined) ? null : folderId;
+  openConfirmModal({
+    title: isES ? 'Eliminar imagen' : 'Delete image',
+    message: isES ? '¿Seguro que quieres eliminar esta imagen? Esta acción no se puede deshacer.'
+                  : 'Are you sure you want to delete this image? This cannot be undone.',
+    confirmLabel: t('delete'),
+    danger: true,
+    onConfirm: function(){ _doDelMBImg(idx, fid); }
+  });
 }
 async function _doDelMBImg(idx, folderId){
   const p=proj();const mb=getMB(p);
@@ -377,15 +544,18 @@ function renameMBImg(idx, folderId, name){
 function moveMBImageModal(idx, folderId){
   const p=proj();const mb=getMB(p);
   const folders=mb.folders;
-  openMo(`<div class="mo-title">Move Image to Folder</div>
-  <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">
-    ${folders.map(f=>`
-    <div onclick="doMoveMBImage(${idx},'${folderId||'__root__'}','${f.id}')" class="option-card">
-      <svg width="16" height="16" fill="${f.color||'#f59e0b'}" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-      ${esc(f.name)} <span style="color:var(--muted);font-size:11px">(${f.images.length})</span>
-    </div>`).join('')}
+  const isES = LANG==='es';
+  openMo(`<div class="mo-title">${isES?'Mover imagen a otra carpeta':'Move image to folder'}</div>
+  <div class="mb-pick-list">
+    ${folders.map(function(f){
+      return '<button type="button" class="mb-pick" onclick="doMoveMBImage(' + idx + ',\'' + mbAttrStr(folderId||'__root__') + '\',\'' + mbAttrStr(f.id) + '\')">'
+        + '<span class="mb-fdot" style="background:' + mbSafeColor(f.color) + '"></span>'
+        + '<span class="mb-pick-name">' + esc(f.name) + '</span>'
+        + '<span class="mb-fcount rd-num">' + (f.images||[]).length + '</span>'
+        + '</button>';
+    }).join('')}
   </div>
-  <div class="mo-foot"><button class="btn btn-ghost" onclick="closeMo()">Cancel</button></div>`);
+  <div class="mo-foot"><button class="btn" onclick="closeMo()">${esc(t('cancel'))}</button></div>`);
 }
 
 function doMoveMBImage(idx, fromId, toId){
@@ -792,9 +962,9 @@ function openConfirmModal(opts){
   var btnClass = o.danger !== false ? 'btn btn-danger' : 'btn btn-primary';
   openMo(
     '<div class="mo-title">' + esc(title) + '</div>'
-    + '<div style="font-size:14px;color:var(--text);margin-bottom:8px;line-height:1.5">' + esc(msg) + '</div>'
+    + '<p class="ui-confirm-msg">' + esc(msg) + '</p>'
     + '<div class="mo-foot">'
-    + '<button class="btn btn-ghost" onclick="closeMo()">' + esc(cancelLabel) + '</button>'
+    + '<button class="btn" onclick="closeMo()">' + esc(cancelLabel) + '</button>'
     + '<button class="' + btnClass + '" id="_confirm-action-btn">' + esc(confirmLabel) + '</button>'
     + '</div>'
   );
@@ -916,7 +1086,7 @@ function showLoading(msg){
   _loadingEl.className = 'eventos-loading-overlay';
   _loadingEl.innerHTML = '<div class="eventos-loading-box">'
     + '<div class="eventos-spinner"></div>'
-    + '<div style="font-size:13px;color:var(--text);margin-top:10px">' + esc(msg || t('loading')) + '</div>'
+    + '<div class="ui-loading-msg">' + esc(msg || t('loading')) + '</div>'
     + '</div>';
   document.body.appendChild(_loadingEl);
   requestAnimationFrame(function(){ if(_loadingEl) _loadingEl.classList.add('show'); });
@@ -1770,13 +1940,15 @@ window.addEventListener('DOMContentLoaded', function(){
 (function(){
   var _op = window.openProject;
   if(_op) window.openProject = function(){
-    _op.apply(this, arguments);
+    var r = _op.apply(this, arguments);
     setTimeout(updateAIFabVisibility, 100);
+    return r;   // openProject es async: sin este return se pierde la promesa
   };
   var _rt = window.openTab;
   if(_rt) window.openTab = function(){
-    _rt.apply(this, arguments);
+    var r = _rt.apply(this, arguments);
     if(_aiOn) renderAIHome(); // refresh context bar
+    return r;
   };
 })();
 
@@ -1832,11 +2004,11 @@ function openFeedbackModal(){
       <input type="file" class="input" id="fb-file" accept="image/*" style="padding:8px">
     </div>
   </div>
-  <div style="font-size:11px;color:var(--muted);margin-top:8px;margin-bottom:12px">${isES
+  <div class="rd-hint" style="margin:10px 0 14px;line-height:1.5">${isES
     ?'Solo recopilamos la información mostrada arriba + contexto técnico (página actual, versión de la app).'
     :'We only collect the information above + technical context (current page, app version).'}</div>
   <div class="mo-foot">
-    <button class="btn btn-ghost" onclick="closeMo()">${t('cancel')}</button>
+    <button class="btn" onclick="closeMo()">${esc(t('cancel'))}</button>
     <button class="btn btn-primary" onclick="submitFeedback()">${isES?'Enviar':'Send'}</button>
   </div>`);
 }

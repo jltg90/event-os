@@ -77,8 +77,8 @@ function isEventLayoutViewOnly(p){
 // ─── Multi-layout support ───────────────────────────────────────────────────
 function ensureEventLayouts(p){
   if(!p) return [];
-  if(!p.eventLayouts){
-    p.eventLayouts = [];
+  if(!p.eventLayouts || !p.eventLayouts.length){
+    p.eventLayouts = p.eventLayouts || [];
     if(p.layoutExport){
       p.eventLayouts.push({
         id: 'el_' + Date.now(),
@@ -529,6 +529,7 @@ function _lvZoomOut(){ _lvZoomSet(_lvZoom - 0.25); }
 function renderEventLayoutViewer(p){
   var el=_layoutEl();
   if(!el) return;
+  var es = LANG==='es';
   var exp = p.layoutExport || null;
   var missingSource = false;
   if(exp && exp.layoutId && typeof getLib==='function'){
@@ -536,7 +537,8 @@ function renderEventLayoutViewer(p){
   }
   var summary = exp && exp.summary ? exp.summary : null;
   var exportedAt = exp && exp.exportedAt ? new Date(exp.exportedAt) : null;
-  var dateLabel = exportedAt && !isNaN(exportedAt) ? exportedAt.toLocaleDateString(LANG==='es'?'es-MX':'en-US',{year:'numeric',month:'long',day:'numeric'}) : '';
+  var dateLabel = exportedAt && !isNaN(exportedAt)
+    ? exportedAt.toLocaleDateString(es?'es-MX':'en-US',{year:'numeric',month:'long',day:'numeric'}) : '';
 
   var layouts = ensureEventLayouts(p);
 
@@ -551,31 +553,105 @@ function renderEventLayoutViewer(p){
   }
 
   if(!exp){
-    el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:28px"><div style="max-width:560px;width:100%;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:34px;text-align:center;box-shadow:var(--sh-sm)"><div style="width:76px;height:76px;border-radius:50%;background:var(--gold-l);margin:0 auto 20px;display:flex;align-items:center;justify-content:center;color:var(--gold-h)"><svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div><div style="font-family:Cormorant Garamond,serif;font-size:30px;font-weight:700;margin-bottom:10px">'+(LANG==="es"?"No hay layout exportado":"No exported layout yet")+'</div><div style="color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:24px">'+(LANG==="es"?"Los layouts ahora se crean y editan en la Biblioteca. Crea uno o importa uno a este evento para verlo aqui.":"Layouts are now created and edited in the Library. Create one or import one into this event to view it here.")+'</div><div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap"><button class="btn btn-primary" onclick="openLayoutLibraryPicker()">'+(LANG==="es"?"Importa tu layout":"Import your layout")+'</button><button class="btn btn-ghost" onclick="openLayoutLibraryAndCreate()">'+(LANG==="es"?"Crear primer layout":"Create First Layout")+'</button></div></div></div>';
+    el.innerHTML = '<div class="ly-view"><div class="rd-card pad-lg" style="max-width:560px;margin:40px auto;text-align:center">'
+      + '<div style="width:72px;height:72px;border-radius:50%;background:var(--accent-l);margin:0 auto 20px;display:flex;align-items:center;justify-content:center;color:var(--accent-deep)">'
+      +   '<svg width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div>'
+      + '<h2 class="rd-h2" style="margin-bottom:10px">'+(es?'No hay plano exportado':'No exported plan yet')+'</h2>'
+      + '<p class="rd-sub" style="margin:0 auto 22px;max-width:420px">'+(es
+          ? 'Los planos se crean y editan en la Biblioteca. Crea uno o impórtalo a este evento para verlo aquí.'
+          : 'Plans are created and edited in the Library. Create one or import it into this event to see it here.')+'</p>'
+      + '<div class="rd-actions" style="justify-content:center">'
+      +   '<button class="btn btn-primary" onclick="openLayoutLibraryPicker()">'+(es?'Importa tu layout':'Import your layout')+'</button>'
+      +   '<button class="btn" onclick="openLayoutLibraryAndCreate()">'+(es?'Crear primer plano':'Create first plan')+'</button>'
+      + '</div></div></div>';
     return;
   }
 
+  var COLS = 'style="grid-template-columns:1.4fr 1fr 70px 1.6fr"';
   var summaryRows = summary && summary.elements && summary.elements.length
     ? summary.elements.map(function(row){
-        var labels = row.labels && row.labels.length ? row.labels.join(', ') : '?';
-        return '<tr><td style="padding:10px 12px;font-weight:600">'+esc(row.type)+'</td><td style="padding:10px 12px;color:var(--muted)">'+esc(row.dimensions)+'</td><td style="padding:10px 12px;text-align:center">'+row.qty+'</td><td style="padding:10px 12px;color:var(--muted)">'+esc(labels)+'</td></tr>';
+        var labels = row.labels && row.labels.length ? row.labels.join(', ') : '-';
+        return '<div class="rd-row" '+COLS+'>'
+          + '<div class="rd-cell-main">'+esc(row.type)+'</div>'
+          + '<div class="rd-cell rd-num">'+esc(row.dimensions)+'</div>'
+          + '<div class="rd-cell rd-num" style="text-align:center">'+esc(String(row.qty))+'</div>'
+          + '<div class="rd-cell">'+esc(labels)+'</div>'
+        + '</div>';
       }).join('')
-    : '<tr><td colspan="4" style="padding:14px 12px;color:var(--muted);text-align:center">'+(LANG==='es'?'No hay elementos en este layout':'No elements in this layout')+'</td></tr>';
-  _lvZoom = 1;
-  var isES = LANG==='es';
-  var imgSection = exp.image
-    ? '<div style="display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-bottom:10px">'
-        +'<button class="btn btn-ghost btn-sm" onclick="_lvZoomOut()" title="'+(isES?'Alejar':'Zoom out')+'" style="padding:3px 10px;font-size:17px;line-height:1">−</button>'
-        +'<span id="lv-zoom-lbl" style="font-size:11px;font-weight:700;color:var(--light);min-width:40px;text-align:center;letter-spacing:.04em">100%</span>'
-        +'<button class="btn btn-ghost btn-sm" onclick="_lvZoomIn()" title="'+(isES?'Acercar':'Zoom in')+'" style="padding:3px 10px;font-size:17px;line-height:1">+</button>'
-        +'<button class="btn btn-ghost btn-sm" onclick="_lvZoomSet(1)" style="font-size:11px;padding:3px 9px">'+(isES?'Ajustar':'Fit')+'</button>'
-      +'</div>'
-      +'<div id="lv-viewport" style="overflow:auto;max-height:72vh;border-radius:14px;border:1px solid var(--border);background:#fff;cursor:zoom-in">'
-        +'<img id="lv-img" src="'+exp.image+'" alt="'+esc(exp.layoutName||'Layout')+'" style="display:block;width:100%;height:auto;border-radius:14px">'
-      +'</div>'
-    : '<div style="padding:44px;text-align:center;color:var(--muted)">'+(isES?'No se pudo generar la imagen del layout':'Could not generate the layout image')+'</div>';
+    : '<div class="rd-row" style="grid-template-columns:1fr"><div class="rd-cell" style="text-align:center;padding:8px 0">'
+      + (es?'No hay elementos en este plano':'No elements in this plan')+'</div></div>';
 
-  el.innerHTML = '<div style="max-width:1180px;margin:0 auto;padding:24px;width:100%"><div style="display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start;margin-bottom:20px"><div style="flex:1;min-width:260px"><div style="font-family:Cormorant Garamond,serif;font-size:32px;font-weight:700;margin-bottom:6px">'+esc(exp.layoutName || (isES?'Layout exportado':'Exported layout'))+'</div><div style="font-size:13px;color:var(--muted);line-height:1.6">'+(isES?'Vista de solo lectura del layout exportado desde la Biblioteca.':'Read-only view of the layout exported from the Library.')+(dateLabel?(' '+(isES?'Exportado el ':'Exported on ')+dateLabel+'.'):'')+'</div>'+(missingSource?'<div style="margin-top:12px;padding:10px 12px;border:1px solid rgba(239,68,68,.25);background:rgba(239,68,68,.08);border-radius:10px;font-size:12px;color:var(--danger)">'+(isES?'El layout fuente ya no existe en la Biblioteca. Puedes ver esta exportacion, pero no actualizarla.':'The source layout no longer exists in the Library. You can still view this export, but you cannot refresh it.')+'</div>':'')+'</div><div style="display:flex;flex-wrap:wrap;gap:8px">'+(missingSource?'':'<button class="btn btn-ghost" onclick="openEventLayoutInLibrary()">'+(isES?'Editar en Biblioteca':'Edit in Library')+'</button>')+'<button class="btn btn-ghost" onclick="exportEventLayoutSnapshot()" style="display:flex;align-items:center;gap:5px"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>'+(isES?'Exportar PDF':'Export PDF')+'</button>'+'<div id="ev-layouts-wrap" style="position:relative"><button id="ev-layouts-btn" class="btn btn-ghost" onclick="openEventLayoutsPanel()" style="display:flex;align-items:center;gap:6px"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>'+(isES?'Layouts':'Layouts')+' ('+layouts.length+')</button></div></div></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px"><div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">'+(isES?'Mesas':'Tables')+'</div><div style="font-size:24px;font-weight:700">'+((summary&&summary.tables)||0)+'</div></div><div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">'+(isES?'Invitados':'Guests')+'</div><div style="font-size:24px;font-weight:700">'+((summary&&summary.guests)||'-')+'</div></div></div><div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;box-shadow:var(--sh-sm);margin-bottom:18px">'+imgSection+'</div><div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;box-shadow:var(--sh-sm)"><div style="font-family:Cormorant Garamond,serif;font-size:24px;font-weight:700;margin-bottom:12px">'+(isES?'Resumen de Elementos':'Element Summary')+'</div><div style="overflow:auto"><table style="width:100%;border-collapse:collapse"><thead><tr style="background:var(--bg2)"><th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--muted)">'+(isES?'Elemento':'Element')+'</th><th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--muted)">'+(isES?'Dimensiones':'Dimensions')+'</th><th style="padding:10px 12px;text-align:center;font-size:11px;text-transform:uppercase;color:var(--muted)">'+(isES?'Cantidad':'Qty')+'</th><th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--muted)">'+(isES?'Etiquetas':'Labels')+'</th></tr></thead><tbody>'+summaryRows+'</tbody></table></div></div>'+renderEventLayoutQuoteSection(p)+'</div>';
+  _lvZoom = 1;
+  var imgSection = exp.image
+    ? '<div class="ly-view-zoom">'
+        +'<button class="btn btn-sm" onclick="_lvZoomOut()" title="'+(es?'Alejar':'Zoom out')+'">&minus;</button>'
+        +'<span id="lv-zoom-lbl" class="ly-zoom-lbl">100%</span>'
+        +'<button class="btn btn-sm" onclick="_lvZoomIn()" title="'+(es?'Acercar':'Zoom in')+'">+</button>'
+        +'<button class="btn btn-sm" onclick="_lvZoomSet(1)">'+(es?'Ajustar':'Fit')+'</button>'
+      +'</div>'
+      +'<div id="lv-viewport" class="ly-view-frame">'
+        +'<img id="lv-img" src="'+exp.image+'" alt="'+esc(exp.layoutName||'Layout')+'">'
+      +'</div>'
+    : '<div class="ly-view-empty">'+(es?'No se pudo generar la imagen del plano':'Could not generate the plan image')+'</div>';
+
+  var tablesN = (summary && summary.tables) || 0;
+  var guestsN = (function(){
+    var g = summary ? summary.guests : null;
+    if(Array.isArray(g)) return g.length;
+    if(g==null || g==='') return (p.guests||[]).length;
+    var n = Number(g);
+    return isNaN(n) ? (p.guests||[]).length : n;
+  })();
+  var elementsN = summary && summary.elements
+    ? summary.elements.reduce(function(a,r){ return a + (Number(r.qty)||0); }, 0) : 0;
+
+  var actions = (missingSource?'':'<button class="btn btn-sm" onclick="openEventLayoutInLibrary()">'+(es?'Editar en Biblioteca':'Edit in Library')+'</button>')
+    + '<button class="btn btn-sm" onclick="exportEventLayoutSnapshot()">'
+    +   '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>'
+    +   (es?'Exportar PDF':'Export PDF')+'</button>'
+    + '<div id="ev-layouts-wrap" style="position:relative">'
+    +   '<button id="ev-layouts-btn" class="btn btn-primary btn-sm" onclick="openEventLayoutsPanel()">'
+    +     '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>'
+    +     (es?'Planos':'Plans')+' ('+layouts.length+')</button></div>';
+
+  el.innerHTML = '<div class="ly-view">'
+    + '<div class="rd-tab-head">'
+    +   '<div style="min-width:260px;flex:1">'
+    +     '<h2 class="rd-h2">'+esc(exp.layoutName || (es?'Plano exportado':'Exported plan'))+'</h2>'
+    +     '<p class="rd-sub">'+(es?'Vista de solo lectura del plano exportado desde la Biblioteca.':'Read-only view of the plan exported from the Library.')
+    +       (dateLabel?(' '+(es?'Exportado el ':'Exported on ')+esc(dateLabel)+'.'):'')+'</p>'
+    +     (missingSource?'<div class="ly-view-warn">'+(es
+            ?'El plano original ya no existe en la Biblioteca. Puedes verlo, pero no actualizarlo.'
+            :'The source plan no longer exists in the Library. You can view it, but not refresh it.')+'</div>':'')
+    +   '</div>'
+    +   '<div class="rd-actions">'+actions+'</div>'
+    + '</div>'
+    + '<div class="rd-metrics">'
+    +   rdMetric({ label: es?'Mesas':'Tables', value: tablesN,
+                   icon:'<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/></svg>',
+                   iconBg:'var(--accent-l)', iconFg:'var(--accent-deep)' })
+    +   rdMetric({ label: es?'Invitados':'Guests', value: guestsN,
+                   icon:'<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><path d="M16 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 20v-2a4 4 0 0 0-3-3.87"/></svg>',
+                   iconBg:'var(--info-l)', iconFg:'var(--info)' })
+    +   rdMetric({ label: es?'Elementos':'Items', value: elementsN,
+                   icon:'<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>',
+                   iconBg:'var(--champagne-l)', iconFg:'var(--champagne-deep)' })
+    + '</div>'
+    + '<div class="rd-card pad" style="margin-bottom:18px">'+imgSection+'</div>'
+    + '<div class="rd-table" style="margin-bottom:18px">'
+    +   '<div class="rd-card-head"><span class="rd-card-dot"></span><h2>'+(es?'Resumen de elementos':'Element summary')+'</h2></div>'
+    +   '<div class="rd-table-scroll"><div style="min-width:640px">'
+    +     '<div class="rd-thead" '+COLS+'>'
+    +       '<div>'+(es?'Elemento':'Element')+'</div>'
+    +       '<div>'+(es?'Dimensiones':'Dimensions')+'</div>'
+    +       '<div style="text-align:center">'+(es?'Cant.':'Qty')+'</div>'
+    +       '<div>'+(es?'Etiquetas':'Labels')+'</div>'
+    +     '</div>'
+    +     summaryRows
+    +   '</div></div>'
+    + '</div>'
+    + renderEventLayoutQuoteSection(p)
+    + '</div>';
 
   var lv = document.getElementById('lv-viewport');
   if(lv){
@@ -729,6 +805,510 @@ function openLayoutImportModal(){
     +'</div>'
     +'<div class="mo-foot"><button class="btn btn-ghost" onclick="closeMo()">'+t('cancel')+'</button></div>');
 }
+/* ═══ Rediseño 2026-08 · cáscara del editor de planos ══════════════════
+   Solo presentación: el motor del lienzo (arrastre, zoom, snap, medición,
+   rotación, render de mesas y sillas) no se toca.                        */
+
+function _lyIco(path, size, sw){
+  return '<svg width="'+(size||14)+'" height="'+(size||14)+'" viewBox="0 0 24 24" fill="none" '
+    +'stroke="currentColor" stroke-width="'+(sw||1.9)+'" stroke-linecap="round" stroke-linejoin="round">'+path+'</svg>';
+}
+
+var _LY_P = {
+  table:   '<circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="3.6" r="1.4"/><circle cx="12" cy="20.4" r="1.4"/><circle cx="3.6" cy="12" r="1.4"/><circle cx="20.4" cy="12" r="1.4"/>',
+  element: '<rect x="3" y="7" width="18" height="10" rx="1.8"/><path d="M8 7v10M16 7v10"/>',
+  image:   '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m3 16 4.5-4.5L12 16l3-3 6 5"/><circle cx="8.5" cy="8.5" r="1.2"/>',
+  chair:   '<path d="M7 4v7h10V4"/><path d="M5 11h14"/><path d="M8 11v9M16 11v9"/>',
+  flower:  '<circle cx="12" cy="8.5" r="2.2"/><path d="M12 6.3c0-2 3-2.4 3-.3M12 6.3c0-2-3-2.4-3-.3M14.2 8.5c2 0 2.4 3 .3 3M9.8 8.5c-2 0-2.4 3-.3 3"/><path d="M12 12v8"/>',
+  info:    '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><circle cx="12" cy="8" r=".7" fill="currentColor" stroke="none"/>',
+  down:    '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/>',
+  save:    '<path d="M4 4h11l5 5v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/><path d="M8 4v5h7"/><rect x="8" y="14" width="8" height="6"/>',
+  fit:     '<path d="M3 3h6M3 3v6M21 3h-6M21 3v6M3 21h6M3 21v-6M21 21h-6M21 21v-6"/>',
+  fitsel:  '<rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="4 2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+  ruler:   '<path d="M2 2 22 22M6 2v4M2 6h4M18 22v-4M22 18h-4"/>',
+  close:   '<path d="M18 6 6 18M6 6l12 12"/>',
+  edit:    '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/>',
+  rotL:    '<path d="M9 10H4V5"/><path d="M20 11a8 8 0 1 0-2.34 5.66L20 14"/>',
+  rotR:    '<path d="M15 10h5V5"/><path d="M4 11a8 8 0 1 1 2.34 5.66L4 14"/>',
+  users:   '<path d="M16 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 20v-2a4 4 0 0 0-3-3.87"/>'
+};
+
+var _LY_ALIGN = [
+  ['left',  '<path d="M4 6h16M4 12h10M4 18h13"/><path d="M2 4v16"/>'],
+  ['cx',    '<path d="M8 6h8M5 12h14M7 18h10"/><path d="M12 2v20" stroke-dasharray="2 2"/>'],
+  ['right', '<path d="M4 6h16M10 12h10M7 18h13"/><path d="M22 4v16"/>'],
+  ['top',   '<path d="M6 8v12M12 4v16M18 10v10"/><path d="M4 2h16"/>'],
+  ['cy',    '<path d="M6 7v10M12 4v16M18 9v6"/><path d="M4 12h16" stroke-dasharray="2 2"/>'],
+  ['bottom','<path d="M6 4v12M12 8v12M18 4v12"/><path d="M4 22h16"/>'],
+  ['dist-h','<rect x="1.5" y="7" width="4" height="10" rx="1"/><rect x="10" y="9" width="4" height="6" rx="1"/><rect x="18.5" y="6" width="4" height="12" rx="1"/>'],
+  ['dist-v','<rect x="7" y="1.5" width="10" height="4" rx="1"/><rect x="9" y="10" width="6" height="4" rx="1"/><rect x="6" y="18.5" width="12" height="4" rx="1"/>']
+];
+
+function _lyAlignLabel(mode){
+  var es = LANG==='es';
+  var m = {
+    'left':   es?'Alinear a la izquierda':'Align left',
+    'cx':     es?'Centrar horizontalmente':'Center horizontally',
+    'right':  es?'Alinear a la derecha':'Align right',
+    'top':    es?'Alinear arriba':'Align top',
+    'cy':     es?'Centrar verticalmente':'Center vertically',
+    'bottom': es?'Alinear abajo':'Align bottom',
+    'dist-h': es?'Distribuir horizontalmente':'Distribute horizontally',
+    'dist-v': es?'Distribuir verticalmente':'Distribute vertically'
+  };
+  return m[mode] || mode;
+}
+
+function _lyIsTableItem(item){
+  if(!item || !item.shape) return false;
+  if(String(item.shape).indexOf('table') !== -1) return true;
+  return !!(typeof LSHAPES_M!=='undefined' && LSHAPES_M[item.shape] && LSHAPES_M[item.shape]._isCustomTable);
+}
+
+function _lyCounts(){
+  var items = LState.items || [];
+  var tables = items.filter(_lyIsTableItem).length;
+  return {
+    total: items.length,
+    tables: tables,
+    others: items.length - tables,
+    chairs: items.reduce(function(s,i){ return s + (Number(i.chairs)||0); }, 0),
+    centerpieces: items.filter(function(i){ return i.centerpiece && i.centerpiece!=='none'; }).length
+  };
+}
+
+/* Invitados con mesa asignada en el evento (no aplica al editor de biblioteca). */
+function _lySeatedGuests(){
+  if(isLibraryLayoutEditing()) return null;
+  var p = (typeof proj==='function') ? proj() : null;
+  if(!p || p.id==='__library__' || p.id==='__lib_layout__') return null;
+  if(!p.guests || !p.guests.length) return null;
+  return p.guests.filter(function(g){ return g && g.table && String(g.table).trim(); }).length;
+}
+
+function _lyToolBtn(icon, bg, fg, label, count, onclick, id){
+  return '<button class="rd-tool ly-tool"'+(id?' id="'+id+'"':'')+' onclick="'+onclick+'" title="'+esc(label)+'">'
+    + '<span class="rd-tool-ico" style="background:'+bg+';color:'+fg+'">'+icon+'</span>'
+    + '<span class="ly-tool-lbl">'+esc(label)+'</span>'
+    + (count!=null && count!=='' ? '<span class="rd-tool-cnt rd-num">'+esc(String(count))+'</span>' : '')
+    + '</button>';
+}
+
+/* ─── Panel izquierdo: herramientas + plano de fondo ─────────────────── */
+function _lyLeftPanel(){
+  var es = LANG==='es', c = _lyCounts();
+  var fp = LState.floorplan || {};
+  var hasFp = !!fp.img;
+  var op = Math.round((fp.opacity==null?0.4:fp.opacity)*100);
+
+  var h = '<aside class="rd-card ly-side">'
+    + '<span class="rd-label ly-side-title">'+(es?'Agregar elemento':'Add element')+'</span>'
+    + _lyToolBtn(_lyIco(_LY_P.table),   'var(--accent-l)',   'var(--accent-deep)', es?'Mesa':'Table',                     c.tables,       'openAddTableModal()')
+    + _lyToolBtn(_lyIco(_LY_P.element), 'var(--info-l)',     'var(--info)',        es?'Elemento de evento':'Event element', c.others,      'openAddEventElementModal()')
+    + _lyToolBtn(_lyIco(_LY_P.image),   'var(--success-l)',  'var(--success)',     hasFp?(es?'Reemplazar plano':'Replace plan'):(es?'Plano (imagen)':'Plan (image)'), '', 'triggerFloorplanUpload()')
+    + _lyToolBtn(_lyIco(_LY_P.chair),   'var(--warn-l)',     'var(--warn)',        es?'Gestionar sillas':'Manage chairs',   c.chairs,      'openChairEditor()')
+    + _lyToolBtn(_lyIco(_LY_P.flower),  'var(--purple-l)',   'var(--purple)',      es?'Gestionar centros de mesa':'Manage centerpieces', c.centerpieces, 'openCenterpieceEditor()')
+    + '<div class="ly-sep"></div>'
+    + '<span class="rd-label ly-side-title">'+(es?'Plano de fondo':'Background plan')+'</span>';
+
+  if(!hasFp){
+    h += '<div class="ly-fp">'
+      + '<button class="ly-mini-btn" onclick="triggerFloorplanUpload()">'+(es?'Cargar imagen':'Upload image')+'</button>'
+      + '<div class="ly-fp-note">'+(es
+          ? 'Sube el plano del salón para calcarlo y calibrar la escala real.'
+          : 'Upload the venue plan to trace it and calibrate the real scale.')+'</div>'
+      + '</div></aside>';
+    return h;
+  }
+
+  h += '<div class="ly-fp" id="lbtn-floorplan">';
+  if(LState.scaleMode){
+    h += '<div class="ly-fp-note" style="color:var(--accent-deep);font-weight:600">'
+       + (es?'Calibrando escala…':'Calibrating scale…')+'</div>'
+       + '<button class="ly-mini-btn" onclick="cancelScaleMode()">'+(es?'Cancelar':'Cancel')+'</button>';
+  } else {
+    h += '<button class="ly-mini-btn" onclick="triggerFloorplanUpload()">'+(es?'Cambiar imagen':'Change image')+'</button>'
+      + '<div class="ly-fp-row">'
+      +   '<button class="ly-mini-btn" onclick="startScaleMode()">'+(es?'Escalar':'Scale')+'</button>'
+      +   '<button class="ly-mini-btn'+(fp.locked?' on':'')+'" onclick="toggleFloorplanLock()">'
+      +     (fp.locked?(es?'Desbloquear':'Unlock'):(es?'Bloquear':'Lock'))+'</button>'
+      + '</div>'
+      + '<div class="ly-fp-op" onclick="event.stopPropagation()">'
+      +   '<div class="ly-fp-op-top">'
+      +     '<span>'+(t('opacity_lbl')||(es?'Opacidad':'Opacity'))+'</span>'
+      +     '<input id="floorplan-opacity-num" type="number" min="0" max="100" step="1" value="'+op+'" '
+      +       'oninput="setFloorplanOpacity(this.value,false)" onkeydown="if(event.key===\'Enter\')this.blur();event.stopPropagation();" onclick="event.stopPropagation()">'
+      +   '</div>'
+      +   '<input id="floorplan-opacity-range" type="range" min="0" max="100" step="1" value="'+op+'" '
+      +     'oninput="setFloorplanOpacity(this.value,true)" onchange="setFloorplanOpacity(this.value,true)">'
+      + '</div>'
+      + '<button class="ly-mini-btn danger" onclick="removeFloorplan()">'+(es?'Quitar plano':'Remove plan')+'</button>';
+  }
+  h += '</div></aside>';
+  return h;
+}
+
+/* ─── Barra de herramientas del lienzo ───────────────────────────────── */
+function _lyToolbar(p){
+  var es = LANG==='es', c = _lyCounts();
+  var zoomPct = Math.round(LState.zoom*100);
+
+  var h = '<div class="layout-toolbar ly-toolbar">';
+
+  /* Agregar elemento + menú */
+  h += '<div style="position:relative;flex-shrink:0">'
+    + '<button id="add-element-trigger" class="ly-tbtn dark" onclick="toggleAddElementMenu()">+ '+(es?'Agregar elemento':'Add element')+'</button>'
+    + '<div id="add-element-menu" class="ly-menu">'
+    +   '<button onclick="selectAddElement(\'table\')">'+_lyIco(_LY_P.table,14)+(es?'Mesa':'Table')+'</button>'
+    +   '<button onclick="selectAddElement(\'event-element\')">'+_lyIco(_LY_P.element,14)+(es?'Elemento de evento':'Event element')+'</button>'
+    +   '<button onclick="selectAddElement(\'floorplan\')">'+_lyIco(_LY_P.image,14)
+    +     (LState.floorplan.img?(es?'Reemplazar plano':'Replace plan'):(es?'Plano (imagen)':'Plan (image)'))+'</button>'
+    +   '<div class="ly-menu-sep"></div>'
+    +   '<button onclick="openChairEditor()">'+_lyIco(_LY_P.chair,14)+(es?'Gestionar sillas':'Manage chairs')+'</button>'
+    +   '<button onclick="openCenterpieceEditor()">'+_lyIco(_LY_P.flower,14)+(es?'Gestionar centros de mesa':'Manage centerpieces')+'</button>'
+    + '</div></div>';
+
+  /* Zoom */
+  h += '<div id="layout-zoom-bar" class="ly-group">'
+    + '<button class="ly-stepbtn" title="'+(es?'Alejar':'Zoom out')+'" onclick="lZoom(-0.1)">&minus;</button>'
+    + '<input id="layout-zoom-input" class="ly-numin" type="text" style="width:48px" value="'+zoomPct+'%" '
+    +   'onkeydown="if(event.key===\'Enter\'){lZoomTo(this.value);this.blur();}" onblur="lZoomTo(this.value)" onfocus="this.select()">'
+    + '<button class="ly-stepbtn" title="'+(es?'Acercar':'Zoom in')+'" onclick="lZoom(0.1)">+</button>'
+    + '</div>';
+
+  /* Encuadre */
+  h += '<button id="lbtn-zoom-fit" class="ly-tbtn icon" title="'+(es?'Zoom al contenido':'Zoom to fit')+'" onclick="lZoom(0,\'fit\')">'+_lyIco(_LY_P.fit,14,2)+'</button>'
+    + '<button id="lbtn-zoom-sel" class="ly-tbtn icon" title="'+(es?'Zoom a la selección':'Zoom to selection')+'" onclick="lZoom(0,\'sel\')">'+_lyIco(_LY_P.fitsel,14,2)+'</button>';
+
+  h += '<div class="ly-tb-sep"></div>';
+
+  /* Tamaño de fuente */
+  h += '<div id="lbtn-font" class="ly-group px">'
+    + '<span class="ly-glabel">Aa</span>'
+    + '<button class="ly-stepbtn" title="'+(es?'Reducir texto':'Decrease label size')+'" onclick="changeFontSize(-1)">&minus;</button>'
+    + '<input id="toolbar-font-size" class="ly-numin" type="number" min="5" max="99" style="width:34px" placeholder="--" '
+    +   'oninput="setFontSizeDirect(+this.value)" onkeydown="if(event.key===\'Enter\')this.blur();event.stopPropagation();" onclick="event.stopPropagation()">'
+    + '<button class="ly-stepbtn" title="'+(es?'Aumentar texto':'Increase label size')+'" onclick="changeFontSize(1)">+</button>'
+    + '</div>';
+
+  /* Alinear / distribuir */
+  h += '<div id="lbtn-align" class="ly-group px">'
+    + '<span class="ly-glabel">'+t('align')+'</span>'
+    + _LY_ALIGN.map(function(a){
+        return '<button class="ly-stepbtn" title="'+esc(_lyAlignLabel(a[0]))+'" onclick="alignSelected(\''+a[0]+'\')">'+_lyIco(a[1],14,2)+'</button>';
+      }).join('')
+    + '</div>';
+
+  /* Rotación */
+  h += '<div id="lbtn-rotate" class="ly-group px">'
+    + '<button class="ly-stepbtn" title="'+(es?'Rotar a la izquierda':'Rotate counter-clockwise')+'" onclick="doRotate(-getRotateStep())">'+_lyIco(_LY_P.rotL,15)+'</button>'
+    + '<input id="rotate-step" class="ly-numin boxed" type="number" value="90" min="1" step="1" style="width:38px" '
+    +   'title="'+(es?'Grados por paso':'Degrees per step')+'" onclick="event.stopPropagation()">'
+    + '<button class="ly-stepbtn" title="'+(es?'Rotar a la derecha':'Rotate clockwise')+'" onclick="doRotate(getRotateStep())">'+_lyIco(_LY_P.rotR,15)+'</button>'
+    + '</div>';
+
+  /* Snap + Medidas */
+  h += '<button id="lbtn-snap" class="ly-tbtn'+(LState.useSnap?' on-teal':'')+'" title="'+(es?'Alinear a objetos':'Snap to objects')+'" '
+    + 'onclick="LState.useSnap=!LState.useSnap;renderLayoutUI()">'
+    + '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M1 6h10"/><rect x="2" y="2" width="3" height="3" rx=".5"/><rect x="7" y="7" width="3" height="3" rx=".5"/></svg>Snap</button>';
+
+  h += '<button id="lbtn-measure" class="ly-tbtn'+(LState.measureMode?' on-info':'')+'" title="'+(es?'Medir distancias entre elementos':'Measure distances between items')+'" onclick="toggleMeasureMode()">'
+    + '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M1 6h10"/><path d="M1 3v6M11 3v6"/></svg>'
+    + (es?'Medidas':'Measure')+'</button>';
+
+  if(_measureLines.length){
+    h += '<button class="ly-tbtn icon danger" title="'+(es?'Borrar mediciones':'Clear measurements')+'" onclick="clearMeasurements()">'+_lyIco(_LY_P.close,12,2)+'</button>';
+  }
+
+  if(LState.addMode){
+    h += '<span class="ly-mode">'+(es?'Haz clic en el lienzo para colocar':'Click the canvas to place')+'</span>';
+  }
+  h += '<span class="ly-count"><b>'+c.total+'</b> '+(es?'elementos':'items')
+     + ' · <b>'+c.tables+'</b> '+t('tables_lbl')
+     + ' · <b>'+c.chairs+'</b> '+t('chairs_lbl')+'</span>';
+
+  h += '</div>';
+  return h;
+}
+
+/* ─── Reglas: ticks cada 1 m, número cada 5 m ────────────────────────── */
+function _lyRulerTicks(axis, lengthPx){
+  var ppm = getPPM(), z = LState.zoom || 1;
+  var mPer = 1;                                   /* metros entre marcas */
+  while(mPer * ppm * z < 6 && mPer < 100) mPer *= 5;
+  var step = mPer * ppm * z;
+  var labelEvery = Math.max(1, Math.round(5 / mPer));   /* etiqueta cada 5 m */
+  while(labelEvery * step < 34) labelEvery *= 2;
+  var n = Math.min(Math.floor(lengthPx / step), 500);
+  var out = [];
+  for(var i=0;i<=n;i++){
+    var m = i * mPer;
+    var pos = Math.round(i * step);
+    var major = (m % 5 === 0);
+    out.push('<div class="ly-tick" style="'+(axis==='x'?'left':'top')+':'+pos+'px;'
+      + (axis==='x' ? 'height:'+(major?9:4)+'px' : 'width:'+(major?9:4)+'px')+'"></div>');
+    if(i % labelEvery === 0){
+      out.push('<span class="ly-tick-lbl" style="'+(axis==='x'?'left':'top')+':'+pos+'px">'+m+'</span>');
+    }
+  }
+  return out.join('');
+}
+
+function _lyRulers(){
+  var w = Math.round(LState.canvasW * (LState.zoom||1));
+  var h = Math.round(LState.canvasH * (LState.zoom||1));
+  return '<div class="ly-ruler-corner">m</div>'
+    + '<div class="ly-ruler ly-ruler-x" id="ly-ruler-x"><div class="ly-ruler-inner" id="ly-ruler-x-in" style="width:'+w+'px">'+_lyRulerTicks('x', w)+'</div></div>'
+    + '<div class="ly-ruler ly-ruler-y" id="ly-ruler-y"><div class="ly-ruler-inner" id="ly-ruler-y-in" style="height:'+h+'px">'+_lyRulerTicks('y', h)+'</div></div>';
+}
+
+function _lyRefreshRulers(){
+  var z = LState.zoom || 1;
+  var w = Math.round(LState.canvasW * z), h = Math.round(LState.canvasH * z);
+  var rx = document.getElementById('ly-ruler-x-in');
+  var ry = document.getElementById('ly-ruler-y-in');
+  if(rx){ rx.style.width = w+'px'; rx.innerHTML = _lyRulerTicks('x', w); }
+  if(ry){ ry.style.height = h+'px'; ry.innerHTML = _lyRulerTicks('y', h); }
+  _lySyncRulers();
+}
+
+function _lySyncRulers(){
+  var co = document.getElementById('lcanvas-outer');
+  var rx = document.getElementById('ly-ruler-x-in');
+  var ry = document.getElementById('ly-ruler-y-in');
+  if(!co) return;
+  if(rx) rx.style.transform = 'translateX(' + (_canvasPad - co.scrollLeft) + 'px)';
+  if(ry) ry.style.transform = 'translateY(' + (_canvasPad - co.scrollTop) + 'px)';
+}
+
+/* ─── Pie del lienzo ─────────────────────────────────────────────────── */
+function _lyFoot(isPhone){
+  var es = LANG==='es';
+  var hints = isPhone
+    ? [ es?'Arrastra para mover':'Drag to pan',
+        es?'Pellizca para zoom':'Pinch to zoom',
+        es?'Toca un elemento para moverlo':'Tap an item to move it',
+        es?'Doble toque para editar':'Double-tap to edit',
+        es?'Mantén presionado para opciones':'Long-press for options' ]
+    : [ t('scroll_zoom'), t('space_pan'), t('drag_select'), t('shift_drag_add'),
+        t('ctrl_drag_remove'), t('shift_click_add'), t('ctrl_click_desel'),
+        t('copy_paste'), t('del_remove') ];
+  var ppm = getPPM();
+  return '<div class="ly-foot">'
+    + '<div class="ly-foot-hints">'
+    +   hints.map(function(x){ return '<span>'+esc(x)+'</span>'; }).join('')
+    + '</div>'
+    + '<div class="ly-foot-right">'
+    +   '<span class="rd-num">'+(es?'Cuadro = 1 m':'Square = 1 m')+' · '+ppm+' px/m</span>'
+    +   (LState.sel.length ? '<span class="ly-foot-sel rd-num">'+LState.sel.length+' '+(es?'seleccionados':'selected')+'</span>' : '')
+    + '</div></div>';
+}
+
+function _lyInspEmptyText(){
+  var es = LANG==='es';
+  if(LState.sel.length>1){
+    return es ? 'Hay varios elementos seleccionados. Deja uno solo para editar sus propiedades.'
+              : 'Several items are selected. Keep just one to edit its properties.';
+  }
+  return es ? 'Selecciona un elemento del plano para ver y editar sus propiedades.'
+            : 'Select an item on the plan to view and edit its properties.';
+}
+
+/* ─── Inspector derecho (contenedor; el cuerpo lo pinta renderLPropsPanel) ── */
+function _lyInspector(){
+  var es = LANG==='es';
+  var one = LState.sel.length===1;
+  return '<aside class="rd-card ly-insp">'
+    + '<span class="rd-label ly-side-title">'+(es?'Propiedades':'Properties')+'</span>'
+    + '<div id="lsb-props" style="display:'+(one?'block':'none')+'"><div id="lsb-props-inner"></div></div>'
+    + '<div class="ly-insp-empty" id="ly-insp-empty" style="display:'+(one?'none':'block')+'">'+esc(_lyInspEmptyText())+'</div>'
+    + '</aside>';
+}
+
+/* ─── Cabecera de la pestaña ─────────────────────────────────────────── */
+function _lyTabHead(p){
+  var es = LANG==='es', c = _lyCounts();
+  var seated = _lySeatedGuests();
+  var quote = getLayoutQuoteSummary(LState.items, ensureLayoutQuoteState(p));
+  var bits = [ c.tables+' '+(es?'mesas':'tables'), c.chairs+' '+(es?'sillas':'chairs') ];
+  if(seated!=null) bits.push(seated+' '+(es?'asignadas':'seated'));
+  bits.push(c.total+' '+(es?'elementos':'items'));
+
+  var quoteWord = es ? 'Cotización' : 'Quote';
+  var quoteLabel = (quote.total>0 || quote.extraRows.length)
+    ? quoteWord+': '+formatCost(quote.total)
+    : quoteWord;
+
+  var actions = '<button id="lbtn-highlights" class="btn btn-sm" onclick="startLayoutTour()" title="'
+      + (es?'Ver guía interactiva':'Replay the interactive guide')+'">'+_lyIco(_LY_P.info,14,2)+(es?'Guía':'Guide')+'</button>'
+    + '<button id="lbtn-export" class="btn btn-sm" onclick="exportLayoutFull()">'+_lyIco(_LY_P.down,14,2)+t('export')+'</button>';
+
+  if(!isLibraryLayoutEditing() && typeof libSaveLayoutModal==='function' && c.total>0){
+    actions += '<button class="btn btn-sm" onclick="libSaveLayoutModal(proj())">'+_lyIco(_LY_P.save,14,2)+t('lib_save_btn')+'</button>';
+  }
+  actions += '<button id="lbtn-quote-toggle" class="btn btn-primary btn-sm" onclick="toggleLayoutQuoteWorkspace()" title="'
+    + esc(t('layout_quote_open'))+'">'+esc(quoteLabel)+'</button>';
+
+  return '<div class="rd-tab-head">'
+    + '<div><h2 class="rd-h2">'+(es?'Plano del salón':'Floor plan')+'</h2>'
+    +   '<p class="rd-sub rd-num">'+esc(bits.join(' · '))+'</p></div>'
+    + '<div class="rd-actions">'+actions+'</div>'
+    + '</div>';
+}
+
+/* ─── Lienzo (motor intacto: mismos ids, mismos handlers) ────────────── */
+function _lyCanvas(){
+  var ppm = getPPM(), maj = ppm*5;
+  var grid = 'background-color:#fff;'
+    + 'background-image:linear-gradient(rgba(22,19,15,.1) 1px,transparent 1px),'
+    + 'linear-gradient(90deg,rgba(22,19,15,.1) 1px,transparent 1px),'
+    + 'linear-gradient(rgba(22,19,15,.045) 1px,transparent 1px),'
+    + 'linear-gradient(90deg,rgba(22,19,15,.045) 1px,transparent 1px);'
+    + 'background-size:'+maj+'px '+maj+'px,'+maj+'px '+maj+'px,'+ppm+'px '+ppm+'px,'+ppm+'px '+ppm+'px;';
+
+  var h = '<div class="layout-canvas-outer" id="lcanvas-outer"'
+    + ' onmousedown="lCanvasDown(event)" oncontextmenu="return false" onmouseleave="lCanvasLeave(event)"'
+    + ' onscroll="_lySyncRulers()"'
+    + ' style="position:relative;cursor:'+(LState.scaleMode||LState.measureMode?'crosshair':(_fpDragging?'grabbing':'default'))+'">'
+    + '<div class="layout-canvas" id="lcanvas" style="width:'+LState.canvasW+'px;height:'+LState.canvasH+'px;margin:'+_canvasPad+'px;'
+    +   'transform:scale('+LState.zoom+');transform-origin:0 0;position:relative;border:2px solid rgba(22,19,15,.16);box-sizing:border-box;'+grid+'">';
+
+  if(LState.floorplan.img){
+    h += '<img id="fp-img" src="'+LState.floorplan.img+'" draggable="false" style="position:absolute;'
+      + 'left:'+LState.floorplan.x+'px;top:'+LState.floorplan.y+'px;'
+      + 'width:'+Math.round(LState.floorplan.w*LState.floorplan.scale)+'px;'
+      + 'height:'+Math.round(LState.floorplan.h*LState.floorplan.scale)+'px;'
+      + 'opacity:'+LState.floorplan.opacity+';user-select:none;z-index:0;transform-origin:center center;'
+      + 'transform:rotate('+(LState.floorplan.rotation||0)+'deg);pointer-events:none;'
+      + 'cursor:'+(LState.floorplan.locked?'default':'grab')+'">';
+  }
+
+  if(LState.scaleMode && LState.scalePoints.length>0){
+    h += LState.scalePoints.map(function(pt,i){
+      return '<div style="position:absolute;left:'+(pt.x-10)+'px;top:'+(pt.y-10)+'px;width:20px;height:20px;border-radius:50%;'
+        + 'background:'+(i===0?'var(--warn-2)':'var(--success-2)')+';border:2px solid #fff;box-shadow:0 2px 6px rgba(22,19,15,.3);'
+        + 'z-index:100;pointer-events:none;display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700">'
+        + (i===0?'A':'B')+'</div>';
+    }).join('');
+  }
+  if(LState.scaleMode && LState.scalePoints.length===2){
+    var a=LState.scalePoints[0], b=LState.scalePoints[1];
+    h += '<svg style="position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:99" overflow="visible">'
+      + '<line x1="'+a.x+'" y1="'+a.y+'" x2="'+b.x+'" y2="'+b.y+'" stroke="#F2A93B" stroke-width="2" stroke-dasharray="6 3"/>'
+      + '<text x="'+((a.x+b.x)/2)+'" y="'+((a.y+b.y)/2-8)+'" fill="#A2700B" font-size="12" font-weight="600" text-anchor="middle">'
+      + Math.round(Math.hypot(b.x-a.x,b.y-a.y))+'px</text></svg>';
+  }
+
+  h += '<div style="position:relative;z-index:1">'
+    + LState.items.map(function(item){ return renderLItem(item); }).join('');
+
+  if(LState.items.length===0 && (typeof _libEditingLayoutId==='undefined' || !_libEditingLayoutId)){
+    h += '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:auto;width:420px;max-width:80vw">'
+      + '<div style="font-family:\'Cormorant Garamond\',serif;font-size:26px;font-weight:500;color:var(--ink);margin-bottom:8px">'
+      +   (t('create_general_layout')||(LANG==='es'?'Empieza tu plano':'Start your layout'))+'</div>'
+      + '<div style="font-size:12.5px;color:var(--muted);margin-bottom:18px">'
+      +   (LANG==='es'?'Crea un plano general o importa uno de tu biblioteca.':'Create a general layout or import one from your library.')+'</div>'
+      + '<div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap">'
+      +   '<button class="btn btn-primary" onclick="openLayoutLibraryAndCreate()">+ '+(t('create_general_layout')||(LANG==='es'?'Crear plano general':'Create general layout'))+'</button>'
+      +   '<button class="btn" onclick="openLayoutImportModal()">'+(LANG==='es'?'Importa tu layout':'Import your layout')+'</button>'
+      + '</div></div>';
+  }
+  h += '</div>';
+
+  h += '<svg id="measure-overlay" style="position:absolute;left:0;top:0;width:'+LState.canvasW+'px;height:'+LState.canvasH+'px;pointer-events:none;z-index:200;overflow:visible">'
+    + _measureLines.map(function(ln){
+        var mx=(ln.x1+ln.x2)/2, my=(ln.y1+ln.y2)/2;
+        var label = (ln.calibrated&&ln.m>0) ? ln.m.toFixed(2)+'m' : (ln.px/getPPM()).toFixed(2)+'m';
+        return '<line x1="'+ln.x1+'" y1="'+ln.y1+'" x2="'+ln.x2+'" y2="'+ln.y2+'" stroke="#3B7DD8" stroke-width="2"/>'
+          + '<circle cx="'+ln.x1+'" cy="'+ln.y1+'" r="5" fill="#3B7DD8" stroke="#fff" stroke-width="1.5"/>'
+          + '<circle cx="'+ln.x2+'" cy="'+ln.y2+'" r="5" fill="#3B7DD8" stroke="#fff" stroke-width="1.5"/>'
+          + '<rect x="'+(mx-28)+'" y="'+(my-22)+'" width="56" height="18" rx="5" fill="#2A63C4"/>'
+          + '<text x="'+mx+'" y="'+(my-9)+'" fill="#fff" font-size="11" font-weight="600" text-anchor="middle">'+label+'</text>';
+      }).join('');
+  if(_measurePoints.length===1){
+    var mp=_measurePoints[0];
+    h += '<circle cx="'+mp.x+'" cy="'+mp.y+'" r="6" fill="#F2A93B" stroke="#fff" stroke-width="2"/>'
+      + '<line id="measure-preview" x1="'+mp.x+'" y1="'+mp.y+'" x2="'+mp.x+'" y2="'+mp.y+'" stroke="#F2A93B" stroke-width="2" stroke-dasharray="6 3"/>'
+      + '<text id="measure-preview-label" x="'+mp.x+'" y="'+(mp.y-10)+'" fill="#A2700B" font-size="12" font-weight="600" text-anchor="middle">...</text>';
+  }
+  h += '</svg></div>';   /* /measure-overlay  /lcanvas */
+
+  if(LState.scaleMode) h += _lyScaleWizard();
+
+  h += '</div>';         /* /lcanvas-outer */
+  return h;
+}
+
+function _lyScaleWizard(){
+  var es = LANG==='es', n = LState.scalePoints.length;
+  var dot = function(state, txt){
+    var st = state==='now' ? 'background:var(--ink);color:var(--paper)'
+           : state==='done' ? 'background:var(--accent-l);color:var(--accent-deep);border:1.5px solid var(--accent)'
+           : 'background:var(--paper-2);color:var(--light);border:1.5px solid var(--border-2)';
+    return '<div style="width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;'
+      + 'font-size:11px;font-weight:600;flex-shrink:0;box-sizing:border-box;'+st+'">'+txt+'</div>';
+  };
+  var bar = function(on){ return '<div style="flex:1;height:1px;background:'+(on?'var(--accent)':'var(--border-2)')+'"></div>'; };
+
+  var h = '<div id="scale-wizard" onmousedown="event.stopPropagation()" onclick="event.stopPropagation()" '
+    + 'style="position:fixed;top:140px;left:50%;transform:translateX(-50%);z-index:500;background:var(--card);'
+    + 'border:1px solid var(--border);border-radius:18px;padding:18px 22px;box-shadow:var(--sh);min-width:300px;max-width:400px;pointer-events:all">'
+    + '<div style="display:flex;align-items:center;gap:4px;margin-bottom:16px">'
+    +   dot(n===0?'now':'done', n>0?'✓':'A') + bar(n>0)
+    +   dot(n===1?'now':(n>1?'done':'todo'), n>1?'✓':'B') + bar(n>1)
+    +   dot(n===2?'now':'todo','m')
+    + '</div>';
+
+  if(n===0){
+    h += '<div style="font-size:14px;font-weight:600;margin-bottom:4px">'+(es?'Haz clic en el punto A':'Click point A')+'</div>'
+      + '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.55">'
+      + (es?'Elige un extremo de una distancia conocida en el plano.':'Pick one end of a known distance on the plan.')+'</div>';
+  } else if(n===1){
+    h += '<div style="font-size:14px;font-weight:600;margin-bottom:4px">'+(es?'Haz clic en el punto B':'Click point B')+'</div>'
+      + '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.55">'
+      + (es?'Elige el otro extremo de la misma distancia.':'Pick the other end of the same distance.')+'</div>';
+  } else {
+    var px = Math.round(Math.hypot(LState.scalePoints[1].x-LState.scalePoints[0].x, LState.scalePoints[1].y-LState.scalePoints[0].y));
+    h += '<div style="font-size:14px;font-weight:600;margin-bottom:4px">'+(es?'Ingresa la distancia real':'Enter the real distance')+'</div>'
+      + '<div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.55">'
+      +   (es?'¿Cuántos metros hay entre A y B en la realidad?':'How many meters apart are A and B in real life?')+'</div>'
+      + '<span class="rd-pill sm t-neutral rd-num" style="margin-bottom:12px">'+px+' px '+(es?'medidos':'measured')+'</span>'
+      + '<div style="display:flex;align-items:center;gap:8px;margin-top:12px">'
+      +   '<input id="scale-dist" class="rd-input rd-num" type="number" step="0.1" min="0.1" placeholder="0.00" style="width:88px;text-align:center" '
+      +     'onclick="event.stopPropagation()" onkeydown="if(event.key===\'Enter\'){applyScaleCalibration();}event.stopPropagation();">'
+      +   '<span style="font-size:13px;color:var(--muted);font-weight:600">m</span>'
+      +   '<button class="btn btn-primary btn-sm" style="flex:1;justify-content:center" onclick="applyScaleCalibration()">'+(es?'Aplicar':'Apply')+'</button>'
+      + '</div>';
+  }
+  h += '<button class="btn btn-sm" style="width:100%;justify-content:center;margin-top:12px" onclick="cancelScaleMode()">'+(es?'Cancelar':'Cancel')+'</button></div>';
+  return h;
+}
+
+/* ─── Cáscara completa ───────────────────────────────────────────────── */
+function _lyRenderShell(p, isPhone){
+  var h = '<div class="layout-shell ly-shell">'
+    + '<input id="layout-floorplan-input" type="file" accept="image/*" style="display:none" onchange="handleFloorplanUpload(event)">'
+    + _lyTabHead(p)
+    + '<div class="ly-grid'+(isPhone?' solo':'')+'">';
+
+  if(!isPhone) h += _lyLeftPanel();
+
+  h += '<div class="rd-card clip ly-canvas-card layout-main">'
+    + _lyToolbar(p)
+    + (isPhone ? renderLayoutMobileQuickBar() : '')
+    + '<div class="ly-canvas-wrap">' + (isPhone ? '' : _lyRulers()) + _lyCanvas() + '</div>'
+    + _lyFoot(isPhone)
+    + '</div>';
+
+  if(!isPhone) h += _lyInspector();
+
+  h += '</div>';                                   /* /ly-grid */
+  if(isPhone) h += renderLayoutMobileInspector(p);
+  if(!isPhone && !_layoutQuoteCollapsed) h += '<div class="ly-quote-slot">'+renderLayoutQuoteWorkspace(p)+'</div>';
+  h += '</div>';                                   /* /ly-shell */
+  return h;
+}
+
 function renderLayout(){
   var _savedScroll={x:0,y:0};
   var _outerBefore=document.getElementById('lcanvas-outer');
@@ -840,191 +1420,7 @@ function renderLayout(){
     return;
   }
   var isPhone=isPhoneViewport();
-  el.innerHTML=`
-  <div class="layout-shell">
-    <input id="layout-floorplan-input" type="file" accept="image/*" style="display:none" onchange="handleFloorplanUpload(event)">
-    <!-- MAIN -->
-    <!-- MAIN -->
-    <!-- MAIN -->
-    <div class="layout-main">
-      <!-- Toolbar -->
-      <div class="layout-toolbar">
-        <div style="position:relative">
-          <button id="add-element-trigger" class="btn btn-ghost btn-sm" onclick="toggleAddElementMenu()" style="height:28px;padding:0 10px;font-size:12px;white-space:nowrap">+ ${LANG==='es'?'Agregar elemento':'Add element'}</button>
-          <div id="add-element-menu" style="display:none;position:absolute;left:0;top:calc(100% + 6px);min-width:200px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px;box-shadow:0 12px 24px rgba(0,0,0,0.12);z-index:50">
-            <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start;padding:8px 10px;font-size:12px" onclick="selectAddElement('table')">${LANG==='es'?'Mesa':'Table'}</button>
-            <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start;padding:8px 10px;font-size:12px" onclick="selectAddElement('event-element')">${LANG==='es'?'Elemento de evento':'Event element'}</button>
-            <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start;padding:8px 10px;font-size:12px" onclick="selectAddElement('floorplan')">${LState.floorplan.img?(LANG==='es'?'Reemplazar plano':'Replace floorplan'):(LANG==='es'?'Plano (Imagen)':'Floorplan image')}</button>
-            <div style="height:1px;background:var(--border);margin:6px 2px"></div>
-            <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start;padding:8px 10px;font-size:12px;color:var(--muted)" onclick="openChairEditor()">${LANG==='es'?'Gestionar sillas':'Manage chairs'}</button>
-            <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start;padding:8px 10px;font-size:12px;color:var(--muted)" onclick="openCenterpieceEditor()">${LANG==='es'?'Gestionar centros de mesa':'Manage centerpieces'}</button>
-          </div>
-        </div>
-        <div id="layout-zoom-bar" class="zoom-bar">
-          <button class="zoom-btn" onclick="lZoom(-0.1)">-</button>
-          <input id="layout-zoom-input" class="zoom-input" type="text" value="${Math.round(LState.zoom*100)}%" onkeydown="if(event.key==='Enter'){lZoomTo(this.value);this.blur();}" onblur="lZoomTo(this.value)" onfocus="this.select()">
-          <button class="zoom-btn" onclick="lZoom(0.1)">+</button>
-        </div>
-        <div style="width:1px;height:24px;background:var(--border)"></div>
-        <button id="lbtn-zoom-fit" title="Zoom to fit" onclick="lZoom(0,'fit')" style="width:28px;height:28px;border:1px solid var(--border);background:transparent;border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:var(--tr)" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)';this.style.borderColor='var(--gold)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)';this.style.borderColor='var(--border)'"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3h6M3 3v6M21 3h-6M21 3v6M3 21h6M3 21v-6M21 21h-6M21 21v-6"/></svg></button>
-        <button id="lbtn-zoom-sel" title="Zoom to selected" onclick="lZoom(0,'sel')" style="width:28px;height:28px;border:1px solid var(--border);background:transparent;border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:var(--tr)" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)';this.style.borderColor='var(--gold)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)';this.style.borderColor='var(--border)'"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="4 2"/><path d="M8 8h8M8 12h8M8 16h5"/><circle cx="18" cy="18" r="3" fill="currentColor" stroke="none"/></svg></button>
-        <button id="lbtn-measure" title="${LANG==='es'?'Medir distancias':'Measure distances'}" onclick="toggleMeasureMode()" style="width:28px;height:28px;border:1px solid ${LState.measureMode?'var(--gold)':'var(--border)'};background:${LState.measureMode?'var(--gold-l)':'transparent'};border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:${LState.measureMode?'var(--gold-h)':'var(--muted)'};transition:var(--tr)" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)';this.style.borderColor='var(--gold)'" onmouseout="if(!LState.measureMode){this.style.background='transparent';this.style.color='var(--muted)';this.style.borderColor='var(--border)'}"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M2 2l20 20M6 2v4M2 6h4M18 22v-4M22 18h-4"/></svg></button>${_measureLines.length?`<button title="${LANG==='es'?'Borrar mediciones':'Clear measurements'}" onclick="clearMeasurements()" style="width:28px;height:28px;border:1px solid var(--border);background:transparent;border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--danger);transition:var(--tr)" onmouseover="this.style.background='rgba(220,53,69,.08)';this.style.borderColor='var(--danger)'" onmouseout="this.style.background='transparent';this.style.borderColor='var(--border)'"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`:''}
-        <div style="width:1px;height:24px;background:var(--border)"></div>
-        <span style="font-size:12px;color:var(--muted)">
-          ${LState.items.length} ${t('items_count')} |
-          ${LState.items.filter(i=>i.shape.includes('table')).length} ${t('tables_lbl')} |
-          ${LState.items.reduce((s,i)=>s+(i.chairs||0),0)} ${t('chairs_lbl')}
-
-          ${LState.addMode?`<strong style="color:var(--gold-h)"> | Click canvas to place ${LState.addMode.replace('-',' ')}</strong>`:''}
-        </span>
-        <div style="flex:1"></div>
-        ${(()=>{const q=getLayoutQuoteSummary(LState.items, ensureLayoutQuoteState(p));return (q.total>0||q.extraRows.length)?`<div id="layout-quote-total-pill" style="background:var(--gold-l);border:1px solid rgba(166,124,61,.3);border-radius:20px;padding:4px 14px;font-size:12px;font-weight:600;color:var(--gold-h);cursor:pointer" onclick="showLayoutBudget()" title="${t('layout_quote_open')}">${t('layout_quote_title')}: ${formatCost(q.total)}</div>`:'';})()}
-        <button id="lbtn-snap" onclick="LState.useSnap=!LState.useSnap;renderLayoutUI()" title="${LANG==='es'?'Alinear a objetos':'Snap to objects'}"
-          style="height:28px;padding:0 10px;border:1px solid ${LState.useSnap?'var(--gold)':'var(--border)'};background:${LState.useSnap?'var(--gold-l)':'transparent'};border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;color:${LState.useSnap?'var(--gold-h)':'var(--muted)'};transition:var(--tr);white-space:nowrap"
-          onmouseover="this.style.borderColor='var(--gold)'" onmouseout="if(!LState.useSnap)this.style.borderColor='var(--border)'">
-          <span style="display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M1 6h10"/><rect x="2" y="2" width="3" height="3" rx=".5"/><rect x="7" y="7" width="3" height="3" rx=".5"/></svg>${LState.useSnap?'Snap':'Snap'}</span>
-        </button>
-        ${LState.floorplan.img?`
-        <div id="lbtn-floorplan" style="display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:4px 8px;flex-wrap:wrap">
-          <span style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em">${LANG==='es'?'Plano':'Floorplan'}</span>
-          ${LState.scaleMode?`
-          <span style="font-size:12px;color:var(--gold-h);font-weight:600;display:flex;align-items:center;gap:5px"><svg width="8" height="8" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="currentColor"/></svg>${LANG==='es'?'Calibrando escala…':'Calibrating scale…'}</span>
-          <button class="btn btn-ghost btn-sm" onclick="cancelScaleMode()">${LANG==='es'?'Cancelar':'Cancel'}</button>
-          `:`
-          <button class="btn btn-ghost btn-sm" onclick="triggerFloorplanUpload()">${LANG==='es'?'Cambiar imagen':'Change image'}</button>
-          <button class="btn btn-ghost btn-sm" onclick="startScaleMode()">${LANG==='es'?'Escalar':'Scale'}</button>
-          <button class="btn btn-ghost btn-sm" onclick="toggleFloorplanLock()">${LState.floorplan.locked?(LANG==='es'?'Desbloquear':'Unlock'):(LANG==='es'?'Bloquear':'Lock')}</button>
-          <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);font-weight:600" onclick="event.stopPropagation()">
-            <span>${t('opacity_lbl')||'Opacity'}</span>
-            <input id="floorplan-opacity-range" type="range" min="0" max="100" step="1" value="${Math.round((LState.floorplan.opacity==null?0.4:LState.floorplan.opacity)*100)}" style="width:88px" oninput="setFloorplanOpacity(this.value,true)" onchange="setFloorplanOpacity(this.value,true)">
-            <input id="floorplan-opacity-num" type="number" min="0" max="100" step="1" value="${Math.round((LState.floorplan.opacity==null?0.4:LState.floorplan.opacity)*100)}" style="width:52px;height:28px;border:1px solid var(--border);border-radius:5px;background:var(--bg2);color:var(--text);font-size:12px;text-align:center;padding:0 6px" oninput="setFloorplanOpacity(this.value,false)" onkeydown="if(event.key==='Enter')this.blur();event.stopPropagation();" onclick="event.stopPropagation()">
-          </label>
-          <button class="btn btn-ghost btn-sm" onclick="removeFloorplan()" style="color:var(--danger)">${LANG==='es'?'Quitar':'Remove'}</button>
-          `}
-        </div>`:''}
-        <div id="lbtn-font" style="display:flex;align-items:center;gap:3px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:4px 8px;opacity:1;gap:5px">
-          <span style="font-size:10px;color:var(--muted);margin-right:2px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Aa</span>
-          <button title="Decrease font size" onclick="changeFontSize(-1)" style="width:28px;height:28px;border:none;background:transparent;cursor:pointer;border-radius:4px;font-size:18px;color:var(--muted);line-height:1" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'">-</button>
-          <span style="font-size:11px;color:var(--muted);min-width:44px;text-align:center"><input id="toolbar-font-size" type="number" min="5" max="99" style="width:44px;font-size:12px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:2px 4px;background:var(--bg);color:var(--text)" placeholder="--" oninput="setFontSizeDirect(+this.value)" onkeydown="if(event.key==='Enter')this.blur();event.stopPropagation();" onclick="event.stopPropagation()"></span>
-          <button title="Increase font size" onclick="changeFontSize(1)" style="width:28px;height:28px;border:none;background:transparent;cursor:pointer;border-radius:4px;font-size:18px;color:var(--muted);line-height:1" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'">+</button>
-        </div>
-        <div id="lbtn-align" style="display:flex;align-items:center;gap:3px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:3px 6px;opacity:1">
-          <span style="font-size:10px;color:var(--muted);margin-right:3px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">${t('align')}</span>
-          <button title="Align Left" onclick="alignSelected('left')" class="s-ibtn" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 6h16M4 12h10M4 18h13"/><line x1="2" y1="4" x2="2" y2="20" stroke-width="2.5"/></svg></button>
-          <button title="Center Horizontally" onclick="alignSelected('cx')" class="s-ibtn" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M8 6h8M5 12h14M7 18h10"/><line x1="12" y1="2" x2="12" y2="22" stroke-width="2.5" stroke-dasharray="2 2"/></svg></button>
-          <button title="Align Right" onclick="alignSelected('right')" class="s-ibtn" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 6h16M10 12h10M7 18h13"/><line x1="22" y1="4" x2="22" y2="20" stroke-width="2.5"/></svg></button>
-          <div style="width:1px;height:18px;background:var(--border);margin:0 2px"></div>
-          <button title="Align Top" onclick="alignSelected('top')" class="s-ibtn" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 8v12M12 4v16M18 10v10"/><line x1="4" y1="2" x2="20" y2="2" stroke-width="2.5"/></svg></button>
-          <button title="Center Vertically" onclick="alignSelected('cy')" class="s-ibtn" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 7v10M12 4v16M18 9v6"/><line x1="4" y1="12" x2="20" y2="12" stroke-width="2.5" stroke-dasharray="2 2"/></svg></button>
-          <button title="Align Bottom" onclick="alignSelected('bottom')" class="s-ibtn" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 4v12M12 8v12M18 4v12"/><line x1="4" y1="22" x2="20" y2="22" stroke-width="2.5"/></svg></button>
-          <div style="width:1px;height:18px;background:var(--border);margin:0 2px"></div>
-          <button title="Distribute Horizontally" onclick="alignSelected('dist-h')" class="s-ibtn" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="1" y="6" width="5" height="12" rx="1"/><rect x="9.5" y="8" width="5" height="8" rx="1"/><rect x="18" y="5" width="5" height="14" rx="1"/><line x1="3.5" y1="3" x2="3.5" y2="21" stroke-dasharray="2 2" stroke-width="1.2"/><line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="2 2" stroke-width="1.2"/><line x1="20.5" y1="3" x2="20.5" y2="21" stroke-dasharray="2 2" stroke-width="1.2"/></svg></button>
-          <button title="Distribute Vertically" onclick="alignSelected('dist-v')" class="s-ibtn" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="6" y="1" width="12" height="5" rx="1"/><rect x="8" y="9.5" width="8" height="5" rx="1"/><rect x="5" y="18" width="14" height="5" rx="1"/><line x1="3" y1="3.5" x2="21" y2="3.5" stroke-dasharray="2 2" stroke-width="1.2"/><line x1="3" y1="12" x2="21" y2="12" stroke-dasharray="2 2" stroke-width="1.2"/><line x1="3" y1="20.5" x2="21" y2="20.5" stroke-dasharray="2 2" stroke-width="1.2"/></svg></button>
-        </div>
-        <div id="lbtn-rotate" style="display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:4px 8px;opacity:1">
-          <button title="Rotate counterclockwise" onclick="doRotate(-getRotateStep())" style="width:32px;height:32px;border:none;background:transparent;cursor:pointer;border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--muted)" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 10H4V5"/><path d="M20 11a8 8 0 1 0-2.34 5.66L20 14"/></svg></button>
-          <input id="rotate-step" type="number" value="90" min="1" step="1" style="width:54px;height:30px;border:1px solid var(--border);border-radius:5px;background:var(--bg2);color:var(--text);font-size:12px;text-align:center;padding:0 4px" title="Degrees per rotation step" onclick="event.stopPropagation()">
-          <button title="Rotate clockwise" onclick="doRotate(getRotateStep())" style="width:32px;height:32px;border:none;background:transparent;cursor:pointer;border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--muted)" onmouseover="this.style.background='var(--gold-l)';this.style.color='var(--gold-h)'" onmouseout="this.style.background='transparent';this.style.color='var(--muted)'"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 10h5V5"/><path d="M4 11a8 8 0 1 1 2.34 5.66L4 14"/></svg></button>
-        </div>
-        <button id="lbtn-export" class="btn btn-ghost btn-sm" onclick="exportLayoutFull()">${t('export')}</button>
-        <button id="lbtn-highlights" class="btn btn-ghost btn-sm" onclick="startLayoutTour()" title="${LANG==='es'?'Ver guía interactiva':'Rewatch layout highlights'}" style="display:flex;align-items:center;gap:5px"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><circle cx="12" cy="8" r="0.5" fill="currentColor" stroke="none"/></svg>${LANG==='es'?'Guía':'Highlights'}</button>
-      </div>
-      ${isPhone?renderLayoutMobileQuickBar():''}
-      ${isPhone?'':renderLayoutQuoteWorkspace(p)}
-      <!-- Canvas -->
-      <div class="layout-canvas-outer" id="lcanvas-outer"
-        onmousedown="lCanvasDown(event)"
-        oncontextmenu="return false"
-        onmouseleave="lCanvasLeave(event)"
-        style="position:relative;cursor:${LState.scaleMode||LState.measureMode?'crosshair':_fpDragging?'grabbing':'default'}">
-        <div class="layout-canvas" id="lcanvas"
-          style="width:${LState.canvasW}px;height:${LState.canvasH}px;margin:${_canvasPad}px;transform:scale(${LState.zoom});transform-origin:0 0;background:#fff;position:relative">
-          ${LState.floorplan.img?`<img id="fp-img" src="${LState.floorplan.img}"
-            style="position:absolute;left:${LState.floorplan.x}px;top:${LState.floorplan.y}px;
-              width:${Math.round(LState.floorplan.w*LState.floorplan.scale)}px;
-              height:${Math.round(LState.floorplan.h*LState.floorplan.scale)}px;
-              opacity:${LState.floorplan.opacity};user-select:none;z-index:0;transform-origin:center center;
-              transform:rotate(${LState.floorplan.rotation||0}deg);
-              pointer-events:none;cursor:${LState.floorplan.locked?'default':'grab'}" draggable="false">`:''}
-          ${LState.scaleMode&&LState.scalePoints.length>0?LState.scalePoints.map((pt,i)=>`
-            <div style="position:absolute;left:${pt.x-10}px;top:${pt.y-10}px;width:20px;height:20px;border-radius:50%;
-              background:${i===0?'#f59e0b':'#10b981'};border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3);z-index:100;pointer-events:none;
-              display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700">${i===0?'A':'B'}</div>
-          `).join(''):''}
-          ${LState.scaleMode&&LState.scalePoints.length===2?`
-            <svg style="position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:99" overflow="visible">
-              <line x1="${LState.scalePoints[0].x}" y1="${LState.scalePoints[0].y}"
-                    x2="${LState.scalePoints[1].x}" y2="${LState.scalePoints[1].y}"
-                    stroke="#f59e0b" stroke-width="2" stroke-dasharray="6 3"/>
-              <text x="${(LState.scalePoints[0].x+LState.scalePoints[1].x)/2}"
-                    y="${(LState.scalePoints[0].y+LState.scalePoints[1].y)/2-8}"
-                    fill="#f59e0b" font-size="12" font-weight="600" text-anchor="middle"
-                    style="filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))">${Math.round(Math.hypot(LState.scalePoints[1].x-LState.scalePoints[0].x,LState.scalePoints[1].y-LState.scalePoints[0].y))}px</text>
-            </svg>`:''}
-          <div style="position:relative;z-index:1">
-            ${LState.items.map(item=>renderLItem(item)).join('')}
-            ${LState.items.length===0&&(typeof _libEditingLayoutId==="undefined"||!_libEditingLayoutId)?`<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:auto">
-              <div style="font-family:Cormorant Garamond,serif;font-size:22px;font-weight:700;color:var(--muted);margin-bottom:16px">${t("create_general_layout")||"Start your layout"}</div>
-              <div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap">
-                <button class="btn btn-primary" style="padding:14px 28px;font-size:14px;font-weight:700" onclick="openLayoutLibraryAndCreate()">+ ${t("create_general_layout")||"Create General Layout"}</button>
-                <button class="btn btn-ghost" style="padding:14px 22px;font-size:14px;font-weight:700" onclick="openLayoutImportModal()">${LANG==="es"?"Importa tu layout":"Import your layout"}</button>
-              </div>
-              <div style="font-size:12px;color:var(--light);margin-top:10px">${LANG==="es"?"O arrastra elementos desde el panel izquierdo":"Or drag elements from the left panel"}</div>
-            </div>`:''}
-          </div>
-          <!-- Measure overlay -->
-          <svg id="measure-overlay" style="position:absolute;left:0;top:0;width:${LState.canvasW}px;height:${LState.canvasH}px;pointer-events:none;z-index:200;overflow:visible">
-            ${_measureLines.map((ln,i)=>`
-              <line x1="${ln.x1}" y1="${ln.y1}" x2="${ln.x2}" y2="${ln.y2}" stroke="#3b82f6" stroke-width="2" stroke-dasharray="0"/>
-              <circle cx="${ln.x1}" cy="${ln.y1}" r="5" fill="#3b82f6" stroke="#fff" stroke-width="1.5"/>
-              <circle cx="${ln.x2}" cy="${ln.y2}" r="5" fill="#3b82f6" stroke="#fff" stroke-width="1.5"/>
-              <rect x="${(ln.x1+ln.x2)/2-28}" y="${(ln.y1+ln.y2)/2-22}" width="56" height="18" rx="4" fill="rgba(30,30,50,.82)"/>
-              <text x="${(ln.x1+ln.x2)/2}" y="${(ln.y1+ln.y2)/2-9}" fill="#fff" font-size="11" font-weight="700" text-anchor="middle" font-family="monospace">${ln.calibrated&&ln.m>0?ln.m.toFixed(2)+'m':(ln.px/getPPM()).toFixed(2)+'m'}</text>
-            `).join('')}
-            ${_measurePoints.length===1?`
-              <circle cx="${_measurePoints[0].x}" cy="${_measurePoints[0].y}" r="6" fill="#f59e0b" stroke="#fff" stroke-width="2"/>
-              <line id="measure-preview" x1="${_measurePoints[0].x}" y1="${_measurePoints[0].y}" x2="${_measurePoints[0].x}" y2="${_measurePoints[0].y}" stroke="#f59e0b" stroke-width="2" stroke-dasharray="6 3"/>
-              <text id="measure-preview-label" x="${_measurePoints[0].x}" y="${_measurePoints[0].y-10}" fill="#f59e0b" font-size="12" font-weight="700" text-anchor="middle" font-family="monospace">...</text>
-            `:''}
-          </svg>
-        </div>
-      ${LState.scaleMode?`<div id="scale-wizard" onmousedown="event.stopPropagation()" onclick="event.stopPropagation()" style="position:fixed;top:130px;left:50%;transform:translateX(-50%);z-index:500;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px 22px;box-shadow:var(--sh-md);min-width:300px;max-width:400px;pointer-events:all">
-        <div style="display:flex;align-items:center;gap:4px;margin-bottom:16px">
-          <div style="width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;${LState.scalePoints.length===0?'background:var(--gold-h);color:#fff':'background:var(--gold-l);color:var(--gold-h);border:2px solid var(--gold-h)'}">${LState.scalePoints.length>0?'✓':'A'}</div>
-          <div style="flex:1;height:1px;background:${LState.scalePoints.length>0?'var(--gold-h)':'var(--border)'}"></div>
-          <div style="width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;${LState.scalePoints.length===1?'background:var(--gold-h);color:#fff':LState.scalePoints.length>1?'background:var(--gold-l);color:var(--gold-h);border:2px solid var(--gold-h)':'background:var(--bg2);color:var(--muted);border:2px solid var(--border)'}">${LState.scalePoints.length>1?'✓':'B'}</div>
-          <div style="flex:1;height:1px;background:${LState.scalePoints.length>1?'var(--gold-h)':'var(--border)'}"></div>
-          <div style="width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;${LState.scalePoints.length===2?'background:var(--gold-h);color:#fff':'background:var(--bg2);color:var(--muted);border:2px solid var(--border)'}">m</div>
-        </div>
-        ${LState.scalePoints.length===0?`<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div style="width:36px;height:36px;border-radius:50%;background:rgba(245,158,11,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="7"/><line x1="12" y1="17" x2="12" y2="22"/><line x1="2" y1="12" x2="7" y2="12"/><line x1="17" y1="12" x2="22" y2="12"/></svg></div><div><div style="font-weight:700;font-size:14px">${LANG==='es'?'Haz clic en el punto A':'Click point A'}</div><div style="font-size:12px;color:var(--muted);margin-top:2px">${LANG==='es'?'Elige un extremo de una distancia conocida en el plano':'Pick one end of a known distance on the floorplan'}</div></div></div>`:''}
-        ${LState.scalePoints.length===1?`<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div style="width:36px;height:36px;border-radius:50%;background:rgba(16,185,129,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="7"/><line x1="12" y1="17" x2="12" y2="22"/><line x1="2" y1="12" x2="7" y2="12"/><line x1="17" y1="12" x2="22" y2="12"/></svg></div><div><div style="font-weight:700;font-size:14px">${LANG==='es'?'Haz clic en el punto B':'Click point B'}</div><div style="font-size:12px;color:var(--muted);margin-top:2px">${LANG==='es'?'Elige el otro extremo de la misma distancia':'Pick the other end of the same distance'}</div></div></div>`:''}
-        ${LState.scalePoints.length>=2?`<div style="margin-bottom:14px"><div style="font-weight:700;font-size:14px;margin-bottom:3px">${LANG==='es'?'Ingresa la distancia real':'Enter real-world distance'}</div><div style="font-size:12px;color:var(--muted);margin-bottom:10px">${LANG==='es'?'¿Cuántos metros hay entre A y B en la realidad?':'How many meters apart are A and B in real life?'}</div><div style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:var(--bg2);border-radius:8px;font-size:11px;color:var(--muted);margin-bottom:12px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5"><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="8" x2="4" y2="16"/><line x1="20" y1="8" x2="20" y2="16"/></svg>${Math.round(Math.hypot(LState.scalePoints[1].x-LState.scalePoints[0].x,LState.scalePoints[1].y-LState.scalePoints[0].y))} px ${LANG==='es'?'medidos':'measured'}</div><div style="display:flex;align-items:center;gap:8px"><input id="scale-dist" type="number" step="0.1" min="0.1" placeholder="0.00" style="width:88px;height:34px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text);font-size:14px;text-align:center;padding:0 8px" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter'){applyScaleCalibration();}event.stopPropagation();"><span style="font-size:13px;color:var(--muted);font-weight:600">m</span><button class="btn btn-primary btn-sm" onclick="applyScaleCalibration()" style="flex:1">${LANG==='es'?'Aplicar':'Apply'}</button></div></div>`:''}
-        <button class="btn btn-ghost btn-sm" onclick="cancelScaleMode()" style="width:100%;justify-content:center;margin-top:2px">${LANG==='es'?'Cancelar':'Cancel'}</button>
-      </div>`:''}
-      </div>
-      ${isPhone?renderLayoutMobileInspector(p):''}
-      <div style="padding:5px 16px;background:var(--card);border-top:1px solid var(--border);font-size:10.5px;color:var(--muted);display:flex;gap:16px;align-items:center;flex-wrap:wrap">
-        ${isPhone?`
-          <span>${LANG==='es'?'Arrastra para mover':'Drag to pan'}</span>
-          <span>${LANG==='es'?'Pellizca para zoom':'Pinch to zoom'}</span>
-          <span>${LANG==='es'?'Toca un elemento para moverlo':'Tap item to move'}</span>
-          <span>${LANG==='es'?'Doble toque para editar':'Double-tap to edit'}</span>
-          <span>${LANG==='es'?'Mantén presionado para opciones':'Long-press for options'}</span>
-        `:`
-          <span>${t('scroll_zoom')}</span>
-          <span>${t('space_pan')}</span>
-          <span>${t('drag_select')}</span>
-          <span>${t('shift_drag_add')}</span>
-          <span>${t('ctrl_drag_remove')}</span>
-          <span>${t('shift_click_add')}</span>
-          <span>${t('ctrl_click_desel')}</span>
-          <span>${t('copy_paste')}</span>
-          <span>${t('del_remove')}</span>
-        `}
-        ${LState.sel.length?`<span style="color:var(--gold-h);font-weight:600">${LState.sel.length} ${LANG==='es'?'seleccionados':'selected'}</span>`:''}
-      </div>
-    </div>
-  </div>`;
+  el.innerHTML=_lyRenderShell(p,isPhone);
   attachLItemEvents();
   const co=document.getElementById('lcanvas-outer');
   if(co){
@@ -1039,6 +1435,9 @@ function renderLayout(){
       co.scrollTop=_canvasPad;
     }
   }
+  _lySyncRulers();
+  if(!isPhone && LState.sel.length===1) renderLPropsPanel();
+  updateFontSizeUI();
   syncLayoutMobileInspector();
 }
 
@@ -1053,20 +1452,23 @@ function setLayoutMobilePane(pane){
 }
 
 function renderLayoutMobileQuickBar(){
+  var es=LANG==='es';
   var hasFloorplan=!!(LState.floorplan&&LState.floorplan.img);
-  return `<div class="layout-mobile-quickbar">
-    <div class="layout-mobile-quickrow">
-      <button class="layout-mobile-btn lm-primary" onclick="toggleAddElementMenu()">${LANG==='es'?'Agregar':'Add'}</button>
-      <button class="layout-mobile-btn" onclick="lZoom(0,'fit')">${LANG==='es'?'Ajustar':'Fit'}</button>
-      <button class="layout-mobile-btn" onclick="lZoom(-0.1)">-</button>
-      <button class="layout-mobile-btn" onclick="lZoom(0.1)">+</button>
-      <button class="layout-mobile-btn" onclick="setLayoutMobilePane('items')">${LANG==='es'?'Items':'Items'}</button>
-      <button class="layout-mobile-btn" onclick="setLayoutMobilePane('quote')">${LANG==='es'?'Cotización':'Quote'}</button>
-      <button class="layout-mobile-btn" onclick="setLayoutMobilePane('properties')">${LANG==='es'?'Propiedades':'Properties'}</button>
-      <button class="layout-mobile-btn" onclick="${hasFloorplan?'startScaleMode()':'triggerFloorplanUpload()'}">${hasFloorplan?(LANG==='es'?'Escalar':'Scale'):(LANG==='es'?'Plano':'Floorplan')}</button>
-      <button class="layout-mobile-btn" onclick="startLayoutTour()">${LANG==='es'?'Guía':'Highlights'}</button>
-    </div>
-  </div>`;
+  var btn=function(cls,onclick,label){
+    return '<button class="layout-mobile-btn'+(cls?' '+cls:'')+'" onclick="'+onclick+'">'+esc(label)+'</button>';
+  };
+  return '<div class="layout-mobile-quickbar"><div class="layout-mobile-quickrow">'
+    + btn('lm-primary','openAddTableModal()', es?'+ Mesa':'+ Table')
+    + btn('','openAddEventElementModal()', es?'+ Elemento':'+ Item')
+    + btn('',"lZoom(0,'fit')", es?'Ajustar':'Fit')
+    + btn('','lZoom(-0.1)','−')
+    + btn('','lZoom(0.1)','+')
+    + btn('',"setLayoutMobilePane('items')", es?'Elementos':'Items')
+    + btn('',"setLayoutMobilePane('properties')", es?'Propiedades':'Properties')
+    + btn('',"setLayoutMobilePane('quote')", t('layout_quote_title'))
+    + btn('', hasFloorplan?'startScaleMode()':'triggerFloorplanUpload()', hasFloorplan?(es?'Escalar':'Scale'):(es?'Plano':'Plan'))
+    + btn('','startLayoutTour()', es?'Guía':'Guide')
+    + '</div></div>';
 }
 
 function renderLayoutMobileInspector(p){
@@ -1116,12 +1518,12 @@ function renderLayoutMobileInspectorBody(p){
   }
   if(!items.length) return `<div class="layout-mobile-empty">${LANG==='es'?'Tu layout aún no tiene elementos. Usa Agregar para empezar.':'Your layout has no elements yet. Use Add to get started.'}</div>`;
   return items.map(function(item){
-    return `<button class="litem-list-row ${LState.sel.includes(item.id)?'sel-row':''}" data-id="${item.id}" style="width:100%;justify-content:space-between;border:1px solid var(--border);background:transparent" onclick="selectLayoutMobileItem('${item.id}')">
-      <span style="display:flex;flex-direction:column;align-items:flex-start;min-width:0">
-        <span style="font-weight:700;color:var(--text)">${esc(item.label||getLayoutShapeLabel(item.shape))}</span>
-        <span style="font-size:11px;color:var(--muted)">${esc(getLayoutShapeLabel(item.shape))}${item.chairs?` · ${item.chairs} ${LANG==='es'?'sillas':'chairs'}`:''}</span>
+    return `<button class="litem-list-row ly-mob-row ${LState.sel.includes(item.id)?'sel-row on':''}" data-id="${item.id}" onclick="selectLayoutMobileItem('${item.id}')">
+      <span class="ly-mob-main">
+        <span class="ly-mob-name">${esc(item.label||getLayoutShapeLabel(item.shape))}</span>
+        <span class="ly-mob-sub">${esc(getLayoutShapeLabel(item.shape))}${item.chairs?` · ${item.chairs} ${LANG==='es'?'sillas':'chairs'}`:''}</span>
       </span>
-      <span style="font-size:11px;color:var(--gold-h);font-weight:700">${Math.round(item.rotation||0)}°</span>
+      <span class="ly-mob-rot">${Math.round(item.rotation||0)}°</span>
     </button>`;
   }).join('');
 }
@@ -1305,34 +1707,29 @@ function renderLayoutQuoteWorkspace(p){
   var hiddenBody=_layoutQuoteCollapsed ? 'display:none;' : '';
   var empty = !quote.elementRows.length && !quote.chairRows.length && !quote.centerpieceRows.length && !quote.extraRows.length;
   return `
-    <div id="layout-quote-workspace" style="margin:0 12px 12px;background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:0 8px 24px rgba(15,23,42,.06);overflow:hidden">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
-        <div>
-          <div style="font-size:15px;font-weight:700;color:var(--text)">${t('layout_quote_title')}</div>
-          <div style="font-size:12px;color:var(--muted)">${t('layout_quote_sub')}</div>
+    <div id="layout-quote-workspace" class="rd-card clip">
+      <div class="rd-card-head" style="justify-content:space-between;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:11px;min-width:0">
+          <span class="rd-card-dot"></span>
+          <div style="min-width:0">
+            <h2>${t('layout_quote_title')}</h2>
+            <div style="font-size:12px;color:var(--muted);margin-top:3px">${t('layout_quote_sub')}</div>
+          </div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <button id="lbtn-quote-toggle" class="btn btn-ghost btn-sm" onclick="toggleLayoutQuoteWorkspace()">${_layoutQuoteCollapsed?t('layout_quote_show'):t('layout_quote_hide')}</button>
+        <div class="rd-actions">
+          <button class="btn btn-sm" onclick="showLayoutBudget()">${t('layout_quote_open')}</button>
+          <button class="btn btn-sm" onclick="toggleLayoutQuoteWorkspace()">${_layoutQuoteCollapsed?t('layout_quote_show'):t('layout_quote_hide')}</button>
         </div>
       </div>
       <div style="${hiddenBody}">
-        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:14px 16px;border-bottom:1px solid var(--border)">
-          <div style="background:var(--bg2);border-radius:10px;padding:12px 14px">
-            <div style="font-size:20px;font-weight:700;color:var(--gold-h)">${quote.totalElements}</div>
-            <div style="font-size:11px;color:var(--muted)">${isES?'Elementos cotizados':'Quoted elements'}</div>
-          </div>
-          <div style="background:var(--bg2);border-radius:10px;padding:12px 14px">
-            <div style="font-size:20px;font-weight:700">${quote.totalSeats}</div>
-            <div style="font-size:11px;color:var(--muted)">${isES?'Asientos totales':'Total seats'}</div>
-          </div>
-          <div style="background:var(--gold-l);border-radius:10px;padding:12px 14px">
-            <div style="font-size:20px;font-weight:700;color:var(--gold-h)">${formatCost(quote.total)}</div>
-            <div style="font-size:11px;color:var(--muted)">${t('layout_quote_title')}</div>
-          </div>
+        <div class="rd-metrics tight" style="margin:0;padding:16px 20px;border-bottom:1px solid var(--line)">
+          ${rdMetric({ label:(isES?'Elementos cotizados':'Quoted elements'), value:quote.totalElements, valClass:'sm', color:'var(--accent-deep)' })}
+          ${rdMetric({ label:(isES?'Asientos totales':'Total seats'), value:quote.totalSeats, valClass:'sm' })}
+          ${rdMetric({ label:t('layout_quote_title'), value:formatCost(quote.total), valClass:'sm', color:'var(--accent-deep)' })}
         </div>
         ${empty
           ? `<div style="padding:28px 18px;text-align:center">
-              <div style="font-size:15px;font-weight:700;margin-bottom:6px">${t('layout_quote_empty')}</div>
+              <div style="font-size:14px;font-weight:600;margin-bottom:6px">${t('layout_quote_empty')}</div>
               <div style="font-size:12px;color:var(--muted)">${t('layout_quote_empty_sub')}</div>
             </div>`
           : `
@@ -1649,28 +2046,20 @@ function renderEventLayoutQuoteSection(p){
   if(_didSwap){ CHAIR_TYPES=_savedCT; CENTERPIECE_TYPES=_savedCP; }
   var isES=LANG==='es';
   var empty=!quote.elementRows.length&&!quote.chairRows.length&&!quote.centerpieceRows.length;
-  return '<div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;box-shadow:var(--sh-sm);margin-top:18px">'
-    +'<div style="margin-bottom:14px">'
-      +'<div style="font-family:Cormorant Garamond,serif;font-size:24px;font-weight:700">'+(isES?'Cotización de Layout':'Layout Quote')+'</div>'
-      +'<div style="font-size:12px;color:var(--muted)">'+(isES?'Precios definidos en el editor de layout de la Biblioteca':'Prices are defined in the Library layout editor')+'</div>'
+  return '<div class="rd-card pad">'
+    +'<div class="rd-card-title" style="align-items:flex-start">'
+      +'<div><h2>'+(isES?'Cotización del plano':'Plan quote')+'</h2>'
+      +'<div style="font-size:12px;color:var(--muted);margin-top:4px;font-weight:400">'
+      +(isES?'Precios definidos en el editor de planos de la Biblioteca':'Prices are defined in the Library plan editor')+'</div></div>'
     +'</div>'
-    +'<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px">'
-      +'<div style="background:var(--bg2);border-radius:10px;padding:12px 14px">'
-        +'<div style="font-size:20px;font-weight:700;color:var(--gold-h)">'+quote.totalElements+'</div>'
-        +'<div style="font-size:11px;color:var(--muted)">'+(isES?'Elementos cotizados':'Quoted elements')+'</div>'
-      +'</div>'
-      +'<div style="background:var(--bg2);border-radius:10px;padding:12px 14px">'
-        +'<div style="font-size:20px;font-weight:700">'+quote.totalSeats+'</div>'
-        +'<div style="font-size:11px;color:var(--muted)">'+(isES?'Asientos totales':'Total seats')+'</div>'
-      +'</div>'
-      +'<div style="background:var(--gold-l);border-radius:10px;padding:12px 14px">'
-        +'<div style="font-size:20px;font-weight:700;color:var(--gold-h)">'+formatCost(quote.total)+'</div>'
-        +'<div style="font-size:11px;color:var(--muted)">'+(isES?'Total estimado':'Estimated total')+'</div>'
-      +'</div>'
+    +'<div class="rd-metrics tight" style="margin-bottom:16px">'
+      + rdMetric({ label:(isES?'Elementos cotizados':'Quoted elements'), value:quote.totalElements, valClass:'sm', color:'var(--accent-deep)' })
+      + rdMetric({ label:(isES?'Asientos totales':'Total seats'), value:quote.totalSeats, valClass:'sm' })
+      + rdMetric({ label:(isES?'Total estimado':'Estimated total'), value:formatCost(quote.total), valClass:'sm', color:'var(--accent-deep)' })
     +'</div>'
     +(empty
-      ?'<div style="padding:28px 18px;text-align:center">'
-        +'<div style="font-size:15px;font-weight:700;margin-bottom:6px">'+(isES?'Sin elementos que cotizar':'No items to quote')+'</div>'
+      ?'<div style="padding:26px 18px;text-align:center;border:1px dashed var(--border-2);border-radius:14px">'
+        +'<div style="font-size:14px;font-weight:600;margin-bottom:6px">'+(isES?'Sin elementos que cotizar':'No items to quote')+'</div>'
         +'<div style="font-size:12px;color:var(--muted)">'+(isES?'Los precios se definen en el editor de la Biblioteca':'Prices are set in the Library editor')+'</div>'
         +'</div>'
       :renderLayoutQuoteAutoTable(quote, null, true))
@@ -1694,7 +2083,7 @@ function renderLItem(item){
   const chairsHTML = renderChairs(item);
   const pad = getChairPad(item);
   const cornerRadius = isRound ? '50%' : '0px';
-  const textClr = item.bdClr;
+  const textClr = item.bdClr || '#2A241D';   /* el lienzo siempre es blanco: nunca heredar el color del tema */
   const wM = item.w / getPPM();
   const autoFontSize = Math.max(7, Math.min(14, Math.round(wM * 8)));
   const fontSize = item.fontSize || autoFontSize;
@@ -1704,7 +2093,7 @@ function renderLItem(item){
     `<div style="position:absolute;inset:0;border-radius:${cornerRadius};background:${item.bg};overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.10)">
         ${cpHTML}
         <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;z-index:2;pointer-events:none">
-          <div class="litem-label" style="color:${textClr};font-size:${fontSize}px;font-weight:300;letter-spacing:0.03em;font-family:'Jost',sans-serif;text-align:center;line-height:1.2">${esc(item.label)}</div>
+          <div class="litem-label" style="color:${textClr};font-size:${fontSize}px;font-weight:300;letter-spacing:0.03em;font-family:DM Sans,sans-serif;text-align:center;line-height:1.2">${esc(item.label)}</div>
         </div>
       </div>`;
   return `<div class="litem ${LState.sel.includes(item.id)?'sel':''}"
@@ -1742,7 +2131,7 @@ function _renderSTableBody(item){
     +'<path d="'+topPath+botPath+'Z" fill="'+item.bg+'"/>'
     +'</svg>'
     +'<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;pointer-events:none">'
-    +'<div class="litem-label" style="color:'+item.bdClr+';font-size:'+(item.fontSize||Math.max(7,Math.min(14,Math.round((w/getPPM())*8))))+'px;font-weight:300;letter-spacing:0.03em;font-family:Jost,sans-serif;text-align:center;line-height:1.2">'+esc(item.label)+'</div>'
+    +'<div class="litem-label" style="color:'+item.bdClr+';font-size:'+(item.fontSize||Math.max(7,Math.min(14,Math.round((w/getPPM())*8))))+'px;font-weight:300;letter-spacing:0.03em;font-family:DM Sans,sans-serif;text-align:center;line-height:1.2">'+esc(item.label)+'</div>'
     +'</div></div>';
 }
 
@@ -2380,7 +2769,7 @@ function _showLayoutContextMenu(cx,cy,id){
   var isTable=['round-table','rect-table','square-table'].includes(item.shape)||(LSHAPES_M[item.shape]&&LSHAPES_M[item.shape]._isCustomTable);
   var menu=document.createElement('div');
   menu.id='l-ctx-menu';
-  menu.style.cssText='position:fixed;left:'+cx+'px;top:'+cy+'px;z-index:99999;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.18);padding:4px 0;min-width:180px;font-size:13px;font-family:Jost,sans-serif';
+  menu.style.cssText='position:fixed;left:'+cx+'px;top:'+cy+'px;z-index:99999;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.18);padding:4px 0;min-width:180px;font-size:13px;font-family:DM Sans,sans-serif';
   function mi(label,icon,fn,danger){
     return '<div onclick="'+fn+';_closeLayoutContextMenu()" style="padding:7px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;color:'+(danger?'var(--danger)':'var(--text)')+'" onmouseenter="this.style.background=\'var(--bg2)\'" onmouseleave="this.style.background=\'none\'">'
       +'<span style="width:18px;text-align:center;font-size:14px;flex-shrink:0">'+icon+'</span>'+label+'</div>';
@@ -3086,6 +3475,11 @@ function updateSelUI(){
   });
   const panel=document.getElementById('lsb-props');
   if(panel){panel.style.display=LState.sel.length===1?'block':'none';}
+  const emptyInsp=document.getElementById('ly-insp-empty');
+  if(emptyInsp){
+    emptyInsp.style.display=LState.sel.length===1?'none':'block';
+    emptyInsp.textContent=_lyInspEmptyText();
+  }
   if(LState.sel.length===1){renderLPropsPanel();}
   document.querySelectorAll('.litem-list-row').forEach(row=>{
     const id=row.dataset.id;
@@ -4115,10 +4509,25 @@ function alignSelected(mode){
   renderLayout();toast(LANG==='es'?'Alineado':'Aligned','s');
 }
 
+function _lySeatedForItem(item){
+  // Invitados del evento cuya mesa coincide con la etiqueta de este elemento.
+  if(isLibraryLayoutEditing()) return null;
+  var p=(typeof proj==='function')?proj():null;
+  if(!p || p.id==='__library__' || p.id==='__lib_layout__' || !p.guests || !p.guests.length) return null;
+  var lbl=String(item.label==null?'':item.label).trim().toLowerCase();
+  if(!lbl) return null;
+  return p.guests.filter(function(g){
+    var tb=String((g&&g.table)||'').trim().toLowerCase();
+    if(!tb) return false;
+    return tb===lbl || tb.replace(/^(mesa|table)\s*/,'')===lbl.replace(/^(mesa|table|m)\s*/,'');
+  }).length;
+}
+
 function renderLPropsPanel(){
   const id=LState.sel[0];if(!id)return;
   const item=LState.items.find(i=>i.id===id);if(!item)return;
   const panel=document.getElementById('lsb-props-inner');if(!panel)return;
+  const es=LANG==='es';
   const isTable=item.chairs>0;
   const cType=item.chairType||'default';
   const cpType=item.centerpiece||'none';
@@ -4137,43 +4546,57 @@ function renderLPropsPanel(){
   const cpOpts=Object.entries(CENTERPIECE_TYPES).map(([k,v])=>
     `<option value="${esc(k)}" ${cpType===k?'selected':''}>${esc(v.label)}</option>`).join('');
 
+  const seated=isTable?_lySeatedForItem(item):null;
+  const canAssign=!isLibraryLayoutEditing() && typeof switchTab==='function'
+    && (typeof proj==='function') && proj() && proj().id!=='__library__' && proj().id!=='__lib_layout__';
+
   panel.innerHTML=`
-    <div class="lsb-prop"><label>${t('label')}</label>
-      <input class="input" value="${esc(item.label)}" oninput="lPropChange('${id}','label',this.value)">
+    <div class="rd-field"><label>${t('label')}</label>
+      <input class="rd-input" value="${esc(item.label)}" oninput="lPropChange('${id}','label',this.value)">
     </div>
-    <div class="form-grid" style="gap:6px">
-      <div class="lsb-prop"><label>${t('width')} (m)</label>
-        <input class="input" type="number" value="${(item.w/getPPM()).toFixed(2)}" step="0.05" oninput="lPropChange('${id}','w',Math.round((+this.value||0.5)*getPPM()))">
+    <div class="ly-field-row">
+      <div class="rd-field"><label>${t('width')} (m)</label>
+        <input class="rd-input rd-num" type="number" value="${(item.w/getPPM()).toFixed(2)}" step="0.05" oninput="lPropChange('${id}','w',Math.round((+this.value||0.5)*getPPM()))">
       </div>
-      <div class="lsb-prop"><label>${t('height')} (m)</label>
-        <input class="input" type="number" value="${(item.h/getPPM()).toFixed(2)}" step="0.05" oninput="lPropChange('${id}','h',Math.round((+this.value||0.5)*getPPM()))">
+      <div class="rd-field"><label>${t('height')} (m)</label>
+        <input class="rd-input rd-num" type="number" value="${(item.h/getPPM()).toFixed(2)}" step="0.05" oninput="lPropChange('${id}','h',Math.round((+this.value||0.5)*getPPM()))">
       </div>
     </div>
-    <div class="lsb-prop"><label>${t('seats')}</label>
-      <input class="input" type="number" value="${item.chairs||0}" min="0" max="30" oninput="lPropChange('${id}','chairs',+this.value)">
+    <div class="rd-field"><label>${t('seats')}</label>
+      <input class="rd-input rd-num" type="number" value="${item.chairs||0}" min="0" max="30" oninput="lPropChange('${id}','chairs',+this.value)">
     </div>
-    <div class="form-grid" style="gap:6px">
-      <div class="lsb-prop"><label>${t('fill')}</label>
-        <input class="input" type="color" value="${item.bg}" style="height:36px;padding:2px" oninput="lPropChange('${id}','bg',this.value)">
+    <div class="ly-field-row">
+      <div class="rd-field"><label title="${esc(t('fill'))}">${es?'Relleno':'Fill'}</label>
+        <input class="rd-input" type="color" value="${esc(item.bg||'#ffffff')}" oninput="lPropChange('${id}','bg',this.value)">
       </div>
-      <div class="lsb-prop"><label>${t('label_color')}</label>
-        <input class="input" type="color" value="${item.bdClr}" style="height:36px;padding:2px" oninput="lPropChange('${id}','bdClr',this.value)">
+      <div class="rd-field"><label title="${esc(t('label_color'))}">${es?'Etiqueta':'Label'}</label>
+        <input class="rd-input" type="color" value="${esc(item.bdClr||'#16130f')}" oninput="lPropChange('${id}','bdClr',this.value)">
       </div>
     </div>
     ${isTable?(
-      '<div class="lsb-prop"><label>'+t('chair_style')+'</label>'+
-      '<div style="display:flex;align-items:center;gap:6px">'+
-      '<select class="input" style="font-size:11px;flex:1" onchange="lPropChange(\''+id+'\',\'chairType\',this.value);renderLPropsPanel()">'+chairOpts+'</select>'+
-      '<button class="btn btn-ghost btn-icon btn-sm" onclick="openChairEditor()" title="'+(LANG==='es'?'Gestionar sillas':'Manage chairs')+'"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>'+
+      '<div class="rd-field"><label>'+t('chair_style')+'</label>'+
+      '<div class="ly-field-inline">'+
+      (selectedChairImg?'<img class="ly-chair-prev" src="'+esc(selectedChairImg)+'" alt="">':'')+
+      '<select class="rd-input" onchange="lPropChange(\''+id+'\',\'chairType\',this.value);renderLPropsPanel()">'+chairOpts+'</select>'+
+      '<button class="rd-ibtn lg" onclick="openChairEditor()" title="'+(es?'Gestionar sillas':'Manage chairs')+'"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'+
       '</div></div>'+
-      '<div class="lsb-prop"><label>'+t('centerpiece')+'</label>'+
-      '<div style="display:flex;align-items:center;gap:6px">'+
-      '<select class="input" style="font-size:11px;flex:1" onchange="lPropChange(\''+id+'\',\'centerpiece\',this.value)">'+cpOpts+'</select>'+
-      '<button class="btn btn-ghost btn-icon btn-sm" onclick="openCenterpieceEditor()" title="'+(LANG==='es'?'Gestionar centros':'Manage centerpieces')+'"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>'+
+      '<div class="rd-field"><label>'+t('centerpiece')+'</label>'+
+      '<div class="ly-field-inline">'+
+      '<select class="rd-input" onchange="lPropChange(\''+id+'\',\'centerpiece\',this.value)">'+cpOpts+'</select>'+
+      '<button class="rd-ibtn lg" onclick="openCenterpieceEditor()" title="'+(es?'Gestionar centros de mesa':'Manage centerpieces')+'"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></button>'+
       '</div></div>'
     ):''}
-    <div class="lsb-prop"><label>${t('cost')}</label><input class="input" type="number" value="${item.cost||0}" min="0" step="0.01" oninput="lPropChange('${id}','cost',+this.value||0)"></div>
-    <button class="btn btn-danger btn-sm w-full" style="margin-top:6px" onclick="delLItem('${id}')">${t('delete')}</button>
+    <div class="rd-field"><label>${t('cost')}</label>
+      <input class="rd-input rd-num" type="number" value="${item.cost||0}" min="0" step="0.01" oninput="lPropChange('${id}','cost',+this.value||0)">
+    </div>
+    ${isTable?`<div class="ly-insp-stat">
+      <span>${seated!=null?(es?'Asignados':'Seated'):(es?'Asientos':'Seats')}</span>
+      <b>${seated!=null
+            ? esc(seated+' '+(es?'de':'of')+' '+(item.chairs||0)+' '+(es?'invitados':'guests'))
+            : esc((item.chairs||0)+' '+(es?'lugares':'places'))}</b>
+    </div>`:''}
+    ${canAssign?`<button class="ly-insp-btn" onclick="switchTab('guests')">${es?'Asignar invitados':'Assign guests'}</button>`:''}
+    <button class="ly-insp-btn del" onclick="delLItem('${id}')">${es?'Eliminar elemento':'Delete item'}</button>
   `;
 }
 
@@ -4653,6 +5076,7 @@ function lZoom(delta,mode,cx,cy){
   if(canvas)canvas.style.transform=`scale(${LState.zoom})`;
   var zi=document.getElementById('layout-zoom-input');
   if(zi&&document.activeElement!==zi) zi.value=Math.round(LState.zoom*100)+'%';
+  _lyRefreshRulers();
 }
 function lZoomTo(val){
   var n=parseInt(String(val).replace(/[^0-9]/g,''),10);
@@ -4669,6 +5093,7 @@ function lZoomTo(val){
   if(canvas) canvas.style.transform='scale('+LState.zoom+')';
   var zi=document.getElementById('layout-zoom-input');
   if(zi) zi.value=Math.round(LState.zoom*100)+'%';
+  _lyRefreshRulers();
 }
 
 function lWheel(e){

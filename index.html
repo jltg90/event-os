@@ -5,9 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <title>EventOS</title>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,600&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=Jost:wght@300;400;500;600;700&family=Raleway:wght@200;300;400;500&display=swap" rel="stylesheet">
+<!-- Rediseño 2026-08: la app usa solo DM Sans y Cormorant Garamond.  Inter, Jost y
+     Raleway se retiraron; se descargaban en cada carga sin que nada las usara. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
 <script>try{var k=Object.keys(localStorage).find(function(k){return k.indexOf('eventos_settings_')===0;});if(k){var s=JSON.parse(localStorage.getItem(k));if(s&&s.theme==='dark')document.documentElement.classList.add('dark');}}catch(e){}</script>
-<link rel="stylesheet" href="styles.css?v=20260820-3">
+<link rel="stylesheet" href="styles.css?v=20260821-1">
 <script>
 // Lazy-load heavy libraries on demand
 var _lazyScripts = {};
@@ -43,7 +47,7 @@ function ensureChairImages(){
   });
 }
 </script>
-<script src="app-config.js?v=20260820-3"></script>
+<script src="app-config.js?v=20260821-1"></script>
 <script>
 // ─── Carga de Clerk ─────────────────────────────────────────────────────────
 // Clerk se inyecta desde JS (y no con dos <script> fijos) porque su URL depende
@@ -97,148 +101,180 @@ window.__clerkReady = (function(){
     .then(function(){ return window.Clerk; });
 })();
 </script>
-<script src="app-data.js?v=20260820-3"></script>
+<script src="app-data.js?v=20260821-1"></script>
 </head>
 <body>
 <div id="toast-c" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <!-- LOADING SCREEN (shown while waiting for Wix user identity) -->
 <div id="pg-loading" style="min-height:100dvh;display:flex;align-items:center;justify-content:center;background:var(--bg);flex-direction:column;gap:16px">
-  <div style="font-family:'Cormorant Garamond',serif;font-size:38px;font-weight:400;color:#242424;letter-spacing:-.01em">Event<span style="color:#DFD7C9;font-style:italic">OS</span></div>
+  <div style="font-family:'Cormorant Garamond',serif;font-size:38px;font-weight:500;color:var(--ink);letter-spacing:-.01em">Event<span style="color:var(--champagne);font-style:italic">OS</span></div>
   <div style="display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
     Loading your workspace...
   </div>
-  <div id="pg-loading-error" style="display:none;max-width:340px;text-align:center;padding:16px 20px;background:var(--danger-bg,#fff8f8);border:1px solid #fecaca;border-radius:10px;font-size:13px;color:#b91c1c;margin-top:8px"></div>
+  <div id="pg-loading-error" style="display:none;max-width:340px;text-align:center;padding:16px 20px;background:var(--accent-l);border:1px solid rgba(228,87,46,.28);border-radius:12px;font-size:13px;color:var(--accent-deep);margin-top:8px"></div>
 </div>
 
 <!-- PANTALLA DE ACCESO (Clerk) -->
 <div id="pg-signin" style="display:none;min-height:100dvh;align-items:center;justify-content:center;background:var(--bg);flex-direction:column;gap:26px;padding:24px">
   <div style="text-align:center">
-    <div style="font-family:'Cormorant Garamond',serif;font-size:44px;font-weight:400;color:var(--text);letter-spacing:-.01em">Event<span style="color:var(--gold,#DFD7C9);font-style:italic">OS</span></div>
+    <div style="font-family:'Cormorant Garamond',serif;font-size:44px;font-weight:500;color:var(--ink);letter-spacing:-.02em">Event<span style="color:var(--champagne);font-style:italic">OS</span></div>
     <div id="signin-sub" style="font-family:'DM Sans',sans-serif;font-size:13px;color:var(--muted);margin-top:6px">Planeación de eventos</div>
   </div>
   <div id="clerk-signin"></div>
-  <div id="signin-error" style="display:none;max-width:380px;text-align:center;padding:14px 18px;background:var(--danger-bg,#fff8f8);border:1px solid #fecaca;border-radius:10px;font-size:13px;color:#b91c1c;line-height:1.5"></div>
+  <div id="signin-error" style="display:none;max-width:380px;text-align:center;padding:14px 18px;background:var(--accent-l);border:1px solid rgba(228,87,46,.28);border-radius:12px;font-size:13px;color:var(--accent-deep);line-height:1.5"></div>
 </div>
 
 <!-- APP -->
 <div id="pg-app" class="hidden">
-  <nav class="tnav">
-    <div style="display:flex;align-items:center;gap:10px">
-      <button class="mob-menu-btn" onclick="openMobDrawer()" aria-label="Menu">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-      </button>
-      
-      <div class="tnav-logo" onclick="showPage('events')">Event<span>OS</span></div>
-    </div>
-    <div style="flex:1"></div>
-    <button id="feedback-tnav-btn" onclick="openFeedbackModal()" title="Send feedback" style="display:none;width:36px;height:36px;border-radius:50%;border:none;background:#F2EFE9;cursor:pointer;align-items:center;justify-content:center;flex-shrink:0">
-      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:#242424"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-    </button>
-  </nav>
-
   <div id="app-body" class="app-body">
 
     <aside id="app-sidebar" class="app-sidebar">
-      <nav class="sidebar-nav">
-        <button id="sidebar-toggle-btn" class="icon-ghost-btn" onclick="toggleSidebar()" title="Toggle sidebar"
-          style="justify-content:flex-start;width:100%;font-size:13px;font-weight:500;font-family:'Jost',sans-serif;white-space:nowrap;">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;opacity:.7"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
-          <span data-i18n="main_menu_btn">Main Menu</span>
+      <div class="sb-head">
+        <span class="sb-dot" aria-hidden="true"></span>
+        <div class="tnav-logo" onclick="showPage('events')">Event<span>OS</span></div>
+        <button id="sidebar-toggle-btn" class="sb-collapse" onclick="toggleSidebar()" title="Toggle sidebar" aria-label="Toggle sidebar">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
         </button>
+      </div>
+
+      <button class="sb-search" id="sb-search-btn" onclick="focusGlobalSearch()" title="Search">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg>
+        <span id="sb-search-label">Search</span>
+        <span class="sb-search-kbd">Ctrl K</span>
+      </button>
+
+      <nav class="sidebar-nav">
         <button class="sidebar-item" id="snav-events" onclick="showPage('events')">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
           <span data-i18n="nav_events">Events</span>
+          <span class="sb-count" id="snav-events-count"></span>
         </button>
         <button class="sidebar-item" id="snav-dashboard" onclick="showPage('dashboard')">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-          <span data-i18n="nav_dashboard">Dashboard</span>
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          <span data-i18n="nav_dashboard">Overview</span>
         </button>
-        <div class="sidebar-divider"></div>
-        <div class="sidebar-section-label" data-i18n="nav_section_events">Events</div>
-        <button class="sidebar-item" id="snav-vendors" onclick="sidebarSwitchTab('budget')">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-          <span data-i18n="nav_vendors">Vendors</span>
-        </button>
-        <button class="sidebar-item" id="snav-tasks" onclick="sidebarSwitchTab('timeline')">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-          <span data-i18n="nav_tasks">Tasks</span>
-        </button>
-        
-        <button class="sidebar-item" id="snav-layouts" onclick="_libTab='layouts';openLibrary()">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-          <span data-i18n="nav_layouts">Layouts</span>
-        </button>
-        <button class="sidebar-item" id="snav-moodboard" onclick="sidebarSwitchTab('moodboard')">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="9" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="16" width="7" height="5" rx="1"/></svg>
-          <span data-i18n="nav_moodboard">Moodboard</span>
-        </button>
-        <div class="sidebar-divider"></div>
-        <div class="sidebar-section-label" data-i18n="nav_section_more">More</div>
         <button class="sidebar-item" id="snav-analytics" onclick="showPage('analytics')">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
           <span data-i18n="nav_analytics">Analytics</span>
         </button>
+
+        <div class="sidebar-section-label" data-i18n="nav_section_events">Library</div>
+        <button class="sidebar-item sb-lib" id="snav-vendors" onclick="sidebarSwitchTab('budget')">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <span data-i18n="nav_vendors">Vendors</span>
+        </button>
+        <button class="sidebar-item sb-lib" id="snav-tasks" onclick="sidebarSwitchTab('timeline')">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          <span data-i18n="nav_tasks">Tasks</span>
+        </button>
+        <button class="sidebar-item sb-lib" id="snav-layouts" onclick="_libTab='layouts';openLibrary()">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+          <span data-i18n="nav_layouts">Layouts</span>
+        </button>
+        <button class="sidebar-item sb-lib" id="snav-moodboard" onclick="sidebarSwitchTab('moodboard')">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="9" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="16" width="7" height="5" rx="1"/></svg>
+          <span data-i18n="nav_moodboard">Moodboards</span>
+        </button>
+
+        <div id="sb-active-wrap" style="display:none">
+          <div class="sidebar-section-label" data-i18n="active_event">Active event</div>
+          <button class="sb-active" id="sb-active-btn" onclick="reopenActiveProject()">
+            <span class="sb-active-ini" id="sb-active-ini">&#183;</span>
+            <div style="min-width:0;flex:1">
+              <div class="sb-active-name" id="sb-active-name"></div>
+              <div class="sb-active-date" id="sb-active-date"></div>
+            </div>
+          </button>
+        </div>
       </nav>
+
       <div class="sidebar-footer">
-        <button id="tour-btn" class="nav-pill sidebar-footer-pill" onclick="startWelcomeTour()" title="App tour / Guía de la app">
-          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-          </svg>
-          <span id="tour-label">Highlights</span>
-        </button>
-        <button id="lang-btn" class="nav-pill sidebar-footer-pill" onclick="toggleLang()" title="Switch language / Cambiar idioma">
-          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="9"/>
-            <path d="M3 12h18"/>
-            <path d="M12 3a13.5 13.5 0 0 1 0 18"/>
-            <path d="M12 3a13.5 13.5 0 0 0 0 18"/>
-            <path d="M7 7.5c1.4.6 3.1.9 5 .9s3.6-.3 5-.9"/>
-            <path d="M7 16.5c1.4-.6 3.1-.9 5-.9s3.6.3 5 .9"/>
-          </svg>
-          <span id="lang-label">EN</span>
-        </button>
-        <button id="settings-btn" class="nav-pill sidebar-footer-pill" onclick="openSettings()" title="Settings / Ajustes">
-          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-          </svg>
-          <span data-i18n="settings">Settings</span>
-        </button>
-        <div id="sync-btn" class="nav-pill nav-status-pill sidebar-footer-pill" onclick="manualSync()" title="Click to sync now">
+        <div class="sb-footrow">
+          <button id="lang-btn" class="nav-pill" onclick="toggleLang()" title="Switch language / Cambiar idioma">
+            <span id="lang-label">EN</span>
+          </button>
+          <button id="settings-btn" class="nav-pill" onclick="openSettings()" title="Settings / Ajustes">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+            <span data-i18n="settings">Settings</span>
+          </button>
+          <button id="tour-btn" class="nav-pill" onclick="startWelcomeTour()" title="App tour / Guia de la app">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <span id="tour-label">Highlights</span>
+          </button>
+        </div>
+        <div id="sync-btn" class="nav-pill nav-status-pill" onclick="manualSync()" title="Click to sync now">
           <div id="sync-dot" class="nav-dot"></div>
           <span id="sync-label">Offline</span>
+          <span id="sync-meta"></span>
         </div>
-        <div class="sidebar-account-wrap" style="display:flex;align-items:center;gap:8px">
-          <button id="feedback-sidebar-btn" class="nav-avatar-trigger sidebar-account-trigger" onclick="openFeedbackModal()" title="Send feedback" style="cursor:pointer;border:none;background:#F2EFE9">
-            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:#242424"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-          </button>
+        <div class="sidebar-account-wrap">
           <div id="upill" class="nav-avatar-trigger sidebar-account-trigger" onclick="toggleMenu()" title="Account">
             <span id="uav" class="nav-avatar-label">?</span>
           </div>
+          <div class="sb-user" onclick="toggleMenu()">
+            <div class="sb-user-name" id="sb-user-name">User</div>
+            <div class="sb-user-meta" id="sb-user-meta"></div>
+          </div>
+          <button class="sb-user-chev" onclick="toggleMenu()" aria-label="Account menu">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
           <div class="umenu hidden" id="umenu">
-            <div style="padding:16px 18px;border-bottom:1px solid rgba(36,36,36,.06)">
-              <div style="font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;color:#242424" id="uname">User</div>
-              <div style="font-family:'DM Sans',sans-serif;font-size:12px;color:#787470;margin-top:3px" id="uemail"></div>
+            <div style="padding:16px 18px;border-bottom:1px solid var(--line)">
+              <div style="font-size:14px;font-weight:600" id="uname">User</div>
+              <div style="font-size:12px;margin-top:3px" id="uemail"></div>
             </div>
             <div onclick="manualSync();closeMenu()" class="menu-row">
               <div id="sync-dot-menu" class="nav-dot"></div>
               <div>
-                <div style="font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;color:#242424"><span id="sync-label-menu">Offline</span></div>
-                <div style="font-family:'DM Sans',sans-serif;font-size:11px;color:#787470;margin-top:1px">Click to sync now</div>
+                <div style="font-size:13px;font-weight:500"><span id="sync-label-menu">Offline</span></div>
+                <div style="font-size:11px;color:var(--light);margin-top:1px">Click to sync now</div>
               </div>
             </div>
-            <div class="umenu-item" onclick="showPage('events');closeMenu()"><svg width="15" height="15" fill="none" stroke="#464646" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> <span data-i18n="my_events">My Events</span></div>
-            <div class="umenu-item" onclick="openLibrary();closeMenu()"><svg width="15" height="15" fill="none" stroke="#464646" stroke-width="1.8" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg> <span id="lib-menu-label">My Library</span></div>
-            <div class="umenu-item" onclick="showPage('analytics');closeMenu()"><svg width="15" height="15" fill="none" stroke="#464646" stroke-width="1.8" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg> <span id="analytics-menu-label">Analytics</span></div>
-            <div class="umenu-item" onclick="openCurrencyPicker();closeMenu()"><svg width="15" height="15" fill="none" stroke="#464646" stroke-width="1.8" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> <span data-i18n="currency">Currency</span><span style="margin-left:auto;font-size:11px;font-weight:600;color:#787470" id="currency-label">USD</span></div>
-            <div class="umenu-item" style="color:#a8403a;border-top:1px solid rgba(36,36,36,.06)" onclick="doLogout()"><svg width="15" height="15" fill="none" stroke="#a8403a" stroke-width="1.8" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> <span data-i18n="sign_out">Sign Out</span></div>
+            <div class="umenu-item" onclick="showPage('events');closeMenu()"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> <span data-i18n="my_events">My Events</span></div>
+            <div class="umenu-item" onclick="openLibrary();closeMenu()"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg> <span id="lib-menu-label">My Library</span></div>
+            <div class="umenu-item" onclick="showPage('analytics');closeMenu()"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg> <span id="analytics-menu-label">Analytics</span></div>
+            <div class="umenu-item" id="feedback-sidebar-btn" onclick="openFeedbackModal();closeMenu()"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> <span id="feedback-menu-label">Send feedback</span></div>
+            <div class="umenu-item" onclick="openCurrencyPicker();closeMenu()"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> <span data-i18n="currency">Currency</span><span style="margin-left:auto;font-size:11px;font-weight:600;color:var(--light)" id="currency-label">USD</span></div>
+            <div class="umenu-item" style="color:var(--accent-deep);border-top:1px solid var(--line)" onclick="doLogout()"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> <span data-i18n="sign_out">Sign Out</span></div>
           </div>
         </div>
       </div>
     </aside>
 
     <div id="app-content" class="app-content">
+
+      <header class="topbar">
+        <button class="mob-menu-btn" onclick="openMobDrawer()" aria-label="Menu">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="topbar-logo" onclick="showPage('events')">Event<span>OS</span></div>
+        <div class="crumbs">
+          <span class="crumb-root" id="crumb-root">Events</span>
+          <span class="crumb-project" id="crumb-project" style="display:none">
+            <span class="crumb-sep"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span>
+            <span class="crumb-cur" id="crumb-cur"></span>
+          </span>
+        </div>
+        <div class="topbar-spacer"></div>
+        <div class="topbar-search">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg>
+          <input id="topbar-search-input" type="text" placeholder="Search events..." oninput="topbarSearch(this.value)" aria-label="Search events">
+        </div>
+        <button class="topbar-icon" id="feedback-tnav-btn" onclick="openFeedbackModal()" title="Send feedback" aria-label="Send feedback">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span class="tb-dot"></span>
+        </button>
+        <button class="topbar-cta" onclick="openEventModal()">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          <span data-i18n="new_event">New event</span>
+        </button>
+      </header>
 
   <!-- DASHBOARD PAGE -->
   <div id="pg-dashboard" class="pg hidden">
@@ -250,14 +286,18 @@ window.__clerkReady = (function(){
   <!-- EVENTS PAGE -->
   <div id="pg-events" class="pg hidden">
     <div class="page-shell">
-      <div class="page-header" id="ev-header">
+      <div class="rd-page-head" id="ev-header">
         <div id="ev-header-copy">
-          <h1 class="editorial-title" style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700" data-i18n="my_events_title">My Events</h1>
+          <div class="rd-eyebrow" data-i18n="ev_eyebrow">Portfolio</div>
+          <h1 class="rd-h1" data-i18n="my_events_title">My Events</h1>
+          <p class="rd-sub" id="ev-portfolio-line"></p>
         </div>
-        <button class="btn btn-primary btn-create-gradient" id="ev-create-btn" onclick="openEventModal()">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-          <span data-i18n="create_event">New Event</span>
-        </button>
+        <div class="ev-create-wrap">
+          <button class="btn btn-primary" id="ev-create-btn" onclick="openEventModal()">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+            <span data-i18n="create_event">New event</span>
+          </button>
+        </div>
       </div>
       <!-- Events search bar -->
       <div id="ev-searchbar" style="margin-bottom:14px;position:relative;display:flex;align-items:center">
@@ -328,12 +368,13 @@ window.__clerkReady = (function(){
   <!-- LIBRARY PAGE -->
   <div id="pg-library" class="pg hidden">
     <div class="page-shell">
-      <div class="page-header" style="margin-bottom:24px">
+      <div class="rd-page-head">
         <div>
-          <h1 class="editorial-title" id="lib-page-title" style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700">My Library</h1>
-          <p id="lib-page-sub" style="display:none"></p>
+          <div class="rd-eyebrow" data-i18n="lib_eyebrow">Reusable</div>
+          <h1 class="rd-h1" id="lib-page-title">My Library</h1>
+          <p class="rd-sub" id="lib-page-sub" style="display:none"></p>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap" id="lib-add-btns"></div>
+        <div class="rd-actions" id="lib-add-btns"></div>
       </div>
       <div style="display:none" id="lib-tabs"></div>
       <div id="lib-content"></div>
@@ -343,12 +384,13 @@ window.__clerkReady = (function(){
   <!-- ANALYTICS PAGE -->
   <div id="pg-analytics" class="pg hidden">
     <div class="page-shell">
-      <div class="page-header" style="margin-bottom:24px">
+      <div class="rd-page-head">
         <div>
-          <h1 class="editorial-title" style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:400;color:#242424" id="analytics-title">Analytics</h1>
-          <p style="font-family:'DM Sans',sans-serif;color:#787470;font-size:14px;margin-top:2px" id="analytics-sub">Insights across all your events</p>
+          <div class="rd-eyebrow" data-i18n="an_eyebrow">Insights</div>
+          <h1 class="rd-h1" id="analytics-title">Analytics</h1>
+          <p class="rd-sub" id="analytics-sub">Insights across all your events</p>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap" id="analytics-controls">
+        <div class="rd-actions" id="analytics-controls">
           <button class="tb active" id="ap-alltime" onclick="setAnalyticsAllTime()"></button>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <div class="date-field" style="width:140px">
@@ -374,68 +416,96 @@ window.__clerkReady = (function(){
   <!-- PROJECT PAGE -->
   <div id="pg-project" class="pg hidden">
     <nav class="pnav">
-      <div class="pnav-main" style="display:flex;align-items:center;gap:16px">
-        <div class="back-btn" onclick="showPage('events')">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
-          <span data-i18n="back_to_events">Back to Events</span>
+      <div class="pnav-inner">
+        <div class="pnav-top">
+          <div class="pnav-main">
+            <div class="pnav-badges">
+              <div class="back-btn" onclick="showPage('events')">
+                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
+                <span data-i18n="back_to_events">Back to Events</span>
+              </div>
+              <span class="rd-pill up t-neutral" id="pnav-type">Type</span>
+              <span class="rd-pill t-neutral" id="pnav-status"><i></i><span id="pnav-status-label"></span></span>
+            </div>
+            <h1 id="pnav-name">Project</h1>
+            <div class="pnav-meta">
+              <span id="pnav-client"></span>
+              <span class="dot" id="pnav-dot-1"></span>
+              <span id="pnav-date"></span>
+              <span class="dot" id="pnav-dot-2"></span>
+              <span id="pnav-location"></span>
+            </div>
+          </div>
+          <div class="pnav-side">
+            <div class="pnav-count">
+              <div class="pnav-count-lbl" data-i18n="countdown">Countdown</div>
+              <div id="pnav-days">&#8212;</div>
+            </div>
+            <div id="pnav-ring"></div>
+            <div class="pnav-actions">
+              <button class="btn" id="pnav-export-btn" onclick="openExportPDFForEvent(CID)">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <span data-i18n="export_pdf">Export PDF</span>
+              </button>
+              <button class="btn btn-primary" id="pnav-edit-btn" onclick="openEventModal(CID)">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg>
+                <span data-i18n="edit_event">Edit event</span>
+              </button>
+            </div>
+          </div>
         </div>
-        <div class="pnav-meta">
-          <div style="font-weight:700;font-size:15px" id="pnav-name">Project</div>
-          <div class="s-sm" id="pnav-type">Type</div>
+        <button class="pnav-menu-trigger hidden" id="pnav-menu-trigger" type="button" onclick="toggleProjectTabMenu(event)" aria-expanded="false" aria-controls="pnav-mobile-menu">
+          <span id="pnav-menu-label">Dashboard</span>
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="ptabs" id="ptabs">
+          <div class="ptabs-hover-bg" id="ptabs-hover-bg"></div>
+          <div class="ptabs-indicator" id="ptabs-indicator"></div>
+          <button class="ptab active" data-tab="dashboard" onclick="switchTab('dashboard')">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span data-i18n="tab_dashboard">Dashboard</span>
+          </button>
+          <button class="ptab" data-tab="budget" onclick="switchTab('budget')">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span data-i18n="tab_budget">Budget</span>
+          </button>
+          <button class="ptab" data-tab="timeline" onclick="switchTab('timeline')">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span data-i18n="tab_timeline">Timeline</span>
+          </button>
+          <button class="ptab" data-tab="guests" onclick="switchTab('guests')">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span data-i18n="tab_guests">Guests</span>
+          </button>
+          <button class="ptab" data-tab="layout" onclick="switchTab('layout')">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg><span data-i18n="tab_layout">Layout</span>
+          </button>
+          <button class="ptab" data-tab="moodboard" onclick="switchTab('moodboard')">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="9" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="16" width="7" height="5" rx="1"/></svg><span data-i18n="tab_moodboard">Moodboard</span>
+          </button>
         </div>
-      </div>
-      <button class="pnav-menu-trigger hidden" id="pnav-menu-trigger" type="button" onclick="toggleProjectTabMenu(event)" aria-expanded="false" aria-controls="pnav-mobile-menu">
-        <span id="pnav-menu-label">Dashboard</span>
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-      </button>
-      <div class="ptabs" id="ptabs">
-        <div class="ptabs-hover-bg" id="ptabs-hover-bg"></div>
-        <div class="ptabs-indicator" id="ptabs-indicator"></div>
-        <button class="ptab active" data-tab="dashboard" onclick="switchTab('dashboard')">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span data-i18n="tab_dashboard">Dashboard</span>
-        </button>
-        <button class="ptab" data-tab="budget" onclick="switchTab('budget')">
-          <span style="font-family:'Cormorant Garamond',serif;font-size:16px;font-weight:600;font-style:italic;line-height:1">$</span><span data-i18n="tab_budget">Budget</span>
-        </button>
-        <button class="ptab" data-tab="timeline" onclick="switchTab('timeline')">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span data-i18n="tab_timeline">Timeline</span>
-        </button>
-        <button class="ptab" data-tab="guests" onclick="switchTab('guests')">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span data-i18n="tab_guests">Guests</span>
-        </button>
-        <button class="ptab" data-tab="layout" onclick="switchTab('layout')">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg><span data-i18n="tab_layout">Layout</span>
-        </button>
-        <button class="ptab" data-tab="moodboard" onclick="switchTab('moodboard')">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="9" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="16" width="7" height="5" rx="1"/></svg><span data-i18n="tab_moodboard">Moodboard</span>
-        </button>
-
-      </div>
-      <div class="pnav-mobile-menu hidden" id="pnav-mobile-menu">
-        <button class="pnav-mobile-item active" data-tab="dashboard" type="button" onclick="switchTab('dashboard');closeProjectTabMenu()">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-          <span data-i18n="tab_dashboard">Dashboard</span>
-        </button>
-        <button class="pnav-mobile-item" data-tab="budget" type="button" onclick="switchTab('budget');closeProjectTabMenu()">
-          <span style="font-family:'Cormorant Garamond',serif;font-size:16px;font-weight:600;font-style:italic;line-height:1">$</span>
-          <span data-i18n="tab_budget">Budget</span>
-        </button>
-        <button class="pnav-mobile-item" data-tab="timeline" type="button" onclick="switchTab('timeline');closeProjectTabMenu()">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
-          <span data-i18n="tab_timeline">Timeline</span>
-        </button>
-        <button class="pnav-mobile-item" data-tab="guests" type="button" onclick="switchTab('guests');closeProjectTabMenu()">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          <span data-i18n="tab_guests">Guests</span>
-        </button>
-        <button class="pnav-mobile-item" data-tab="layout" type="button" onclick="switchTab('layout');closeProjectTabMenu()">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-          <span data-i18n="tab_layout">Layout</span>
-        </button>
-        <button class="pnav-mobile-item" data-tab="moodboard" type="button" onclick="switchTab('moodboard');closeProjectTabMenu()">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="9" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="16" width="7" height="5" rx="1"/></svg>
-          <span data-i18n="tab_moodboard">Moodboard</span>
-        </button>
+        <div class="pnav-mobile-menu hidden" id="pnav-mobile-menu">
+          <button class="pnav-mobile-item active" data-tab="dashboard" type="button" onclick="switchTab('dashboard');closeProjectTabMenu()">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            <span data-i18n="tab_dashboard">Dashboard</span>
+          </button>
+          <button class="pnav-mobile-item" data-tab="budget" type="button" onclick="switchTab('budget');closeProjectTabMenu()">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            <span data-i18n="tab_budget">Budget</span>
+          </button>
+          <button class="pnav-mobile-item" data-tab="timeline" type="button" onclick="switchTab('timeline');closeProjectTabMenu()">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+            <span data-i18n="tab_timeline">Timeline</span>
+          </button>
+          <button class="pnav-mobile-item" data-tab="guests" type="button" onclick="switchTab('guests');closeProjectTabMenu()">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <span data-i18n="tab_guests">Guests</span>
+          </button>
+          <button class="pnav-mobile-item" data-tab="layout" type="button" onclick="switchTab('layout');closeProjectTabMenu()">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+            <span data-i18n="tab_layout">Layout</span>
+          </button>
+          <button class="pnav-mobile-item" data-tab="moodboard" type="button" onclick="switchTab('moodboard');closeProjectTabMenu()">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="9" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="16" width="7" height="5" rx="1"/></svg>
+            <span data-i18n="tab_moodboard">Moodboard</span>
+          </button>
+        </div>
       </div>
     </nav>
     <div id="tab-dashboard" class="pcontent fade-in"></div>
@@ -476,14 +546,14 @@ window.__clerkReady = (function(){
   </div>
 </div>
 
-<script src="lang.js?v=20260820-3"></script>
-<script src="core.js?v=20260820-3"></script>
-<script src="events.js?v=20260820-3"></script>
-<script src="budget-timeline-guests.js?v=20260820-3"></script>
-<script src="layout.js?v=20260820-3"></script>
-<script src="misc.js?v=20260820-3"></script>
-<script src="analytics.js?v=20260820-3"></script>
-<script src="library.js?v=20260820-3"></script>
+<script src="lang.js?v=20260821-1"></script>
+<script src="core.js?v=20260821-1"></script>
+<script src="events.js?v=20260821-1"></script>
+<script src="budget-timeline-guests.js?v=20260821-1"></script>
+<script src="layout.js?v=20260821-1"></script>
+<script src="misc.js?v=20260821-1"></script>
+<script src="analytics.js?v=20260821-1"></script>
+<script src="library.js?v=20260821-1"></script>
 
 <!-- -- MOBILE DRAWER -------------------------------------------- -->
 <div id="mob-drawer" class="mob-drawer hidden" onclick="closeMobDrawerIfOverlay(event)">
