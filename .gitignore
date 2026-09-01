@@ -42,3 +42,6 @@ desktop.ini
 scripts/preview/.chrome-*/
 scripts/preview/shots/
 scripts/preview/sweep/
+
+# Generado por scripts/build-demo.mjs — no se versiona.
+demo/
